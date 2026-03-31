@@ -1,0 +1,24 @@
+namespace: rna_velocity_pseudotime_analysis
+mode: exploratory
+production_required: false
+dataset: lung_carcinoma_3k
+input:
+  tenx_dir: "/home/zerlinshen/singlecell_factory/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix"
+  loom: "/home/zerlinshen/singlecell_factory/lung_carcinoma_3k_count/velocyto/lung_carcinoma_3k_count.loom"
+output:
+  root: "rna_velocity_pseudotime_analysis/runtime"
+  keep_days: 7
+modules:
+  velocity:
+    enabled: true
+    backend: scvelo
+    mode: dynamical
+  pseudotime:
+    enabled: true
+    backend: cellrank
+  r_bridge:
+    enabled: false
+    backend: monocle3
+safety:
+  forbid_main_pipeline_write: true
+  forbid_e2e_script_invoke: true

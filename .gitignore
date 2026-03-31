@@ -1,0 +1,39 @@
+# data and outputs
+data/raw
+output
+rna_velocity_pseudotime_analysis/runtime
+cellranger_runs
+fastq
+reference
+pbmc_1k_v3_count
+pbmc_1k_v3_count_backup
+lung_carcinoma_3k_count
+
+# large bio files
+*.h5ad
+*.loom
+*.bam
+*.bai
+*.mtx
+*.h5
+*.tar
+*.tar.gz
+*.fq.gz
+*.fastq.gz
+*.fasta
+*.fa
+
+# env/cache
+envs
+.venv
+.mplconfig
+__pycache__
+.pytest_cache
+.coverage
+coverage.xml
+.mypy_cache
+.ruff_cache
+.ipynb_checkpoints
+
+# IDE/system
+.DS_Store

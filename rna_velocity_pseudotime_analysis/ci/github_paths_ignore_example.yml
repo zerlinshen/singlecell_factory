@@ -1,0 +1,14 @@
+name: sample-ci-ignore-rna-velocity-pseudotime
+on:
+  push:
+    paths-ignore:
+      - 'rna_velocity_pseudotime_analysis/**'
+  pull_request:
+    paths-ignore:
+      - 'rna_velocity_pseudotime_analysis/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "rna_velocity_pseudotime_analysis excluded from CI scope"

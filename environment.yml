@@ -1,0 +1,32 @@
+name: sc10x
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - scikit-image
+  - h5py
+  - pytables
+  - scanpy=1.11.5
+  - anndata
+  - umap-learn
+  - python-igraph
+  - leidenalg
+  - numba
+  - scvelo=0.3.*
+  - loompy=3.0.*
+  - pip:
+      - scrublet
+      - cellrank>=2.0
+      - pre-commit
+      - pytest
+      - pytest-cov
+      - ruff
+      - black

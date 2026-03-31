@@ -1,0 +1,25 @@
+namespace: rna_velocity_pseudotime_analysis
+legacy_alias: phase1_optional
+mode: exploratory
+production_required: false
+dataset: pbmc_1k_v3
+input:
+  tenx_dir: ""
+  loom: ""
+output:
+  root: "rna_velocity_pseudotime_analysis/runtime"
+  keep_days: 7
+modules:
+  velocity:
+    enabled: true
+    backend: scvelo
+    mode: dynamical
+  pseudotime:
+    enabled: true
+    backend: cellrank
+  r_bridge:
+    enabled: false
+    backend: monocle3
+safety:
+  forbid_main_pipeline_write: true
+  forbid_e2e_script_invoke: true

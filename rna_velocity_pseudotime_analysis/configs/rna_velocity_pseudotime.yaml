@@ -1,0 +1,30 @@
+namespace: rna_velocity_pseudotime_analysis
+mode: exploratory
+production_required: false
+dataset: pbmc_1k_v3
+input:
+  h5ad: ""
+  tenx_dir: ""
+  loom: ""
+  preferred_stage: "after_qc"
+output:
+  root: "rna_velocity_pseudotime_analysis/runtime"
+  keep_days: 7
+  save_integrated_h5ad: true
+modules:
+  velocity:
+    enabled: true
+    backend: scvelo
+    mode: dynamical
+  pseudotime:
+    enabled: true
+    backend: cellrank
+  r_bridge:
+    enabled: false
+    backend: monocle3
+plots:
+  dpi: 150
+  umap_color: "leiden"
+safety:
+  forbid_main_pipeline_write: true
+  forbid_e2e_script_invoke: true
