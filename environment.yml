@@ -22,9 +22,17 @@ dependencies:
   - numba
   - scvelo=0.3.*
   - loompy=3.0.*
+  - requests
+  - bbknn
   - pip:
       - scrublet
       - cellrank>=2.0
+      - gseapy
+      - decoupler>=1.4.0
+      - liana>=0.1.7
+      - infercnvpy
+      - harmonypy
+      - scanorama
       - pre-commit
       - pytest
       - pytest-cov

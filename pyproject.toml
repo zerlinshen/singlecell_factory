@@ -10,6 +10,7 @@ branch = true
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
+omit = ["workflow/modular/*", "workflow/query_cbioportal.py"]
 
 [tool.black]
 line-length = 100

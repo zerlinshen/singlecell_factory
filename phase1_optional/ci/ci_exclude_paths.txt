@@ -1,4 +1,0 @@
-phase1_optional/**
-**/phase1_optional/**
-rna_velocity_pseudotime_analysis/**
-**/rna_velocity_pseudotime_analysis/**
