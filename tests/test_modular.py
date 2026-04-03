@@ -148,7 +148,7 @@ def test_dependency_resolution_cycle_detection(monkeypatch):
     try:
         pipe._resolve_execution_order([], ["a", "b"])
     except ValueError as exc:
-        assert "循环依赖检测" in str(exc)
+        assert "Cyclic dependency detected" in str(exc)
         assert "a" in str(exc) and "b" in str(exc)
     else:
         raise AssertionError("Expected ValueError for cyclic dependencies")
@@ -208,3 +208,23 @@ def test_parallel_figure_pool_shutdown_on_exception(monkeypatch, tmp_path):
 
     assert ctx._figure_pool is None
     assert pools and pools[0].shutdown_called is True
+
+
+def test_parallel_memory_guard_disables_parallel(monkeypatch, tmp_path):
+    import workflow.modular.pipeline as pipe
+    from workflow.modular.context import PipelineContext
+
+    adata = AnnData(np.ones((4, 4), dtype=float))
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="p",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(sample_root=tmp_path / "dataset", outs_dir=tmp_path / "outs"),
+        ),
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=adata,
+    )
+    monkeypatch.setattr(pipe, "_estimate_adata_copy_bytes", lambda _adata: pipe.PARALLEL_COPY_BUDGET_BYTES)
+    assert pipe._should_parallelize_appending(ctx, ["annotation", "trajectory"]) is False

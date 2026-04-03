@@ -8,11 +8,14 @@ from pathlib import Path
 import json
 
 import pandas as pd
+from scipy import sparse
 
 from .config import PipelineConfig
 from .context import PipelineContext
 
 logger = logging.getLogger(__name__)
+
+PARALLEL_COPY_BUDGET_BYTES = 512 * 1024 * 1024
 
 # Module dependency DAG: module_name -> set of modules it requires
 MODULE_DEPENDENCIES: dict[str, set[str]] = {
@@ -83,7 +86,7 @@ def _resolve_execution_order(mandatory: list[str], optional: list[str]) -> list[
     # cycle exists in the induced subgraph.
     remaining = sorted(m for m in all_requested if m not in order)
     if remaining:
-        raise ValueError(f"循环依赖检测: {remaining}")
+        raise ValueError(f"Cyclic dependency detected: {remaining}")
 
     return order
 
@@ -200,6 +203,32 @@ def _run_module(mod, ctx: PipelineContext) -> None:
     mod.run(ctx)
 
 
+def _estimate_adata_copy_bytes(adata) -> int:
+    """Estimate the memory footprint of one AnnData copy."""
+    if adata is None:
+        return 0
+
+    def _array_bytes(value) -> int:
+        if sparse.issparse(value):
+            return value.data.nbytes + value.indices.nbytes + value.indptr.nbytes
+        return int(getattr(value, "nbytes", 0))
+
+    total = _array_bytes(adata.X)
+    total += sum(_array_bytes(layer) for layer in adata.layers.values())
+    total += sum(_array_bytes(obsm) for obsm in adata.obsm.values())
+    total += sum(_array_bytes(varm) for varm in adata.varm.values())
+    return int(total)
+
+
+def _should_parallelize_appending(ctx: PipelineContext, modules: list[str]) -> bool:
+    """Return True only when parallel branch copies fit within the memory budget."""
+    if ctx.adata is None or len(modules) <= 1:
+        return False
+    est_copy_bytes = _estimate_adata_copy_bytes(ctx.adata)
+    projected = est_copy_bytes * len(modules)
+    return projected <= PARALLEL_COPY_BUDGET_BYTES
+
+
 def _execute_tier(
     tier: list[str],
     registry: dict,
@@ -246,6 +275,25 @@ def _execute_tier(
                 if stage in mandatory:
                     raise
     else:
+        if not _should_parallelize_appending(ctx, appending):
+            logger.warning(
+                "Falling back to sequential appending execution to avoid excessive AnnData copies."
+            )
+            for stage in appending:
+                mod = registry.get(stage)
+                if mod is None:
+                    ctx.status(stage, False, "unknown module")
+                    continue
+                ctx.set_module_dir(stage)
+                try:
+                    mod.run(ctx)
+                    ctx.status(stage, True, "completed")
+                    ctx.save_checkpoint(stage)
+                except Exception as exc:
+                    ctx.status(stage, False, str(exc))
+                    if stage in mandatory:
+                        raise
+            return
         _run_parallel_appending(appending, registry, ctx, mandatory, max_workers)
 
 
