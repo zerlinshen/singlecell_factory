@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import json
 
@@ -15,7 +16,11 @@ from .context import PipelineContext
 
 logger = logging.getLogger(__name__)
 
-PARALLEL_COPY_BUDGET_BYTES = 512 * 1024 * 1024
+# Defaults tuned for high-memory workstations (~96 GB RAM):
+# - allow several large AnnData branch copies when parallel append-only modules run
+# - still keep a safety reserve to avoid swapping/OOM on larger cohorts
+PARALLEL_COPY_BUDGET_BYTES = 24 * 1024 * 1024 * 1024
+MEMORY_RESERVE_BYTES = 8 * 1024 * 1024 * 1024
 
 # Module dependency DAG: module_name -> set of modules it requires
 MODULE_DEPENDENCIES: dict[str, set[str]] = {
@@ -34,7 +39,6 @@ MODULE_DEPENDENCIES: dict[str, set[str]] = {
     "pathway_analysis": {"differential_expression"},
     "cell_communication": {"annotation"},
     "gene_regulatory_network": {"clustering"},
-    "compare_10x": {"clustering"},
     "validate_cbioportal": {"differential_expression"},
     "immune_phenotyping": {"annotation"},
     "tumor_microenvironment": {"annotation"},
@@ -44,7 +48,7 @@ MODULE_DEPENDENCIES: dict[str, set[str]] = {
 
 # Modules that mutate adata structurally (embeddings, X, layers).
 # These MUST run sequentially, not in parallel branches.
-MUTATING_MODULES = {"batch_correction", "rna_velocity"}
+MUTATING_MODULES = {"batch_correction"}
 
 
 def _resolve_execution_order(mandatory: list[str], optional: list[str]) -> list[str]:
@@ -105,7 +109,6 @@ def _build_registry() -> dict[str, object]:
     from .modules.cellranger import CellRangerModule
     from .modules.clustering import ClusteringModule
     from .modules.cnv_inference import CNVInferenceModule
-    from .modules.compare_10x import Compare10XModule
     from .modules.differential_expression import DifferentialExpressionModule
     from .modules.doublet_detection import DoubletDetectionModule
     from .modules.gene_regulatory_network import GeneRegulatoryNetworkModule
@@ -135,7 +138,6 @@ def _build_registry() -> dict[str, object]:
         "pathway_analysis": PathwayAnalysisModule(),
         "cell_communication": CellCommunicationModule(),
         "gene_regulatory_network": GeneRegulatoryNetworkModule(),
-        "compare_10x": Compare10XModule(),
         "validate_cbioportal": ValidateCbioPortalModule(),
         "immune_phenotyping": ImmunePhenotypingModule(),
         "tumor_microenvironment": TumorMicroenvironmentModule(),
@@ -158,7 +160,7 @@ def _save_manifest(ctx: PipelineContext) -> Path:
         ctx.adata.write(ctx.run_dir / "final_adata.h5ad")
     manifest = {
         "project": ctx.cfg.project,
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "run_dir": str(ctx.run_dir),
         "optional_modules": ctx.cfg.optional_modules,
         "module_status": ctx.module_status,
@@ -220,13 +222,47 @@ def _estimate_adata_copy_bytes(adata) -> int:
     return int(total)
 
 
-def _should_parallelize_appending(ctx: PipelineContext, modules: list[str]) -> bool:
-    """Return True only when parallel branch copies fit within the memory budget."""
-    if ctx.adata is None or len(modules) <= 1:
-        return False
-    est_copy_bytes = _estimate_adata_copy_bytes(ctx.adata)
-    projected = est_copy_bytes * len(modules)
-    return projected <= PARALLEL_COPY_BUDGET_BYTES
+def _get_available_memory_bytes() -> int | None:
+    """Return currently available system memory in bytes, if detectable."""
+    try:
+        import psutil  # type: ignore
+
+        return int(psutil.virtual_memory().available)
+    except Exception:
+        pass
+
+    try:
+        pages = os.sysconf("SC_AVPHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        return int(pages * page_size)
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
+def _safe_parallel_worker_count(
+    ctx: PipelineContext,
+    modules: list[str],
+    requested_workers: int,
+) -> int:
+    """Choose a safe parallel worker count based on copy size and free memory."""
+    if ctx.adata is None or not modules:
+        return 0
+
+    est_copy_bytes = max(_estimate_adata_copy_bytes(ctx.adata), 1)
+    hard_budget_workers = max(1, PARALLEL_COPY_BUDGET_BYTES // est_copy_bytes)
+
+    available = _get_available_memory_bytes()
+    if available is None:
+        memory_workers = hard_budget_workers
+    else:
+        reserve = min(MEMORY_RESERVE_BYTES, max(available // 4, 0))
+        usable = max(0, available - reserve)
+        memory_workers = max(1, usable // est_copy_bytes)
+
+    return max(
+        0,
+        min(requested_workers, len(modules), int(hard_budget_workers), int(memory_workers)),
+    )
 
 
 def _execute_tier(
@@ -275,9 +311,10 @@ def _execute_tier(
                 if stage in mandatory:
                     raise
     else:
-        if not _should_parallelize_appending(ctx, appending):
+        safe_workers = _safe_parallel_worker_count(ctx, appending, max_workers)
+        if safe_workers <= 1:
             logger.warning(
-                "Falling back to sequential appending execution to avoid excessive AnnData copies."
+                "Falling back to sequential appending execution due to memory safety guard."
             )
             for stage in appending:
                 mod = registry.get(stage)
@@ -294,7 +331,7 @@ def _execute_tier(
                     if stage in mandatory:
                         raise
             return
-        _run_parallel_appending(appending, registry, ctx, mandatory, max_workers)
+        _run_parallel_appending(appending, registry, ctx, mandatory, safe_workers)
 
 
 def _run_parallel_appending(
@@ -305,31 +342,28 @@ def _run_parallel_appending(
     max_workers: int,
 ) -> None:
     """Run appending-only modules in parallel with copy-on-branch, merge-back."""
-    # Create per-module branch contexts with independent adata copies.
-    branch_contexts: dict[str, PipelineContext] = {}
-    for mod_name in modules:
+    def _run_module_in_branch(mod_name: str) -> tuple[str, PipelineContext]:
         mod = registry.get(mod_name)
         if mod is None:
-            ctx.status(mod_name, False, "unknown module")
-            continue
+            raise ValueError(f"unknown module: {mod_name}")
         branch_ctx = copy.copy(ctx)
         branch_ctx.adata = ctx.adata.copy()
         branch_ctx.module_status = []
         branch_ctx.metadata = dict(ctx.metadata)
         branch_ctx._figure_futures = []
         branch_ctx.set_module_dir(mod_name)
-        branch_contexts[mod_name] = branch_ctx
+        mod.run(branch_ctx)
+        return mod_name, branch_ctx
 
     results: dict[str, tuple[str, str]] = {}
-    with ThreadPoolExecutor(max_workers=min(max_workers, len(branch_contexts))) as pool:
-        futures = {
-            pool.submit(_run_module, registry[name], branch_ctx): name
-            for name, branch_ctx in branch_contexts.items()
-        }
+    branch_contexts: dict[str, PipelineContext] = {}
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(modules))) as pool:
+        futures = {pool.submit(_run_module_in_branch, name): name for name in modules}
         for future in as_completed(futures):
             name = futures[future]
             try:
-                future.result()
+                returned_name, branch_ctx = future.result()
+                branch_contexts[returned_name] = branch_ctx
                 results[name] = ("ok", "completed")
             except Exception as exc:
                 results[name] = ("failed", str(exc))

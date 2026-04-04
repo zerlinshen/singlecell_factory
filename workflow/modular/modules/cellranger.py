@@ -56,9 +56,9 @@ class CellRangerModule:
             "cellranger",
             "count",
             f"--id={sample_id}",
+            "--create-bam=true",
             f"--fastqs={fastq_dir}",
             f"--transcriptome={transcriptome_dir}",
-            f"--sample={sample_id}",
             f"--localcores={localcores}",
             f"--localmem={localmem}",
         ]

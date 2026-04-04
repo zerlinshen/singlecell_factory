@@ -80,7 +80,7 @@ class AnnotationModule:
         cluster_summary.to_csv(ctx.table_dir / "cluster_majority_cell_type.csv")
 
         # --- Visualizations ---
-        sc.pl.umap(adata, color=["cell_type"], show=False)
+        sc.pl.umap(adata, color=["cell_type"], show=False, legend_loc="on data")
         plt.savefig(ctx.figure_dir / "umap_cell_type.png", dpi=160, bbox_inches="tight")
         plt.close()
 

@@ -75,8 +75,13 @@ class VelocityConfig:
     """Configuration for RNA velocity."""
 
     loom_path: Path | None = None
+    bam_path: Path | None = None
+    gtf_path: Path | None = None
     mode: str = "stochastic"  # stochastic, dynamical
     n_jobs: int = 4
+    min_shared_counts: int = 20  # scVelo filter_and_normalize threshold
+    n_pcs: int = 30  # PCA components for scVelo moments
+    n_neighbors: int = 30  # neighbors for scVelo moments
 
 
 @dataclass
@@ -118,7 +123,6 @@ class PipelineConfig:
             "annotation",
             "trajectory",
             "pseudo_velocity",
-            "compare_10x",
         ]
     )
     markers: dict[str, list[str]] = field(default_factory=dict)

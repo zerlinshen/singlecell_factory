@@ -37,7 +37,7 @@ Pathway analysis              Pseudo-velocity (flow arrows)
 Immune phenotyping --> TME scoring --> Tumor evolution
 ```
 
-The pipeline produces **77 output files** (figures + tables) organized into 18 analysis folders.
+The pipeline produces output files (figures + tables) organized into 18 analysis folders.
 
 ### 1.3 Who Is This For?
 
@@ -126,7 +126,7 @@ cellranger --> qc --> doublet_detection --> clustering
 | Type | Modules | Why mandatory? |
 |---|---|---|
 | **Mandatory** (always run) | cellranger, qc, doublet_detection | Every analysis needs clean, de-duplicated data |
-| **Optional** (you choose) | All 18 others | Pick what's relevant to your biological question |
+| **Optional** (you choose) | All 17 others | Pick what's relevant to your biological question |
 
 ### 3.3 How to Run
 
@@ -137,13 +137,13 @@ python -m workflow.modular.cli \
   --sample-root data/raw/my_dataset \
   --optional-modules clustering
 
-# Full analysis (all 18 optional modules)
+# Full analysis (all optional modules)
 python -m workflow.modular.cli \
   --project LUSC_3k_Analysis \
   --sample-root data/raw/lung_carcinoma_3k_count \
   --optional-modules clustering,cell_cycle,differential_expression,annotation,\
 trajectory,pseudo_velocity,cnv_inference,pathway_analysis,cell_communication,\
-gene_regulatory_network,compare_10x,immune_phenotyping,tumor_microenvironment,\
+gene_regulatory_network,immune_phenotyping,tumor_microenvironment,\
 gene_signature_scoring,evolution
 ```
 
@@ -211,6 +211,8 @@ Scrublet works by:
 2. Building a shared k-NN graph of real + simulated cells
 3. Scoring each real cell by how similar it is to simulated doublets
 4. Automatically finding a threshold to call doublets
+
+**Robust fallback:** If the dataset is too small/degenerate for Scrublet, the module falls back to all-singlets (no cells removed) and records `doublet_method=fallback_all_singlets` in run metadata.
 
 **Output:** `doublet_scores.png` — histogram showing the distribution of doublet scores. There should be a clear bimodal distribution with a small peak of doublets on the right.
 
@@ -340,24 +342,7 @@ Scrublet works by:
 
 ---
 
-### Module 8: 10X Validation (`compare_10x`)
-
-**What it does:** Compares your pipeline's results against Cell Ranger's built-in analysis to quantify agreement.
-
-**Metrics:**
-- **ARI** (Adjusted Rand Index) — measures cluster assignment agreement (0 = random, 1 = perfect). DOI: [10.1007/BF01908075](https://doi.org/10.1007/BF01908075)
-- **NMI** (Normalized Mutual Information) — measures information shared between clusterings (0 = none, 1 = identical)
-
-**How to interpret:**
-- ARI > 0.5: Good agreement
-- ARI 0.3-0.5: Moderate (different resolution or method choices)
-- ARI < 0.3: Poor — investigate why
-
-**LUSC example:** ARI = 0.42, NMI = 0.59. Moderate agreement — expected because we use Leiden (not Cell Ranger's graph-based clustering) at different resolution.
-
----
-
-### Module 9: Differential Expression (`differential_expression`)
+### Module 8: Differential Expression (`differential_expression`)
 
 **What it does:** Finds "marker genes" — genes that are significantly higher or lower in one cluster compared to all others. These markers define what makes each cluster biologically distinct.
 
@@ -383,7 +368,7 @@ Scrublet works by:
 
 ---
 
-### Module 10: Gene Regulatory Network (`gene_regulatory_network`)
+### Module 9: Gene Regulatory Network (`gene_regulatory_network`)
 
 **What it does:** Infers which transcription factors (TFs) are active in each cluster. TFs are master regulators that control downstream gene programs.
 
@@ -400,7 +385,7 @@ Scrublet works by:
 
 ---
 
-### Module 11: Gene Signature Scoring (`gene_signature_scoring`)
+### Module 10: Gene Signature Scoring (`gene_signature_scoring`)
 
 **What it does:** Scores each cell against 10 cancer hallmark gene signatures. This reveals which biological processes are active where.
 
@@ -431,7 +416,7 @@ Scrublet works by:
 
 ---
 
-### Module 12: Trajectory / Pseudotime (`trajectory`)
+### Module 11: Trajectory / Pseudotime (`trajectory`)
 
 **What it does:** Orders cells along a continuous "pseudotime" axis that represents biological progression — for example, from stem-like to differentiated, or from naive to exhausted T cells. Also builds a PAGA graph showing how clusters connect.
 
@@ -458,7 +443,7 @@ Scrublet works by:
 
 ---
 
-### Module 13: Cell Communication (`cell_communication`)
+### Module 12: Cell Communication (`cell_communication`)
 
 **What it does:** Identifies ligand-receptor interactions between cell types — which cell types are "talking" to which, and through what signaling pathways.
 
@@ -481,7 +466,7 @@ Scrublet works by:
 
 ---
 
-### Module 14: Immune Phenotyping (`immune_phenotyping`)
+### Module 13: Immune Phenotyping (`immune_phenotyping`)
 
 **What it does:** Assigns fine-grained immune subtypes to immune cells (15 subtypes) and computes functional scores for exhaustion, cytotoxicity, and activation.
 
@@ -522,7 +507,7 @@ Scrublet works by:
 
 ---
 
-### Module 15: Tumor Microenvironment (`tumor_microenvironment`)
+### Module 14: Tumor Microenvironment (`tumor_microenvironment`)
 
 **What it does:** Computes established immunotherapy-relevant scores that predict response to immune checkpoint inhibitors.
 
@@ -555,7 +540,7 @@ Scrublet works by:
 
 ---
 
-### Module 16: Pathway Analysis (`pathway_analysis`)
+### Module 15: Pathway Analysis (`pathway_analysis`)
 
 **What it does:** Identifies which biological pathways are enriched in the differentially expressed genes.
 
@@ -572,7 +557,7 @@ Scrublet works by:
 
 ---
 
-### Module 17: Pseudo-Velocity (`pseudo_velocity`)
+### Module 16: Pseudo-Velocity (`pseudo_velocity`)
 
 **What it does:** Computes velocity vectors showing the *direction* cells are moving in gene expression space, based on pseudotime gradients. This produces flow arrows and stream plots on UMAP.
 
@@ -594,7 +579,7 @@ Scrublet works by:
 
 ---
 
-### Module 18: Tumor Evolution (`evolution`)
+### Module 17: Tumor Evolution (`evolution`)
 
 **What it does:** Reconstructs the clonal architecture of the tumor by clustering cells based on their CNV profiles, then orders clones along pseudotime to reveal the evolutionary trajectory.
 
@@ -621,6 +606,39 @@ Scrublet works by:
 
 ---
 
+### Module 18: RNA Velocity (`rna_velocity`)
+
+**What it does:** Estimates transcriptional state transitions from spliced/unspliced RNA kinetics using scVelo.
+
+**Method:** scVelo stochastic mode (`scv.tl.velocity`) or dynamical mode (`scv.tl.recover_dynamics` + `scv.tl.latent_time`).
+- Reference: Bergen et al., *Nature Biotechnology*, 2020. DOI: [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3)
+
+**Input data sources (priority order):**
+1. `--velocity-loom` (pre-computed loom with `spliced`/`unspliced`)
+2. `--velocity-bam` + `--velocity-gtf` (direct extraction from Cell Ranger BAM)
+2b. `--velocity-bam` + `--transcriptome-dir` (auto-discover `genes.gtf(.gz)` from Cell Ranger reference)
+
+**BAM extraction details:** Reads are classified as spliced/unspliced from CIGAR splice junctions plus exon/intron overlap against GTF annotations. Chromosomes are scanned in parallel (`--velocity-n-jobs`) and accumulated with COO sparse matrices before CSR conversion.
+
+**Architecture note:** The module runs on an internal `adata.copy()` and transfers only cell-level outputs (`obs`/`obsm`/selected `uns`) back to the main object, so the shared gene index stays unchanged and the module remains parallel-safe in the pipeline.
+
+**Dynamical mode outputs:** `--velocity-mode dynamical` additionally produces latent time (`adata.obs["latent_time"]`) and phase portraits.
+
+**Additional parameters:** `--velocity-min-shared-counts` (gene filter threshold), `--velocity-n-pcs` (PCA for moments), `--velocity-n-neighbors` (neighbors for moments).
+
+**Output files:**
+| File | What it shows |
+|---|---|
+| `velocity_stream_umap.png` | Main velocity stream field on UMAP |
+| `velocity_grid_umap.png` | Grid-based velocity field on UMAP |
+| `velocity_length_distribution.png` | Distribution of velocity magnitudes (QC) |
+| `velocity_confidence.csv` | Per-cell velocity confidence and length (plus latent time if available) |
+| `velocity_top_genes.csv` | Top ranked velocity genes |
+| `velocity_latent_time_umap.png` | UMAP colored by latent time (dynamical mode only) |
+| `velocity_phase_portraits.png` | Phase portraits for top genes (dynamical mode only) |
+
+---
+
 ## 5. Running the Pipeline
 
 ### 5.1 Common Commands
@@ -635,7 +653,7 @@ python -m workflow.modular.cli \
   --sample-root data/raw/lung_carcinoma_3k_count \
   --optional-modules clustering,cell_cycle,differential_expression,annotation,\
 trajectory,pseudo_velocity,cnv_inference,pathway_analysis,cell_communication,\
-gene_regulatory_network,compare_10x,immune_phenotyping,tumor_microenvironment,\
+gene_regulatory_network,immune_phenotyping,tumor_microenvironment,\
 gene_signature_scoring,evolution
 
 # Quick exploratory run (just clustering + DE)
@@ -725,13 +743,13 @@ After a run completes, follow this order:
 ## 7. FAQ / Troubleshooting
 
 **Q: How long does the full pipeline take?**
-A: For 3,000 cells with all 18 modules: approximately 5-10 minutes. Larger datasets scale roughly linearly.
+A: For 3,000 cells with all modules: approximately 5-10 minutes. Larger datasets scale roughly linearly.
 
 **Q: Can I add my own gene signatures?**
 A: Yes. Create a JSON file: `{"my_signature": ["GENE1", "GENE2", "GENE3"]}` and pass `--signature-json my_sigs.json`.
 
 **Q: What if I don't have a loom file for RNA velocity?**
-A: The `rna_velocity` module requires spliced/unspliced layers from velocyto. Without a loom file, it will skip gracefully. Use `pseudo_velocity` instead — it works from pseudotime alone.
+A: The `rna_velocity` module can extract spliced/unspliced counts directly from a Cell Ranger BAM file (parallelized by chromosome for ~4-5x speedup). Use `--velocity-bam` and either: (1) `--velocity-gtf`, or (2) `--transcriptome-dir` so the pipeline auto-detects `genes.gtf(.gz)` from the reference directory. Use `--velocity-n-jobs` to control parallelism. If neither a loom file nor BAM+GTF/reference are available, use `pseudo_velocity` instead — it works from pseudotime alone and does not require spliced/unspliced data.
 
 **Q: Can I run on mouse data?**
 A: The pipeline is designed for human data (human gene names, human marker panels, Ensembl human gene positions). For mouse, you would need to customize marker panels and change the BioMart organism.
@@ -764,17 +782,17 @@ results/{project}_{timestamp}/
 ├── annotation/                   # [M5] Cell type UMAP + composition + CSVs
 ├── cell_cycle/                   # [M6] Cell cycle UMAP + scores CSV
 ├── cnv_inference/                # [M7] CNV heatmap + UMAP + classification
-├── compare_10x/                  # [M8] ARI/NMI metrics
-├── differential_expression/      # [M9] Volcano + dotplot + heatmap + CSVs
-├── gene_regulatory_network/      # [M10] TF activity heatmap + CSVs
-├── gene_signature_scoring/       # [M11] Signature heatmap + UMAP + correlation
-├── trajectory/                   # [M12] PAGA + pseudotime heatmap + violin + CSVs
-├── cell_communication/           # [M13] L-R heatmap + CSV
-├── immune_phenotyping/           # [M14] Immune UMAP + composition + signatures
-├── tumor_microenvironment/       # [M15] TME heatmap + checkpoint dotplot + CSVs
-├── pathway_analysis/             # [M16] Enrichment bar + CSV
-├── pseudo_velocity/              # [M17] Arrows + stream + speed UMAP + boxplot
-└── evolution/                    # [M18] Clone UMAP + dendrogram + timeline + CSVs
+├── differential_expression/      # [M8] Volcano + dotplot + heatmap + CSVs
+├── gene_regulatory_network/      # [M9] TF activity heatmap + CSVs
+├── gene_signature_scoring/       # [M10] Signature heatmap + UMAP + correlation
+├── trajectory/                   # [M11] PAGA + pseudotime heatmap + violin + CSVs
+├── cell_communication/           # [M12] L-R heatmap + CSV
+├── immune_phenotyping/           # [M13] Immune UMAP + composition + signatures
+├── tumor_microenvironment/       # [M14] TME heatmap + checkpoint dotplot + CSVs
+├── pathway_analysis/             # [M15] Enrichment bar + CSV
+├── pseudo_velocity/              # [M16] Arrows + stream + speed UMAP + boxplot
+├── evolution/                    # [M17] Clone UMAP + dendrogram + timeline + CSVs
+└── rna_velocity/                 # [M18] scVelo velocity plots + confidence tables
 ```
 
-**Total: 77 files across 18 module folders.**
+**Total: 18 module folders.**

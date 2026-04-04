@@ -1,0 +1,18 @@
+module,status,message
+cellranger,ok,completed
+qc,ok,completed
+doublet_detection,ok,completed
+clustering,ok,completed
+rna_velocity,failed,normalize_per_cell() got an unexpected keyword argument 'n_top_genes'
+annotation,ok,completed
+cell_cycle,ok,completed
+cnv_inference,ok,completed
+differential_expression,ok,completed
+gene_regulatory_network,ok,completed
+gene_signature_scoring,ok,completed
+trajectory,ok,completed
+cell_communication,ok,completed
+immune_phenotyping,ok,completed
+tumor_microenvironment,ok,completed
+pathway_analysis,ok,completed
+evolution,ok,completed

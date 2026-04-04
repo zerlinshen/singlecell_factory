@@ -13,7 +13,7 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 - **Checkpoint & resume** — crash recovery via `--checkpoint` and `--resume-from`
 - **Parallel execution** — independent modules can run concurrently via `--parallel-workers`
 - Multi-backend support: each module auto-detects the best available tool
-- Validated against 10X official results + cBioPortal
+- Validated against cBioPortal mutation data
 
 ## Architecture
 
@@ -41,7 +41,6 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 | `pathway_analysis` | Gene set enrichment (gseapy/decoupler/built-in Hallmark, BH FDR) | differential_expression |
 | `cell_communication` | Ligand-receptor interactions (LIANA / manual L-R scoring) | annotation |
 | `gene_regulatory_network` | TF activity inference (decoupler+DoRothEA / manual TF-target) | clustering |
-| `compare_10x` | Quantitative comparison with 10X official results (ARI/NMI) | clustering |
 | `validate_cbioportal` | Cross-reference DE genes with cBioPortal mutation data | differential_expression |
 | `immune_phenotyping` | 15 immune subtypes + exhaustion/cytotoxicity/activation scores | annotation |
 | `tumor_microenvironment` | TME scoring (CYT/TIS/IFN-gamma/ESTIMATE) + checkpoint profiling | annotation |
@@ -65,7 +64,6 @@ cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression
                                                       +-> rna_velocity
                                                       +-> gene_regulatory_network
                                                       +-> gene_signature_scoring
-                                                      +-> compare_10x
 ```
 
 ## Project Structure
@@ -116,7 +114,7 @@ python -m workflow.modular.cli \
   --sample-root data/raw/lung_carcinoma_3k_count \
   --optional-modules clustering,cell_cycle,differential_expression,annotation,\
 trajectory,pseudo_velocity,cnv_inference,pathway_analysis,cell_communication,\
-gene_regulatory_network,compare_10x,immune_phenotyping,tumor_microenvironment,\
+gene_regulatory_network,immune_phenotyping,tumor_microenvironment,\
 gene_signature_scoring
 ```
 
@@ -160,6 +158,21 @@ python -m workflow.modular.cli \
 immune_phenotyping,tumor_microenvironment,gene_signature_scoring,pathway_analysis
 ```
 
+### RNA Velocity from BAM (no loom file)
+
+```bash
+python -m workflow.modular.cli \
+  --project LUSC_velocity \
+  --sample-root data/raw/lung_carcinoma_3k_count \
+  --optional-modules clustering,rna_velocity \
+  --velocity-bam data/raw/lung_carcinoma_3k_count/outs/possorted_genome_bam.bam \
+  --transcriptome-dir /path/to/refdata-gex-GRCh38-2020-A
+```
+
+If `--transcriptome-dir` is set, `genes.gtf(.gz)` is auto-discovered from:
+`<transcriptome-dir>/genes/genes.gtf(.gz)` (or `<transcriptome-dir>/genes.gtf(.gz)`).
+You can still pass `--velocity-gtf` explicitly to override auto-discovery.
+
 ## Output Structure
 
 Each run creates an independent timestamped folder under `results/`. Subfolders are named by analysis type:
@@ -195,9 +208,6 @@ results/LUSC_3k_Analysis_{timestamp}/
 │   ├── cnv_classification.json
 │   ├── cnv_score_umap.png
 │   └── cnv_heatmap.png
-├── compare_10x/
-│   ├── metrics_vs_10x.csv
-│   └── compare_10x_summary.json
 ├── differential_expression/
 │   ├── marker_genes.csv
 │   ├── marker_genes_all.csv
@@ -253,6 +263,14 @@ results/LUSC_3k_Analysis_{timestamp}/
 │   ├── pseudo_velocity_stream.png
 │   ├── pseudo_velocity_speed_umap.png
 │   └── pseudo_velocity_speed_boxplot.png
+├── rna_velocity/
+│   ├── velocity_confidence.csv
+│   ├── velocity_top_genes.csv
+│   ├── velocity_stream_umap.png
+│   ├── velocity_grid_umap.png
+│   ├── velocity_length_distribution.png
+│   ├── velocity_latent_time_umap.png         # dynamical mode only
+│   └── velocity_phase_portraits.png          # dynamical mode only
 └── evolution/
     ├── evolution_clone_assignment.csv
     ├── evolution_clone_stats.csv
@@ -319,7 +337,17 @@ results/
 | Parameter | Default | Description |
 |---|---|---|
 | `--velocity-loom` | - | Loom file with spliced/unspliced counts |
+| `--velocity-bam` | - | Path to possorted_genome_bam.bam (Cell Ranger BAM output) |
+| `--velocity-gtf` | - | Path to genes.gtf(.gz); optional if `--transcriptome-dir` is set (auto-discovery) |
 | `--velocity-mode` | stochastic | scVelo mode: stochastic/dynamical |
+| `--velocity-n-jobs` | 4 | Parallel workers for BAM extraction and scVelo dynamics |
+| `--velocity-min-shared-counts` | 20 | Minimum shared counts for scVelo gene filtering |
+| `--velocity-n-pcs` | 30 | PCA components for scVelo moments |
+| `--velocity-n-neighbors` | 30 | Neighbors for scVelo moments |
+
+If no loom file is provided, the module can extract spliced/unspliced counts directly from Cell Ranger BAM output using pysam (parallelized by chromosome). `genes.gtf(.gz)` is taken from `--velocity-gtf` or auto-discovered from `--transcriptome-dir`. The module runs scVelo on an internal adata copy and transfers only cell-level results back, preserving the shared gene index and enabling parallel execution with other modules.
+
+**Dynamical mode** additionally outputs latent time UMAP and phase portraits for top velocity genes.
 
 ### Other
 
@@ -351,6 +379,7 @@ results/
 - **Checkpoint/resume**: `--checkpoint` saves h5ad after each module; `--resume-from` skips completed work
 - **Parallel execution**: `--parallel-workers N` runs independent modules concurrently
 - **Async figure I/O**: Background disk writes when parallel mode is active
+- **RNA velocity**: Copy-on-write pattern (non-mutating, parallelizable); BAM extraction parallelized by chromosome with `read.get_tag()` + COO sparse accumulation (~4-5x speedup)
 
 ## Quality Verification Checklist
 
@@ -358,9 +387,8 @@ results/
 2. Review `02_qc/qc_violin_*.png` — verify filter thresholds are reasonable
 3. Review `04_clustering/umap_leiden.png` — clusters should be well-separated
 4. Check `05_annotation/umap_cell_type.png` — cell types should be biologically coherent
-5. Verify `08_compare_10x/compare_10x_summary.json` — ARI/NMI vs 10X official
-6. Review `14_immune_phenotyping/immune_signature_heatmap.png` — CD8_exhausted should correlate with exhaustion score
-7. Check `15_tumor_microenvironment/checkpoint_dotplot.png` — checkpoint expression patterns
+5. Review `14_immune_phenotyping/immune_signature_heatmap.png` — CD8_exhausted should correlate with exhaustion score
+6. Check `15_tumor_microenvironment/checkpoint_dotplot.png` — checkpoint expression patterns
 
 ## Methodology & References
 
@@ -399,6 +427,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 | **Method** | Scrublet — synthetic doublet simulation |
 | **Algorithm** | Simulates doublets by averaging random cell pairs, scores real cells by k-NN similarity to synthetic doublets |
 | **Implementation** | `scrublet.Scrublet.scrub_doublets(min_counts=2, min_cells=3, n_prin_comps=30)` |
+| **Fallback** | For tiny/degenerate datasets, pipeline falls back to all-singlets (records `doublet_method=fallback_all_singlets`) instead of aborting |
 | **Parameters** | expected_doublet_rate=0.06, min_gene_variability_pctl=85 |
 | **Reference** | **Wolock et al., *Cell Systems*, 2019.** DOI: [10.1016/j.cels.2018.11.005](https://doi.org/10.1016/j.cels.2018.11.005) |
 
@@ -456,18 +485,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 08. 10X Validation (`compare_10x`)
-
-| Item | Detail |
-|---|---|
-| **Metrics** | Cell count, median genes/cell, median UMI/cell, total genes detected |
-| **Cluster agreement** | Adjusted Rand Index (ARI) + Normalized Mutual Information (NMI) |
-| **Implementation** | `sklearn.metrics.adjusted_rand_score()`, `sklearn.metrics.normalized_mutual_info_score()` |
-| **References** | **Hubert & Arabie, *Journal of Classification*, 1985.** DOI: [10.1007/BF01908075](https://doi.org/10.1007/BF01908075) (ARI); **Strehl & Ghosh, *JMLR*, 2002** (NMI) |
-
----
-
-### 09. Differential Expression (`differential_expression`)
+### 08. Differential Expression (`differential_expression`)
 
 | Item | Detail |
 |---|---|
@@ -480,7 +498,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 10. Gene Regulatory Network (`gene_regulatory_network`)
+### 09. Gene Regulatory Network (`gene_regulatory_network`)
 
 | Item | Detail |
 |---|---|
@@ -493,7 +511,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 11. Gene Signature Scoring (`gene_signature_scoring`)
+### 10. Gene Signature Scoring (`gene_signature_scoring`)
 
 | Item | Detail |
 |---|---|
@@ -519,7 +537,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 12. Trajectory / Pseudotime (`trajectory`)
+### 11. Trajectory / Pseudotime (`trajectory`)
 
 | Item | Detail |
 |---|---|
@@ -532,7 +550,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 13. Cell Communication (`cell_communication`)
+### 12. Cell Communication (`cell_communication`)
 
 | Item | Detail |
 |---|---|
@@ -544,7 +562,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 14. Immune Phenotyping (`immune_phenotyping`)
+### 13. Immune Phenotyping (`immune_phenotyping`)
 
 | Item | Detail |
 |---|---|
@@ -581,7 +599,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 15. Tumor Microenvironment (`tumor_microenvironment`)
+### 14. Tumor Microenvironment (`tumor_microenvironment`)
 
 | Signature | Genes | Method | Reference |
 |---|---|---|---|
@@ -596,7 +614,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 16. Pathway Analysis (`pathway_analysis`)
+### 15. Pathway Analysis (`pathway_analysis`)
 
 | Backend | Method | Implementation | Reference |
 |---|---|---|---|
@@ -606,7 +624,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 17. Pseudo-Velocity (`pseudo_velocity`)
+### 16. Pseudo-Velocity (`pseudo_velocity`)
 
 | Item | Detail |
 |---|---|
@@ -618,7 +636,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 18. Batch Correction (`batch_correction`)
+### 17. Batch Correction (`batch_correction`)
 
 | Method | Algorithm | Reference |
 |---|---|---|
@@ -629,7 +647,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 19. RNA Velocity (`rna_velocity`)
+### 18. RNA Velocity (`rna_velocity`)
 
 | Item | Detail |
 |---|---|
@@ -637,12 +655,15 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 | **Stochastic mode** | Moment-based estimation of splicing/degradation rates |
 | **Dynamical mode** | Full transcriptome kinetics model with latent time inference |
 | **Implementation** | `scvelo.tl.velocity()`, `scvelo.tl.velocity_graph()`, `scvelo.tl.velocity_confidence()` |
-| **Requirements** | Spliced/unspliced count layers (from loom file or velocyto) |
+| **Architecture** | Copy-on-write execution (`adata.copy()`), then transfer only cell-level outputs back to main adata (non-mutating, parallel-safe) |
+| **Requirements** | Spliced/unspliced count layers (from loom file, velocyto, or BAM extraction) |
+| **BAM extraction** | If no loom file is provided, spliced/unspliced counts are extracted directly from Cell Ranger BAM output (`possorted_genome_bam.bam`) using pysam + GTF-based exon/intron classification |
+| **Outputs** | `velocity_stream_umap.png`, `velocity_grid_umap.png`, `velocity_length_distribution.png`, `velocity_confidence.csv`, `velocity_top_genes.csv` (+ `velocity_latent_time_umap.png`, `velocity_phase_portraits.png` in dynamical mode) |
 | **Reference** | **Bergen et al., *Nature Biotechnology*, 2020.** DOI: [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) |
 
 ---
 
-### 20. cBioPortal Validation (`validate_cbioportal`)
+### 19. cBioPortal Validation (`validate_cbioportal`)
 
 | Item | Detail |
 |---|---|
@@ -654,7 +675,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 ---
 
-### 21. Tumor Evolution (`evolution`)
+### 20. Tumor Evolution (`evolution`)
 
 | Item | Detail |
 |---|---|
@@ -701,8 +722,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 | 27 | Zheng et al., *Cell*, 2017 | [10.1016/j.cell.2017.05.035](https://doi.org/10.1016/j.cell.2017.05.035) | immune_phenotyping |
 | 28 | Zhang et al., *Nature*, 2018 | [10.1038/s41586-018-0694-x](https://doi.org/10.1038/s41586-018-0694-x) | immune_phenotyping |
 | 29 | Luecken & Theis, *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | qc (best practices) |
-| 30 | Hubert & Arabie, *Journal of Classification*, 1985 | [10.1007/BF01908075](https://doi.org/10.1007/BF01908075) | compare_10x (ARI) |
-| 31 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | validate_cbioportal |
+| 30 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | validate_cbioportal |
 | 32 | Gao et al., *Science Signaling*, 2013 | [10.1126/scisignal.2004088](https://doi.org/10.1126/scisignal.2004088) | validate_cbioportal |
 | 33 | Zheng et al., *Nature Communications*, 2017 | [10.1038/ncomms14049](https://doi.org/10.1038/ncomms14049) | cellranger (10X platform) |
 | 34 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | trajectory (PAGA) |
@@ -724,7 +744,6 @@ results/LUSC_3k_Analysis_20260404_062118/
 ├── annotation/                   (3 plots + 2 CSV)
 ├── cell_cycle/                   (1 plot + 1 CSV)
 ├── cnv_inference/                (2 plots + 1 CSV + 1 JSON)
-├── compare_10x/                  (1 CSV + 1 JSON)
 ├── differential_expression/      (3 plots + 3 CSV)
 ├── gene_regulatory_network/      (1 plot + 1 CSV + 1 JSON)
 ├── gene_signature_scoring/       (3 plots + 2 CSV)
@@ -736,7 +755,7 @@ results/LUSC_3k_Analysis_20260404_062118/
 ├── pseudo_velocity/              (4 plots + 2 CSV)
 ├── final_adata.h5ad
 ├── evolution/                    (4 plots + 3 CSV)
-├── module_status.csv             (18/18 modules: all OK)
+├── module_status.csv             (17/17 modules: all OK)
 └── run_manifest.json
 ```
 

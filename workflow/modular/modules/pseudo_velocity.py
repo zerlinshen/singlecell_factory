@@ -11,6 +11,28 @@ from sklearn.neighbors import NearestNeighbors
 from ..context import PipelineContext
 
 
+def _get_cell_group_col(adata) -> str:
+    """Return 'cell_type' if available, otherwise 'leiden' fallback."""
+    if "cell_type" in adata.obs.columns:
+        return "cell_type"
+    if "leiden" in adata.obs.columns:
+        return "leiden"
+    return ""
+
+
+def _adaptive_quiver_scale(umap_coords, velocity):
+    """Compute a quiver scale that makes arrows visible regardless of magnitude."""
+    umap_range = max(
+        umap_coords[:, 0].ptp(),
+        umap_coords[:, 1].ptp(),
+    )
+    median_speed = np.median(np.linalg.norm(velocity, axis=1))
+    if median_speed < 1e-10:
+        return 1.0
+    # Target: median arrow ~5% of UMAP range
+    return median_speed / (umap_range * 0.05)
+
+
 class PseudoVelocityModule:
     """Optional module: pseudo-RNA velocity from local pseudotime gradients.
 
@@ -65,6 +87,9 @@ class PseudoVelocityModule:
         self._plot_speed_umap(adata, ctx)
         self._plot_arrows(adata, umap_valid, velocity, ctx)
         self._plot_stream(adata, umap_valid, velocity, ctx)
+        self._plot_arrows_temporal(adata, umap_valid, velocity, valid, ctx)
+        self._plot_celltype_arrows(adata, umap_valid, velocity, valid, ctx)
+        self._plot_celltype_stream(adata, umap_valid, velocity, valid, ctx)
         if "leiden" in adata.obs:
             self._plot_speed_boxplot(adata, ctx)
 
@@ -95,13 +120,14 @@ class PseudoVelocityModule:
         n = len(umap_valid)
         step = max(1, n // 500)
         sel = slice(None, None, step)
+        qscale = _adaptive_quiver_scale(umap_valid, velocity)
         fig, ax = plt.subplots(figsize=(8, 7))
         ax.scatter(adata.obsm["X_umap"][:, 0], adata.obsm["X_umap"][:, 1],
                    c="lightgrey", s=1, alpha=0.3)
         ax.quiver(
             umap_valid[sel, 0], umap_valid[sel, 1],
             velocity[sel, 0], velocity[sel, 1],
-            angles="xy", scale_units="xy", scale=3,
+            angles="xy", scale_units="xy", scale=qscale,
             color="black", alpha=0.6, width=0.002, headwidth=4,
         )
         ax.set_title("Pseudo-velocity Arrows")
@@ -148,6 +174,137 @@ class PseudoVelocityModule:
         ax.set_xlabel("UMAP1"); ax.set_ylabel("UMAP2")
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudo_velocity_stream.png", dpi=160, bbox_inches="tight")
+        plt.close()
+
+    @staticmethod
+    def _plot_arrows_temporal(adata, umap_valid, velocity, valid_mask, ctx: PipelineContext) -> None:
+        """Arrow plot colored by pseudotime to show temporal evolution direction."""
+        pseudotime = adata.obs["dpt_pseudotime"].values
+        pt_valid = pseudotime[valid_mask]
+        n = len(umap_valid)
+        step = max(1, n // 500)
+        sel = slice(None, None, step)
+        qscale = _adaptive_quiver_scale(umap_valid, velocity)
+
+        fig, ax = plt.subplots(figsize=(8, 7))
+        sc_bg = ax.scatter(
+            adata.obsm["X_umap"][:, 0], adata.obsm["X_umap"][:, 1],
+            c=pseudotime, cmap="viridis", s=2, alpha=0.3,
+        )
+        ax.quiver(
+            umap_valid[sel, 0], umap_valid[sel, 1],
+            velocity[sel, 0], velocity[sel, 1],
+            pt_valid[sel],
+            angles="xy", scale_units="xy", scale=qscale,
+            cmap="viridis", alpha=0.8, width=0.002, headwidth=4,
+        )
+        plt.colorbar(sc_bg, ax=ax, label="Pseudotime")
+        ax.set_title("Pseudo-velocity Arrows (temporal)")
+        ax.set_xlabel("UMAP1")
+        ax.set_ylabel("UMAP2")
+        plt.tight_layout()
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows_temporal.png",
+                    dpi=160, bbox_inches="tight")
+        plt.close()
+
+    @staticmethod
+    def _plot_celltype_arrows(adata, umap_valid, velocity, valid_mask, ctx: PipelineContext) -> None:
+        """Arrow plot with cells and arrows colored by cell type (or leiden fallback)."""
+        col = _get_cell_group_col(adata)
+        if not col:
+            return
+
+        categories = adata.obs[col].astype("category")
+        cat_names = categories.cat.categories.tolist()
+        cmap = plt.cm.tab20
+        color_map = {c: cmap(i / max(len(cat_names) - 1, 1)) for i, c in enumerate(cat_names)}
+
+        fig, ax = plt.subplots(figsize=(9, 7))
+        for cat_name in cat_names:
+            mask = categories == cat_name
+            ax.scatter(
+                adata.obsm["X_umap"][mask, 0], adata.obsm["X_umap"][mask, 1],
+                c=[color_map[cat_name]], s=2, alpha=0.3, label=cat_name,
+            )
+
+        n = len(umap_valid)
+        step = max(1, n // 500)
+        sel_idx = np.arange(n)[::step]
+        valid_idx = np.where(valid_mask)[0]
+        arrow_cats = categories.iloc[valid_idx[sel_idx]]
+        arrow_colors = [color_map[c] for c in arrow_cats]
+        qscale = _adaptive_quiver_scale(umap_valid, velocity)
+
+        ax.quiver(
+            umap_valid[sel_idx, 0], umap_valid[sel_idx, 1],
+            velocity[sel_idx, 0], velocity[sel_idx, 1],
+            angles="xy", scale_units="xy", scale=qscale,
+            color=arrow_colors, alpha=0.7, width=0.002, headwidth=4,
+        )
+        ax.legend(fontsize=7, loc="best", markerscale=3, framealpha=0.8)
+        ax.set_title(f"Pseudo-velocity Arrows (by {col})")
+        ax.set_xlabel("UMAP1")
+        ax.set_ylabel("UMAP2")
+        plt.tight_layout()
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows_celltype.png",
+                    dpi=160, bbox_inches="tight")
+        plt.close()
+
+    @staticmethod
+    def _plot_celltype_stream(adata, umap_valid, velocity, valid_mask, ctx: PipelineContext) -> None:
+        """Stream plot overlaid on cell-type-colored UMAP."""
+        from scipy.spatial import cKDTree
+
+        col = _get_cell_group_col(adata)
+        if not col:
+            return
+
+        categories = adata.obs[col].astype("category")
+        cat_names = categories.cat.categories.tolist()
+        cmap_cat = plt.cm.tab20
+        color_map = {c: cmap_cat(i / max(len(cat_names) - 1, 1)) for i, c in enumerate(cat_names)}
+
+        # Grid interpolation for streamlines
+        x_min, x_max = umap_valid[:, 0].min(), umap_valid[:, 0].max()
+        y_min, y_max = umap_valid[:, 1].min(), umap_valid[:, 1].max()
+        pad_x, pad_y = (x_max - x_min) * 0.05, (y_max - y_min) * 0.05
+        ng = 40
+        xi = np.linspace(x_min - pad_x, x_max + pad_x, ng)
+        yi = np.linspace(y_min - pad_y, y_max + pad_y, ng)
+        Xi, Yi = np.meshgrid(xi, yi)
+        tree = cKDTree(umap_valid)
+        grid_pts = np.column_stack([Xi.ravel(), Yi.ravel()])
+        dist, idx = tree.query(grid_pts, k=10)
+        dist = np.maximum(dist, 1e-6)
+        w = 1.0 / dist
+        w /= w.sum(axis=1, keepdims=True)
+        Vx = (velocity[idx, 0] * w).sum(axis=1).reshape(ng, ng)
+        Vy = (velocity[idx, 1] * w).sum(axis=1).reshape(ng, ng)
+        min_d = dist[:, 0].reshape(ng, ng)
+        thresh = np.percentile(dist[:, 0], 80)
+        Vx[min_d > thresh] = np.nan
+        Vy[min_d > thresh] = np.nan
+
+        fig, ax = plt.subplots(figsize=(9, 7))
+        for cat_name in cat_names:
+            mask = categories == cat_name
+            ax.scatter(
+                adata.obsm["X_umap"][mask, 0], adata.obsm["X_umap"][mask, 1],
+                c=[color_map[cat_name]], s=2, alpha=0.3, label=cat_name,
+            )
+        try:
+            speed_g = np.sqrt(np.nan_to_num(Vx)**2 + np.nan_to_num(Vy)**2)
+            ax.streamplot(xi, yi, Vx, Vy, color=speed_g, cmap="coolwarm",
+                          linewidth=1, density=1.5, arrowsize=1.2)
+        except Exception:
+            pass
+        ax.legend(fontsize=7, loc="best", markerscale=3, framealpha=0.8)
+        ax.set_title(f"Pseudo-velocity Stream (by {col})")
+        ax.set_xlabel("UMAP1")
+        ax.set_ylabel("UMAP2")
+        plt.tight_layout()
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_stream_celltype.png",
+                    dpi=160, bbox_inches="tight")
         plt.close()
 
     @staticmethod

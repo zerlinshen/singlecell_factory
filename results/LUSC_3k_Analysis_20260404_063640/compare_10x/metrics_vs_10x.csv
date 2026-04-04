@@ -1,5 +1,0 @@
-metric,tenx,ours,diff_pct
-Estimated Number of Cells,2588.0,2377.0,-8.153013910355487
-Median Genes per Cell,1484.0,1513.0,1.954177897574124
-Median UMI Counts per Cell,3671.0,3756.0,2.3154453827295014
-Total Genes Detected,27135.0,21993.0,-18.949695964621338

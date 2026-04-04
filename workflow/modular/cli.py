@@ -32,12 +32,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="/home/zerlinshen/singlecell_factory/results")
     parser.add_argument(
         "--optional-modules",
-        default="clustering,differential_expression,annotation,trajectory,pseudo_velocity,compare_10x",
+        default="clustering,differential_expression,annotation,trajectory,pseudo_velocity",
         help=(
             "Comma-separated optional modules. Available: clustering, cell_cycle, "
             "batch_correction, differential_expression, annotation, trajectory, "
             "pseudo_velocity, rna_velocity, cnv_inference, pathway_analysis, "
-            "cell_communication, gene_regulatory_network, compare_10x, validate_cbioportal, "
+            "cell_communication, gene_regulatory_network, validate_cbioportal, "
             "immune_phenotyping, tumor_microenvironment, gene_signature_scoring"
         ),
     )
@@ -45,7 +45,14 @@ def parse_args() -> argparse.Namespace:
 
     # Cell Ranger
     parser.add_argument("--fastq-dir", default="")
-    parser.add_argument("--transcriptome-dir", default="")
+    parser.add_argument(
+        "--transcriptome-dir",
+        default="",
+        help=(
+            "Cell Ranger reference directory. Used by cellranger count and for RNA velocity "
+            "GTF auto-discovery (<ref>/genes/genes.gtf[.gz])."
+        ),
+    )
     parser.add_argument("--sample-id", default="lusc")
     parser.add_argument("--localcores", type=int, default=8)
     parser.add_argument("--localmem", type=int, default=64)
@@ -88,7 +95,20 @@ def parse_args() -> argparse.Namespace:
 
     # RNA velocity
     parser.add_argument("--velocity-loom", default="", help="Path to loom file with spliced/unspliced counts")
+    parser.add_argument("--velocity-bam", default="", help="Path to possorted_genome_bam.bam for spliced/unspliced extraction")
+    parser.add_argument(
+        "--velocity-gtf",
+        default="",
+        help=(
+            "Path to genes.gtf(.gz) for spliced/unspliced extraction. "
+            "Optional if --transcriptome-dir is set (auto-discovery enabled)."
+        ),
+    )
     parser.add_argument("--velocity-mode", default="stochastic", choices=["stochastic", "dynamical"])
+    parser.add_argument("--velocity-n-jobs", type=int, default=4, help="Parallel workers for BAM extraction and scVelo dynamics (default: 4)")
+    parser.add_argument("--velocity-min-shared-counts", type=int, default=20, help="Minimum shared counts for scVelo gene filtering (default: 20)")
+    parser.add_argument("--velocity-n-pcs", type=int, default=30, help="PCA components for scVelo moments (default: 30)")
+    parser.add_argument("--velocity-n-neighbors", type=int, default=30, help="Neighbors for scVelo moments (default: 30)")
 
     # Gene signature scoring
     parser.add_argument(
@@ -201,7 +221,13 @@ def main() -> None:
         ),
         velocity=VelocityConfig(
             loom_path=Path(args.velocity_loom) if args.velocity_loom else None,
+            bam_path=Path(args.velocity_bam) if args.velocity_bam else None,
+            gtf_path=Path(args.velocity_gtf) if args.velocity_gtf else None,
             mode=args.velocity_mode,
+            n_jobs=args.velocity_n_jobs,
+            min_shared_counts=args.velocity_min_shared_counts,
+            n_pcs=args.velocity_n_pcs,
+            n_neighbors=args.velocity_n_neighbors,
         ),
         optional_modules=[m.strip() for m in args.optional_modules.split(",") if m.strip()],
         markers=_load_markers(args.markers_json),

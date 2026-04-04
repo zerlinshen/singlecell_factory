@@ -1,0 +1,102 @@
+{
+  "module": "gene_signature_scoring",
+  "metadata": {
+    "cellranger_outs": "/home/zerlinshen/singlecell_factory/data/raw/lung_carcinoma_dtc/lung_carcinoma_dtc/outs/filtered_feature_bc_matrix",
+    "raw_cells": 2588,
+    "raw_genes": 38606,
+    "cells_after_qc": 2382,
+    "genes_after_qc": 21992,
+    "qc_removed_cells": 206,
+    "doublets_detected": 4,
+    "doublet_rate_pct": 0.17,
+    "cells_after_doublet_removal": 2378,
+    "doublets_removed": 4,
+    "pca_cumulative_var_90pct": 40,
+    "n_clusters": 17,
+    "annotation_unknown_pct": 4.42,
+    "cell_cycle_phases": {
+      "G1": 1623,
+      "G2M": 489,
+      "S": 266
+    },
+    "cnv_mean_score": 0.007267687935382128,
+    "cnv_malignant_cells": 595,
+    "de_significant_genes": 6803,
+    "grn_top_tfs": [
+      "STAT1",
+      "MYC",
+      "SNAI1",
+      "TWIST1",
+      "HIF1A"
+    ],
+    "gene_signatures_scored": [
+      "proliferation",
+      "apoptosis_resistance",
+      "angiogenesis",
+      "invasion_metastasis",
+      "EMT_mesenchymal",
+      "EMT_epithelial",
+      "stemness",
+      "hypoxia",
+      "DDR",
+      "glycolysis"
+    ]
+  },
+  "module_status": [
+    {
+      "module": "cellranger",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "qc",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "doublet_detection",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "clustering",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "rna_velocity",
+      "status": "failed",
+      "message": "normalize_per_cell() got an unexpected keyword argument 'n_top_genes'"
+    },
+    {
+      "module": "annotation",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "cell_cycle",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "cnv_inference",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "differential_expression",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "gene_regulatory_network",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "gene_signature_scoring",
+      "status": "ok",
+      "message": "completed"
+    }
+  ]
+}

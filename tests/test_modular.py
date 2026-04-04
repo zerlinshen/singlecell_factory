@@ -61,7 +61,7 @@ def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
     # Verify all 21 modules are registered (including evolution)
-    assert len(MODULE_DEPENDENCIES) == 21
+    assert len(MODULE_DEPENDENCIES) == 20
 
     # Verify new modules exist with correct dependencies
     assert "immune_phenotyping" in MODULE_DEPENDENCIES
@@ -70,6 +70,13 @@ def test_new_modules_in_dag():
     assert "annotation" in MODULE_DEPENDENCIES["immune_phenotyping"]
     assert "annotation" in MODULE_DEPENDENCIES["tumor_microenvironment"]
     assert "clustering" in MODULE_DEPENDENCIES["gene_signature_scoring"]
+
+
+def test_rna_velocity_not_in_mutating_modules():
+    from workflow.modular.pipeline import MUTATING_MODULES
+
+    assert "rna_velocity" not in MUTATING_MODULES
+    assert "batch_correction" in MUTATING_MODULES
 
 
 def test_registry_includes_new_modules():
@@ -210,7 +217,7 @@ def test_parallel_figure_pool_shutdown_on_exception(monkeypatch, tmp_path):
     assert pools and pools[0].shutdown_called is True
 
 
-def test_parallel_memory_guard_disables_parallel(monkeypatch, tmp_path):
+def test_parallel_memory_guard_adjusts_worker_count(monkeypatch, tmp_path):
     import workflow.modular.pipeline as pipe
     from workflow.modular.context import PipelineContext
 
@@ -226,5 +233,12 @@ def test_parallel_memory_guard_disables_parallel(monkeypatch, tmp_path):
         table_dir=tmp_path / "run",
         adata=adata,
     )
-    monkeypatch.setattr(pipe, "_estimate_adata_copy_bytes", lambda _adata: pipe.PARALLEL_COPY_BUDGET_BYTES)
-    assert pipe._should_parallelize_appending(ctx, ["annotation", "trajectory"]) is False
+    monkeypatch.setattr(pipe, "_estimate_adata_copy_bytes", lambda _adata: 100)
+    monkeypatch.setattr(pipe, "_get_available_memory_bytes", lambda: 350)
+    monkeypatch.setattr(pipe, "MEMORY_RESERVE_BYTES", 100)
+    workers = pipe._safe_parallel_worker_count(
+        ctx,
+        ["annotation", "trajectory", "immune_phenotyping"],
+        requested_workers=8,
+    )
+    assert workers == 2
