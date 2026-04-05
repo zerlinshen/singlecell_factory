@@ -239,6 +239,155 @@ def test_parallel_figure_pool_shutdown_on_exception(monkeypatch, tmp_path):
     assert pools and pools[0].shutdown_called is True
 
 
+def test_gpu_utils_returns_bool(monkeypatch):
+    """gpu_available() returns True when cupy+rapids are importable, False otherwise."""
+    import workflow.modular.modules._gpu_utils as gutils
+
+    # Reset cache
+    monkeypatch.setattr(gutils, "_gpu_ok", None)
+    # When imports fail, should return False
+    import builtins
+    _real_import = builtins.__import__
+
+    def _block_cupy(name, *args, **kwargs):
+        if name == "cupy":
+            raise ImportError("no cupy")
+        return _real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _block_cupy)
+    assert gutils.gpu_available() is False
+    # Cached
+    assert gutils._gpu_ok is False
+
+
+def test_clustering_gpu_fallback(monkeypatch, tmp_path):
+    """If GPU clustering raises, module falls back to CPU and records metadata."""
+    from workflow.modular.modules.clustering import ClusteringModule
+    import workflow.modular.modules._gpu_utils as gutils
+
+    monkeypatch.setattr(gutils, "_gpu_ok", True)
+
+    mod = ClusteringModule()
+    call_log = []
+
+    def mock_run_gpu(self, adata, cfg, ctx):
+        call_log.append("gpu")
+        raise RuntimeError("GPU OOM")
+
+    def mock_run_cpu(self, adata, cfg, ctx):
+        call_log.append("cpu")
+        adata.obs["leiden"] = "0"
+
+    monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
+    monkeypatch.setattr(ClusteringModule, "_run_cpu", mock_run_cpu)
+    monkeypatch.setattr(ClusteringModule, "_plot_umap_clusters", lambda self, a, c: None)
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=AnnData(np.ones((4, 4), dtype=float)),
+    )
+    mod.run(ctx)
+
+    assert call_log == ["gpu", "cpu"]
+    assert ctx.metadata["clustering_backend"] == "cpu"
+
+    # Reset
+    monkeypatch.setattr(gutils, "_gpu_ok", None)
+
+
+def test_clustering_gpu_fallback_does_not_reuse_mutated_gpu_adata(monkeypatch, tmp_path):
+    """GPU failure should not leak partially mutated state into CPU fallback."""
+    from workflow.modular.modules.clustering import ClusteringModule
+    import workflow.modular.modules._gpu_utils as gutils
+
+    monkeypatch.setattr(gutils, "_gpu_ok", True)
+    mod = ClusteringModule()
+
+    def mock_run_gpu(self, adata, cfg, ctx):
+        adata.obs["gpu_only"] = "1"
+        adata.X = np.zeros_like(adata.X)
+        raise RuntimeError("GPU failure after mutation")
+
+    def mock_run_cpu(self, adata, cfg, ctx):
+        # CPU fallback must run on the original (unmutated) object.
+        assert "gpu_only" not in adata.obs
+        assert float(np.asarray(adata.X).sum()) > 0.0
+        adata.obs["leiden"] = "0"
+
+    monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
+    monkeypatch.setattr(ClusteringModule, "_run_cpu", mock_run_cpu)
+    monkeypatch.setattr(ClusteringModule, "_plot_umap_clusters", lambda self, a, c: None)
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=AnnData(np.ones((4, 4), dtype=float)),
+    )
+    mod.run(ctx)
+
+    assert ctx.metadata["clustering_backend"] == "cpu"
+    assert "gpu_only" not in ctx.adata.obs
+    monkeypatch.setattr(gutils, "_gpu_ok", None)
+
+
+def test_de_backend_metadata(monkeypatch, tmp_path):
+    """DE module records de_backend in metadata."""
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+    import workflow.modular.modules._gpu_utils as gutils
+
+    # Force GPU off
+    monkeypatch.setattr(gutils, "_gpu_ok", False)
+
+    adata = AnnData(np.random.default_rng(42).random((20, 10)).astype(np.float32))
+    adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
+    adata.var_names = [f"G{i}" for i in range(10)]
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+    )
+    run_dir = tmp_path / "run"
+    fig_dir = run_dir / "differential_expression"
+    tab_dir = run_dir / "differential_expression"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=fig_dir,
+        table_dir=tab_dir,
+        adata=adata,
+    )
+
+    mod = DifferentialExpressionModule()
+    mod.run(ctx)
+    assert ctx.metadata["de_backend"] == "cpu"
+    assert ctx.metadata["de_significant_genes"] >= 0
+
+    monkeypatch.setattr(gutils, "_gpu_ok", None)
+
+
 def test_parallel_memory_guard_adjusts_worker_count(monkeypatch, tmp_path):
     import workflow.modular.pipeline as pipe
     from workflow.modular.context import PipelineContext

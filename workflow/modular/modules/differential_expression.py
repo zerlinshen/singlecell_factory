@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import matplotlib
 
 matplotlib.use("Agg")
@@ -9,6 +10,9 @@ import pandas as pd
 import scanpy as sc
 
 from ..context import PipelineContext
+from ._gpu_utils import gpu_available
+
+logger = logging.getLogger(__name__)
 
 
 class DifferentialExpressionModule:
@@ -27,12 +31,30 @@ class DifferentialExpressionModule:
         if method == "wilcoxon":
             rank_kwargs["tie_correct"] = True
 
-        sc.tl.rank_genes_groups(
-            adata,
-            groupby="leiden",
-            method=method,
-            **rank_kwargs,
-        )
+        use_gpu = gpu_available() and method in ("wilcoxon", "t-test", "t-test_overestim_var")
+        if use_gpu:
+            try:
+                import rapids_singlecell as rsc
+                logger.info("GPU DE: using rapids-singlecell rank_genes_groups (%s)", method)
+                rsc.tl.rank_genes_groups(
+                    adata,
+                    groupby="leiden",
+                    method=method,
+                    **rank_kwargs,
+                )
+                ctx.metadata["de_backend"] = "gpu"
+            except Exception as exc:
+                logger.warning("GPU DE failed (%s), falling back to CPU", exc)
+                use_gpu = False
+
+        if not use_gpu:
+            sc.tl.rank_genes_groups(
+                adata,
+                groupby="leiden",
+                method=method,
+                **rank_kwargs,
+            )
+            ctx.metadata["de_backend"] = "cpu"
         markers = sc.get.rank_genes_groups_df(adata, group=None)
         if "pvals_adj" not in markers.columns:
             markers["pvals_adj"] = 1.0

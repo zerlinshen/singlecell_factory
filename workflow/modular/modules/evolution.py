@@ -165,10 +165,24 @@ class EvolutionModule:
         if adata.obs["clone"].nunique() < 2:
             return None
         try:
-            sc.tl.rank_genes_groups(
-                adata, groupby="clone", method="wilcoxon",
-                use_raw=False, n_genes=50, key_added="rank_genes_clone",
-            )
+            from ._gpu_utils import gpu_available
+            if gpu_available():
+                import rapids_singlecell as rsc
+                rsc.tl.rank_genes_groups(
+                    adata, groupby="clone", method="wilcoxon",
+                    use_raw=False, n_genes=50, key_added="rank_genes_clone",
+                )
+            else:
+                raise ImportError("GPU not available")
+        except Exception:
+            try:
+                sc.tl.rank_genes_groups(
+                    adata, groupby="clone", method="wilcoxon",
+                    use_raw=False, n_genes=50, key_added="rank_genes_clone",
+                )
+            except Exception:
+                return None
+        try:
             markers = sc.get.rank_genes_groups_df(adata, group=None, key="rank_genes_clone")
             return markers[markers["pvals_adj"] < 0.05].head(200)
         except Exception:

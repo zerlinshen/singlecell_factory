@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import matplotlib
 
 matplotlib.use("Agg")
@@ -7,6 +8,9 @@ import matplotlib.pyplot as plt
 import scanpy as sc
 
 from ..context import PipelineContext
+from ._gpu_utils import gpu_available
+
+logger = logging.getLogger(__name__)
 
 
 class BatchCorrectionModule:
@@ -63,21 +67,37 @@ class BatchCorrectionModule:
             raise ValueError(f"Unknown batch correction method: {cfg.method}")
 
         # Recompute UMAP + Leiden on corrected representation
+        use_rep = "X_pca"
         if cfg.method == "harmony":
-            sc.pp.neighbors(adata, use_rep="X_pca_harmony")
+            use_rep = "X_pca_harmony"
         elif cfg.method == "scanorama":
-            sc.pp.neighbors(adata, use_rep="X_scanorama")
-        elif cfg.method != "bbknn":
-            sc.pp.neighbors(adata, use_rep="X_pca")
+            use_rep = "X_scanorama"
 
-        sc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
-        sc.tl.leiden(
-            adata,
-            resolution=ctx.cfg.clustering.leiden_resolution,
-            flavor="igraph",
-            directed=False,
-            random_state=ctx.cfg.clustering.random_state,
-        )
+        use_gpu = gpu_available()
+        if use_gpu:
+            try:
+                import rapids_singlecell as rsc
+                logger.info("GPU batch post-processing: neighbors/UMAP/Leiden")
+                if cfg.method != "bbknn":
+                    rsc.pp.neighbors(adata, use_rep=use_rep)
+                rsc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
+                rsc.tl.leiden(adata, resolution=ctx.cfg.clustering.leiden_resolution,
+                              random_state=ctx.cfg.clustering.random_state)
+            except Exception as exc:
+                logger.warning("GPU batch post-processing failed (%s), falling back to CPU", exc)
+                use_gpu = False
+
+        if not use_gpu:
+            if cfg.method != "bbknn":
+                sc.pp.neighbors(adata, use_rep=use_rep)
+            sc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
+            sc.tl.leiden(
+                adata,
+                resolution=ctx.cfg.clustering.leiden_resolution,
+                flavor="igraph",
+                directed=False,
+                random_state=ctx.cfg.clustering.random_state,
+            )
         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique())
         ctx.metadata["batch_correction_status"] = "completed"
 

@@ -11,19 +11,9 @@ import matplotlib.pyplot as plt
 import scanpy as sc
 
 from ..context import PipelineContext
+from ._gpu_utils import gpu_available
 
 logger = logging.getLogger(__name__)
-
-
-def _gpu_available() -> bool:
-    """Check if rapids-singlecell GPU backend is usable."""
-    try:
-        import rapids_singlecell  # noqa: F401
-        import cupy  # noqa: F401
-        cupy.cuda.runtime.getDeviceCount()
-        return True
-    except Exception:
-        return False
 
 
 class ClusteringModule:
@@ -42,10 +32,17 @@ class ClusteringModule:
         cfg = ctx.cfg.clustering
         sc.settings.n_jobs = max(1, os.cpu_count() or 1)
 
-        use_gpu = _gpu_available()
+        use_gpu = gpu_available()
         if use_gpu:
-            logger.info("GPU detected — using rapids-singlecell for PCA/neighbors/UMAP")
-            self._run_gpu(adata, cfg, ctx)
+            logger.info("GPU detected — using rapids-singlecell for PCA/neighbors/UMAP/Leiden")
+            adata_gpu = adata.copy()
+            try:
+                self._run_gpu(adata_gpu, cfg, ctx)
+                adata = adata_gpu
+            except Exception as exc:
+                logger.warning("GPU clustering failed (%s), falling back to CPU", exc)
+                use_gpu = False
+                self._run_cpu(adata, cfg, ctx)
         else:
             self._run_cpu(adata, cfg, ctx)
 
