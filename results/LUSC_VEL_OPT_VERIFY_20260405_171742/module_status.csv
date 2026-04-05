@@ -1,6 +1,0 @@
-module,status,message
-cellranger,ok,completed
-qc,ok,completed
-doublet_detection,ok,completed
-clustering,failed,cannot access local variable 'counts_per_cols' where it is not associated with a value
-rna_velocity,failed,RNA velocity requires AnnData with UMAP embedding.

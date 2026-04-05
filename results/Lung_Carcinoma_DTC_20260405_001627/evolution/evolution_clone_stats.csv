@@ -1,4 +1,0 @@
-clone,n_cells,fraction,mean_cnv_score,mean_pseudotime,median_pseudotime,dominant_cell_type
-Clone_1,435,0.1829,0.0052,0.329,0.333,Myeloid/Macro
-Clone_2,1133,0.4765,0.0069,0.2331,0.1747,T cell
-Clone_3,810,0.3406,0.0088,0.1194,0.0411,T cell

@@ -1,6 +1,0 @@
-module,status,message
-cellranger,ok,completed
-qc,ok,completed
-doublet_detection,ok,completed
-clustering,ok,completed
-rna_velocity,ok,completed

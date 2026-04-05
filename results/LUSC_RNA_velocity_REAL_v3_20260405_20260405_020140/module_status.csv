@@ -1,6 +1,0 @@
-module,status,message
-cellranger,ok,completed
-qc,ok,completed
-doublet_detection,ok,completed
-clustering,ok,completed
-rna_velocity,failed,_patch_scvelo_numpy2.<locals>._leastsq_fixed() takes from 4 to 7 positional arguments but 9 were given
