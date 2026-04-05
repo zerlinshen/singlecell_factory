@@ -48,7 +48,7 @@ class CellCommunicationModule:
             adata,
             groupby="cell_type",
             resource_name="consensus",
-            use_raw=True,
+            use_raw=False,
             verbose=False,
         )
 
@@ -140,32 +140,32 @@ class CellCommunicationModule:
 
         mean_mat = np.stack(mean_mat_rows)  # (n_cell_types, n_needed_genes)
 
-        # Score all L-R pairs via pre-computed matrix lookups
-        results = []
+        # Score all L-R pairs via vectorized matrix lookups
+        result_frames = []
         for ligand, receptor in valid_pairs:
             lig_col = gene_col_map[ligand]
             rec_col = gene_col_map[receptor]
             lig_vec = mean_mat[:, lig_col]   # (n_cell_types,)
             rec_vec = mean_mat[:, rec_col]   # (n_cell_types,)
             score_mat = lig_vec[:, None] * rec_vec[None, :]  # outer product
-            for i, source in enumerate(ct_list):
-                for j, target in enumerate(ct_list):
-                    score = score_mat[i, j]
-                    if score > 0:
-                        results.append({
-                            "ligand": ligand,
-                            "receptor": receptor,
-                            "source": source,
-                            "target": target,
-                            "ligand_expr": round(float(lig_vec[i]), 4),
-                            "receptor_expr": round(float(rec_vec[j]), 4),
-                            "lr_score": round(float(score), 4),
-                        })
+            ii, jj = np.where(score_mat > 0)
+            if len(ii) == 0:
+                continue
+            result_frames.append(pd.DataFrame({
+                "ligand": ligand,
+                "receptor": receptor,
+                "source": [ct_list[i] for i in ii],
+                "target": [ct_list[j] for j in jj],
+                "ligand_expr": np.round(lig_vec[ii], 4),
+                "receptor_expr": np.round(rec_vec[jj], 4),
+                "lr_score": np.round(score_mat[ii, jj], 4),
+            }))
+        results = result_frames
 
         if not results:
             raise ValueError("No significant L-R interactions detected.")
 
-        df = pd.DataFrame(results).sort_values("lr_score", ascending=False)
+        df = pd.concat(results, ignore_index=True).sort_values("lr_score", ascending=False)
         df.to_csv(ctx.table_dir / "cell_communication_lr.csv", index=False)
         ctx.metadata["cc_top_interactions"] = min(50, len(df))
 

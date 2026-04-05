@@ -1,0 +1,33 @@
+{
+  "module": "doublet_detection",
+  "metadata": {
+    "cellranger_outs": "data/raw/lung_carcinoma_dtc/lung_carcinoma_dtc/outs/filtered_feature_bc_matrix",
+    "raw_cells": 2588,
+    "raw_genes": 38606,
+    "cells_after_qc": 2382,
+    "genes_after_qc": 21992,
+    "qc_removed_cells": 206,
+    "doublet_method": "scrublet",
+    "doublets_detected": 4,
+    "doublet_rate_pct": 0.17,
+    "cells_after_doublet_removal": 2378,
+    "doublets_removed": 4
+  },
+  "module_status": [
+    {
+      "module": "cellranger",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "qc",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "doublet_detection",
+      "status": "ok",
+      "message": "completed"
+    }
+  ]
+}

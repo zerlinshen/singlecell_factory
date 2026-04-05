@@ -1,0 +1,1372 @@
+ligand,receptor,source,target,ligand_expr,receptor_expr,lr_score
+SPP1,CD44,Myeloid/Macro,Mast cell,1.4071,2.5404,3.5746
+SPP1,CD44,Myeloid/Macro,Unknown,1.4071,1.8479,2.6002
+SPP1,CD44,Myeloid/Macro,Myeloid/Macro,1.4071,1.8373,2.5853
+SPP1,CD44,Myeloid/Macro,T cell,1.4071,1.7587,2.4746
+SPP1,CD44,Myeloid/Macro,NK cell,1.4071,1.7429,2.4524
+SPP1,CD44,Myeloid/Macro,Dendritic cell,1.4071,1.4728,2.0724
+SPP1,CD44,Myeloid/Macro,B cell,1.4071,1.4571,2.0503
+TGFB1,TGFBR2,NK cell,Endothelial,1.8423,1.1072,2.0398
+SPP1,CD44,Myeloid/Macro,Fibroblast,1.4071,1.3545,1.906
+TGFB1,TGFBR2,T cell,Endothelial,1.487,1.1072,1.6464
+TGFB1,TGFBR2,Unknown,Endothelial,1.4363,1.1072,1.5902
+SPP1,CD44,Myeloid/Macro,Plasma cell,1.4071,1.0933,1.5384
+TGFB1,TGFBR2,Myeloid/Macro,Endothelial,1.1397,1.1072,1.2619
+TGFB1,TGFBR2,Endothelial,Endothelial,1.1134,1.1072,1.2327
+TGFB1,TGFBR2,Mast cell,Endothelial,1.0125,1.1072,1.121
+TGFB1,TGFBR2,B cell,Endothelial,0.9306,1.1072,1.0304
+TGFB1,TGFBR2,Plasma cell,Endothelial,0.9078,1.1072,1.0051
+VEGFA,FLT1,Mast cell,Endothelial,1.1046,0.9014,0.9956
+TGFB1,TGFBR2,NK cell,T cell,1.8423,0.5351,0.9858
+SPP1,CD44,Myeloid/Macro,Endothelial,1.4071,0.7001,0.9851
+TGFB1,TGFBR2,NK cell,Unknown,1.8423,0.5026,0.926
+SPP1,CD44,Myeloid/Macro,Tumor epithelial,1.4071,0.6114,0.8604
+TGFB1,TGFBR2,NK cell,Fibroblast,1.8423,0.4319,0.7958
+TGFB1,TGFBR2,T cell,T cell,1.487,0.5351,0.7957
+TGFB1,TGFBR2,Unknown,T cell,1.4363,0.5351,0.7685
+TGFB1,TGFBR2,NK cell,NK cell,1.8423,0.4093,0.7541
+TGFB1,TGFBR2,Dendritic cell,Endothelial,0.6772,1.1072,0.7498
+TGFB1,TGFBR2,T cell,Unknown,1.487,0.5026,0.7474
+TGFB1,TGFBR2,NK cell,B cell,1.8423,0.3982,0.7336
+TGFB1,TGFBR2,Unknown,Unknown,1.4363,0.5026,0.7219
+VEGFA,FLT1,Myeloid/Macro,Endothelial,0.7644,0.9014,0.689
+TGFB1,TGFBR2,Fibroblast,Endothelial,0.6044,1.1072,0.6692
+CXCL12,CXCR4,Fibroblast,T cell,0.2949,2.2242,0.656
+CXCL12,CXCR4,Fibroblast,B cell,0.2949,2.1976,0.6481
+TGFB1,TGFBR2,Tumor epithelial,Endothelial,0.5814,1.1072,0.6438
+TGFB1,TGFBR2,T cell,Fibroblast,1.487,0.4319,0.6423
+TGFB1,TGFBR2,Unknown,Fibroblast,1.4363,0.4319,0.6204
+TGFB1,TGFBR2,Myeloid/Macro,T cell,1.1397,0.5351,0.6099
+CXCL12,CXCR4,Fibroblast,NK cell,0.2949,2.0671,0.6096
+TGFB1,TGFBR2,T cell,NK cell,1.487,0.4093,0.6087
+TGFB1,TGFBR2,Endothelial,T cell,1.1134,0.5351,0.5958
+SPP1,CD44,Plasma cell,Mast cell,0.2337,2.5404,0.5937
+TGFB1,TGFBR2,T cell,B cell,1.487,0.3982,0.5921
+TGFB1,TGFBR2,Unknown,NK cell,1.4363,0.4093,0.5879
+CXCL12,CXCR4,Fibroblast,Unknown,0.2949,1.9708,0.5812
+TGFB1,TGFBR2,Myeloid/Macro,Unknown,1.1397,0.5026,0.5728
+TGFB1,TGFBR2,Unknown,B cell,1.4363,0.3982,0.5719
+TGFB1,TGFBR2,NK cell,Dendritic cell,1.8423,0.3056,0.563
+TGFB1,TGFBR2,Endothelial,Unknown,1.1134,0.5026,0.5596
+TGFB1,TGFBR2,Mast cell,T cell,1.0125,0.5351,0.5418
+VEGFA,FLT1,Fibroblast,Endothelial,0.579,0.9014,0.5219
+TGFB1,TGFBR2,Mast cell,Unknown,1.0125,0.5026,0.5089
+TGFB1,TGFBR2,B cell,T cell,0.9306,0.5351,0.498
+TGFB1,TGFBR2,Myeloid/Macro,Fibroblast,1.1397,0.4319,0.4923
+TGFB1,TGFBR2,Plasma cell,T cell,0.9078,0.5351,0.4858
+TGFB1,TGFBR2,NK cell,Myeloid/Macro,1.8423,0.2636,0.4856
+TGFB1,TGFBR2,Endothelial,Fibroblast,1.1134,0.4319,0.4809
+TGFB1,TGFBR2,B cell,Unknown,0.9306,0.5026,0.4677
+TGFB1,TGFBR2,Myeloid/Macro,NK cell,1.1397,0.4093,0.4665
+TGFB1,TGFBR2,Plasma cell,Unknown,0.9078,0.5026,0.4563
+TGFB1,TGFBR2,Endothelial,NK cell,1.1134,0.4093,0.4557
+TGFB1,TGFBR2,T cell,Dendritic cell,1.487,0.3056,0.4544
+TGFB1,TGFBR2,Myeloid/Macro,B cell,1.1397,0.3982,0.4538
+TGFB1,TGFBR2,Endothelial,B cell,1.1134,0.3982,0.4434
+TGFB1,TGFBR2,Unknown,Dendritic cell,1.4363,0.3056,0.4389
+TGFB1,TGFBR2,Mast cell,Fibroblast,1.0125,0.4319,0.4373
+SPP1,CD44,Plasma cell,Unknown,0.2337,1.8479,0.4319
+SPP1,CD44,Plasma cell,Myeloid/Macro,0.2337,1.8373,0.4294
+TGFB1,TGFBR2,Mast cell,NK cell,1.0125,0.4093,0.4144
+SPP1,CD44,Dendritic cell,Mast cell,0.1621,2.5404,0.4119
+SPP1,CD44,Plasma cell,T cell,0.2337,1.7587,0.411
+CXCL12,CXCR4,Fibroblast,Dendritic cell,0.2949,1.3883,0.4094
+SPP1,CD44,Fibroblast,Mast cell,0.161,2.5404,0.409
+SPP1,CD44,Plasma cell,NK cell,0.2337,1.7429,0.4073
+TGFB1,TGFBR2,NK cell,Mast cell,1.8423,0.2204,0.406
+TGFB1,TGFBR2,Mast cell,B cell,1.0125,0.3982,0.4032
+TGFB1,TGFBR2,B cell,Fibroblast,0.9306,0.4319,0.402
+VEGFA,FLT1,Tumor epithelial,Endothelial,0.4454,0.9014,0.4015
+TGFB1,TGFBR2,Plasma cell,Fibroblast,0.9078,0.4319,0.3921
+TGFB1,TGFBR2,T cell,Myeloid/Macro,1.487,0.2636,0.3919
+TGFB1,TGFBR2,B cell,NK cell,0.9306,0.4093,0.3809
+TGFB1,TGFBR2,Unknown,Myeloid/Macro,1.4363,0.2636,0.3786
+CXCL12,CXCR4,Fibroblast,Myeloid/Macro,0.2949,1.2666,0.3735
+TGFB1,TGFBR2,Plasma cell,NK cell,0.9078,0.4093,0.3716
+TGFB1,TGFBR2,B cell,B cell,0.9306,0.3982,0.3706
+TGFB1,TGFBR2,Dendritic cell,T cell,0.6772,0.5351,0.3624
+TGFB1,TGFBR2,Plasma cell,B cell,0.9078,0.3982,0.3615
+TGFB1,TGFBR2,NK cell,Plasma cell,1.8423,0.191,0.3519
+TGFB1,TGFBR2,Myeloid/Macro,Dendritic cell,1.1397,0.3056,0.3483
+SPP1,CD44,Plasma cell,Dendritic cell,0.2337,1.4728,0.3442
+SPP1,CD44,Plasma cell,B cell,0.2337,1.4571,0.3406
+TGFB1,TGFBR2,Dendritic cell,Unknown,0.6772,0.5026,0.3404
+TGFB1,TGFBR2,Endothelial,Dendritic cell,1.1134,0.3056,0.3402
+TNF,TNFRSF1A,Dendritic cell,Tumor epithelial,0.5106,0.6576,0.3358
+IL6,IL6R,Fibroblast,Myeloid/Macro,0.4306,0.7741,0.3333
+CD80,CTLA4,Dendritic cell,T cell,0.6036,0.552,0.3332
+TGFB1,TGFBR2,T cell,Mast cell,1.487,0.2204,0.3277
+TGFB1,TGFBR2,Fibroblast,T cell,0.6044,0.5351,0.3234
+SPP1,CD44,Plasma cell,Fibroblast,0.2337,1.3545,0.3166
+TGFB1,TGFBR2,Unknown,Mast cell,1.4363,0.2204,0.3165
+TGFB1,TGFBR2,Tumor epithelial,T cell,0.5814,0.5351,0.3111
+TGFB1,TGFBR2,Mast cell,Dendritic cell,1.0125,0.3056,0.3094
+CXCL12,CXCR4,Fibroblast,Plasma cell,0.2949,1.0476,0.3089
+CDH1,CDH1,Tumor epithelial,Tumor epithelial,0.5557,0.5557,0.3088
+TGFB1,TGFBR2,Fibroblast,Unknown,0.6044,0.5026,0.3038
+CCL5,CCR5,NK cell,T cell,3.3625,0.0903,0.3037
+TNF,TNFRSF1A,Dendritic cell,Myeloid/Macro,0.5106,0.5912,0.3019
+TGFB1,TGFBR2,Myeloid/Macro,Myeloid/Macro,1.1397,0.2636,0.3004
+SPP1,CD44,Dendritic cell,Unknown,0.1621,1.8479,0.2996
+SPP1,CD44,Dendritic cell,Myeloid/Macro,0.1621,1.8373,0.2979
+SPP1,CD44,Fibroblast,Unknown,0.161,1.8479,0.2975
+SPP1,CD44,Fibroblast,Myeloid/Macro,0.161,1.8373,0.2958
+TGFB1,TGFBR2,Endothelial,Myeloid/Macro,1.1134,0.2636,0.2935
+TGFB1,TGFBR2,Dendritic cell,Fibroblast,0.6772,0.4319,0.2925
+TGFB1,TGFBR2,Tumor epithelial,Unknown,0.5814,0.5026,0.2922
+SPP1,CD44,Dendritic cell,T cell,0.1621,1.7587,0.2851
+TGFB1,TGFBR2,B cell,Dendritic cell,0.9306,0.3056,0.2844
+TGFB1,TGFBR2,T cell,Plasma cell,1.487,0.191,0.2841
+SPP1,CD44,Fibroblast,T cell,0.161,1.7587,0.2832
+SPP1,CD44,Dendritic cell,NK cell,0.1621,1.7429,0.2826
+SPP1,CD44,Fibroblast,NK cell,0.161,1.7429,0.2806
+TGFB1,TGFBR2,Plasma cell,Dendritic cell,0.9078,0.3056,0.2774
+TGFB1,TGFBR2,Dendritic cell,NK cell,0.6772,0.4093,0.2772
+CCL5,CCR5,NK cell,NK cell,3.3625,0.0824,0.2772
+TGFB1,TGFBR2,Unknown,Plasma cell,1.4363,0.191,0.2744
+TGFB1,TGFBR2,Dendritic cell,B cell,0.6772,0.3982,0.2697
+TGFB1,TGFBR2,Mast cell,Myeloid/Macro,1.0125,0.2636,0.2669
+TGFB1,TGFBR2,Fibroblast,Fibroblast,0.6044,0.4319,0.2611
+TNF,TNFRSF1A,Dendritic cell,Fibroblast,0.5106,0.5097,0.2603
+SPP1,CD44,Mast cell,Mast cell,0.1024,2.5404,0.2602
+CCL5,CCR5,NK cell,Myeloid/Macro,3.3625,0.0774,0.2602
+CXCL12,CXCR4,Fibroblast,Endothelial,0.2949,0.8784,0.2591
+TNF,TNFRSF1A,B cell,Tumor epithelial,0.3905,0.6576,0.2568
+SPP1,CD44,Plasma cell,Plasma cell,0.2337,1.0933,0.2555
+TGFB1,TGFBR2,Myeloid/Macro,Mast cell,1.1397,0.2204,0.2512
+TGFB1,TGFBR2,Tumor epithelial,Fibroblast,0.5814,0.4319,0.2511
+TGFB1,TGFBR2,Fibroblast,NK cell,0.6044,0.4093,0.2474
+TGFB1,TGFBR2,Endothelial,Mast cell,1.1134,0.2204,0.2454
+TGFB1,TGFBR2,B cell,Myeloid/Macro,0.9306,0.2636,0.2453
+TNF,TNFRSF1A,NK cell,Tumor epithelial,0.3667,0.6576,0.2411
+TGFB1,TGFBR2,Fibroblast,B cell,0.6044,0.3982,0.2407
+SPP1,CD44,Unknown,Mast cell,0.0947,2.5404,0.2406
+TGFB1,TGFBR2,Plasma cell,Myeloid/Macro,0.9078,0.2636,0.2393
+SPP1,CD44,Dendritic cell,Dendritic cell,0.1621,1.4728,0.2388
+CXCL12,CXCR4,Fibroblast,Fibroblast,0.2949,0.8076,0.2382
+TGFB1,TGFBR2,Tumor epithelial,NK cell,0.5814,0.4093,0.238
+SPP1,CD44,Fibroblast,Dendritic cell,0.161,1.4728,0.2371
+SPP1,CD44,Dendritic cell,B cell,0.1621,1.4571,0.2363
+SPP1,CD44,Fibroblast,B cell,0.161,1.4571,0.2346
+TGFB1,TGFBR2,Tumor epithelial,B cell,0.5814,0.3982,0.2315
+SPP1,CD44,Endothelial,Mast cell,0.0909,2.5404,0.231
+TNF,TNFRSF1A,B cell,Myeloid/Macro,0.3905,0.5912,0.2308
+TNF,TNFRSF1A,T cell,Tumor epithelial,0.341,0.6576,0.2243
+TGFB1,TGFBR2,Mast cell,Mast cell,1.0125,0.2204,0.2231
+SPP1,CD44,Dendritic cell,Fibroblast,0.1621,1.3545,0.2196
+SPP1,CD44,Fibroblast,Fibroblast,0.161,1.3545,0.2181
+TGFB1,TGFBR2,Myeloid/Macro,Plasma cell,1.1397,0.191,0.2177
+TNF,TNFRSF1A,NK cell,Myeloid/Macro,0.3667,0.5912,0.2168
+TGFB1,TGFBR2,Endothelial,Plasma cell,1.1134,0.191,0.2127
+TGFB1,TGFBR2,Dendritic cell,Dendritic cell,0.6772,0.3056,0.2069
+TGFB1,TGFBR2,B cell,Mast cell,0.9306,0.2204,0.2051
+TNF,TNFRSF1A,T cell,Myeloid/Macro,0.341,0.5912,0.2016
+TNF,TNFRSF1A,Dendritic cell,Endothelial,0.5106,0.3939,0.2011
+TGFB1,TGFBR2,Plasma cell,Mast cell,0.9078,0.2204,0.2
+TNF,TNFRSF1A,B cell,Fibroblast,0.3905,0.5097,0.199
+TGFB1,TGFBR2,Mast cell,Plasma cell,1.0125,0.191,0.1934
+TGFB1,TGFBR2,NK cell,Tumor epithelial,1.8423,0.1047,0.1929
+VEGFA,KDR,Mast cell,Endothelial,1.1046,0.1746,0.1928
+SPP1,CD44,NK cell,Mast cell,0.0755,2.5404,0.1919
+SPP1,CD44,Tumor epithelial,Mast cell,0.0751,2.5404,0.1909
+SPP1,CD44,Mast cell,Unknown,0.1024,1.8479,0.1892
+SPP1,CD44,Mast cell,Myeloid/Macro,0.1024,1.8373,0.1882
+TNF,TNFRSF1A,NK cell,Fibroblast,0.3667,0.5097,0.1869
+TGFB1,TGFBR2,Fibroblast,Dendritic cell,0.6044,0.3056,0.1847
+CCL5,CCR5,T cell,T cell,2.0187,0.0903,0.1824
+VEGFA,FLT1,Mast cell,Myeloid/Macro,1.1046,0.1648,0.1821
+TNF,TNFRSF1A,Unknown,Tumor epithelial,0.276,0.6576,0.1815
+VEGFA,FLT1,Plasma cell,Endothelial,0.2005,0.9014,0.1808
+SPP1,CD44,Mast cell,T cell,0.1024,1.7587,0.1801
+IL6,IL6R,Endothelial,Myeloid/Macro,0.2326,0.7741,0.1801
+TGFB1,TGFBR2,Dendritic cell,Myeloid/Macro,0.6772,0.2636,0.1785
+SPP1,CD44,Mast cell,NK cell,0.1024,1.7429,0.1785
+TGFB1,TGFBR2,B cell,Plasma cell,0.9306,0.191,0.1778
+TGFB1,TGFBR2,Tumor epithelial,Dendritic cell,0.5814,0.3056,0.1777
+SPP1,CD44,Dendritic cell,Plasma cell,0.1621,1.0933,0.1773
+SPP1,CD44,Fibroblast,Plasma cell,0.161,1.0933,0.176
+SPP1,CD44,Unknown,Unknown,0.0947,1.8479,0.175
+SPP1,CD44,Unknown,Myeloid/Macro,0.0947,1.8373,0.174
+TNF,TNFRSF1A,T cell,Fibroblast,0.341,0.5097,0.1738
+TGFB1,TGFBR2,Plasma cell,Plasma cell,0.9078,0.191,0.1734
+IL6,IL6R,Fibroblast,Mast cell,0.4306,0.4018,0.173
+SPP1,CD44,Endothelial,Unknown,0.0909,1.8479,0.168
+SPP1,CD44,Endothelial,Myeloid/Macro,0.0909,1.8373,0.1671
+SPP1,CD44,Unknown,T cell,0.0947,1.7587,0.1666
+CCL5,CCR5,T cell,NK cell,2.0187,0.0824,0.1664
+SPP1,CD44,Unknown,NK cell,0.0947,1.7429,0.1651
+SPP1,CD44,Plasma cell,Endothelial,0.2337,0.7001,0.1636
+TNF,TNFRSF1A,Unknown,Myeloid/Macro,0.276,0.5912,0.1632
+CD80,CTLA4,Dendritic cell,Unknown,0.6036,0.2687,0.1622
+SPP1,CD44,Endothelial,T cell,0.0909,1.7587,0.1599
+TGFB1,TGFBR2,Fibroblast,Myeloid/Macro,0.6044,0.2636,0.1593
+SPP1,CD44,Endothelial,NK cell,0.0909,1.7429,0.1585
+CCL5,CCR5,T cell,Myeloid/Macro,2.0187,0.0774,0.1562
+TGFB1,TGFBR2,T cell,Tumor epithelial,1.487,0.1047,0.1557
+TNF,TNFRSF1A,B cell,Endothelial,0.3905,0.3939,0.1538
+TGFB1,TGFBR2,Tumor epithelial,Myeloid/Macro,0.5814,0.2636,0.1533
+SPP1,CD44,Mast cell,Dendritic cell,0.1024,1.4728,0.1508
+TGFB1,TGFBR2,Unknown,Tumor epithelial,1.4363,0.1047,0.1504
+SPP1,CD44,Mast cell,B cell,0.1024,1.4571,0.1492
+TGFB1,TGFBR2,Dendritic cell,Mast cell,0.6772,0.2204,0.1492
+CD80,CTLA4,Dendritic cell,NK cell,0.6036,0.2459,0.1484
+VEGFA,FLT1,Endothelial,Endothelial,0.1629,0.9014,0.1468
+TNF,TNFRSF1A,NK cell,Endothelial,0.3667,0.3939,0.1444
+SPP1,CD44,Plasma cell,Tumor epithelial,0.2337,0.6114,0.1429
+TNF,TNFRSF1A,Unknown,Fibroblast,0.276,0.5097,0.1407
+SPP1,CD44,NK cell,Unknown,0.0755,1.8479,0.1396
+SPP1,CD44,Unknown,Dendritic cell,0.0947,1.4728,0.1395
+SPP1,CD44,Tumor epithelial,Unknown,0.0751,1.8479,0.1388
+SPP1,CD44,NK cell,Myeloid/Macro,0.0755,1.8373,0.1388
+SPP1,CD44,Mast cell,Fibroblast,0.1024,1.3545,0.1387
+SPP1,CD44,Unknown,B cell,0.0947,1.4571,0.138
+SPP1,CD44,Tumor epithelial,Myeloid/Macro,0.0751,1.8373,0.138
+TNF,TNFRSF1A,T cell,Endothelial,0.341,0.3939,0.1343
+SPP1,CD44,Endothelial,Dendritic cell,0.0909,1.4728,0.1339
+VEGFA,KDR,Myeloid/Macro,Endothelial,0.7644,0.1746,0.1335
+TGFB1,TGFBR2,Fibroblast,Mast cell,0.6044,0.2204,0.1332
+SPP1,CD44,NK cell,T cell,0.0755,1.7587,0.1328
+SPP1,CD44,Endothelial,B cell,0.0909,1.4571,0.1325
+SPP1,CD44,Tumor epithelial,T cell,0.0751,1.7587,0.1321
+SPP1,CD44,NK cell,NK cell,0.0755,1.7429,0.1316
+CXCL12,CXCR4,Fibroblast,Mast cell,0.2949,0.4447,0.1311
+SPP1,CD44,Tumor epithelial,NK cell,0.0751,1.7429,0.131
+CXCL12,CXCR4,Endothelial,T cell,0.0582,2.2242,0.1295
+TGFB1,TGFBR2,Dendritic cell,Plasma cell,0.6772,0.191,0.1294
+SPP1,CD44,Unknown,Fibroblast,0.0947,1.3545,0.1283
+TGFB1,TGFBR2,Tumor epithelial,Mast cell,0.5814,0.2204,0.1281
+CXCL12,CXCR4,Endothelial,B cell,0.0582,2.1976,0.128
+CD274,PDCD1,Mast cell,T cell,0.2372,0.5391,0.1279
+VEGFA,FLT1,Myeloid/Macro,Myeloid/Macro,0.7644,0.1648,0.126
+SPP1,CD44,T cell,Mast cell,0.0492,2.5404,0.1249
+SPP1,CD44,Endothelial,Fibroblast,0.0909,1.3545,0.1232
+CXCL12,CXCR4,Endothelial,NK cell,0.0582,2.0671,0.1204
+TGFB1,TGFBR2,Myeloid/Macro,Tumor epithelial,1.1397,0.1047,0.1193
+FAS,FASLG,Unknown,NK cell,0.5031,0.233,0.1172
+TGFB1,TGFBR2,Endothelial,Tumor epithelial,1.1134,0.1047,0.1166
+TGFB1,TGFBR2,Fibroblast,Plasma cell,0.6044,0.191,0.1155
+CXCL12,CXCR4,Endothelial,Unknown,0.0582,1.9708,0.1148
+SPP1,CD44,Dendritic cell,Endothelial,0.1621,0.7001,0.1135
+SPP1,CD44,Fibroblast,Endothelial,0.161,0.7001,0.1127
+SPP1,CD44,Mast cell,Plasma cell,0.1024,1.0933,0.112
+SPP1,CD44,NK cell,Dendritic cell,0.0755,1.4728,0.1112
+TGFB1,TGFBR2,Tumor epithelial,Plasma cell,0.5814,0.191,0.1111
+SPP1,CD44,Tumor epithelial,Dendritic cell,0.0751,1.4728,0.1107
+SPP1,CD44,NK cell,B cell,0.0755,1.4571,0.1101
+SPP1,CD44,Tumor epithelial,B cell,0.0751,1.4571,0.1095
+TNF,TNFRSF1A,Unknown,Endothelial,0.276,0.3939,0.1087
+TGFB1,TGFBR2,Mast cell,Tumor epithelial,1.0125,0.1047,0.106
+SPP1,CD44,Unknown,Plasma cell,0.0947,1.0933,0.1036
+FAS,FASLG,T cell,NK cell,0.4437,0.233,0.1034
+CD80,CTLA4,B cell,T cell,0.1857,0.552,0.1025
+SPP1,CD44,NK cell,Fibroblast,0.0755,1.3545,0.1023
+SPP1,CD44,Tumor epithelial,Fibroblast,0.0751,1.3545,0.1018
+VEGFA,KDR,Fibroblast,Endothelial,0.579,0.1746,0.1011
+TNF,TNFRSF1A,Myeloid/Macro,Tumor epithelial,0.1517,0.6576,0.0998
+SPP1,CD44,Endothelial,Plasma cell,0.0909,1.0933,0.0994
+SPP1,CD44,Dendritic cell,Tumor epithelial,0.1621,0.6114,0.0991
+SPP1,CD44,Fibroblast,Tumor epithelial,0.161,0.6114,0.0984
+CD80,CTLA4,Dendritic cell,Endothelial,0.6036,0.162,0.0978
+TGFB1,TGFBR2,B cell,Tumor epithelial,0.9306,0.1047,0.0974
+VEGFA,FLT1,Fibroblast,Myeloid/Macro,0.579,0.1648,0.0954
+TGFB1,TGFBR2,Plasma cell,Tumor epithelial,0.9078,0.1047,0.095
+IL6,IL6R,Endothelial,Mast cell,0.2326,0.4018,0.0935
+VEGFA,FLT1,Mast cell,Dendritic cell,1.1046,0.0845,0.0933
+VEGFA,FLT1,Dendritic cell,Endothelial,0.1007,0.9014,0.0908
+SPP1,CD44,T cell,Unknown,0.0492,1.8479,0.0908
+SPP1,CD44,T cell,Myeloid/Macro,0.0492,1.8373,0.0903
+CCL5,CCR5,Endothelial,T cell,0.994,0.0903,0.0898
+TNF,TNFRSF1A,Myeloid/Macro,Myeloid/Macro,0.1517,0.5912,0.0897
+SPP1,CD44,T cell,T cell,0.0492,1.7587,0.0864
+TNF,TNFRSF1A,Fibroblast,Tumor epithelial,0.1308,0.6576,0.086
+SPP1,CD44,T cell,NK cell,0.0492,1.7429,0.0857
+CXCL10,CXCR3,Endothelial,NK cell,0.2389,0.3515,0.084
+SPP1,CD44,NK cell,Plasma cell,0.0755,1.0933,0.0826
+PDGFA,PDGFRA,Fibroblast,Fibroblast,0.339,0.2436,0.0826
+SPP1,CD44,Tumor epithelial,Plasma cell,0.0751,1.0933,0.0821
+CCL5,CCR5,Endothelial,NK cell,0.994,0.0824,0.0819
+CXCL12,CXCR4,Endothelial,Dendritic cell,0.0582,1.3883,0.0809
+VEGFA,KDR,Tumor epithelial,Endothelial,0.4454,0.1746,0.0778
+TNF,TNFRSF1A,Mast cell,Tumor epithelial,0.118,0.6576,0.0776
+TNF,TNFRSF1A,Fibroblast,Myeloid/Macro,0.1308,0.5912,0.0773
+TNF,TNFRSF1A,Myeloid/Macro,Fibroblast,0.1517,0.5097,0.0773
+IL6,IL6R,Fibroblast,Plasma cell,0.4306,0.1794,0.0772
+CCL5,CCR5,Endothelial,Myeloid/Macro,0.994,0.0774,0.0769
+CXCL10,CXCR3,Endothelial,T cell,0.2389,0.3155,0.0754
+CD80,CTLA4,Dendritic cell,Plasma cell,0.6036,0.1242,0.075
+CXCL12,CXCR4,Endothelial,Myeloid/Macro,0.0582,1.2666,0.0738
+VEGFA,FLT1,Tumor epithelial,Myeloid/Macro,0.4454,0.1648,0.0734
+CD274,PDCD1,Mast cell,NK cell,0.2372,0.3091,0.0733
+CCL5,CCR5,Unknown,T cell,0.8046,0.0903,0.0727
+SPP1,CD44,T cell,Dendritic cell,0.0492,1.4728,0.0724
+SPP1,CD44,Mast cell,Endothelial,0.1024,0.7001,0.0717
+SPP1,CD44,T cell,B cell,0.0492,1.4571,0.0716
+CD80,CTLA4,Myeloid/Macro,T cell,0.1289,0.552,0.0711
+TGFB1,TGFBR2,Dendritic cell,Tumor epithelial,0.6772,0.1047,0.0709
+TNF,TNFRSF1A,Mast cell,Myeloid/Macro,0.118,0.5912,0.0698
+FAS,FASLG,Dendritic cell,NK cell,0.2923,0.233,0.0681
+FAS,FASLG,Endothelial,NK cell,0.2866,0.233,0.0668
+TNF,TNFRSF1A,Fibroblast,Fibroblast,0.1308,0.5097,0.0666
+SPP1,CD44,T cell,Fibroblast,0.0492,1.3545,0.0666
+SPP1,CD44,Unknown,Endothelial,0.0947,0.7001,0.0663
+CCL5,CCR5,Unknown,NK cell,0.8046,0.0824,0.0663
+CD274,PDCD1,Mast cell,Unknown,0.2372,0.2793,0.0662
+FAS,FASLG,Fibroblast,NK cell,0.2805,0.233,0.0654
+VEGFA,FLT1,Myeloid/Macro,Dendritic cell,0.7644,0.0845,0.0646
+CD274,PDCD1,Endothelial,T cell,0.1186,0.5391,0.064
+SPP1,CD44,Endothelial,Endothelial,0.0909,0.7001,0.0637
+FAS,FASLG,NK cell,NK cell,0.2723,0.233,0.0634
+TGFB1,TGFBR2,Fibroblast,Tumor epithelial,0.6044,0.1047,0.0633
+SPP1,CD44,B cell,Mast cell,0.0249,2.5404,0.0632
+SPP1,CD44,Mast cell,Tumor epithelial,0.1024,0.6114,0.0626
+CCL5,CCR5,Unknown,Myeloid/Macro,0.8046,0.0774,0.0623
+TNF,TNFRSF1A,Dendritic cell,Unknown,0.5106,0.121,0.0618
+CXCL12,CXCR4,Endothelial,Plasma cell,0.0582,1.0476,0.061
+TGFB1,TGFBR2,Tumor epithelial,Tumor epithelial,0.5814,0.1047,0.0609
+TNF,TNFRSF1A,Mast cell,Fibroblast,0.118,0.5097,0.0601
+TNF,TNFRSF1A,Myeloid/Macro,Endothelial,0.1517,0.3939,0.0598
+HGF,MET,Fibroblast,Tumor epithelial,0.1995,0.2988,0.0596
+IL6,IL6R,Fibroblast,Fibroblast,0.4306,0.138,0.0594
+FAS,FASLG,B cell,NK cell,0.2547,0.233,0.0593
+SPP1,CD44,Unknown,Tumor epithelial,0.0947,0.6114,0.0579
+TNF,TNFRSF1A,Plasma cell,Tumor epithelial,0.0867,0.6576,0.057
+IL6,IL6R,Fibroblast,Endothelial,0.4306,0.1313,0.0565
+SPP1,CD44,Endothelial,Tumor epithelial,0.0909,0.6114,0.0556
+TNF,TNFRSF1A,Dendritic cell,Dendritic cell,0.5106,0.1065,0.0544
+IL6,IL6R,Fibroblast,Dendritic cell,0.4306,0.1254,0.054
+SPP1,CD44,T cell,Plasma cell,0.0492,1.0933,0.0537
+SPP1,CD44,NK cell,Endothelial,0.0755,0.7001,0.0529
+SPP1,CD44,Tumor epithelial,Endothelial,0.0751,0.7001,0.0526
+TNF,TNFRSF1A,Dendritic cell,NK cell,0.5106,0.1025,0.0523
+CCL5,CCR5,NK cell,Unknown,3.3625,0.0154,0.0519
+TNF,TNFRSF1A,Fibroblast,Endothelial,0.1308,0.3939,0.0515
+CCL2,CCR2,Endothelial,Plasma cell,1.2821,0.04,0.0513
+CXCL12,CXCR4,Endothelial,Endothelial,0.0582,0.8784,0.0512
+FAS,FASLG,Unknown,T cell,0.5031,0.1019,0.0512
+TNF,TNFRSF1A,Plasma cell,Myeloid/Macro,0.0867,0.5912,0.0512
+FAS,FASLG,Plasma cell,NK cell,0.218,0.233,0.0508
+CD80,CTLA4,B cell,Unknown,0.1857,0.2687,0.0499
+CCL5,CCR5,Plasma cell,T cell,0.5475,0.0903,0.0495
+VEGFA,FLT1,Fibroblast,Dendritic cell,0.579,0.0845,0.0489
+CXCL10,CXCR3,Endothelial,Dendritic cell,0.2389,0.2016,0.0482
+IL6,IL6R,Unknown,Myeloid/Macro,0.0616,0.7741,0.0477
+TNF,TNFRSF1A,B cell,Unknown,0.3905,0.121,0.0472
+CXCL12,CXCR4,Endothelial,Fibroblast,0.0582,0.8076,0.047
+TNF,TNFRSF1A,Mast cell,Endothelial,0.118,0.3939,0.0465
+CCL5,CCR5,NK cell,B cell,3.3625,0.0138,0.0465
+SPP1,CD44,NK cell,Tumor epithelial,0.0755,0.6114,0.0462
+SPP1,CD44,B cell,Unknown,0.0249,1.8479,0.0459
+SPP1,CD44,Tumor epithelial,Tumor epithelial,0.0751,0.6114,0.0459
+SPP1,CD44,B cell,Myeloid/Macro,0.0249,1.8373,0.0457
+CD80,CTLA4,B cell,NK cell,0.1857,0.2459,0.0457
+FAS,FASLG,T cell,T cell,0.4437,0.1019,0.0452
+CCL5,CCR5,Plasma cell,NK cell,0.5475,0.0824,0.0451
+CCL2,CCR2,Fibroblast,Plasma cell,1.119,0.04,0.0447
+TNF,TNFRSF1A,NK cell,Unknown,0.3667,0.121,0.0444
+TNF,TNFRSF1A,Plasma cell,Fibroblast,0.0867,0.5097,0.0442
+SPP1,CD44,B cell,T cell,0.0249,1.7587,0.0437
+HGF,MET,Fibroblast,Endothelial,0.1995,0.2181,0.0435
+SPP1,CD44,B cell,NK cell,0.0249,1.7429,0.0433
+VEGFA,KDR,Mast cell,Tumor epithelial,1.1046,0.0388,0.0428
+IL6,IL6R,B cell,Myeloid/Macro,0.0552,0.7741,0.0427
+CCL5,CCR5,Plasma cell,Myeloid/Macro,0.5475,0.0774,0.0424
+IL6,IL6R,Endothelial,Plasma cell,0.2326,0.1794,0.0417
+TNF,TNFRSF1A,B cell,Dendritic cell,0.3905,0.1065,0.0416
+TNF,TNFRSF1A,T cell,Unknown,0.341,0.121,0.0413
+TNF,TNFRSF1A,B cell,NK cell,0.3905,0.1025,0.04
+TNF,TNFRSF1A,Dendritic cell,T cell,0.5106,0.078,0.0398
+TNF,TNFRSF1A,NK cell,Dendritic cell,0.3667,0.1065,0.0391
+FAS,FASLG,Unknown,Unknown,0.5031,0.0774,0.0389
+CD274,PDCD1,Tumor epithelial,T cell,0.07,0.5391,0.0377
+TNF,TNFRSF1A,NK cell,NK cell,0.3667,0.1025,0.0376
+VEGFA,FLT1,Tumor epithelial,Dendritic cell,0.4454,0.0845,0.0376
+PDGFA,PDGFRA,Endothelial,Fibroblast,0.1521,0.2436,0.0371
+CCL5,CCR5,Fibroblast,T cell,0.4092,0.0903,0.037
+CD274,PDCD1,Endothelial,NK cell,0.1186,0.3091,0.0367
+SPP1,CD44,B cell,Dendritic cell,0.0249,1.4728,0.0366
+PDGFA,PDGFRA,Mast cell,Fibroblast,0.1504,0.2436,0.0366
+CXCL10,CXCR3,Endothelial,Unknown,0.2389,0.1526,0.0365
+TNF,TNFRSF1A,T cell,Dendritic cell,0.341,0.1065,0.0363
+SPP1,CD44,B cell,B cell,0.0249,1.4571,0.0362
+CDH1,CDH1,Fibroblast,Tumor epithelial,0.064,0.5557,0.0356
+CDH1,CDH1,Tumor epithelial,Fibroblast,0.5557,0.064,0.0356
+FAS,FASLG,Unknown,Mast cell,0.5031,0.0702,0.0353
+CXCL10,CXCR3,Endothelial,Plasma cell,0.2389,0.1476,0.0353
+CD274,PDCD1,Myeloid/Macro,T cell,0.0653,0.5391,0.0352
+VEGFA,KDR,Plasma cell,Endothelial,0.2005,0.1746,0.035
+TNF,TNFRSF1A,T cell,NK cell,0.341,0.1025,0.035
+CD80,CTLA4,Myeloid/Macro,Unknown,0.1289,0.2687,0.0346
+SPP1,CD44,T cell,Endothelial,0.0492,0.7001,0.0344
+FAS,FASLG,T cell,Unknown,0.4437,0.0774,0.0343
+IL6,IL6R,Myeloid/Macro,Myeloid/Macro,0.044,0.7741,0.0341
+TNF,TNFRSF1A,Plasma cell,Endothelial,0.0867,0.3939,0.0341
+CDH1,CDH1,Tumor epithelial,Plasma cell,0.5557,0.0612,0.034
+CDH1,CDH1,Plasma cell,Tumor epithelial,0.0612,0.5557,0.034
+CXCL10,CXCR3,Myeloid/Macro,NK cell,0.0966,0.3515,0.0339
+CCL5,CCR5,Fibroblast,NK cell,0.4092,0.0824,0.0337
+SPP1,CD44,B cell,Fibroblast,0.0249,1.3545,0.0337
+TNF,TNFRSF1A,Unknown,Unknown,0.276,0.121,0.0334
+CD274,PDCD1,Endothelial,Unknown,0.1186,0.2793,0.0331
+VEGFA,FLT1,Plasma cell,Myeloid/Macro,0.2005,0.1648,0.0331
+CD80,CTLA4,Dendritic cell,Myeloid/Macro,0.6036,0.054,0.0326
+CD274,PDCD1,Mast cell,Plasma cell,0.2372,0.1359,0.0322
+IL6,IL6R,Endothelial,Fibroblast,0.2326,0.138,0.0321
+CD80,CTLA4,Myeloid/Macro,NK cell,0.1289,0.2459,0.0317
+TNF,TNFRSF1A,Endothelial,Tumor epithelial,0.0482,0.6576,0.0317
+CCL5,CCR5,Fibroblast,Myeloid/Macro,0.4092,0.0774,0.0317
+VEGFA,FLT1,Mast cell,Unknown,1.1046,0.0285,0.0314
+DLL1,NOTCH1,Endothelial,Endothelial,0.1167,0.2671,0.0312
+CCL5,CCR5,T cell,Unknown,2.0187,0.0154,0.0312
+FAS,FASLG,T cell,Mast cell,0.4437,0.0702,0.0311
+DLL1,NOTCH1,Endothelial,Unknown,0.1167,0.2668,0.0311
+CXCL10,CXCR3,Plasma cell,NK cell,0.088,0.3515,0.0309
+IL6,IL6R,Fibroblast,Tumor epithelial,0.4306,0.0713,0.0307
+CXCL10,CXCR3,Endothelial,B cell,0.2389,0.1281,0.0306
+CD80,CTLA4,Dendritic cell,Mast cell,0.6036,0.0508,0.0306
+CXCL10,CXCR3,Myeloid/Macro,T cell,0.0966,0.3155,0.0305
+IL6,IL6R,Endothelial,Endothelial,0.2326,0.1313,0.0305
+TNF,TNFRSF1A,B cell,T cell,0.3905,0.078,0.0304
+CD80,CTLA4,B cell,Endothelial,0.1857,0.162,0.0301
+CXCL10,CXCR3,Fibroblast,NK cell,0.0857,0.3515,0.0301
+SPP1,CD44,T cell,Tumor epithelial,0.0492,0.6114,0.0301
+FAS,FASLG,Dendritic cell,T cell,0.2923,0.1019,0.0298
+CXCL12,CXCR4,Fibroblast,Tumor epithelial,0.2949,0.1006,0.0297
+VEGFA,KDR,Myeloid/Macro,Tumor epithelial,0.7644,0.0388,0.0296
+TNF,TNFRSF1A,Unknown,Dendritic cell,0.276,0.1065,0.0294
+FAS,FASLG,Endothelial,T cell,0.2866,0.1019,0.0292
+IL6,IL6R,Endothelial,Dendritic cell,0.2326,0.1254,0.0292
+TNF,TNFRSF1A,Dendritic cell,Plasma cell,0.5106,0.0566,0.0289
+TNF,TNFRSF1A,NK cell,T cell,0.3667,0.078,0.0286
+FAS,FASLG,Fibroblast,T cell,0.2805,0.1019,0.0286
+TNF,TNFRSF1A,Endothelial,Myeloid/Macro,0.0482,0.5912,0.0285
+VEGFA,KDR,Endothelial,Endothelial,0.1629,0.1746,0.0284
+CD80,CTLA4,Endothelial,T cell,0.0513,0.552,0.0283
+TNF,TNFRSF1A,Unknown,NK cell,0.276,0.1025,0.0283
+CCL5,CCR5,T cell,B cell,2.0187,0.0138,0.0279
+CXCL10,CXCR3,Plasma cell,T cell,0.088,0.3155,0.0278
+FAS,FASLG,NK cell,T cell,0.2723,0.1019,0.0277
+CXCL12,CXCR4,Mast cell,T cell,0.0123,2.2242,0.0274
+SPP1,CD44,B cell,Plasma cell,0.0249,1.0933,0.0272
+VEGFA,FLT1,Unknown,Endothelial,0.0301,0.9014,0.0271
+CXCL10,CXCR3,Fibroblast,T cell,0.0857,0.3155,0.0271
+CXCL12,CXCR4,Mast cell,B cell,0.0123,2.1976,0.0271
+FAS,FASLG,Mast cell,NK cell,0.116,0.233,0.027
+CCL5,CCR5,NK cell,Fibroblast,3.3625,0.008,0.027
+VEGFA,FLT1,Endothelial,Myeloid/Macro,0.1629,0.1648,0.0269
+TNF,TNFRSF1A,T cell,T cell,0.341,0.078,0.0266
+CD274,PDCD1,T cell,T cell,0.0482,0.5391,0.026
+CXCL10,CXCR3,Endothelial,Fibroblast,0.2389,0.1088,0.026
+FAS,FASLG,B cell,T cell,0.2547,0.1019,0.0259
+VEGFA,FLT1,Mast cell,Mast cell,1.1046,0.0235,0.0259
+CXCL12,CXCR4,Endothelial,Mast cell,0.0582,0.4447,0.0259
+CXCL12,CXCR4,Mast cell,NK cell,0.0123,2.0671,0.0255
+FAS,FASLG,Myeloid/Macro,NK cell,0.1079,0.233,0.0251
+IL6,IL6R,Unknown,Mast cell,0.0616,0.4018,0.0248
+TNF,TNFRSF1A,Endothelial,Fibroblast,0.0482,0.5097,0.0246
+CXCL12,CXCR4,Myeloid/Macro,T cell,0.0111,2.2242,0.0246
+CXCL12,CXCR4,Myeloid/Macro,B cell,0.0111,2.1976,0.0243
+CXCL12,CXCR4,Mast cell,Unknown,0.0123,1.9708,0.0243
+IL6,IL6R,Plasma cell,Myeloid/Macro,0.0313,0.7741,0.0243
+CD274,PDCD1,Mast cell,Endothelial,0.2372,0.1018,0.0242
+CD274,PDCD1,Mast cell,Dendritic cell,0.2372,0.1019,0.0242
+IL6,IL6R,Fibroblast,T cell,0.4306,0.0552,0.0238
+IL6,IL6R,Fibroblast,Unknown,0.4306,0.0552,0.0238
+CCL5,CCR5,Myeloid/Macro,T cell,0.2596,0.0903,0.0234
+CD80,CTLA4,Unknown,T cell,0.0424,0.552,0.0234
+VEGFA,FLT1,Mast cell,Tumor epithelial,1.1046,0.0212,0.0234
+CD80,CTLA4,B cell,Plasma cell,0.1857,0.1242,0.0231
+IL6,IL6R,Tumor epithelial,Myeloid/Macro,0.0297,0.7741,0.023
+CXCL10,CXCR3,Tumor epithelial,NK cell,0.0654,0.3515,0.023
+CCL5,CCR5,Mast cell,T cell,0.2536,0.0903,0.0229
+CXCL12,CXCR4,Myeloid/Macro,NK cell,0.0111,2.0671,0.0229
+CD274,PDCD1,Plasma cell,T cell,0.0423,0.5391,0.0228
+FAS,FASLG,Dendritic cell,Unknown,0.2923,0.0774,0.0226
+VEGFA,KDR,Fibroblast,Tumor epithelial,0.579,0.0388,0.0225
+DLL1,NOTCH1,Endothelial,Fibroblast,0.1167,0.192,0.0224
+IL6,IL6R,B cell,Mast cell,0.0552,0.4018,0.0222
+FAS,FASLG,Plasma cell,T cell,0.218,0.1019,0.0222
+VEGFA,FLT1,Mast cell,B cell,1.1046,0.0201,0.0222
+FAS,FASLG,Endothelial,Unknown,0.2866,0.0774,0.0222
+TNF,TNFRSF1A,B cell,Plasma cell,0.3905,0.0566,0.0221
+VEGFA,FLT1,Myeloid/Macro,Unknown,0.7644,0.0285,0.0218
+CXCL12,CXCR4,Myeloid/Macro,Unknown,0.0111,1.9708,0.0218
+FAS,FASLG,Fibroblast,Unknown,0.2805,0.0774,0.0217
+CD274,PDCD1,Tumor epithelial,NK cell,0.07,0.3091,0.0216
+TNF,TNFRSF1A,Unknown,T cell,0.276,0.078,0.0215
+CCL5,CCR5,Myeloid/Macro,NK cell,0.2596,0.0824,0.0214
+FAS,FASLG,NK cell,Unknown,0.2723,0.0774,0.0211
+CCL5,CCR5,Mast cell,NK cell,0.2536,0.0824,0.0209
+CD80,CTLA4,Myeloid/Macro,Endothelial,0.1289,0.162,0.0209
+TNF,TNFRSF1A,NK cell,Plasma cell,0.3667,0.0566,0.0207
+CXCL10,CXCR3,Tumor epithelial,T cell,0.0654,0.3155,0.0206
+FAS,FASLG,Dendritic cell,Mast cell,0.2923,0.0702,0.0205
+CD274,PDCD1,Myeloid/Macro,NK cell,0.0653,0.3091,0.0202
+FAS,FASLG,Unknown,Plasma cell,0.5031,0.0402,0.0202
+CCL5,CCR5,Myeloid/Macro,Myeloid/Macro,0.2596,0.0774,0.0201
+DLL1,NOTCH1,Endothelial,Mast cell,0.1167,0.1723,0.0201
+FAS,FASLG,Endothelial,Mast cell,0.2866,0.0702,0.0201
+CD274,PDCD1,Dendritic cell,T cell,0.0369,0.5391,0.0199
+DLL1,NOTCH1,Endothelial,NK cell,0.1167,0.17,0.0198
+FAS,FASLG,Fibroblast,Mast cell,0.2805,0.0702,0.0197
+FAS,FASLG,B cell,Unknown,0.2547,0.0774,0.0197
+CCL5,CCR5,Mast cell,Myeloid/Macro,0.2536,0.0774,0.0196
+CXCL12,CXCR4,Unknown,T cell,0.0088,2.2242,0.0196
+CD274,PDCD1,Tumor epithelial,Unknown,0.07,0.2793,0.0196
+CXCL10,CXCR3,Myeloid/Macro,Dendritic cell,0.0966,0.2016,0.0195
+CXCL12,CXCR4,Unknown,B cell,0.0088,2.1976,0.0194
+TNF,TNFRSF1A,T cell,Plasma cell,0.341,0.0566,0.0193
+FAS,FASLG,NK cell,Mast cell,0.2723,0.0702,0.0191
+TNF,TNFRSF1A,Endothelial,Endothelial,0.0482,0.3939,0.019
+CCL5,CCR5,B cell,T cell,0.2063,0.0903,0.0186
+FAS,FASLG,Unknown,Endothelial,0.5031,0.0368,0.0185
+TNF,TNFRSF1A,Myeloid/Macro,Unknown,0.1517,0.121,0.0184
+CXCL12,CXCR4,Unknown,NK cell,0.0088,2.0671,0.0182
+CD274,PDCD1,Myeloid/Macro,Unknown,0.0653,0.2793,0.0182
+VEGFA,FLT1,Myeloid/Macro,Mast cell,0.7644,0.0235,0.0179
+FAS,FASLG,B cell,Mast cell,0.2547,0.0702,0.0179
+CD80,CTLA4,T cell,T cell,0.0323,0.552,0.0178
+CD274,PDCD1,Mast cell,Fibroblast,0.2372,0.0752,0.0178
+FAS,FASLG,T cell,Plasma cell,0.4437,0.0402,0.0178
+CXCL10,CXCR3,Plasma cell,Dendritic cell,0.088,0.2016,0.0177
+IL6,IL6R,Myeloid/Macro,Mast cell,0.044,0.4018,0.0177
+VEGFA,KDR,Dendritic cell,Endothelial,0.1007,0.1746,0.0176
+DLL1,NOTCH1,Endothelial,T cell,0.1167,0.1493,0.0174
+CXCL12,CXCR4,Unknown,Unknown,0.0088,1.9708,0.0174
+SPP1,CD44,B cell,Endothelial,0.0249,0.7001,0.0174
+CXCL10,CXCR3,Fibroblast,Dendritic cell,0.0857,0.2016,0.0173
+VEGFA,KDR,Tumor epithelial,Tumor epithelial,0.4454,0.0388,0.0173
+DLL1,NOTCH1,Endothelial,B cell,0.1167,0.1476,0.0172
+CXCL12,CXCR4,Mast cell,Dendritic cell,0.0123,1.3883,0.0171
+CCL5,CCR5,B cell,NK cell,0.2063,0.0824,0.017
+FAS,FASLG,Plasma cell,Unknown,0.218,0.0774,0.0169
+VEGFA,FLT1,Plasma cell,Dendritic cell,0.2005,0.0845,0.0169
+HGF,MET,Endothelial,Tumor epithelial,0.0563,0.2988,0.0168
+VEGFA,FLT1,Dendritic cell,Myeloid/Macro,0.1007,0.1648,0.0166
+IL6,IL6R,Endothelial,Tumor epithelial,0.2326,0.0713,0.0166
+DLL1,NOTCH1,Myeloid/Macro,Unknown,0.0619,0.2668,0.0165
+DLL1,NOTCH1,Endothelial,Myeloid/Macro,0.1167,0.1417,0.0165
+DLL1,NOTCH1,Myeloid/Macro,Endothelial,0.0619,0.2671,0.0165
+VEGFA,FLT1,Fibroblast,Unknown,0.579,0.0285,0.0165
+FAS,FASLG,T cell,Endothelial,0.4437,0.0368,0.0163
+TNF,TNFRSF1A,Myeloid/Macro,Dendritic cell,0.1517,0.1065,0.0162
+VEGFA,FLT1,Myeloid/Macro,Tumor epithelial,0.7644,0.0212,0.0162
+CCL5,CCR5,T cell,Fibroblast,2.0187,0.008,0.0162
+CD274,PDCD1,Endothelial,Plasma cell,0.1186,0.1359,0.0161
+CD80,CTLA4,Myeloid/Macro,Plasma cell,0.1289,0.1242,0.016
+CCL5,CCR5,B cell,Myeloid/Macro,0.2063,0.0774,0.016
+DLL1,NOTCH1,Endothelial,Dendritic cell,0.1167,0.1357,0.0158
+TNF,TNFRSF1A,Fibroblast,Unknown,0.1308,0.121,0.0158
+CDH1,CDH1,Dendritic cell,Tumor epithelial,0.0283,0.5557,0.0157
+CDH1,CDH1,Tumor epithelial,Dendritic cell,0.5557,0.0283,0.0157
+CXCL12,CXCR4,Mast cell,Myeloid/Macro,0.0123,1.2666,0.0156
+TNF,TNFRSF1A,Unknown,Plasma cell,0.276,0.0566,0.0156
+TNF,TNFRSF1A,Myeloid/Macro,NK cell,0.1517,0.1025,0.0156
+CCL5,CCR5,Endothelial,Unknown,0.994,0.0154,0.0154
+VEGFA,FLT1,Myeloid/Macro,B cell,0.7644,0.0201,0.0154
+CXCL12,CXCR4,Myeloid/Macro,Dendritic cell,0.0111,1.3883,0.0154
+FAS,FASLG,Plasma cell,Mast cell,0.218,0.0702,0.0153
+SPP1,CD44,B cell,Tumor epithelial,0.0249,0.6114,0.0152
+CD274,PDCD1,NK cell,T cell,0.0278,0.5391,0.015
+CD274,PDCD1,T cell,NK cell,0.0482,0.3091,0.0149
+CXCL10,CXCR3,Myeloid/Macro,Unknown,0.0966,0.1526,0.0147
+CXCL10,CXCR3,Myeloid/Macro,Plasma cell,0.0966,0.1476,0.0143
+TNF,TNFRSF1A,Mast cell,Unknown,0.118,0.121,0.0143
+TNF,TNFRSF1A,Tumor epithelial,Tumor epithelial,0.0216,0.6576,0.0142
+CXCL10,CXCR3,B cell,NK cell,0.0405,0.3515,0.0142
+CD274,PDCD1,Mast cell,B cell,0.2372,0.0593,0.0141
+CD274,PDCD1,B cell,T cell,0.026,0.5391,0.014
+CXCL12,CXCR4,Myeloid/Macro,Myeloid/Macro,0.0111,1.2666,0.014
+TNF,TNFRSF1A,Fibroblast,Dendritic cell,0.1308,0.1065,0.0139
+VEGFA,FLT1,Endothelial,Dendritic cell,0.1629,0.0845,0.0138
+CD80,CTLA4,Endothelial,Unknown,0.0513,0.2687,0.0138
+CCL5,CCR5,Endothelial,B cell,0.994,0.0138,0.0138
+FAS,FASLG,Tumor epithelial,NK cell,0.0592,0.233,0.0138
+HGF,MET,Myeloid/Macro,Tumor epithelial,0.0457,0.2988,0.0136
+VEGFA,FLT1,Mast cell,Plasma cell,1.1046,0.0123,0.0136
+CD274,PDCD1,Mast cell,Myeloid/Macro,0.2372,0.0574,0.0136
+VEGFA,FLT1,Fibroblast,Mast cell,0.579,0.0235,0.0136
+CD274,PDCD1,T cell,Unknown,0.0482,0.2793,0.0135
+CXCL10,CXCR3,Plasma cell,Unknown,0.088,0.1526,0.0134
+TNF,TNFRSF1A,Fibroblast,NK cell,0.1308,0.1025,0.0134
+CD80,CTLA4,Fibroblast,T cell,0.024,0.552,0.0133
+CXCL10,CXCR3,Tumor epithelial,Dendritic cell,0.0654,0.2016,0.0132
+CXCL10,CXCR3,Fibroblast,Unknown,0.0857,0.1526,0.0131
+CD274,PDCD1,Plasma cell,NK cell,0.0423,0.3091,0.0131
+CDH1,CDH1,Unknown,Tumor epithelial,0.0234,0.5557,0.013
+CXCL10,CXCR3,Plasma cell,Plasma cell,0.088,0.1476,0.013
+CDH1,CDH1,Tumor epithelial,Unknown,0.5557,0.0234,0.013
+CXCL12,CXCR4,Mast cell,Plasma cell,0.0123,1.0476,0.0129
+CXCL10,CXCR3,B cell,T cell,0.0405,0.3155,0.0128
+TNF,TNFRSF1A,Tumor epithelial,Myeloid/Macro,0.0216,0.5912,0.0128
+IL6,IL6R,Endothelial,T cell,0.2326,0.0552,0.0128
+IL6,IL6R,Endothelial,Unknown,0.2326,0.0552,0.0128
+CXCL10,CXCR3,Fibroblast,Plasma cell,0.0857,0.1476,0.0127
+VEGFA,FLT1,Tumor epithelial,Unknown,0.4454,0.0285,0.0127
+CD80,CTLA4,Endothelial,NK cell,0.0513,0.2459,0.0126
+IL6,IL6R,Plasma cell,Mast cell,0.0313,0.4018,0.0126
+TNF,TNFRSF1A,Mast cell,Dendritic cell,0.118,0.1065,0.0126
+CXCL10,CXCR3,Myeloid/Macro,B cell,0.0966,0.1281,0.0124
+CCL5,CCR5,Unknown,Unknown,0.8046,0.0154,0.0124
+VEGFA,FLT1,Fibroblast,Tumor epithelial,0.579,0.0212,0.0123
+CXCL12,CXCR4,Unknown,Dendritic cell,0.0088,1.3883,0.0123
+HGF,MET,Endothelial,Endothelial,0.0563,0.2181,0.0123
+CD80,CTLA4,Dendritic cell,Fibroblast,0.6036,0.0202,0.0122
+CD274,PDCD1,Endothelial,Endothelial,0.1186,0.1018,0.0121
+TNF,TNFRSF1A,Mast cell,NK cell,0.118,0.1025,0.0121
+CD274,PDCD1,Endothelial,Dendritic cell,0.1186,0.1019,0.0121
+TNF,TNFRSF1A,Dendritic cell,Mast cell,0.5106,0.0234,0.012
+IL6,IL6R,Tumor epithelial,Mast cell,0.0297,0.4018,0.0119
+DLL1,NOTCH1,Myeloid/Macro,Fibroblast,0.0619,0.192,0.0119
+FAS,FASLG,Mast cell,T cell,0.116,0.1019,0.0118
+TNF,TNFRSF1A,Myeloid/Macro,T cell,0.1517,0.078,0.0118
+CD274,PDCD1,Plasma cell,Unknown,0.0423,0.2793,0.0118
+FAS,FASLG,Dendritic cell,Plasma cell,0.2923,0.0402,0.0117
+CXCL12,CXCR4,Myeloid/Macro,Plasma cell,0.0111,1.0476,0.0116
+VEGFA,FLT1,Fibroblast,B cell,0.579,0.0201,0.0116
+FAS,FASLG,Endothelial,Plasma cell,0.2866,0.0402,0.0115
+CD274,PDCD1,Dendritic cell,NK cell,0.0369,0.3091,0.0114
+CD80,CTLA4,Unknown,Unknown,0.0424,0.2687,0.0114
+FAS,FASLG,Fibroblast,Plasma cell,0.2805,0.0402,0.0113
+HGF,MET,Fibroblast,Myeloid/Macro,0.1995,0.0569,0.0113
+CXCL10,CXCR3,Plasma cell,B cell,0.088,0.1281,0.0113
+CXCL12,CXCR4,Unknown,Myeloid/Macro,0.0088,1.2666,0.0112
+CCL5,CCR5,Unknown,B cell,0.8046,0.0138,0.0111
+IL6,IL6R,Unknown,Plasma cell,0.0616,0.1794,0.0111
+CXCL10,CXCR3,Fibroblast,B cell,0.0857,0.1281,0.011
+TNF,TNFRSF1A,Tumor epithelial,Fibroblast,0.0216,0.5097,0.011
+FAS,FASLG,Myeloid/Macro,T cell,0.1079,0.1019,0.011
+FAS,FASLG,NK cell,Plasma cell,0.2723,0.0402,0.0109
+CXCL12,CXCR4,Mast cell,Endothelial,0.0123,0.8784,0.0108
+IL6,IL6R,Fibroblast,B cell,0.4306,0.025,0.0108
+FAS,FASLG,Dendritic cell,Endothelial,0.2923,0.0368,0.0107
+DLL1,NOTCH1,Myeloid/Macro,Mast cell,0.0619,0.1723,0.0107
+PDGFA,PDGFRA,Tumor epithelial,Fibroblast,0.0437,0.2436,0.0106
+VEGFA,FLT1,Tumor epithelial,Mast cell,0.4454,0.0235,0.0105
+DLL1,NOTCH1,Myeloid/Macro,NK cell,0.0619,0.17,0.0105
+FAS,FASLG,Endothelial,Endothelial,0.2866,0.0368,0.0105
+TNF,TNFRSF1A,Plasma cell,Unknown,0.0867,0.121,0.0105
+CXCL10,CXCR3,Myeloid/Macro,Fibroblast,0.0966,0.1088,0.0105
+CD80,CTLA4,Unknown,NK cell,0.0424,0.2459,0.0104
+FAS,FASLG,Fibroblast,Endothelial,0.2805,0.0368,0.0103
+CD274,PDCD1,Dendritic cell,Unknown,0.0369,0.2793,0.0103
+TNF,TNFRSF1A,Fibroblast,T cell,0.1308,0.078,0.0102
+FAS,FASLG,B cell,Plasma cell,0.2547,0.0402,0.0102
+HGF,MET,Myeloid/Macro,Endothelial,0.0457,0.2181,0.01
+FAS,FASLG,NK cell,Endothelial,0.2723,0.0368,0.01
+CD80,CTLA4,B cell,Myeloid/Macro,0.1857,0.054,0.01
+CXCL10,CXCR3,Tumor epithelial,Unknown,0.0654,0.1526,0.01
+IL6,IL6R,B cell,Plasma cell,0.0552,0.1794,0.0099
+CXCL12,CXCR4,Mast cell,Fibroblast,0.0123,0.8076,0.0099
+CXCL10,CXCR3,Endothelial,Endothelial,0.2389,0.0409,0.0098
+CD274,PDCD1,Mast cell,Mast cell,0.2372,0.0411,0.0097
+CXCL12,CXCR4,Myeloid/Macro,Endothelial,0.0111,0.8784,0.0097
+DLL1,NOTCH1,Endothelial,Plasma cell,0.1167,0.0829,0.0097
+CXCL10,CXCR3,Tumor epithelial,Plasma cell,0.0654,0.1476,0.0096
+CXCL10,CXCR3,Plasma cell,Fibroblast,0.088,0.1088,0.0096
+IL6,IL6R,Mast cell,Myeloid/Macro,0.0123,0.7741,0.0095
+VEGFA,FLT1,T cell,Endothelial,0.0105,0.9014,0.0095
+CD274,PDCD1,Tumor epithelial,Plasma cell,0.07,0.1359,0.0095
+VEGFA,FLT1,Myeloid/Macro,Plasma cell,0.7644,0.0123,0.0094
+CD80,CTLA4,B cell,Mast cell,0.1857,0.0508,0.0094
+VEGFA,FLT1,Tumor epithelial,Tumor epithelial,0.4454,0.0212,0.0094
+FAS,FASLG,B cell,Endothelial,0.2547,0.0368,0.0094
+CXCL10,CXCR3,Fibroblast,Fibroblast,0.0857,0.1088,0.0093
+TNF,TNFRSF1A,Mast cell,T cell,0.118,0.078,0.0092
+DLL1,NOTCH1,Myeloid/Macro,T cell,0.0619,0.1493,0.0092
+HGF,MET,Fibroblast,Plasma cell,0.1995,0.046,0.0092
+TNF,TNFRSF1A,B cell,Mast cell,0.3905,0.0234,0.0092
+TNF,TNFRSF1A,Plasma cell,Dendritic cell,0.0867,0.1065,0.0092
+CXCL12,CXCR4,Unknown,Plasma cell,0.0088,1.0476,0.0092
+DLL1,NOTCH1,Myeloid/Macro,B cell,0.0619,0.1476,0.0091
+PDGFA,PDGFRA,Fibroblast,Endothelial,0.339,0.0268,0.0091
+VEGFA,FLT1,Tumor epithelial,B cell,0.4454,0.0201,0.009
+FAS,FASLG,Mast cell,Unknown,0.116,0.0774,0.009
+CD274,PDCD1,Myeloid/Macro,Plasma cell,0.0653,0.1359,0.0089
+CXCL12,CXCR4,Myeloid/Macro,Fibroblast,0.0111,0.8076,0.0089
+DLL1,NOTCH1,B cell,Endothelial,0.0334,0.2671,0.0089
+DLL1,NOTCH1,B cell,Unknown,0.0334,0.2668,0.0089
+CD274,PDCD1,Endothelial,Fibroblast,0.1186,0.0752,0.0089
+TNF,TNFRSF1A,Plasma cell,NK cell,0.0867,0.1025,0.0089
+VEGFA,FLT1,Mast cell,Fibroblast,1.1046,0.008,0.0089
+VEGFA,FLT1,NK cell,Endothelial,0.0098,0.9014,0.0088
+DLL1,NOTCH1,Myeloid/Macro,Myeloid/Macro,0.0619,0.1417,0.0088
+FAS,FASLG,Plasma cell,Plasma cell,0.218,0.0402,0.0088
+PDGFA,PDGFRA,Unknown,Fibroblast,0.0361,0.2436,0.0088
+CD80,CTLA4,T cell,Unknown,0.0323,0.2687,0.0087
+TNF,TNFRSF1A,Myeloid/Macro,Plasma cell,0.1517,0.0566,0.0086
+TNF,TNFRSF1A,NK cell,Mast cell,0.3667,0.0234,0.0086
+CXCL10,CXCR3,NK cell,NK cell,0.0245,0.3515,0.0086
+CD274,PDCD1,NK cell,NK cell,0.0278,0.3091,0.0086
+VEGFA,FLT1,Dendritic cell,Dendritic cell,0.1007,0.0845,0.0085
+IL6,IL6R,Unknown,Fibroblast,0.0616,0.138,0.0085
+TNF,TNFRSF1A,Tumor epithelial,Endothelial,0.0216,0.3939,0.0085
+CCL5,CCR5,Plasma cell,Unknown,0.5475,0.0154,0.0085
+CXCL10,CXCR3,Endothelial,Myeloid/Macro,0.2389,0.0353,0.0084
+CXCL10,CXCR3,Tumor epithelial,B cell,0.0654,0.1281,0.0084
+DLL1,NOTCH1,Myeloid/Macro,Dendritic cell,0.0619,0.1357,0.0084
+FAS,FASLG,Myeloid/Macro,Unknown,0.1079,0.0774,0.0083
+CD274,PDCD1,Unknown,T cell,0.0154,0.5391,0.0083
+CD80,CTLA4,Endothelial,Endothelial,0.0513,0.162,0.0083
+PDGFA,PDGFRA,Myeloid/Macro,Fibroblast,0.0341,0.2436,0.0083
+CXCL10,CXCR3,B cell,Dendritic cell,0.0405,0.2016,0.0082
+PDGFA,PDGFRA,B cell,Fibroblast,0.0335,0.2436,0.0082
+FAS,FASLG,Mast cell,Mast cell,0.116,0.0702,0.0081
+IL6,IL6R,Unknown,Endothelial,0.0616,0.1313,0.0081
+CCL5,CCR5,Endothelial,Fibroblast,0.994,0.008,0.008
+CD274,PDCD1,B cell,NK cell,0.026,0.3091,0.008
+FAS,FASLG,Plasma cell,Endothelial,0.218,0.0368,0.008
+TNF,TNFRSF1A,T cell,Mast cell,0.341,0.0234,0.008
+CD80,CTLA4,T cell,NK cell,0.0323,0.2459,0.0079
+IL6,IL6R,Myeloid/Macro,Plasma cell,0.044,0.1794,0.0079
+CD274,PDCD1,NK cell,Unknown,0.0278,0.2793,0.0078
+CXCL12,CXCR4,Unknown,Endothelial,0.0088,0.8784,0.0078
+VEGFA,KDR,Plasma cell,Tumor epithelial,0.2005,0.0388,0.0078
+CCL2,CCR2,Endothelial,T cell,1.2821,0.0061,0.0078
+CXCL10,CXCR3,NK cell,T cell,0.0245,0.3155,0.0077
+IL6,IL6R,Unknown,Dendritic cell,0.0616,0.1254,0.0077
+FAS,FASLG,Myeloid/Macro,Mast cell,0.1079,0.0702,0.0076
+CCL5,CCR5,Plasma cell,B cell,0.5475,0.0138,0.0076
+FAS,FASLG,Unknown,Fibroblast,0.5031,0.0151,0.0076
+IL6,IL6R,B cell,Fibroblast,0.0552,0.138,0.0076
+VEGFA,FLT1,Mast cell,T cell,1.1046,0.0068,0.0075
+CCL5,CCR5,Dendritic cell,T cell,0.083,0.0903,0.0075
+TNF,TNFRSF1A,Fibroblast,Plasma cell,0.1308,0.0566,0.0074
+CD274,PDCD1,B cell,Unknown,0.026,0.2793,0.0073
+IL6,IL6R,B cell,Endothelial,0.0552,0.1313,0.0072
+CCL2,CCR2,Myeloid/Macro,Plasma cell,0.1802,0.04,0.0072
+CXCL10,CXCR3,Tumor epithelial,Fibroblast,0.0654,0.1088,0.0071
+CD274,PDCD1,Tumor epithelial,Endothelial,0.07,0.1018,0.0071
+CXCL12,CXCR4,Unknown,Fibroblast,0.0088,0.8076,0.0071
+VEGFA,FLT1,Fibroblast,Plasma cell,0.579,0.0123,0.0071
+CD274,PDCD1,Tumor epithelial,Dendritic cell,0.07,0.1019,0.0071
+CD80,CTLA4,Dendritic cell,B cell,0.6036,0.0117,0.007
+CCL2,CCR2,Endothelial,Myeloid/Macro,1.2821,0.0055,0.007
+CD274,PDCD1,Endothelial,B cell,0.1186,0.0593,0.007
+CD80,CTLA4,Myeloid/Macro,Myeloid/Macro,0.1289,0.054,0.007
+IL6,IL6R,B cell,Dendritic cell,0.0552,0.1254,0.0069
+CD80,CTLA4,Unknown,Endothelial,0.0424,0.162,0.0069
+CCL5,CCR5,Dendritic cell,NK cell,0.083,0.0824,0.0068
+CD274,PDCD1,Endothelial,Myeloid/Macro,0.1186,0.0574,0.0068
+TNF,TNFRSF1A,Plasma cell,T cell,0.0867,0.078,0.0068
+CCL2,CCR2,Fibroblast,T cell,1.119,0.0061,0.0068
+CD274,PDCD1,Myeloid/Macro,Endothelial,0.0653,0.1018,0.0067
+FAS,FASLG,T cell,Fibroblast,0.4437,0.0151,0.0067
+IL6,IL6R,Fibroblast,NK cell,0.4306,0.0156,0.0067
+CDH1,CDH1,T cell,Tumor epithelial,0.012,0.5557,0.0067
+CDH1,CDH1,Tumor epithelial,T cell,0.5557,0.012,0.0067
+TNF,TNFRSF1A,Mast cell,Plasma cell,0.118,0.0566,0.0067
+CD274,PDCD1,Myeloid/Macro,Dendritic cell,0.0653,0.1019,0.0067
+CCL5,CCR5,Tumor epithelial,T cell,0.073,0.0903,0.0066
+CD80,CTLA4,Mast cell,T cell,0.012,0.552,0.0066
+CD274,PDCD1,T cell,Plasma cell,0.0482,0.1359,0.0066
+TNF,TNFRSF1A,Unknown,Mast cell,0.276,0.0234,0.0065
+CCL5,CCR5,Unknown,Fibroblast,0.8046,0.008,0.0065
+DLL1,NOTCH1,Endothelial,Tumor epithelial,0.1167,0.0559,0.0065
+CD80,CTLA4,Myeloid/Macro,Mast cell,0.1289,0.0508,0.0065
+CD80,CTLA4,Fibroblast,Unknown,0.024,0.2687,0.0065
+DLL1,NOTCH1,B cell,Fibroblast,0.0334,0.192,0.0064
+CCL5,CCR5,Dendritic cell,Myeloid/Macro,0.083,0.0774,0.0064
+CD80,CTLA4,Endothelial,Plasma cell,0.0513,0.1242,0.0064
+CCL5,CCR5,Fibroblast,Unknown,0.4092,0.0154,0.0063
+VEGFA,KDR,Endothelial,Tumor epithelial,0.1629,0.0388,0.0063
+CXCL10,CXCR3,B cell,Unknown,0.0405,0.1526,0.0062
+VEGFA,FLT1,Myeloid/Macro,Fibroblast,0.7644,0.008,0.0061
+CD274,PDCD1,Fibroblast,T cell,0.0113,0.5391,0.0061
+CCL2,CCR2,Fibroblast,Myeloid/Macro,1.119,0.0055,0.0061
+IL6,IL6R,Myeloid/Macro,Fibroblast,0.044,0.138,0.0061
+FAS,FASLG,Tumor epithelial,T cell,0.0592,0.1019,0.006
+CXCL10,CXCR3,B cell,Plasma cell,0.0405,0.1476,0.006
+HGF,MET,Plasma cell,Tumor epithelial,0.0201,0.2988,0.006
+CCL5,CCR5,Tumor epithelial,NK cell,0.073,0.0824,0.006
+CXCL12,CXCR4,Endothelial,Tumor epithelial,0.0582,0.1006,0.0059
+CDH1,CDH1,Tumor epithelial,Myeloid/Macro,0.5557,0.0107,0.0059
+CD80,CTLA4,Fibroblast,NK cell,0.024,0.2459,0.0059
+CDH1,CDH1,Myeloid/Macro,Tumor epithelial,0.0107,0.5557,0.0059
+IL6,IL6R,Myeloid/Macro,Endothelial,0.044,0.1313,0.0058
+IL6,IL6R,Endothelial,B cell,0.2326,0.025,0.0058
+TNF,TNFRSF1A,Endothelial,Unknown,0.0482,0.121,0.0058
+DLL1,NOTCH1,B cell,NK cell,0.0334,0.17,0.0057
+DLL1,NOTCH1,B cell,Mast cell,0.0334,0.1723,0.0057
+CCL5,CCR5,Fibroblast,B cell,0.4092,0.0138,0.0057
+VEGFA,FLT1,Plasma cell,Unknown,0.2005,0.0285,0.0057
+CD274,PDCD1,Plasma cell,Plasma cell,0.0423,0.1359,0.0057
+IL6,IL6R,Plasma cell,Plasma cell,0.0313,0.1794,0.0056
+CCL5,CCR5,Tumor epithelial,Myeloid/Macro,0.073,0.0774,0.0056
+CXCL12,CXCR4,Mast cell,Mast cell,0.0123,0.4447,0.0055
+VEGFA,FLT1,Tumor epithelial,Plasma cell,0.4454,0.0123,0.0055
+IL6,IL6R,Myeloid/Macro,Dendritic cell,0.044,0.1254,0.0055
+CD274,PDCD1,Mast cell,Tumor epithelial,0.2372,0.0228,0.0054
+CD274,PDCD1,Tumor epithelial,Fibroblast,0.07,0.0752,0.0053
+VEGFA,KDR,Unknown,Endothelial,0.0301,0.1746,0.0053
+DLL1,NOTCH1,NK cell,Unknown,0.0199,0.2668,0.0053
+CD80,CTLA4,Unknown,Plasma cell,0.0424,0.1242,0.0053
+DLL1,NOTCH1,NK cell,Endothelial,0.0199,0.2671,0.0053
+IL6,IL6R,Tumor epithelial,Plasma cell,0.0297,0.1794,0.0053
+CD80,CTLA4,T cell,Endothelial,0.0323,0.162,0.0052
+VEGFA,FLT1,Myeloid/Macro,T cell,0.7644,0.0068,0.0052
+CXCL10,CXCR3,B cell,B cell,0.0405,0.1281,0.0052
+PDGFA,PDGFRA,NK cell,Fibroblast,0.0209,0.2436,0.0051
+DLL1,NOTCH1,Fibroblast,Unknown,0.0189,0.2668,0.0051
+TNF,TNFRSF1A,Endothelial,Dendritic cell,0.0482,0.1065,0.0051
+DLL1,NOTCH1,Fibroblast,Endothelial,0.0189,0.2671,0.0051
+DLL1,NOTCH1,Myeloid/Macro,Plasma cell,0.0619,0.0829,0.0051
+VEGFA,FLT1,Unknown,Myeloid/Macro,0.0301,0.1648,0.005
+IL6,IL6R,Mast cell,Mast cell,0.0123,0.4018,0.005
+CD274,PDCD1,Dendritic cell,Plasma cell,0.0369,0.1359,0.005
+DLL1,NOTCH1,B cell,T cell,0.0334,0.1493,0.005
+CD274,PDCD1,Myeloid/Macro,Fibroblast,0.0653,0.0752,0.0049
+CXCL10,CXCR3,NK cell,Dendritic cell,0.0245,0.2016,0.0049
+CD274,PDCD1,T cell,Dendritic cell,0.0482,0.1019,0.0049
+CD274,PDCD1,T cell,Endothelial,0.0482,0.1018,0.0049
+CD274,PDCD1,Endothelial,Mast cell,0.1186,0.0411,0.0049
+TNF,TNFRSF1A,Plasma cell,Plasma cell,0.0867,0.0566,0.0049
+CXCL12,CXCR4,Myeloid/Macro,Mast cell,0.0111,0.4447,0.0049
+DLL1,NOTCH1,B cell,B cell,0.0334,0.1476,0.0049
+TNF,TNFRSF1A,Endothelial,NK cell,0.0482,0.1025,0.0049
+CD274,PDCD1,Unknown,NK cell,0.0154,0.3091,0.0048
+CCL2,CCR2,Mast cell,Plasma cell,0.1167,0.04,0.0047
+DLL1,NOTCH1,B cell,Myeloid/Macro,0.0334,0.1417,0.0047
+FAS,FASLG,Mast cell,Plasma cell,0.116,0.0402,0.0047
+CXCL10,CXCR3,Endothelial,Tumor epithelial,0.2389,0.0195,0.0047
+VEGFA,FLT1,Plasma cell,Mast cell,0.2005,0.0235,0.0047
+TNF,TNFRSF1A,Dendritic cell,B cell,0.5106,0.0091,0.0046
+VEGFA,FLT1,Endothelial,Unknown,0.1629,0.0285,0.0046
+VEGFA,FLT1,Fibroblast,Fibroblast,0.579,0.008,0.0046
+FAS,FASLG,Tumor epithelial,Unknown,0.0592,0.0774,0.0046
+DLL1,NOTCH1,B cell,Dendritic cell,0.0334,0.1357,0.0045
+CCL5,CCR5,Plasma cell,Fibroblast,0.5475,0.008,0.0044
+FAS,FASLG,Dendritic cell,Fibroblast,0.2923,0.0151,0.0044
+HGF,MET,Plasma cell,Endothelial,0.0201,0.2181,0.0044
+CXCL10,CXCR3,B cell,Fibroblast,0.0405,0.1088,0.0044
+IL6,IL6R,Unknown,Tumor epithelial,0.0616,0.0713,0.0044
+IL6,IL6R,Plasma cell,Fibroblast,0.0313,0.138,0.0043
+CD274,PDCD1,Plasma cell,Dendritic cell,0.0423,0.1019,0.0043
+CD274,PDCD1,Plasma cell,Endothelial,0.0423,0.1018,0.0043
+FAS,FASLG,Myeloid/Macro,Plasma cell,0.1079,0.0402,0.0043
+CD274,PDCD1,Unknown,Unknown,0.0154,0.2793,0.0043
+FAS,FASLG,Endothelial,Fibroblast,0.2866,0.0151,0.0043
+FAS,FASLG,Mast cell,Endothelial,0.116,0.0368,0.0043
+VEGFA,FLT1,Plasma cell,Tumor epithelial,0.2005,0.0212,0.0042
+CD274,PDCD1,Tumor epithelial,B cell,0.07,0.0593,0.0042
+FAS,FASLG,Fibroblast,Fibroblast,0.2805,0.0151,0.0042
+FAS,FASLG,Tumor epithelial,Mast cell,0.0592,0.0702,0.0042
+FAS,FASLG,Unknown,Myeloid/Macro,0.5031,0.0084,0.0042
+CDH1,CDH1,Fibroblast,Fibroblast,0.064,0.064,0.0041
+CD80,CTLA4,Plasma cell,T cell,0.0074,0.552,0.0041
+FAS,FASLG,NK cell,Fibroblast,0.2723,0.0151,0.0041
+PDGFA,PDGFRA,Endothelial,Endothelial,0.1521,0.0268,0.0041
+IL6,IL6R,Tumor epithelial,Fibroblast,0.0297,0.138,0.0041
+IL6,IL6R,Plasma cell,Endothelial,0.0313,0.1313,0.0041
+PDGFA,PDGFRA,Mast cell,Endothelial,0.1504,0.0268,0.004
+CXCL10,CXCR3,Myeloid/Macro,Endothelial,0.0966,0.0409,0.004
+CD80,CTLA4,T cell,Plasma cell,0.0323,0.1242,0.004
+VEGFA,FLT1,Plasma cell,B cell,0.2005,0.0201,0.004
+FAS,FASLG,Myeloid/Macro,Endothelial,0.1079,0.0368,0.004
+CD274,PDCD1,Tumor epithelial,Myeloid/Macro,0.07,0.0574,0.004
+CCL5,CCR5,Myeloid/Macro,Unknown,0.2596,0.0154,0.004
+VEGFA,FLT1,Fibroblast,T cell,0.579,0.0068,0.0039
+CD274,PDCD1,Myeloid/Macro,B cell,0.0653,0.0593,0.0039
+CD80,CTLA4,Fibroblast,Endothelial,0.024,0.162,0.0039
+VEGFA,KDR,Dendritic cell,Tumor epithelial,0.1007,0.0388,0.0039
+IL6,IL6R,Plasma cell,Dendritic cell,0.0313,0.1254,0.0039
+IL6,IL6R,Tumor epithelial,Endothelial,0.0297,0.1313,0.0039
+IL6,IL6R,B cell,Tumor epithelial,0.0552,0.0713,0.0039
+FAS,FASLG,B cell,Fibroblast,0.2547,0.0151,0.0039
+CDH1,CDH1,Plasma cell,Fibroblast,0.0612,0.064,0.0039
+CDH1,CDH1,Fibroblast,Plasma cell,0.064,0.0612,0.0039
+CXCL12,CXCR4,Unknown,Mast cell,0.0088,0.4447,0.0039
+CCL5,CCR5,Mast cell,Unknown,0.2536,0.0154,0.0039
+CD80,CTLA4,Dendritic cell,Tumor epithelial,0.6036,0.0064,0.0038
+CD274,PDCD1,Myeloid/Macro,Myeloid/Macro,0.0653,0.0574,0.0038
+CD80,CTLA4,NK cell,T cell,0.0068,0.552,0.0038
+CD80,CTLA4,B cell,Fibroblast,0.1857,0.0202,0.0038
+CD274,PDCD1,NK cell,Plasma cell,0.0278,0.1359,0.0038
+DLL1,NOTCH1,NK cell,Fibroblast,0.0199,0.192,0.0038
+TNF,TNFRSF1A,Endothelial,T cell,0.0482,0.078,0.0038
+CD274,PDCD1,Dendritic cell,Dendritic cell,0.0369,0.1019,0.0038
+VEGFA,FLT1,Endothelial,Mast cell,0.1629,0.0235,0.0038
+CD274,PDCD1,Dendritic cell,Endothelial,0.0369,0.1018,0.0038
+IL6,IL6R,Tumor epithelial,Dendritic cell,0.0297,0.1254,0.0037
+CXCL10,CXCR3,NK cell,Unknown,0.0245,0.1526,0.0037
+FAS,FASLG,T cell,Myeloid/Macro,0.4437,0.0084,0.0037
+CDH1,CDH1,Plasma cell,Plasma cell,0.0612,0.0612,0.0037
+CCL5,CCR5,Myeloid/Macro,B cell,0.2596,0.0138,0.0036
+CD274,PDCD1,T cell,Fibroblast,0.0482,0.0752,0.0036
+CXCL10,CXCR3,Plasma cell,Endothelial,0.088,0.0409,0.0036
+CXCL10,CXCR3,NK cell,Plasma cell,0.0245,0.1476,0.0036
+VEGFA,FLT1,Tumor epithelial,Fibroblast,0.4454,0.008,0.0036
+IL6,IL6R,Endothelial,NK cell,0.2326,0.0156,0.0036
+TNF,TNFRSF1A,Myeloid/Macro,Mast cell,0.1517,0.0234,0.0036
+DLL1,NOTCH1,Fibroblast,Fibroblast,0.0189,0.192,0.0036
+TNF,TNFRSF1A,B cell,B cell,0.3905,0.0091,0.0035
+CD274,PDCD1,B cell,Plasma cell,0.026,0.1359,0.0035
+CXCL10,CXCR3,Fibroblast,Endothelial,0.0857,0.0409,0.0035
+CCL5,CCR5,Mast cell,B cell,0.2536,0.0138,0.0035
+CD274,PDCD1,Fibroblast,NK cell,0.0113,0.3091,0.0035
+DLL1,NOTCH1,Myeloid/Macro,Tumor epithelial,0.0619,0.0559,0.0035
+IL6,IL6R,Unknown,Unknown,0.0616,0.0552,0.0034
+IL6,IL6R,Unknown,T cell,0.0616,0.0552,0.0034
+VEGFA,FLT1,Endothelial,Tumor epithelial,0.1629,0.0212,0.0034
+CXCL10,CXCR3,Myeloid/Macro,Myeloid/Macro,0.0966,0.0353,0.0034
+DLL1,NOTCH1,NK cell,NK cell,0.0199,0.17,0.0034
+DLL1,NOTCH1,NK cell,Mast cell,0.0199,0.1723,0.0034
+CCL5,CCR5,Fibroblast,Fibroblast,0.4092,0.008,0.0033
+DLL1,NOTCH1,Fibroblast,Mast cell,0.0189,0.1723,0.0033
+TNF,TNFRSF1A,NK cell,B cell,0.3667,0.0091,0.0033
+FAS,FASLG,Plasma cell,Fibroblast,0.218,0.0151,0.0033
+VEGFA,FLT1,Endothelial,B cell,0.1629,0.0201,0.0033
+DLL1,NOTCH1,Fibroblast,NK cell,0.0189,0.17,0.0032
+CCL5,CCR5,B cell,Unknown,0.2063,0.0154,0.0032
+CD274,PDCD1,Plasma cell,Fibroblast,0.0423,0.0752,0.0032
+HGF,MET,Endothelial,Myeloid/Macro,0.0563,0.0569,0.0032
+CD274,PDCD1,Fibroblast,Unknown,0.0113,0.2793,0.0032
+CD80,CTLA4,Mast cell,Unknown,0.012,0.2687,0.0032
+CXCL10,CXCR3,Plasma cell,Myeloid/Macro,0.088,0.0353,0.0031
+CXCL10,CXCR3,NK cell,B cell,0.0245,0.1281,0.0031
+TNF,TNFRSF1A,T cell,B cell,0.341,0.0091,0.0031
+CCL2,CCR2,Tumor epithelial,Plasma cell,0.0782,0.04,0.0031
+TNF,TNFRSF1A,Fibroblast,Mast cell,0.1308,0.0234,0.0031
+IL6,IL6R,Myeloid/Macro,Tumor epithelial,0.044,0.0713,0.0031
+VEGFA,FLT1,B cell,Endothelial,0.0034,0.9014,0.0031
+VEGFA,FLT1,Tumor epithelial,T cell,0.4454,0.0068,0.003
+CD80,CTLA4,Mast cell,NK cell,0.012,0.2459,0.003
+DLL1,NOTCH1,NK cell,T cell,0.0199,0.1493,0.003
+IL6,IL6R,B cell,Unknown,0.0552,0.0552,0.003
+CD80,CTLA4,Fibroblast,Plasma cell,0.024,0.1242,0.003
+CXCL10,CXCR3,Fibroblast,Myeloid/Macro,0.0857,0.0353,0.003
+IL6,IL6R,B cell,T cell,0.0552,0.0552,0.003
+VEGFA,FLT1,Dendritic cell,Unknown,0.1007,0.0285,0.0029
+CD274,PDCD1,T cell,B cell,0.0482,0.0593,0.0029
+DLL1,NOTCH1,Plasma cell,Unknown,0.0108,0.2668,0.0029
+DLL1,NOTCH1,Plasma cell,Endothelial,0.0108,0.2671,0.0029
+DLL1,NOTCH1,NK cell,B cell,0.0199,0.1476,0.0029
+CD274,PDCD1,Tumor epithelial,Mast cell,0.07,0.0411,0.0029
+CCL5,CCR5,B cell,B cell,0.2063,0.0138,0.0029
+CD274,PDCD1,NK cell,Endothelial,0.0278,0.1018,0.0028
+DLL1,NOTCH1,Fibroblast,B cell,0.0189,0.1476,0.0028
+CD274,PDCD1,NK cell,Dendritic cell,0.0278,0.1019,0.0028
+DLL1,NOTCH1,NK cell,Myeloid/Macro,0.0199,0.1417,0.0028
+CD274,PDCD1,T cell,Myeloid/Macro,0.0482,0.0574,0.0028
+DLL1,NOTCH1,B cell,Plasma cell,0.0334,0.0829,0.0028
+CD80,CTLA4,Endothelial,Myeloid/Macro,0.0513,0.054,0.0028
+TNF,TNFRSF1A,Mast cell,Mast cell,0.118,0.0234,0.0028
+CD274,PDCD1,Dendritic cell,Fibroblast,0.0369,0.0752,0.0028
+DLL1,NOTCH1,Fibroblast,T cell,0.0189,0.1493,0.0028
+TNF,TNFRSF1A,Endothelial,Plasma cell,0.0482,0.0566,0.0027
+DLL1,NOTCH1,NK cell,Dendritic cell,0.0199,0.1357,0.0027
+CD274,PDCD1,Endothelial,Tumor epithelial,0.1186,0.0228,0.0027
+CCL2,CCR2,Unknown,Plasma cell,0.0685,0.04,0.0027
+CXCL10,CXCR3,NK cell,Fibroblast,0.0245,0.1088,0.0027
+CXCL10,CXCR3,Tumor epithelial,Endothelial,0.0654,0.0409,0.0027
+CD274,PDCD1,Myeloid/Macro,Mast cell,0.0653,0.0411,0.0027
+CD274,PDCD1,B cell,Dendritic cell,0.026,0.1019,0.0027
+DLL1,NOTCH1,Fibroblast,Myeloid/Macro,0.0189,0.1417,0.0027
+CD80,CTLA4,Endothelial,Mast cell,0.0513,0.0508,0.0026
+CD80,CTLA4,Myeloid/Macro,Fibroblast,0.1289,0.0202,0.0026
+HGF,MET,Myeloid/Macro,Myeloid/Macro,0.0457,0.0569,0.0026
+DLL1,NOTCH1,Fibroblast,Dendritic cell,0.0189,0.1357,0.0026
+HGF,MET,Endothelial,Plasma cell,0.0563,0.046,0.0026
+TNF,TNFRSF1A,Tumor epithelial,Unknown,0.0216,0.121,0.0026
+CD274,PDCD1,B cell,Endothelial,0.026,0.1018,0.0026
+VEGFA,FLT1,Plasma cell,Plasma cell,0.2005,0.0123,0.0025
+CD274,PDCD1,Plasma cell,B cell,0.0423,0.0593,0.0025
+FAS,FASLG,Dendritic cell,Myeloid/Macro,0.2923,0.0084,0.0025
+VEGFA,FLT1,Unknown,Dendritic cell,0.0301,0.0845,0.0025
+TNF,TNFRSF1A,Unknown,B cell,0.276,0.0091,0.0025
+CD274,PDCD1,Plasma cell,Myeloid/Macro,0.0423,0.0574,0.0024
+CDH1,CDH1,B cell,Tumor epithelial,0.0044,0.5557,0.0024
+IL6,IL6R,Myeloid/Macro,T cell,0.044,0.0552,0.0024
+FAS,FASLG,Endothelial,Myeloid/Macro,0.2866,0.0084,0.0024
+FAS,FASLG,Tumor epithelial,Plasma cell,0.0592,0.0402,0.0024
+HGF,MET,Mast cell,Tumor epithelial,0.0079,0.2988,0.0024
+CXCL10,CXCR3,Endothelial,Mast cell,0.2389,0.0102,0.0024
+CDH1,CDH1,Tumor epithelial,B cell,0.5557,0.0044,0.0024
+FAS,FASLG,Fibroblast,Myeloid/Macro,0.2805,0.0084,0.0024
+IL6,IL6R,Myeloid/Macro,Unknown,0.044,0.0552,0.0024
+VEGFA,FLT1,Dendritic cell,Mast cell,0.1007,0.0235,0.0024
+CD80,CTLA4,Unknown,Myeloid/Macro,0.0424,0.054,0.0023
+FAS,FASLG,NK cell,Myeloid/Macro,0.2723,0.0084,0.0023
+CXCL10,CXCR3,Tumor epithelial,Myeloid/Macro,0.0654,0.0353,0.0023
+HGF,MET,Fibroblast,Mast cell,0.1995,0.0116,0.0023
+TNF,TNFRSF1A,Tumor epithelial,Dendritic cell,0.0216,0.1065,0.0023
+CD80,CTLA4,Unknown,Mast cell,0.0424,0.0508,0.0022
+IL6,IL6R,Mast cell,Plasma cell,0.0123,0.1794,0.0022
+IL6,IL6R,Plasma cell,Tumor epithelial,0.0313,0.0713,0.0022
+FAS,FASLG,Tumor epithelial,Endothelial,0.0592,0.0368,0.0022
+CD274,PDCD1,Dendritic cell,B cell,0.0369,0.0593,0.0022
+TNF,TNFRSF1A,Tumor epithelial,NK cell,0.0216,0.1025,0.0022
+CD80,CTLA4,B cell,B cell,0.1857,0.0117,0.0022
+HGF,MET,Myeloid/Macro,Plasma cell,0.0457,0.046,0.0021
+CCL5,CCR5,Myeloid/Macro,Fibroblast,0.2596,0.008,0.0021
+CD274,PDCD1,NK cell,Fibroblast,0.0278,0.0752,0.0021
+FAS,FASLG,B cell,Myeloid/Macro,0.2547,0.0084,0.0021
+DLL1,NOTCH1,Plasma cell,Fibroblast,0.0108,0.192,0.0021
+PDGFA,PDGFRA,T cell,Fibroblast,0.0086,0.2436,0.0021
+CD274,PDCD1,Unknown,Plasma cell,0.0154,0.1359,0.0021
+HGF,MET,Fibroblast,Fibroblast,0.1995,0.0107,0.0021
+CD274,PDCD1,Dendritic cell,Myeloid/Macro,0.0369,0.0574,0.0021
+VEGFA,FLT1,Dendritic cell,Tumor epithelial,0.1007,0.0212,0.0021
+IL6,IL6R,Tumor epithelial,Tumor epithelial,0.0297,0.0713,0.0021
+TNF,TNFRSF1A,Plasma cell,Mast cell,0.0867,0.0234,0.002
+VEGFA,FLT1,Dendritic cell,B cell,0.1007,0.0201,0.002
+CD274,PDCD1,T cell,Mast cell,0.0482,0.0411,0.002
+CCL5,CCR5,Mast cell,Fibroblast,0.2536,0.008,0.002
+CD274,PDCD1,B cell,Fibroblast,0.026,0.0752,0.002
+VEGFA,FLT1,Endothelial,Plasma cell,0.1629,0.0123,0.002
+CD80,CTLA4,Plasma cell,Unknown,0.0074,0.2687,0.002
+CXCL10,CXCR3,Myeloid/Macro,Tumor epithelial,0.0966,0.0195,0.0019
+CD80,CTLA4,Mast cell,Endothelial,0.012,0.162,0.0019
+DLL1,NOTCH1,B cell,Tumor epithelial,0.0334,0.0559,0.0019
+DLL1,NOTCH1,Plasma cell,Mast cell,0.0108,0.1723,0.0019
+CD80,CTLA4,NK cell,Unknown,0.0068,0.2687,0.0018
+DLL1,NOTCH1,Plasma cell,NK cell,0.0108,0.17,0.0018
+WNT5A,FZD5,Tumor epithelial,Tumor epithelial,0.0357,0.0501,0.0018
+WNT5A,FZD5,Dendritic cell,Tumor epithelial,0.0369,0.0501,0.0018
+CD80,CTLA4,Plasma cell,NK cell,0.0074,0.2459,0.0018
+FAS,FASLG,Plasma cell,Myeloid/Macro,0.218,0.0084,0.0018
+VEGFA,KDR,T cell,Endothelial,0.0105,0.1746,0.0018
+CDH1,CDH1,Dendritic cell,Fibroblast,0.0283,0.064,0.0018
+FAS,FASLG,Mast cell,Fibroblast,0.116,0.0151,0.0018
+CDH1,CDH1,Fibroblast,Dendritic cell,0.064,0.0283,0.0018
+VEGFA,FLT1,T cell,Myeloid/Macro,0.0105,0.1648,0.0017
+CD80,CTLA4,NK cell,NK cell,0.0068,0.2459,0.0017
+CXCL10,CXCR3,Plasma cell,Tumor epithelial,0.088,0.0195,0.0017
+CXCL10,CXCR3,Fibroblast,Tumor epithelial,0.0857,0.0195,0.0017
+TNF,TNFRSF1A,Tumor epithelial,T cell,0.0216,0.078,0.0017
+IL6,IL6R,Plasma cell,Unknown,0.0313,0.0552,0.0017
+IL6,IL6R,Plasma cell,T cell,0.0313,0.0552,0.0017
+CD80,CTLA4,T cell,Myeloid/Macro,0.0323,0.054,0.0017
+HGF,MET,Mast cell,Endothelial,0.0079,0.2181,0.0017
+IL6,IL6R,Mast cell,Fibroblast,0.0123,0.138,0.0017
+CD274,PDCD1,Plasma cell,Mast cell,0.0423,0.0411,0.0017
+CCL5,CCR5,B cell,Fibroblast,0.2063,0.008,0.0017
+CD274,PDCD1,NK cell,B cell,0.0278,0.0593,0.0017
+CDH1,CDH1,Plasma cell,Dendritic cell,0.0612,0.0283,0.0017
+CXCL10,CXCR3,B cell,Endothelial,0.0405,0.0409,0.0017
+CDH1,CDH1,Dendritic cell,Plasma cell,0.0283,0.0612,0.0017
+VEGFA,KDR,NK cell,Endothelial,0.0098,0.1746,0.0017
+FAS,FASLG,Myeloid/Macro,Fibroblast,0.1079,0.0151,0.0016
+VEGFA,FLT1,Plasma cell,Fibroblast,0.2005,0.008,0.0016
+VEGFA,FLT1,NK cell,Myeloid/Macro,0.0098,0.1648,0.0016
+CD274,PDCD1,Unknown,Dendritic cell,0.0154,0.1019,0.0016
+DLL1,NOTCH1,Fibroblast,Plasma cell,0.0189,0.0829,0.0016
+CD274,PDCD1,Tumor epithelial,Tumor epithelial,0.07,0.0228,0.0016
+CD274,PDCD1,Unknown,Endothelial,0.0154,0.1018,0.0016
+IL6,IL6R,Tumor epithelial,Unknown,0.0297,0.0552,0.0016
+IL6,IL6R,Tumor epithelial,T cell,0.0297,0.0552,0.0016
+DLL1,NOTCH1,Plasma cell,T cell,0.0108,0.1493,0.0016
+DLL1,NOTCH1,NK cell,Plasma cell,0.0199,0.0829,0.0016
+CD80,CTLA4,T cell,Mast cell,0.0323,0.0508,0.0016
+DLL1,NOTCH1,Plasma cell,B cell,0.0108,0.1476,0.0016
+IL6,IL6R,Mast cell,Endothelial,0.0123,0.1313,0.0016
+CD274,PDCD1,NK cell,Myeloid/Macro,0.0278,0.0574,0.0016
+CD80,CTLA4,Myeloid/Macro,B cell,0.1289,0.0117,0.0015
+CD274,PDCD1,B cell,B cell,0.026,0.0593,0.0015
+CD274,PDCD1,B cell,Myeloid/Macro,0.026,0.0574,0.0015
+CDH1,CDH1,Unknown,Fibroblast,0.0234,0.064,0.0015
+CD274,PDCD1,Myeloid/Macro,Tumor epithelial,0.0653,0.0228,0.0015
+IL6,IL6R,Mast cell,Dendritic cell,0.0123,0.1254,0.0015
+CDH1,CDH1,Fibroblast,Unknown,0.064,0.0234,0.0015
+CD80,CTLA4,Mast cell,Plasma cell,0.012,0.1242,0.0015
+IL6,IL6R,Unknown,B cell,0.0616,0.025,0.0015
+DLL1,NOTCH1,Plasma cell,Myeloid/Macro,0.0108,0.1417,0.0015
+CD274,PDCD1,Dendritic cell,Mast cell,0.0369,0.0411,0.0015
+CD274,PDCD1,Fibroblast,Plasma cell,0.0113,0.1359,0.0015
+DLL1,NOTCH1,Plasma cell,Dendritic cell,0.0108,0.1357,0.0015
+VEGFA,FLT1,Plasma cell,T cell,0.2005,0.0068,0.0014
+DLL1,NOTCH1,Tumor epithelial,Endothelial,0.0052,0.2671,0.0014
+CDH1,CDH1,Unknown,Plasma cell,0.0234,0.0612,0.0014
+CCL2,CCR2,Plasma cell,Plasma cell,0.0362,0.04,0.0014
+DLL1,NOTCH1,Tumor epithelial,Unknown,0.0052,0.2668,0.0014
+CDH1,CDH1,Plasma cell,Unknown,0.0612,0.0234,0.0014
+CXCL10,CXCR3,B cell,Myeloid/Macro,0.0405,0.0353,0.0014
+TNF,TNFRSF1A,Myeloid/Macro,B cell,0.1517,0.0091,0.0014
+IL6,IL6R,B cell,B cell,0.0552,0.025,0.0014
+CXCL10,CXCR3,Tumor epithelial,Tumor epithelial,0.0654,0.0195,0.0013
+CD80,CTLA4,Fibroblast,Myeloid/Macro,0.024,0.054,0.0013
+HGF,MET,Fibroblast,T cell,0.1995,0.0063,0.0013
+VEGFA,FLT1,Endothelial,Fibroblast,0.1629,0.008,0.0013
+CCL5,CCR5,Dendritic cell,Unknown,0.083,0.0154,0.0013
+VEGFA,FLT1,Dendritic cell,Plasma cell,0.1007,0.0123,0.0012
+CD274,PDCD1,Fibroblast,Endothelial,0.0113,0.1018,0.0012
+CD80,CTLA4,B cell,Tumor epithelial,0.1857,0.0064,0.0012
+CD274,PDCD1,Fibroblast,Dendritic cell,0.0113,0.1019,0.0012
+VEGFA,KDR,Unknown,Tumor epithelial,0.0301,0.0388,0.0012
+CD274,PDCD1,Unknown,Fibroblast,0.0154,0.0752,0.0012
+PDGFA,PDGFRA,Tumor epithelial,Endothelial,0.0437,0.0268,0.0012
+CD80,CTLA4,Plasma cell,Endothelial,0.0074,0.162,0.0012
+WNT5A,FZD5,Dendritic cell,Plasma cell,0.0369,0.0317,0.0012
+TNF,TNFRSF1A,Fibroblast,B cell,0.1308,0.0091,0.0012
+CXCL12,CXCR4,Mast cell,Tumor epithelial,0.0123,0.1006,0.0012
+TNF,TNFRSF1A,Tumor epithelial,Plasma cell,0.0216,0.0566,0.0012
+CD80,CTLA4,Fibroblast,Mast cell,0.024,0.0508,0.0012
+CXCL12,CXCR4,Myeloid/Macro,Tumor epithelial,0.0111,0.1006,0.0011
+CD274,PDCD1,T cell,Tumor epithelial,0.0482,0.0228,0.0011
+DLL1,NOTCH1,NK cell,Tumor epithelial,0.0199,0.0559,0.0011
+CD274,PDCD1,B cell,Mast cell,0.026,0.0411,0.0011
+TNF,TNFRSF1A,Mast cell,B cell,0.118,0.0091,0.0011
+VEGFA,FLT1,Endothelial,T cell,0.1629,0.0068,0.0011
+CCL5,CCR5,Dendritic cell,B cell,0.083,0.0138,0.0011
+IL6,IL6R,Myeloid/Macro,B cell,0.044,0.025,0.0011
+CD274,PDCD1,NK cell,Mast cell,0.0278,0.0411,0.0011
+CCL5,CCR5,Tumor epithelial,Unknown,0.073,0.0154,0.0011
+WNT5A,FZD5,Tumor epithelial,Plasma cell,0.0357,0.0317,0.0011
+TNF,TNFRSF1A,Endothelial,Mast cell,0.0482,0.0234,0.0011
+DLL1,NOTCH1,Fibroblast,Tumor epithelial,0.0189,0.0559,0.0011
+CCL2,CCR2,Myeloid/Macro,T cell,0.1802,0.0061,0.0011
+CD80,CTLA4,NK cell,Endothelial,0.0068,0.162,0.0011
+HGF,MET,Plasma cell,Myeloid/Macro,0.0201,0.0569,0.0011
+DLL1,NOTCH1,Tumor epithelial,Fibroblast,0.0052,0.192,0.001
+CCL2,CCR2,Myeloid/Macro,Myeloid/Macro,0.1802,0.0055,0.001
+PDGFA,PDGFRA,Unknown,Endothelial,0.0361,0.0268,0.001
+DLL1,NOTCH1,T cell,Endothelial,0.0037,0.2671,0.001
+DLL1,NOTCH1,T cell,Unknown,0.0037,0.2668,0.001
+CCL5,CCR5,Tumor epithelial,B cell,0.073,0.0138,0.001
+CD274,PDCD1,Plasma cell,Tumor epithelial,0.0423,0.0228,0.001
+IL6,IL6R,Unknown,NK cell,0.0616,0.0156,0.001
+FAS,FASLG,Mast cell,Myeloid/Macro,0.116,0.0084,0.001
+CXCL10,CXCR3,Myeloid/Macro,Mast cell,0.0966,0.0102,0.001
+CXCL10,CXCR3,NK cell,Endothelial,0.0245,0.0409,0.001
+CD80,CTLA4,Endothelial,Fibroblast,0.0513,0.0202,0.001
+FAS,FASLG,Tumor epithelial,Fibroblast,0.0592,0.0151,0.0009
+CD80,CTLA4,Unknown,Fibroblast,0.0424,0.0202,0.0009
+DLL1,NOTCH1,Tumor epithelial,NK cell,0.0052,0.17,0.0009
+DLL1,NOTCH1,Tumor epithelial,Mast cell,0.0052,0.1723,0.0009
+PDGFA,PDGFRA,Myeloid/Macro,Endothelial,0.0341,0.0268,0.0009
+VEGFA,FLT1,Unknown,Unknown,0.0301,0.0285,0.0009
+HGF,MET,Plasma cell,Plasma cell,0.0201,0.046,0.0009
+CXCL10,CXCR3,NK cell,Myeloid/Macro,0.0245,0.0353,0.0009
+FAS,FASLG,Myeloid/Macro,Myeloid/Macro,0.1079,0.0084,0.0009
+PDGFA,PDGFRA,B cell,Endothelial,0.0335,0.0268,0.0009
+IL6,IL6R,Mast cell,Tumor epithelial,0.0123,0.0713,0.0009
+CXCL10,CXCR3,Plasma cell,Mast cell,0.088,0.0102,0.0009
+IL6,IL6R,B cell,NK cell,0.0552,0.0156,0.0009
+CD274,PDCD1,Unknown,Myeloid/Macro,0.0154,0.0574,0.0009
+PDGFA,PDGFRA,Fibroblast,Tumor epithelial,0.339,0.0026,0.0009
+PDGFA,PDGFRA,Fibroblast,Myeloid/Macro,0.339,0.0027,0.0009
+CD274,PDCD1,Unknown,B cell,0.0154,0.0593,0.0009
+CXCL12,CXCR4,Unknown,Tumor epithelial,0.0088,0.1006,0.0009
+DLL1,NOTCH1,Plasma cell,Plasma cell,0.0108,0.0829,0.0009
+CXCL10,CXCR3,Fibroblast,Mast cell,0.0857,0.0102,0.0009
+CD274,PDCD1,Fibroblast,Fibroblast,0.0113,0.0752,0.0009
+CD80,CTLA4,Plasma cell,Plasma cell,0.0074,0.1242,0.0009
+VEGFA,FLT1,T cell,Dendritic cell,0.0105,0.0845,0.0009
+CD274,PDCD1,Dendritic cell,Tumor epithelial,0.0369,0.0228,0.0008
+WNT5A,FZD5,Endothelial,Tumor epithelial,0.0167,0.0501,0.0008
+CD80,CTLA4,Myeloid/Macro,Tumor epithelial,0.1289,0.0064,0.0008
+CD80,CTLA4,NK cell,Plasma cell,0.0068,0.1242,0.0008
+IL6,IL6R,Plasma cell,B cell,0.0313,0.025,0.0008
+TNF,TNFRSF1A,Plasma cell,B cell,0.0867,0.0091,0.0008
+DLL1,NOTCH1,Tumor epithelial,B cell,0.0052,0.1476,0.0008
+VEGFA,FLT1,Dendritic cell,Fibroblast,0.1007,0.008,0.0008
+CDH1,CDH1,T cell,Fibroblast,0.012,0.064,0.0008
+CXCL10,CXCR3,B cell,Tumor epithelial,0.0405,0.0195,0.0008
+CDH1,CDH1,Fibroblast,T cell,0.064,0.012,0.0008
+CDH1,CDH1,Dendritic cell,Dendritic cell,0.0283,0.0283,0.0008
+VEGFA,FLT1,NK cell,Dendritic cell,0.0098,0.0845,0.0008
+DLL1,NOTCH1,Tumor epithelial,T cell,0.0052,0.1493,0.0008
+CD80,CTLA4,Mast cell,Myeloid/Macro,0.012,0.054,0.0007
+CCL2,CCR2,Mast cell,T cell,0.1167,0.0061,0.0007
+CDH1,CDH1,Plasma cell,T cell,0.0612,0.012,0.0007
+HGF,MET,Endothelial,Mast cell,0.0563,0.0116,0.0007
+CDH1,CDH1,Myeloid/Macro,Fibroblast,0.0107,0.064,0.0007
+CDH1,CDH1,Myeloid/Macro,Plasma cell,0.0107,0.0612,0.0007
+DLL1,NOTCH1,Tumor epithelial,Dendritic cell,0.0052,0.1357,0.0007
+DLL1,NOTCH1,Tumor epithelial,Myeloid/Macro,0.0052,0.1417,0.0007
+CDH1,CDH1,Plasma cell,Myeloid/Macro,0.0612,0.0107,0.0007
+CDH1,CDH1,Unknown,Dendritic cell,0.0234,0.0283,0.0007
+CDH1,CDH1,Dendritic cell,Unknown,0.0283,0.0234,0.0007
+CDH1,CDH1,Fibroblast,Myeloid/Macro,0.064,0.0107,0.0007
+CDH1,CDH1,T cell,Plasma cell,0.012,0.0612,0.0007
+CXCL10,CXCR3,Tumor epithelial,Mast cell,0.0654,0.0102,0.0007
+CD80,CTLA4,T cell,Fibroblast,0.0323,0.0202,0.0007
+CD274,PDCD1,Fibroblast,Myeloid/Macro,0.0113,0.0574,0.0007
+VEGFA,FLT1,Dendritic cell,T cell,0.1007,0.0068,0.0007
+WNT5A,FZD5,Tumor epithelial,Myeloid/Macro,0.0357,0.0189,0.0007
+VEGFA,FLT1,Unknown,Mast cell,0.0301,0.0235,0.0007
+IL6,IL6R,Myeloid/Macro,NK cell,0.044,0.0156,0.0007
+CCL5,CCR5,Dendritic cell,Fibroblast,0.083,0.008,0.0007
+IL6,IL6R,Mast cell,Unknown,0.0123,0.0552,0.0007
+WNT5A,FZD5,Dendritic cell,Myeloid/Macro,0.0369,0.0189,0.0007
+IL6,IL6R,Tumor epithelial,B cell,0.0297,0.025,0.0007
+IL6,IL6R,Mast cell,T cell,0.0123,0.0552,0.0007
+DLL1,NOTCH1,T cell,Fibroblast,0.0037,0.192,0.0007
+CD274,PDCD1,Fibroblast,B cell,0.0113,0.0593,0.0007
+CCL5,CCR5,Tumor epithelial,Fibroblast,0.073,0.008,0.0006
+DLL1,NOTCH1,T cell,T cell,0.0037,0.1493,0.0006
+WNT5A,FZD5,Tumor epithelial,Endothelial,0.0357,0.016,0.0006
+PDGFA,PDGFRA,NK cell,Endothelial,0.0209,0.0268,0.0006
+DLL1,NOTCH1,T cell,Mast cell,0.0037,0.1723,0.0006
+VEGFA,FLT1,B cell,Myeloid/Macro,0.0034,0.1648,0.0006
+CD80,CTLA4,Mast cell,Mast cell,0.012,0.0508,0.0006
+WNT5A,FZD5,Myeloid/Macro,Tumor epithelial,0.0118,0.0501,0.0006
+CD80,CTLA4,Endothelial,B cell,0.0513,0.0117,0.0006
+HGF,MET,Endothelial,Fibroblast,0.0563,0.0107,0.0006
+CD274,PDCD1,B cell,Tumor epithelial,0.026,0.0228,0.0006
+CD274,PDCD1,Unknown,Mast cell,0.0154,0.0411,0.0006
+VEGFA,KDR,B cell,Endothelial,0.0034,0.1746,0.0006
+CD274,PDCD1,NK cell,Tumor epithelial,0.0278,0.0228,0.0006
+VEGFA,FLT1,Unknown,B cell,0.0301,0.0201,0.0006
+DLL1,NOTCH1,T cell,NK cell,0.0037,0.17,0.0006
+VEGFA,FLT1,Unknown,Tumor epithelial,0.0301,0.0212,0.0006
+DLL1,NOTCH1,Plasma cell,Tumor epithelial,0.0108,0.0559,0.0006
+DLL1,NOTCH1,T cell,B cell,0.0037,0.1476,0.0006
+WNT5A,FZD5,Dendritic cell,Endothelial,0.0369,0.016,0.0006
+CCL2,CCR2,Mast cell,Myeloid/Macro,0.1167,0.0055,0.0006
+CD274,PDCD1,Fibroblast,Mast cell,0.0113,0.0411,0.0005
+DLL1,NOTCH1,T cell,Dendritic cell,0.0037,0.1357,0.0005
+DLL1,NOTCH1,T cell,Myeloid/Macro,0.0037,0.1417,0.0005
+CD80,CTLA4,Unknown,B cell,0.0424,0.0117,0.0005
+FAS,FASLG,Tumor epithelial,Myeloid/Macro,0.0592,0.0084,0.0005
+IL6,IL6R,Tumor epithelial,NK cell,0.0297,0.0156,0.0005
+WNT5A,FZD5,Endothelial,Plasma cell,0.0167,0.0317,0.0005
+CD80,CTLA4,Fibroblast,Fibroblast,0.024,0.0202,0.0005
+IL6,IL6R,Plasma cell,NK cell,0.0313,0.0156,0.0005
+HGF,MET,Myeloid/Macro,Mast cell,0.0457,0.0116,0.0005
+HGF,MET,Myeloid/Macro,Fibroblast,0.0457,0.0107,0.0005
+CXCL10,CXCR3,NK cell,Tumor epithelial,0.0245,0.0195,0.0005
+TNF,TNFRSF1A,Tumor epithelial,Mast cell,0.0216,0.0234,0.0005
+CCL2,CCR2,Tumor epithelial,T cell,0.0782,0.0061,0.0005
+CCL2,CCR2,B cell,Plasma cell,0.0122,0.04,0.0005
+CDH1,CDH1,Unknown,Unknown,0.0234,0.0234,0.0005
+VEGFA,FLT1,Unknown,Plasma cell,0.0301,0.0123,0.0004
+PDGFA,PDGFRA,Mast cell,Myeloid/Macro,0.1504,0.0027,0.0004
+PDGFA,PDGFRA,Endothelial,Myeloid/Macro,0.1521,0.0027,0.0004
+PDGFA,PDGFRA,Mast cell,Tumor epithelial,0.1504,0.0026,0.0004
+CCL2,CCR2,Unknown,T cell,0.0685,0.0061,0.0004
+CD274,PDCD1,Unknown,Tumor epithelial,0.0154,0.0228,0.0004
+CCL2,CCR2,Tumor epithelial,Myeloid/Macro,0.0782,0.0055,0.0004
+VEGFA,KDR,T cell,Tumor epithelial,0.0105,0.0388,0.0004
+CXCL10,CXCR3,B cell,Mast cell,0.0405,0.0102,0.0004
+VEGFA,KDR,NK cell,Tumor epithelial,0.0098,0.0388,0.0004
+HGF,MET,Mast cell,Plasma cell,0.0079,0.046,0.0004
+HGF,MET,Mast cell,Myeloid/Macro,0.0079,0.0569,0.0004
+HGF,MET,Endothelial,T cell,0.0563,0.0063,0.0004
+DLL1,NOTCH1,Tumor epithelial,Plasma cell,0.0052,0.0829,0.0004
+CCL2,CCR2,Unknown,Myeloid/Macro,0.0685,0.0055,0.0004
+WNT5A,FZD5,Dendritic cell,Mast cell,0.0369,0.0108,0.0004
+CD80,CTLA4,Plasma cell,Mast cell,0.0074,0.0508,0.0004
+WNT5A,FZD5,Tumor epithelial,Mast cell,0.0357,0.0108,0.0004
+TNF,TNFRSF1A,Endothelial,B cell,0.0482,0.0091,0.0004
+WNT5A,FZD5,Myeloid/Macro,Plasma cell,0.0118,0.0317,0.0004
+CD80,CTLA4,NK cell,Myeloid/Macro,0.0068,0.054,0.0004
+PDGFA,PDGFRA,Endothelial,Tumor epithelial,0.1521,0.0026,0.0004
+CD80,CTLA4,T cell,B cell,0.0323,0.0117,0.0004
+CD80,CTLA4,Plasma cell,Myeloid/Macro,0.0074,0.054,0.0004
+IL6,IL6R,Mast cell,B cell,0.0123,0.025,0.0003
+CDH1,CDH1,B cell,Plasma cell,0.0044,0.0612,0.0003
+CDH1,CDH1,Plasma cell,B cell,0.0612,0.0044,0.0003
+CDH1,CDH1,B cell,Fibroblast,0.0044,0.064,0.0003
+VEGFA,FLT1,NK cell,Unknown,0.0098,0.0285,0.0003
+CD274,PDCD1,Fibroblast,Tumor epithelial,0.0113,0.0228,0.0003
+CXCL10,CXCR3,NK cell,Mast cell,0.0245,0.0102,0.0003
+CCL2,CCR2,NK cell,Plasma cell,0.0077,0.04,0.0003
+VEGFA,FLT1,T cell,Unknown,0.0105,0.0285,0.0003
+CD80,CTLA4,NK cell,Mast cell,0.0068,0.0508,0.0003
+DLL1,NOTCH1,T cell,Plasma cell,0.0037,0.0829,0.0003
+CD80,CTLA4,Endothelial,Tumor epithelial,0.0513,0.0064,0.0003
+VEGFA,FLT1,B cell,Dendritic cell,0.0034,0.0845,0.0003
+CDH1,CDH1,Myeloid/Macro,Dendritic cell,0.0107,0.0283,0.0003
+CDH1,CDH1,Dendritic cell,T cell,0.0283,0.012,0.0003
+CDH1,CDH1,Dendritic cell,Myeloid/Macro,0.0283,0.0107,0.0003
+CDH1,CDH1,Fibroblast,B cell,0.064,0.0044,0.0003
+CDH1,CDH1,T cell,Dendritic cell,0.012,0.0283,0.0003
+CDH1,CDH1,T cell,Unknown,0.012,0.0234,0.0003
+HGF,MET,Myeloid/Macro,T cell,0.0457,0.0063,0.0003
+CDH1,CDH1,Unknown,T cell,0.0234,0.012,0.0003
+WNT5A,FZD5,Endothelial,Myeloid/Macro,0.0167,0.0189,0.0003
+DLL1,NOTCH1,Tumor epithelial,Tumor epithelial,0.0052,0.0559,0.0003
+CD80,CTLA4,Fibroblast,B cell,0.024,0.0117,0.0003
+WNT5A,FZD5,Endothelial,Endothelial,0.0167,0.016,0.0003
+CD80,CTLA4,Unknown,Tumor epithelial,0.0424,0.0064,0.0003
+TNF,TNFRSF1A,Tumor epithelial,B cell,0.0216,0.0091,0.0002
+VEGFA,FLT1,Unknown,Fibroblast,0.0301,0.008,0.0002
+IL6,IL6R,Mast cell,NK cell,0.0123,0.0156,0.0002
+VEGFA,FLT1,T cell,Tumor epithelial,0.0105,0.0212,0.0002
+WNT5A,FZD5,Myeloid/Macro,Myeloid/Macro,0.0118,0.0189,0.0002
+CD80,CTLA4,T cell,Tumor epithelial,0.0323,0.0064,0.0002
+CCL2,CCR2,Plasma cell,T cell,0.0362,0.0061,0.0002
+PDGFA,PDGFRA,T cell,Endothelial,0.0086,0.0268,0.0002
+DLL1,NOTCH1,T cell,Tumor epithelial,0.0037,0.0559,0.0002
+VEGFA,FLT1,NK cell,Mast cell,0.0098,0.0235,0.0002
+CD80,CTLA4,Mast cell,Fibroblast,0.012,0.0202,0.0002
+VEGFA,FLT1,NK cell,B cell,0.0098,0.0201,0.0002
+VEGFA,FLT1,NK cell,Tumor epithelial,0.0098,0.0212,0.0002
+CDH1,CDH1,Myeloid/Macro,Unknown,0.0107,0.0234,0.0002
+VEGFA,FLT1,T cell,B cell,0.0105,0.0201,0.0002
+CCL2,CCR2,Plasma cell,Myeloid/Macro,0.0362,0.0055,0.0002
+HGF,MET,Plasma cell,Fibroblast,0.0201,0.0107,0.0002
+VEGFA,FLT1,T cell,Mast cell,0.0105,0.0235,0.0002
+VEGFA,FLT1,Unknown,T cell,0.0301,0.0068,0.0002
+HGF,MET,Plasma cell,Mast cell,0.0201,0.0116,0.0002
+CDH1,CDH1,Unknown,Myeloid/Macro,0.0234,0.0107,0.0002
+CD80,CTLA4,Fibroblast,Tumor epithelial,0.024,0.0064,0.0002
+WNT5A,FZD5,Endothelial,Mast cell,0.0167,0.0108,0.0002
+WNT5A,FZD5,Myeloid/Macro,Endothelial,0.0118,0.016,0.0002
+CDH1,CDH1,B cell,T cell,0.0044,0.012,1e-04
+CDH1,CDH1,B cell,Unknown,0.0044,0.0234,1e-04
+CDH1,CDH1,B cell,Dendritic cell,0.0044,0.0283,1e-04
+WNT5A,FZD5,Endothelial,B cell,0.0167,0.0032,1e-04
+VEGFA,FLT1,NK cell,Plasma cell,0.0098,0.0123,1e-04
+PDGFA,PDGFRA,Tumor epithelial,Tumor epithelial,0.0437,0.0026,1e-04
+HGF,MET,Mast cell,Mast cell,0.0079,0.0116,1e-04
+PDGFA,PDGFRA,Tumor epithelial,Myeloid/Macro,0.0437,0.0027,1e-04
+PDGFA,PDGFRA,B cell,Myeloid/Macro,0.0335,0.0027,1e-04
+CDH1,CDH1,Dendritic cell,B cell,0.0283,0.0044,1e-04
+VEGFA,FLT1,NK cell,T cell,0.0098,0.0068,1e-04
+PDGFA,PDGFRA,NK cell,Myeloid/Macro,0.0209,0.0027,1e-04
+VEGFA,FLT1,T cell,Plasma cell,0.0105,0.0123,1e-04
+CD80,CTLA4,NK cell,B cell,0.0068,0.0117,1e-04
+CDH1,CDH1,Myeloid/Macro,Myeloid/Macro,0.0107,0.0107,1e-04
+CDH1,CDH1,Myeloid/Macro,T cell,0.0107,0.012,1e-04
+VEGFA,FLT1,T cell,Fibroblast,0.0105,0.008,1e-04
+VEGFA,FLT1,NK cell,Fibroblast,0.0098,0.008,1e-04
+CDH1,CDH1,T cell,T cell,0.012,0.012,1e-04
+VEGFA,FLT1,B cell,Tumor epithelial,0.0034,0.0212,1e-04
+VEGFA,FLT1,B cell,B cell,0.0034,0.0201,1e-04
+VEGFA,FLT1,B cell,Unknown,0.0034,0.0285,1e-04
+CDH1,CDH1,T cell,B cell,0.012,0.0044,1e-04
+CDH1,CDH1,T cell,Myeloid/Macro,0.012,0.0107,1e-04
+VEGFA,FLT1,B cell,Mast cell,0.0034,0.0235,1e-04
+CDH1,CDH1,Unknown,B cell,0.0234,0.0044,1e-04
+HGF,MET,Mast cell,Fibroblast,0.0079,0.0107,1e-04
+PDGFA,PDGFRA,Myeloid/Macro,Tumor epithelial,0.0341,0.0026,1e-04
+PDGFA,PDGFRA,Myeloid/Macro,Myeloid/Macro,0.0341,0.0027,1e-04
+HGF,MET,Plasma cell,T cell,0.0201,0.0063,1e-04
+PDGFA,PDGFRA,B cell,Tumor epithelial,0.0335,0.0026,1e-04
+VEGFA,KDR,B cell,Tumor epithelial,0.0034,0.0388,1e-04
+CCL2,CCR2,T cell,Plasma cell,0.0018,0.04,1e-04
+CCL2,CCR2,B cell,T cell,0.0122,0.0061,1e-04
+CCL2,CCR2,B cell,Myeloid/Macro,0.0122,0.0055,1e-04
+WNT5A,FZD5,Tumor epithelial,T cell,0.0357,0.0027,1e-04
+WNT5A,FZD5,Dendritic cell,T cell,0.0369,0.0027,1e-04
+CD80,CTLA4,Mast cell,B cell,0.012,0.0117,1e-04
+WNT5A,FZD5,Myeloid/Macro,Mast cell,0.0118,0.0108,1e-04
+VEGFA,FLT1,T cell,T cell,0.0105,0.0068,1e-04
+WNT5A,FZD5,Dendritic cell,B cell,0.0369,0.0032,1e-04
+CD80,CTLA4,Plasma cell,B cell,0.0074,0.0117,1e-04
+CD80,CTLA4,Plasma cell,Fibroblast,0.0074,0.0202,1e-04
+PDGFA,PDGFRA,Unknown,Tumor epithelial,0.0361,0.0026,1e-04
+PDGFA,PDGFRA,Unknown,Myeloid/Macro,0.0361,0.0027,1e-04
+WNT5A,FZD5,Tumor epithelial,B cell,0.0357,0.0032,1e-04
+CD80,CTLA4,NK cell,Fibroblast,0.0068,0.0202,1e-04
+PDGFA,PDGFRA,NK cell,Tumor epithelial,0.0209,0.0026,1e-04
+CD80,CTLA4,Mast cell,Tumor epithelial,0.012,0.0064,1e-04
+CDH1,CDH1,B cell,Myeloid/Macro,0.0044,0.0107,0.0
+CDH1,CDH1,B cell,B cell,0.0044,0.0044,0.0
+CCL2,CCR2,NK cell,Myeloid/Macro,0.0077,0.0055,0.0
+CCL2,CCR2,NK cell,T cell,0.0077,0.0061,0.0
+CCL2,CCR2,T cell,Myeloid/Macro,0.0018,0.0055,0.0
+CCL2,CCR2,T cell,T cell,0.0018,0.0061,0.0
+CDH1,CDH1,Myeloid/Macro,B cell,0.0107,0.0044,0.0
+VEGFA,FLT1,B cell,T cell,0.0034,0.0068,0.0
+VEGFA,FLT1,B cell,Plasma cell,0.0034,0.0123,0.0
+VEGFA,FLT1,B cell,Fibroblast,0.0034,0.008,0.0
+HGF,MET,Mast cell,T cell,0.0079,0.0063,0.0
+PDGFA,PDGFRA,T cell,Tumor epithelial,0.0086,0.0026,0.0
+PDGFA,PDGFRA,T cell,Myeloid/Macro,0.0086,0.0027,0.0
+CD80,CTLA4,NK cell,Tumor epithelial,0.0068,0.0064,0.0
+WNT5A,FZD5,Myeloid/Macro,T cell,0.0118,0.0027,0.0
+CD80,CTLA4,Plasma cell,Tumor epithelial,0.0074,0.0064,0.0
+WNT5A,FZD5,Endothelial,T cell,0.0167,0.0027,0.0
+WNT5A,FZD5,Myeloid/Macro,B cell,0.0118,0.0032,0.0

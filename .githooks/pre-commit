@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# This script ensures that the README.md citation list is up-to-date
+# before committing any changes to the singlecell_factory repository.
+
+echo "Running reference manager..."
+python3 scripts/update_references.py
+
+if git diff --name-only | grep -q "README.md"; then
+    echo "README.md references were updated. Please stage the file and commit again."
+    exit 1
+fi
+
+echo "References check passed."
+exit 0

@@ -16,7 +16,7 @@ from .config import (
     QCConfig,
     VelocityConfig,
 )
-from .pipeline import run_pipeline
+from .pipeline import MODULE_DEPENDENCIES, run_pipeline
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +38,8 @@ def parse_args() -> argparse.Namespace:
             "batch_correction, differential_expression, annotation, trajectory, "
             "pseudo_velocity, rna_velocity, cnv_inference, pathway_analysis, "
             "cell_communication, gene_regulatory_network, validate_cbioportal, "
-            "immune_phenotyping, tumor_microenvironment, gene_signature_scoring"
+            "immune_phenotyping, tumor_microenvironment, gene_signature_scoring, "
+            "pseudobulk_de, cell_fate, composition, metacell"
         ),
     )
     parser.add_argument("--markers-json", default="", help="Optional custom marker dictionary JSON file")
@@ -78,6 +79,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-neighbors", type=int, default=15)
     parser.add_argument("--leiden-resolution", type=float, default=0.8)
     parser.add_argument("--scale-data", action="store_true", help="Apply sc.pp.scale() before PCA")
+
+    # Differential expression
+    parser.add_argument(
+        "--de-method",
+        default="wilcoxon",
+        choices=["wilcoxon", "t-test", "t-test_overestim_var", "logreg"],
+        help="Method for scanpy.tl.rank_genes_groups (default: wilcoxon)",
+    )
+    parser.add_argument(
+        "--de-n-genes",
+        type=int,
+        default=300,
+        help="Maximum number of genes ranked per cluster in DE (default: 300)",
+    )
 
     # Cell cycle
     parser.add_argument("--regress-cell-cycle", action="store_true", help="Regress out cell cycle effects")
@@ -139,6 +154,14 @@ def parse_args() -> argparse.Namespace:
         help="Number of top DE genes to include in cBioPortal validation (default: 20)",
     )
 
+    # Configurable thresholds
+    parser.add_argument("--de-pval-threshold", type=float, default=0.05,
+                        help="Adjusted p-value threshold for significant DE genes (default: 0.05)")
+    parser.add_argument("--de-logfc-threshold", type=float, default=0.25,
+                        help="Minimum absolute log fold change for DE genes (default: 0.25)")
+    parser.add_argument("--annotation-confidence-threshold", type=float, default=0.1,
+                        help="Minimum score for confident cell type assignment (default: 0.1)")
+
     # Checkpointing & resume
     parser.add_argument(
         "--checkpoint", action="store_true",
@@ -160,6 +183,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _validate_modules(optional_modules_str: str) -> list[str]:
+    """Parse and validate optional module names."""
+    modules = [m.strip() for m in optional_modules_str.split(",") if m.strip()]
+    unknown = set(modules) - MODULE_DEPENDENCIES.keys()
+    if unknown:
+        raise SystemExit(
+            f"Error: unknown module(s): {sorted(unknown)}. "
+            f"Available: {sorted(MODULE_DEPENDENCIES.keys())}"
+        )
+    return modules
+
+
 def _load_markers(markers_json: str) -> dict[str, list[str]]:
     if not markers_json:
         return {}
@@ -167,9 +202,32 @@ def _load_markers(markers_json: str) -> dict[str, list[str]]:
     return {str(k): [str(g) for g in v] for k, v in payload.items()}
 
 
+def _validate_args(args: argparse.Namespace) -> None:
+    """Validate CLI arguments before pipeline execution."""
+    if args.min_genes >= args.max_genes:
+        raise SystemExit(f"Error: --min-genes ({args.min_genes}) must be < --max-genes ({args.max_genes})")
+    if args.min_counts >= args.max_counts:
+        raise SystemExit(f"Error: --min-counts ({args.min_counts}) must be < --max-counts ({args.max_counts})")
+    if not (0 <= args.max_mito_pct <= 100):
+        raise SystemExit(f"Error: --max-mito-pct must be in [0, 100], got {args.max_mito_pct}")
+    if not (0 <= args.max_ribo_pct <= 100):
+        raise SystemExit(f"Error: --max-ribo-pct must be in [0, 100], got {args.max_ribo_pct}")
+    if args.parallel_workers < 1:
+        raise SystemExit(f"Error: --parallel-workers must be >= 1, got {args.parallel_workers}")
+    if args.n_pcs < 1:
+        raise SystemExit(f"Error: --n-pcs must be >= 1, got {args.n_pcs}")
+    if args.n_neighbors < 1:
+        raise SystemExit(f"Error: --n-neighbors must be >= 1, got {args.n_neighbors}")
+    if args.leiden_resolution <= 0:
+        raise SystemExit(f"Error: --leiden-resolution must be > 0, got {args.leiden_resolution}")
+    if args.de_n_genes < 1:
+        raise SystemExit(f"Error: --de-n-genes must be >= 1, got {args.de_n_genes}")
+
+
 def main() -> None:
     """CLI entrypoint."""
     args = parse_args()
+    _validate_args(args)
     sample_root = Path(args.sample_root)
     outs_dir = (
         Path(args.outs_dir)
@@ -229,7 +287,7 @@ def main() -> None:
             n_pcs=args.velocity_n_pcs,
             n_neighbors=args.velocity_n_neighbors,
         ),
-        optional_modules=[m.strip() for m in args.optional_modules.split(",") if m.strip()],
+        optional_modules=_validate_modules(args.optional_modules),
         markers=_load_markers(args.markers_json),
         gene_signature=GeneSignatureConfig(
             signature_json=Path(args.signature_json) if args.signature_json else None,
@@ -245,6 +303,11 @@ def main() -> None:
         checkpoint=args.checkpoint,
         resume_from=args.resume_from,
         parallel_workers=args.parallel_workers,
+        de_method=args.de_method,
+        de_n_genes=args.de_n_genes,
+        de_pval_threshold=args.de_pval_threshold,
+        de_logfc_threshold=args.de_logfc_threshold,
+        annotation_confidence_threshold=args.annotation_confidence_threshold,
     )
     manifest = run_pipeline(cfg)
     print(manifest)

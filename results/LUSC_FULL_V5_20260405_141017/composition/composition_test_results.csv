@@ -1,0 +1,12 @@
+cell_type,proportion_mean,proportion_std,pvalue,padj,significant
+B cell,0.134,0.3348,0.447812,0.447812,False
+Dendritic cell,0.0069,0.0138,0.447812,0.447812,False
+Endothelial,0.0408,0.1373,0.447812,0.447812,False
+Fibroblast,0.0268,0.0965,0.447812,0.447812,False
+Mast cell,0.0797,0.2655,0.447812,0.447812,False
+Myeloid/Macro,0.1824,0.3635,0.447812,0.447812,False
+NK cell,0.0734,0.1527,0.447812,0.447812,False
+Plasma cell,0.092,0.2596,0.447812,0.447812,False
+T cell,0.1729,0.3101,0.447812,0.447812,False
+Tumor epithelial,0.1428,0.356,0.447812,0.447812,False
+Unknown,0.0482,0.0715,0.447812,0.447812,False

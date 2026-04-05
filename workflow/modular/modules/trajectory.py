@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scanpy as sc
+from scipy import sparse
 
 from ..context import PipelineContext
 
@@ -129,36 +130,78 @@ class TrajectoryModule:
         if len(valid) < 50:
             return
 
-        # Find genes most correlated with pseudotime
+        # Find genes most correlated with pseudotime.
+        # Limit candidate genes to keep memory/runtime bounded on large datasets.
         expr = adata.raw.to_adata() if adata.raw else adata
         expr_sub = expr[valid]
-        X = expr_sub.X
-        if hasattr(X, "toarray"):
-            X = X.toarray()
-        X = np.asarray(X, dtype=np.float32)
         pt_vals = pt.loc[valid].values.astype(np.float32)
+        n_cells = float(len(pt_vals))
+        if n_cells <= 1:
+            return
 
-        # Pearson correlation of each gene with pseudotime
-        X_centered = X - X.mean(axis=0)
-        pt_centered = pt_vals - pt_vals.mean()
-        numer = X_centered.T @ pt_centered
-        denom = np.sqrt((X_centered**2).sum(axis=0)) * np.sqrt((pt_centered**2).sum())
-        denom[denom == 0] = 1
-        corr = numer / denom
+        hv_mask = None
+        if "highly_variable" in adata.var.columns:
+            hv_mask = adata.var["highly_variable"].reindex(expr_sub.var_names, fill_value=False).to_numpy()
+        candidate_idx = np.flatnonzero(hv_mask) if hv_mask is not None else np.arange(expr_sub.n_vars)
+        if candidate_idx.size == 0:
+            candidate_idx = np.arange(expr_sub.n_vars)
 
-        top_idx = np.argsort(np.abs(corr))[-30:][::-1]
+        max_candidates = min(3000, candidate_idx.size)
+        X_all = expr_sub.X
+        if candidate_idx.size > max_candidates:
+            X_cand = X_all[:, candidate_idx]
+            if sparse.issparse(X_cand):
+                means = np.asarray(X_cand.mean(axis=0)).ravel()
+                mean_sq = np.asarray(X_cand.power(2).mean(axis=0)).ravel()
+                var = np.maximum(mean_sq - means**2, 0.0)
+            else:
+                X_cand_arr = np.asarray(X_cand, dtype=np.float32)
+                var = X_cand_arr.var(axis=0)
+            keep = np.argsort(var)[-max_candidates:]
+            candidate_idx = candidate_idx[keep]
+
+        X = X_all[:, candidate_idx]
+        pt_mean = float(pt_vals.mean())
+        pt_std = float(pt_vals.std())
+        if pt_std == 0:
+            return
+
+        # Pearson correlation without densifying full cell x gene matrix.
+        if sparse.issparse(X):
+            X = X.tocsr()
+            x_mean = np.asarray(X.mean(axis=0)).ravel()
+            x_mean_sq = np.asarray(X.power(2).mean(axis=0)).ravel()
+            x_std = np.sqrt(np.maximum(x_mean_sq - x_mean**2, 0.0))
+            xy_mean = np.asarray(X.T.dot(pt_vals) / n_cells).ravel()
+        else:
+            X = np.asarray(X, dtype=np.float32)
+            x_mean = X.mean(axis=0)
+            x_std = X.std(axis=0)
+            xy_mean = (X * pt_vals[:, None]).mean(axis=0)
+
+        denom = x_std * pt_std
+        denom[denom == 0] = np.inf
+        corr = (xy_mean - x_mean * pt_mean) / denom
+        corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
+
+        top_local_idx = np.argsort(np.abs(corr))[-30:][::-1]
+        top_idx = candidate_idx[top_local_idx]
         top_genes = expr_sub.var_names[top_idx].tolist()
 
         # Save gene-pseudotime correlations
         corr_df = pd.DataFrame({
             "gene": expr_sub.var_names[top_idx],
-            "pseudotime_correlation": corr[top_idx],
+            "pseudotime_correlation": corr[top_local_idx],
         })
         corr_df.to_csv(ctx.table_dir / "pseudotime_top_genes.csv", index=False)
 
         # Heatmap: cells ordered by pseudotime, top genes
         sort_idx = np.argsort(pt_vals)
-        mat = X[sort_idx][:, top_idx].T
+        mat = expr_sub.X[:, top_idx]
+        if sparse.issparse(mat):
+            mat = mat.toarray()
+        mat = np.asarray(mat, dtype=np.float32)
+        mat = mat[sort_idx].T
 
         # Smooth for visualization (rolling mean, window=50)
         from scipy.ndimage import uniform_filter1d

@@ -1,0 +1,78 @@
+{
+  "shape": [
+    500
+  ],
+  "chunks": [
+    500
+  ],
+  "dtype": [
+    [
+      "0",
+      "<f8"
+    ],
+    [
+      "1",
+      "<f8"
+    ],
+    [
+      "2",
+      "<f8"
+    ],
+    [
+      "3",
+      "<f8"
+    ],
+    [
+      "4",
+      "<f8"
+    ],
+    [
+      "5",
+      "<f8"
+    ],
+    [
+      "6",
+      "<f8"
+    ],
+    [
+      "7",
+      "<f8"
+    ],
+    [
+      "8",
+      "<f8"
+    ],
+    [
+      "9",
+      "<f8"
+    ],
+    [
+      "10",
+      "<f8"
+    ],
+    [
+      "11",
+      "<f8"
+    ],
+    [
+      "12",
+      "<f8"
+    ],
+    [
+      "13",
+      "<f8"
+    ]
+  ],
+  "fill_value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+  "order": "C",
+  "filters": null,
+  "dimension_separator": ".",
+  "compressor": {
+    "id": "blosc",
+    "cname": "lz4",
+    "clevel": 5,
+    "shuffle": 1,
+    "blocksize": 0
+  },
+  "zarr_format": 2
+}

@@ -9,7 +9,7 @@ def score_gene_sets(
     gene_sets: dict[str, list[str]],
     prefix: str,
     *,
-    use_raw: bool = True,
+    use_raw: bool = False,
     min_genes: int = 2,
 ) -> list[str]:
     """Score multiple gene sets against an AnnData object.

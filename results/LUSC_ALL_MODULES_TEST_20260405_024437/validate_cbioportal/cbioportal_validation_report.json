@@ -1,0 +1,254 @@
+{
+  "study_id": "lusc_tcga_pan_can_atlas_2018",
+  "total_samples": 484,
+  "genes_queried": 20,
+  "genes_with_mutations": 17,
+  "results": [
+    {
+      "gene": "TPSAB1",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 7177,
+      "total_samples": 484,
+      "mutated_samples": 2,
+      "mutation_rate_pct": 0.41,
+      "mutation_types": {
+        "Missense_Mutation": 2
+      },
+      "error": null
+    },
+    {
+      "gene": "APOC1",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 341,
+      "total_samples": 484,
+      "mutated_samples": 1,
+      "mutation_rate_pct": 0.21,
+      "mutation_types": {
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "APOE",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 348,
+      "total_samples": 484,
+      "mutated_samples": 0,
+      "mutation_rate_pct": 0.0,
+      "mutation_types": {},
+      "error": null
+    },
+    {
+      "gene": "KRT19",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 3880,
+      "total_samples": 484,
+      "mutated_samples": 2,
+      "mutation_rate_pct": 0.41,
+      "mutation_types": {
+        "Splice_Site": 1,
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "C1QC",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 714,
+      "total_samples": 484,
+      "mutated_samples": 3,
+      "mutation_rate_pct": 0.62,
+      "mutation_types": {
+        "Missense_Mutation": 3
+      },
+      "error": null
+    },
+    {
+      "gene": "CD68",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 968,
+      "total_samples": 484,
+      "mutated_samples": 4,
+      "mutation_rate_pct": 0.83,
+      "mutation_types": {
+        "Missense_Mutation": 4
+      },
+      "error": null
+    },
+    {
+      "gene": "TPSB2",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 64499,
+      "total_samples": 484,
+      "mutated_samples": 0,
+      "mutation_rate_pct": 0.0,
+      "mutation_types": {},
+      "error": null
+    },
+    {
+      "gene": "C1QA",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 712,
+      "total_samples": 484,
+      "mutated_samples": 2,
+      "mutation_rate_pct": 0.41,
+      "mutation_types": {
+        "Nonsense_Mutation": 1,
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "CTSB",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 1508,
+      "total_samples": 484,
+      "mutated_samples": 1,
+      "mutation_rate_pct": 0.21,
+      "mutation_types": {
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "C1QB",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 713,
+      "total_samples": 484,
+      "mutated_samples": 5,
+      "mutation_rate_pct": 1.03,
+      "mutation_types": {
+        "Missense_Mutation": 4,
+        "Frame_Shift_Del": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "TYROBP",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 7305,
+      "total_samples": 484,
+      "mutated_samples": 3,
+      "mutation_rate_pct": 0.62,
+      "mutation_types": {
+        "Missense_Mutation": 2,
+        "Splice_Site": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "CTSL",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 1514,
+      "total_samples": 484,
+      "mutated_samples": 6,
+      "mutation_rate_pct": 1.24,
+      "mutation_types": {
+        "Missense_Mutation": 5,
+        "Splice_Site": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "CTSZ",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 1522,
+      "total_samples": 484,
+      "mutated_samples": 3,
+      "mutation_rate_pct": 0.62,
+      "mutation_types": {
+        "Splice_Site": 1,
+        "Nonsense_Mutation": 1,
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "FCER1G",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 2207,
+      "total_samples": 484,
+      "mutated_samples": 2,
+      "mutation_rate_pct": 0.41,
+      "mutation_types": {
+        "Missense_Mutation": 1,
+        "Translation_Start_Site": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "KRT5",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 3852,
+      "total_samples": 484,
+      "mutated_samples": 5,
+      "mutation_rate_pct": 1.03,
+      "mutation_types": {
+        "Missense_Mutation": 3,
+        "Frame_Shift_Ins": 1,
+        "Nonsense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "PSAP",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 5660,
+      "total_samples": 484,
+      "mutated_samples": 1,
+      "mutation_rate_pct": 0.21,
+      "mutation_types": {
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "IFI30",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 10437,
+      "total_samples": 484,
+      "mutated_samples": 1,
+      "mutation_rate_pct": 0.21,
+      "mutation_types": {
+        "Missense_Mutation": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "GPNMB",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 10457,
+      "total_samples": 484,
+      "mutated_samples": 7,
+      "mutation_rate_pct": 1.45,
+      "mutation_types": {
+        "Missense_Mutation": 7,
+        "In_Frame_Del": 1
+      },
+      "error": null
+    },
+    {
+      "gene": "FTL",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 2512,
+      "total_samples": 484,
+      "mutated_samples": 0,
+      "mutation_rate_pct": 0.0,
+      "mutation_types": {},
+      "error": null
+    },
+    {
+      "gene": "KRT6A",
+      "study_id": "lusc_tcga_pan_can_atlas_2018",
+      "entrez_id": 3853,
+      "total_samples": 484,
+      "mutated_samples": 5,
+      "mutation_rate_pct": 1.03,
+      "mutation_types": {
+        "Missense_Mutation": 4,
+        "Splice_Site": 1
+      },
+      "error": null
+    }
+  ]
+}

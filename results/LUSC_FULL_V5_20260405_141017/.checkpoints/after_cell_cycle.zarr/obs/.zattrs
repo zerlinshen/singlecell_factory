@@ -1,0 +1,32 @@
+{
+  "column-order": [
+    "n_genes_by_counts",
+    "total_counts",
+    "pct_counts_mt",
+    "pct_counts_ribo",
+    "pct_counts_hb",
+    "doublet_score",
+    "predicted_doublet",
+    "leiden",
+    "cnv_score",
+    "cnv_class",
+    "dpt_pseudotime",
+    "metacell",
+    "score_Myeloid/Macro",
+    "score_Tumor epithelial",
+    "score_B cell",
+    "score_Plasma cell",
+    "score_T cell",
+    "score_NK cell",
+    "score_Dendritic cell",
+    "score_Mast cell",
+    "cell_type",
+    "score_Endothelial",
+    "annotation_confidence",
+    "score_Fibroblast",
+    "phase",
+    "S_score",
+    "G2M_score"
+  ],
+  "_index": "_index"
+}

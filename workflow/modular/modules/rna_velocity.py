@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import gzip
 import importlib
 import logging
+import os
 import warnings
 from collections import defaultdict
 from multiprocessing import Pool
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import matplotlib
@@ -43,7 +46,7 @@ def _patch_scvelo_numpy2() -> bool:
     if _SCVELO_NUMPY2_PATCH_DONE:
         return False
 
-    if np.lib.NumpyVersion(np.__version__) < "2.0.0":
+    if not _version_at_least(np.__version__, (2, 0)):
         return False
 
     try:
@@ -266,15 +269,20 @@ class RNAVelocityModule:
 
         cfg = ctx.cfg.velocity
         n_vars_original = adata.n_vars
+        step_times: dict[str, float] = {}
 
         # Work on a copy to preserve the shared gene index
         adata_v = adata.copy()
 
         # --- Data loading ---
+        t0 = perf_counter()
         self._load_layers(adata_v, ctx)
+        step_times["load_layers"] = perf_counter() - t0
 
         # --- scVelo preprocessing (mutates gene index -- only on the copy) ---
+        t0 = perf_counter()
         scv.pp.filter_and_normalize(adata_v, min_shared_counts=cfg.min_shared_counts)
+        step_times["filter_and_normalize"] = perf_counter() - t0
         if adata_v.n_vars == 0:
             raise ValueError(
                 f"filter_and_normalize removed all genes "
@@ -287,22 +295,32 @@ class RNAVelocityModule:
             n_vars_original,
         )
 
+        t0 = perf_counter()
         scv.pp.moments(adata_v, n_pcs=cfg.n_pcs, n_neighbors=cfg.n_neighbors)
+        step_times["moments"] = perf_counter() - t0
 
         # --- Velocity computation ---
+        t0 = perf_counter()
         self._compute_velocity(adata_v, cfg, scv)
+        step_times["compute_velocity"] = perf_counter() - t0
 
         # --- Metrics ---
+        t0 = perf_counter()
         scv.tl.velocity_confidence(adata_v)
+        step_times["velocity_confidence"] = perf_counter() - t0
 
         # --- Transfer cell-level results to the original adata ---
         _transfer_velocity_results(adata_v, adata)
 
         # --- Tables ---
+        t0 = perf_counter()
         self._write_tables(adata_v, ctx, scv)
+        step_times["write_tables"] = perf_counter() - t0
 
         # --- Visualizations (use adata_v which has velocity data) ---
+        t0 = perf_counter()
         self._visualize(adata_v, ctx, cfg, scv)
+        step_times["visualize"] = perf_counter() - t0
 
         # --- Metadata ---
         if "velocity_confidence" in adata_v.obs:
@@ -310,6 +328,9 @@ class RNAVelocityModule:
                 adata_v.obs["velocity_confidence"].mean()
             )
         ctx.metadata["velocity_mode"] = cfg.mode
+        ctx.metadata["velocity_step_seconds"] = {
+            k: round(v, 3) for k, v in step_times.items()
+        }
 
     # ------------------------------------------------------------------
     # Data loading
@@ -371,13 +392,21 @@ class RNAVelocityModule:
         if not has_layers and cfg.bam_path:
             if cfg.bam_path.exists() and resolved_gtf and resolved_gtf.exists():
                 logger.info("Extracting spliced/unspliced counts from BAM + GTF...")
+                extract_jobs = max(1, int(cfg.n_jobs))
+                # Default cfg.n_jobs=4 is conservative; auto-bump extraction workers
+                # on high-core hosts while preserving explicit user overrides.
+                if extract_jobs == 4 and (os.cpu_count() or 1) >= 16:
+                    extract_jobs = 8
+                ctx.metadata["velocity_extract_n_jobs"] = int(extract_jobs)
+                t0 = perf_counter()
                 spliced, unspliced = _count_spliced_unspliced(
                     cfg.bam_path,
                     resolved_gtf,
                     adata_v.obs_names.tolist(),
                     adata_v.var_names.tolist(),
-                    n_jobs=cfg.n_jobs,
+                    n_jobs=extract_jobs,
                 )
+                ctx.metadata["velocity_extract_seconds"] = round(perf_counter() - t0, 3)
                 adata_v.layers["spliced"] = spliced
                 adata_v.layers["unspliced"] = unspliced
                 has_layers = True
@@ -670,8 +699,6 @@ def _init_count_worker(
     exon_lookup: dict[str, dict[str, list[tuple[int, int]]]],
     barcode_idx: dict[str, int],
     gene_idx: dict[str, int],
-    barcode_set: set[str],
-    gene_set: set[str],
     min_mapq: int,
 ) -> None:
     """Initialize worker state once to avoid per-task pickling overhead."""
@@ -679,8 +706,6 @@ def _init_count_worker(
     _WORKER_STATE["exon_lookup"] = exon_lookup
     _WORKER_STATE["barcode_idx"] = barcode_idx
     _WORKER_STATE["gene_idx"] = gene_idx
-    _WORKER_STATE["barcode_set"] = barcode_set
-    _WORKER_STATE["gene_set"] = gene_set
     _WORKER_STATE["min_mapq"] = int(min_mapq)
 
 
@@ -699,8 +724,6 @@ def _count_chromosome(chrom: str) -> tuple[list[int], list[int], list[int], list
     exon_lookup = _WORKER_STATE["exon_lookup"]
     barcode_idx = _WORKER_STATE["barcode_idx"]
     gene_idx = _WORKER_STATE["gene_idx"]
-    barcode_set = _WORKER_STATE["barcode_set"]
-    gene_set = _WORKER_STATE["gene_set"]
     min_mapq = _WORKER_STATE["min_mapq"]
 
     chrom_exons = exon_lookup.get(chrom, {})
@@ -718,29 +741,40 @@ def _count_chromosome(chrom: str) -> tuple[list[int], list[int], list[int], list
             continue
         if read.mapping_quality < min_mapq:
             continue
-        if not read.has_tag("CB") or not read.has_tag("GN"):
+
+        try:
+            cb = read.get_tag("CB")
+            gene = read.get_tag("GN")
+        except KeyError:
             continue
 
-        cb = read.get_tag("CB")
-        gene = read.get_tag("GN")
-        if cb not in barcode_set or gene not in gene_set:
+        ci = barcode_idx.get(cb)
+        if ci is None:
             continue
+        gi = gene_idx.get(gene)
+        if gi is None:
+            continue
+
+        cigartuples = read.cigartuples
+        has_splice = False
+        if cigartuples:
+            for op, _ in cigartuples:
+                if op == 3:  # CIGAR N
+                    has_splice = True
+                    break
 
         read_end = read.reference_end
         if read_end is None:
             continue
-
-        ci = barcode_idx[cb]
-        gi = gene_idx[gene]
-
-        has_splice = any(op == 3 for op, _ in read.cigartuples) if read.cigartuples else False
 
         if has_splice:
             spliced_rows.append(ci)
             spliced_cols.append(gi)
         else:
             gene_exon_list = chrom_exons.get(gene)
-            if gene_exon_list and _is_exonic(read.reference_start, read_end, gene_exon_list):
+            if gene_exon_list and _is_exonic(
+                read.reference_start, read_end, gene_exon_list
+            ):
                 spliced_rows.append(ci)
                 spliced_cols.append(gi)
             else:
@@ -750,6 +784,49 @@ def _count_chromosome(chrom: str) -> tuple[list[int], list[int], list[int], list
 
     bam.close()
     return spliced_rows, spliced_cols, unspliced_rows, unspliced_cols, n_reads, n_counted
+
+
+def _velocity_cache_dir() -> Path:
+    """Return cache directory for extracted spliced/unspliced layers."""
+    root = os.environ.get("SCF_VELOCITY_CACHE_DIR", "/tmp/singlecell_factory_velocity_cache")
+    path = Path(root)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _velocity_cache_key(
+    bam_path: Path,
+    gtf_path: Path,
+    barcodes: list[str],
+    gene_names: list[str],
+    min_mapq: int,
+) -> str:
+    """Build a stable content key for velocity extraction cache."""
+    h = hashlib.blake2b(digest_size=20)
+    for p in (bam_path, gtf_path):
+        st = p.stat()
+        h.update(str(p.resolve()).encode("utf-8"))
+        h.update(str(st.st_size).encode("ascii"))
+        h.update(str(st.st_mtime_ns).encode("ascii"))
+    h.update(str(min_mapq).encode("ascii"))
+    h.update(b"classifier=strict_exon_v1")
+    h.update(str(len(barcodes)).encode("ascii"))
+    h.update(str(len(gene_names)).encode("ascii"))
+    for bc in barcodes:
+        h.update(bc.encode("utf-8"))
+        h.update(b"\0")
+    for gene in gene_names:
+        h.update(gene.encode("utf-8"))
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def _velocity_cache_paths(cache_key: str) -> tuple[Path, Path]:
+    cache_dir = _velocity_cache_dir()
+    return (
+        cache_dir / f"{cache_key}.spliced.npz",
+        cache_dir / f"{cache_key}.unspliced.npz",
+    )
 
 
 def _count_spliced_unspliced(
@@ -772,13 +849,31 @@ def _count_spliced_unspliced(
     """
     import pysam
 
+    logger.info("RNA velocity BAM classification: strict exon/intron mode")
+
+    cache_key = _velocity_cache_key(
+        bam_path=bam_path,
+        gtf_path=gtf_path,
+        barcodes=barcodes,
+        gene_names=gene_names,
+        min_mapq=min_mapq,
+    )
+    sp_cache, un_cache = _velocity_cache_paths(cache_key)
+    if sp_cache.exists() and un_cache.exists():
+        try:
+            spliced_cached = sparse.load_npz(sp_cache).tocsr()
+            unspliced_cached = sparse.load_npz(un_cache).tocsr()
+            if spliced_cached.shape == (len(barcodes), len(gene_names)) and unspliced_cached.shape == (len(barcodes), len(gene_names)):
+                logger.info("Loaded cached velocity layers from %s", sp_cache.parent)
+                return spliced_cached, unspliced_cached
+        except Exception as exc:
+            logger.warning("Velocity cache load failed, recomputing: %s", exc)
+
     logger.info("Parsing GTF exon annotations...")
     exons = _parse_gtf_exons(gtf_path)
     exon_lookup = _build_exon_lookup(exons)
 
-    barcode_set = set(barcodes)
     barcode_idx = {bc: i for i, bc in enumerate(barcodes)}
-    gene_set = set(gene_names)
     gene_idx = {g: i for i, g in enumerate(gene_names)}
     n_cells = len(barcodes)
     n_genes = len(gene_names)
@@ -814,8 +909,6 @@ def _count_spliced_unspliced(
         exon_lookup,
         barcode_idx,
         gene_idx,
-        barcode_set,
-        gene_set,
         min_mapq,
     )
     if n_workers <= 1:
@@ -862,5 +955,11 @@ def _count_spliced_unspliced(
         ).tocsr()
     else:
         unspliced = sparse.csr_matrix((n_cells, n_genes), dtype=np.float32)
+
+    try:
+        sparse.save_npz(sp_cache, spliced)
+        sparse.save_npz(un_cache, unspliced)
+    except Exception as exc:
+        logger.warning("Velocity cache save failed: %s", exc)
 
     return spliced, unspliced

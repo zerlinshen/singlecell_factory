@@ -21,22 +21,36 @@ class DifferentialExpressionModule:
         if adata is None or "leiden" not in adata.obs:
             raise ValueError("Differential expression requires clustered AnnData.")
 
+        method = ctx.cfg.de_method
+        n_genes = max(1, int(ctx.cfg.de_n_genes))
+        rank_kwargs = {"use_raw": False, "n_genes": n_genes, "pts": True}
+        if method == "wilcoxon":
+            rank_kwargs["tie_correct"] = True
+
         sc.tl.rank_genes_groups(
-            adata, groupby="leiden", method="wilcoxon", use_raw=True, n_genes=500,
+            adata,
+            groupby="leiden",
+            method=method,
+            **rank_kwargs,
         )
         markers = sc.get.rank_genes_groups_df(adata, group=None)
+        if "pvals_adj" not in markers.columns:
+            markers["pvals_adj"] = 1.0
+        if "logfoldchanges" not in markers.columns:
+            markers["logfoldchanges"] = np.nan
 
         # Save unfiltered results
         markers.to_csv(ctx.table_dir / "marker_genes_all.csv", index=False)
 
         # Apply significance filtering
-        sig_markers = markers[
-            (markers["pvals_adj"] < 0.05) & (markers["logfoldchanges"].abs() > 0.25)
-        ].copy()
+        sig_mask = markers["pvals_adj"] < ctx.cfg.de_pval_threshold
+        if markers["logfoldchanges"].notna().any():
+            sig_mask &= markers["logfoldchanges"].abs() > ctx.cfg.de_logfc_threshold
+        sig_markers = markers[sig_mask].copy()
         sig_markers.to_csv(ctx.table_dir / "marker_genes.csv", index=False)
 
         top5 = (
-            sig_markers.sort_values(["group", "scores"], ascending=[True, False])
+            sig_markers.sort_values(["group", "pvals_adj", "scores"], ascending=[True, True, False])
             .groupby("group", observed=True)
             .head(5)
             .reset_index(drop=True)
@@ -44,6 +58,8 @@ class DifferentialExpressionModule:
         top5.to_csv(ctx.table_dir / "marker_top5_by_cluster.csv", index=False)
 
         ctx.metadata["de_significant_genes"] = int(len(sig_markers))
+        ctx.metadata["de_method"] = method
+        ctx.metadata["de_n_genes"] = int(n_genes)
 
         # --- Visualizations ---
         # Dot plot of top markers per cluster
@@ -62,7 +78,7 @@ class DifferentialExpressionModule:
         try:
             sc.pl.rank_genes_groups_heatmap(
                 adata, n_genes=5, show=False, show_gene_labels=True,
-                use_raw=True, swap_axes=True, vmin=-3, vmax=3,
+                use_raw=False, swap_axes=True, vmin=-3, vmax=3,
             )
             plt.savefig(
                 ctx.figure_dir / "de_heatmap_top5.png", dpi=160, bbox_inches="tight",
@@ -80,7 +96,7 @@ class DifferentialExpressionModule:
         if markers.empty:
             return
         fig, ax = plt.subplots(figsize=(10, 7))
-        log_pval = -np.log10(markers["pvals_adj"].clip(lower=1e-300))
+        log_pval = -np.log10(markers["pvals_adj"].clip(lower=1e-20))
         lfc = markers["logfoldchanges"]
 
         scatter = ax.scatter(

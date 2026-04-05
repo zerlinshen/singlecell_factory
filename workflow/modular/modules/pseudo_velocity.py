@@ -23,8 +23,8 @@ def _get_cell_group_col(adata) -> str:
 def _adaptive_quiver_scale(umap_coords, velocity):
     """Compute a quiver scale that makes arrows visible regardless of magnitude."""
     umap_range = max(
-        umap_coords[:, 0].ptp(),
-        umap_coords[:, 1].ptp(),
+        umap_coords[:, 0].max() - umap_coords[:, 0].min(),
+        umap_coords[:, 1].max() - umap_coords[:, 1].min(),
     )
     median_speed = np.median(np.linalg.norm(velocity, axis=1))
     if median_speed < 1e-10:

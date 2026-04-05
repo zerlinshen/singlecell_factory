@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import matplotlib
 
@@ -10,6 +11,8 @@ import numpy as np
 import pandas as pd
 
 from ..context import PipelineContext
+
+logger = logging.getLogger(__name__)
 
 
 class PathwayAnalysisModule:
@@ -84,14 +87,18 @@ class PathwayAnalysisModule:
         results = None
         try:
             results = self._run_gseapy(de_df, adata, ctx)
-        except Exception:
-            pass
+        except ImportError:
+            logger.info("gseapy not available, trying decoupler backend")
+        except Exception as exc:
+            logger.warning("gseapy enrichment failed: %s", exc)
 
         if results is None:
             try:
                 results = self._run_decoupler(adata, ctx)
-            except Exception:
-                pass
+            except ImportError:
+                logger.info("decoupler not available, using built-in fallback")
+            except Exception as exc:
+                logger.warning("decoupler pathway analysis failed: %s", exc)
 
         if results is None:
             results = self._run_fallback(de_df, adata, ctx)
@@ -149,7 +156,7 @@ class PathwayAnalysisModule:
             source="source",
             target="target",
             weight="weight",
-            use_raw=True,
+            use_raw=False,
         )
         if "mlm_estimate" not in adata.obsm:
             return None

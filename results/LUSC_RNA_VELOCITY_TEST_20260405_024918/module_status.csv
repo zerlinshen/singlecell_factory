@@ -1,0 +1,6 @@
+module,status,message
+cellranger,ok,completed
+qc,ok,completed
+doublet_detection,ok,completed
+clustering,ok,completed
+rna_velocity,failed,'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte

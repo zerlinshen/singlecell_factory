@@ -133,3 +133,8 @@ class PipelineConfig:
     checkpoint: bool = False
     resume_from: str | None = None
     parallel_workers: int = 1
+    de_method: str = "wilcoxon"
+    de_n_genes: int = 300
+    de_pval_threshold: float = 0.05
+    de_logfc_threshold: float = 0.25
+    annotation_confidence_threshold: float = 0.1

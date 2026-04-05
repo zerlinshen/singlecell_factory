@@ -212,12 +212,18 @@ class TumorMicroenvironmentModule:
 
         cell_types = df["cell_type"].values
         fig, ax = plt.subplots(figsize=(max(8, len(expr_cols) * 1.0), max(4, len(cell_types) * 0.4)))
-        for i, ct in enumerate(cell_types):
-            for j, gene in enumerate(expr_cols):
-                pct = df.loc[df["cell_type"] == ct, f"{gene}_pct"].values[0]
-                expr_val = df.loc[df["cell_type"] == ct, gene].values[0]
-                ax.scatter(j, i, s=pct * 3, c=expr_val, cmap="Reds", vmin=0,
-                           vmax=max(df[expr_cols].max()) or 1, edgecolors="grey", linewidth=0.5)
+        df_indexed = df.set_index("cell_type")
+        pct_matrix = df_indexed[[f"{g}_pct" for g in expr_cols]].values
+        expr_matrix = df_indexed[expr_cols].values
+        vmax = expr_matrix.max() or 1
+        jj, ii = np.meshgrid(range(len(expr_cols)), range(len(cell_types)))
+        ax.scatter(
+            jj.ravel(), ii.ravel(),
+            s=pct_matrix.ravel() * 3,
+            c=expr_matrix.ravel(),
+            cmap="Reds", vmin=0, vmax=vmax,
+            edgecolors="grey", linewidth=0.5,
+        )
 
         ax.set_xticks(range(len(expr_cols)))
         ax.set_xticklabels(expr_cols, rotation=45, ha="right", fontsize=8)

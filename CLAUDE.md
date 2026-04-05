@@ -37,6 +37,7 @@
 
 ## Skills In This Project
 - `/run-modular-pipeline`
+- `/download-large-file`
 - `/diagnose-modular-run`
 - `/add-pipeline-module`
 - `/validate-analysis-outputs`

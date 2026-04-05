@@ -24,7 +24,13 @@ class QCModule:
         adata.var["mt"] = gene_upper.str.startswith("MT-")
         adata.var["ribo"] = gene_upper.str.startswith(("RPS", "RPL"))
         adata.var["hb"] = gene_upper.str.startswith(("HBA", "HBB"))
-        sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo", "hb"], inplace=True)
+        sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo", "hb"], inplace=True, log1p=False, percent_top=None)
+
+        # Drop verbose columns to save memory
+        obs_drop = [c for c in adata.obs.columns if c.startswith("log1p") or c.startswith("total_counts_") or c.startswith("pct_counts_in_top_")]
+        adata.obs.drop(columns=obs_drop, inplace=True, errors="ignore")
+        var_drop = [c for c in adata.var.columns if c.startswith("log1p") or c.startswith("pct_dropout") or "total_counts" in c or c.startswith("mean_counts") or c.startswith("n_cells_by") or c in ["mt", "ribo", "hb"]]
+        adata.var.drop(columns=var_drop, inplace=True, errors="ignore")
 
         # --- QC visualizations (before filtering) ---
         self._plot_qc_metrics(adata, ctx, suffix="pre_filter")

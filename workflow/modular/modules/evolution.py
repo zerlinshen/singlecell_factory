@@ -154,7 +154,8 @@ class EvolutionModule:
                     row["mean_pseudotime"] = round(float(pt.mean()), 4)
                     row["median_pseudotime"] = round(float(pt.median()), 4)
             if "cell_type" in adata.obs:
-                row["dominant_cell_type"] = adata.obs.loc[mask, "cell_type"].mode().iloc[0]
+                ct_counts = adata.obs.loc[mask, "cell_type"].value_counts()
+                row["dominant_cell_type"] = ct_counts.index[0] if len(ct_counts) > 0 else "Unknown"
             records.append(row)
         return pd.DataFrame(records)
 
@@ -166,7 +167,7 @@ class EvolutionModule:
         try:
             sc.tl.rank_genes_groups(
                 adata, groupby="clone", method="wilcoxon",
-                use_raw=True, n_genes=50, key_added="rank_genes_clone",
+                use_raw=False, n_genes=50, key_added="rank_genes_clone",
             )
             markers = sc.get.rank_genes_groups_df(adata, group=None, key="rank_genes_clone")
             return markers[markers["pvals_adj"] < 0.05].head(200)

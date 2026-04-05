@@ -43,10 +43,18 @@ class RunMetrics:
 
 
 def _optimized_qc(adata):
+    import gc
     gene_upper = adata.var_names.astype(str).str.upper()
     adata.var["mt"] = gene_upper.str.startswith("MT-")
     adata.var["ribo"] = gene_upper.str.startswith(("RPS", "RPL"))
-    sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo"], inplace=True)
+    sc.pp.calculate_qc_metrics(adata, qc_vars=["mt", "ribo"], inplace=True, log1p=False, percent_top=None)
+    
+    # Drop verbose columns to save memory
+    obs_drop = [c for c in adata.obs.columns if c.startswith("log1p") or c.startswith("total_counts_") or c.startswith("pct_counts_in_top_")]
+    adata.obs.drop(columns=obs_drop, inplace=True, errors="ignore")
+    var_drop = [c for c in adata.var.columns if c.startswith("log1p") or c.startswith("pct_dropout") or "total_counts" in c or c.startswith("mean_counts") or c.startswith("n_cells_by") or c in ["mt", "ribo", "hb"]]
+    adata.var.drop(columns=var_drop, inplace=True, errors="ignore")
+
     mask = (
         (adata.obs["n_genes_by_counts"] >= 200)
         & (adata.obs["n_genes_by_counts"] <= 7000)
@@ -54,23 +62,23 @@ def _optimized_qc(adata):
         & (adata.obs["pct_counts_ribo"] <= 50.0)
     )
     adata = adata[mask, :].copy()
+    gc.collect()
     sc.pp.filter_genes(adata, min_cells=3)
     return adata
 
 
 def _optimized_clustering(adata):
+    sc.settings.n_jobs = -1
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
-    if sparse.issparse(adata.X):
-        adata.X = adata.X.astype(np.float32)
-    else:
-        adata.X = np.asarray(adata.X, dtype=np.float32)
-    adata.raw = adata
+    # Removing adata.raw = adata to save memory
     sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=3000)
-    sc.tl.pca(adata, n_comps=40, svd_solver="arpack", use_highly_variable=True)
+    solver = "arpack" if sparse.issparse(adata.X) else "randomized"
+    sc.tl.pca(adata, n_comps=40, svd_solver=solver, mask_var="highly_variable")
     sc.pp.neighbors(adata, n_neighbors=15, n_pcs=40, use_rep="X_pca")
     sc.tl.umap(adata, random_state=0)
     sc.tl.leiden(adata, resolution=0.8, flavor="igraph", directed=False, random_state=0)
+    import gc; gc.collect()
     return adata
 
 

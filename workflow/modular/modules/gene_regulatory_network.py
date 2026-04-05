@@ -47,7 +47,7 @@ class GeneRegulatoryNetworkModule:
             source="source",
             target="target",
             weight="weight",
-            use_raw=True,
+            use_raw=False,
         )
 
         if "ulm_estimate" not in adata.obsm:
@@ -114,7 +114,7 @@ class GeneRegulatoryNetworkModule:
             valid_targets = [g for g in targets if g in var_names]
             if len(valid_targets) >= 2:
                 sc.tl.score_genes(
-                    adata, valid_targets, score_name=f"tf_{tf}", use_raw=True,
+                    adata, valid_targets, score_name=f"tf_{tf}", use_raw=False,
                 )
                 results[tf] = valid_targets
 

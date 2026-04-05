@@ -1,19 +1,22 @@
-# singlecell_factory v4.0 — Modular scRNA-seq Pipeline
+# singlecell_factory v5.0 — Modular scRNA-seq Pipeline
 
-A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 17 optional analysis modules + automatic dependency resolution + categorized output**.
+A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 21 optional analysis modules + automatic dependency resolution + GPU acceleration + categorized output**.
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells.
 
 ## Features
 
 - **3 mandatory modules** (cellranger, QC, doublet detection) ensure data quality baseline
-- **17 optional analysis modules** covering the full scRNA-seq workflow
+- **21 optional analysis modules** covering the full scRNA-seq workflow
 - Automatic topological dependency resolution — just list what you want, dependencies are auto-included
-- **Categorized output** — each module's figures and tables in its own numbered subfolder
-- **Checkpoint & resume** — crash recovery via `--checkpoint` and `--resume-from`
-- **Parallel execution** — independent modules can run concurrently via `--parallel-workers`
+- **GPU acceleration** — rapids-singlecell backend for PCA/UMAP/neighbors (auto-detected)
+- **Categorized output** — each module's figures and tables in its own subfolder
+- **Checkpoint & resume** — zarr-accelerated checkpoints with h5ad fallback
+- **Parallel execution** — thread-safe parallel tiers with cost-aware scheduling
+- **Module runtime telemetry** — per-module wall-time automatically stored in `run_manifest.json`
 - Multi-backend support: each module auto-detects the best available tool
 - Validated against cBioPortal mutation data
+- Engineering principle: **accuracy and reproducibility first, performance second**
 
 ## Architecture
 
@@ -32,7 +35,7 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 | `clustering` | Normalization, HVG, PCA, UMAP, Leiden clustering | doublet_detection |
 | `cell_cycle` | Cell cycle scoring (S/G2M), optional regression | clustering |
 | `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama) | clustering |
-| `differential_expression` | Cluster marker genes (Wilcoxon, n=500), significance filtering | clustering |
+| `differential_expression` | Cluster marker genes (`wilcoxon` default, configurable), significance filtering | clustering |
 | `annotation` | Marker-based cell type annotation with confidence scores | clustering |
 | `trajectory` | PAGA trajectory graph + DPT pseudotime + gene expression dynamics | clustering |
 | `pseudo_velocity` | Pseudo-RNA velocity with arrow/stream plots (vectorized) | trajectory |
@@ -46,17 +49,23 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 | `tumor_microenvironment` | TME scoring (CYT/TIS/IFN-gamma/ESTIMATE) + checkpoint profiling | annotation |
 | `gene_signature_scoring` | 10 built-in cancer signatures + custom JSON signatures | clustering |
 | `evolution` | CNV-based clonal clustering, phylogenetic dendrogram, pseudotime-ordered evolution | cnv_inference + trajectory |
+| `pseudobulk_de` | Pseudobulk DE (pydeseq2 / Mann-Whitney fallback) — statistically proper multi-sample comparison | differential_expression |
+| `cell_fate` | Probabilistic cell fate mapping (CellRank / diffusion-based fallback) | trajectory |
+| `composition` | Differential cell type composition analysis (pertpy/scCODA / chi-squared fallback) | annotation |
+| `metacell` | Metacell aggregation (SEACells / MiniBatchKMeans fallback) — noise reduction for large datasets | clustering |
 
 ### Module Dependency DAG
 
 ```
 cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression -+-> pathway_analysis
                                                       |                            +-> validate_cbioportal
+                                                      |                            +-> pseudobulk_de
                                                       +-> annotation -+-> cell_communication
                                                       |               +-> immune_phenotyping
                                                       |               +-> tumor_microenvironment
+                                                      |               +-> composition
                                                       +-> trajectory -+-> pseudo_velocity
-                                                      |               |
+                                                      |               +-> cell_fate
                                                       +-> cnv_inference --+--> evolution
                                                       |                        (requires both trajectory + cnv_inference)
                                                       +-> cell_cycle
@@ -64,6 +73,7 @@ cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression
                                                       +-> rna_velocity
                                                       +-> gene_regulatory_network
                                                       +-> gene_signature_scoring
+                                                      +-> metacell
 ```
 
 ## Project Structure
@@ -76,7 +86,7 @@ singlecell_factory/
 │   ├── context.py          # Runtime context (per-module output dirs, checkpointing)
 │   ├── pipeline.py         # Pipeline orchestration + dependency resolution
 │   ├── perf_baseline.py    # Performance baselines
-│   └── modules/            # 20 analysis modules
+│   └── modules/            # 24 analysis modules
 ├── data/raw/               # Input datasets
 ├── results/                # Pipeline output (each run = timestamped folder with analysis subfolders)
 ├── tests/                  # Test suite
@@ -91,7 +101,28 @@ singlecell_factory/
 cd /home/zerlinshen/singlecell_factory
 conda env create -f environment.yml
 conda activate sc10x
+export MPLCONFIGDIR=$PWD/.mplconfig
+export NUMBA_CACHE_DIR=/tmp/numba_cache
 ```
+
+`MPLCONFIGDIR` and `NUMBA_CACHE_DIR` are strongly recommended for stable `scanpy/scvelo` startup in some Conda environments.
+
+## Dependency Requirements
+
+- Core: `python>=3.10`, `scanpy`, `anndata`, `numpy`, `scipy`, `pandas`, `matplotlib`, `scikit-learn`
+- Mandatory-module runtime: `scrublet`
+- Optional backends (auto-detected at runtime):
+  - `rapids-singlecell`, `cupy` (GPU clustering)
+  - `harmonypy` / `bbknn` / `scanorama` (batch correction)
+  - `infercnvpy`, `pybiomart` (CNV)
+  - `gseapy`, `decoupler` (pathway / TF activity)
+  - `liana` (cell-cell communication)
+  - `cellrank` (cell fate)
+  - `pydeseq2` (pseudobulk DE)
+  - `SEACells` (metacell)
+  - `scvelo`, `pysam` (RNA velocity)
+
+If a backend is missing, the corresponding module falls back to an implemented alternative whenever possible.
 
 ## Data Preparation (LUSC)
 
@@ -299,11 +330,16 @@ results/
 |---|---|
 | `--project` | Run name (used in output directory naming) |
 | `--sample-root` | Dataset root directory |
-| `--output-dir` | Output root (default: `output/modular_workflow`) |
+| `--output-dir` | Output root (default: `results/`) |
 | `--optional-modules` | Comma-separated module list (dependencies auto-included) |
 | `--checkpoint` | Save checkpoints after each module for crash recovery |
 | `--resume-from MODULE` | Resume from a specific module using saved checkpoints |
 | `--parallel-workers N` | Number of parallel workers (default: 1 = sequential) |
+| `--de-method` | DE method for `scanpy.tl.rank_genes_groups` (default: `wilcoxon`) |
+| `--de-n-genes` | Max genes ranked per cluster in DE (default: 300) |
+| `--de-pval-threshold` | Adjusted p-value cutoff for DE significance (default: 0.05) |
+| `--de-logfc-threshold` | Minimum absolute log fold change for DE (default: 0.25) |
+| `--annotation-confidence-threshold` | Minimum score for confident cell type assignment (default: 0.1) |
 
 ### QC
 
@@ -346,6 +382,15 @@ results/
 | `--velocity-n-neighbors` | 30 | Neighbors for scVelo moments |
 
 If no loom file is provided, the module can extract spliced/unspliced counts directly from Cell Ranger BAM output using pysam (parallelized by chromosome). `genes.gtf(.gz)` is taken from `--velocity-gtf` or auto-discovered from `--transcriptome-dir`. The module runs scVelo on an internal adata copy and transfers only cell-level results back, preserving the shared gene index and enabling parallel execution with other modules.
+RNA velocity BAM classification uses strict exon/intron rules only (no lossy fast-path).
+Policy update (April 5, 2026): all lossy velocity shortcuts were removed from pipeline code.
+
+Velocity BAM extraction cache:
+- Default cache dir: `/tmp/singlecell_factory_velocity_cache`
+- Override: `SCF_VELOCITY_CACHE_DIR=/path/to/cache`
+- Cache key includes BAM/GTF identity + barcode/gene ordering + velocity extraction mode; repeated runs with the same inputs can skip BAM parsing.
+
+On hosts with >=16 logical CPU cores, if `--velocity-n-jobs` is left at default (`4`), BAM extraction workers are auto-bumped to `8` and recorded in `run_manifest.json -> metadata.velocity_extract_n_jobs`.
 
 **Dynamical mode** additionally outputs latent time UMAP and phase portraits for top velocity genes.
 
@@ -369,26 +414,87 @@ If no loom file is provided, the module can extract spliced/unspliced counts dir
 | `cnv_inference` | infercnvpy | Vectorized sliding-window smoothing |
 | `batch_correction` | Harmony | BBKNN / Combat / Scanorama |
 
-## Performance Optimizations (v4.0)
+## Performance Optimizations (v5.0)
 
-- **Memory**: `adata.raw = adata` (view, not copy) — ~50% peak memory reduction
-- **Clustering**: PCA on HVGs only, skip dense scaling — enables 50K+ cells on 32GB RAM
-- **Cell communication**: Pre-computed mean expression matrix + outer product — eliminates O(n^2) matrix slicing
-- **CNV inference**: `scipy.ndimage.uniform_filter1d` vectorized sliding window
-- **Annotation**: `np.partition` vectorized confidence scoring
-- **Checkpoint/resume**: `--checkpoint` saves h5ad after each module; `--resume-from` skips completed work
-- **Parallel execution**: `--parallel-workers N` runs independent modules concurrently
-- **Async figure I/O**: Background disk writes when parallel mode is active
-- **RNA velocity**: Copy-on-write pattern (non-mutating, parallelizable); BAM extraction parallelized by chromosome with `read.get_tag()` + COO sparse accumulation (~4-5x speedup)
+### GPU Acceleration
+- **rapids-singlecell**: Auto-detected GPU backend for PCA, neighbors, UMAP, and Leiden clustering. Falls back to CPU scanpy when unavailable. Expected **10-50x speedup** on datasets >10K cells with NVIDIA GPU.
+
+### Memory & I/O
+- **Memory guard**: Parallel worker count is constrained by estimated AnnData copy size + available RAM to avoid OOM in branch execution.
+- **Raw matrix policy**: Normalized/log1p matrix is stored in `adata.raw` before downstream analyses to improve biological interpretability for marker/score modules.
+- **Zarr checkpoints**: 3-5x faster checkpoint I/O via `adata.write_zarr()` with automatic h5ad fallback for incompatible key names.
+- **Async figure I/O**: Background disk writes with error-resilient flush.
+
+### Computation
+- **Clustering**: PCA on HVGs only, optional scaling via `--scale-data`, CPU/GPU branches now both produce UMAP outputs.
+- **QC**: Optimized `sc.pp.calculate_qc_metrics` (`log1p=False`, `percent_top=None`).
+- **Differential Expression**: Default switched to `wilcoxon` with configurable `--de-method` and `--de-n-genes`.
+- **Trajectory**: Pseudotime-gene correlation refactored to sparse-friendly computation, avoiding full-matrix densification.
+- **Cell communication**: Vectorized `np.where` scoring — eliminates O(n^2) Python loops.
+- **CNV inference**: `scipy.ndimage.uniform_filter1d` vectorized sliding window.
+- **RNA velocity**: BAM extraction parallelized by chromosome (~4-5x speedup).
+
+### Pipeline Orchestration
+- **Cost-aware tier scheduling**: Heavy modules (rna_velocity, cnv_inference) start first in parallel tiers.
+- **Thread-safe status tracking**: `threading.Lock` on module status writes.
+- **Copy-on-write branching**: Parallel modules get isolated AnnData copies with proper merge-back of obs/obsm/uns/metadata/module_dirs.
+- **Runtime telemetry**: `metadata.module_runtime_sec` + `metadata.pipeline_wall_seconds` are persisted in each `run_manifest.json`.
+- **Checkpoint/resume**: `--checkpoint` + `--resume-from` for crash recovery.
+
+### Performance Benchmark Results (LUSC 3K Dataset)
+
+Benchmark script output (`output/performance_benchmark_20260405_optfix/benchmark_compare.json`):
+
+| Metric | Baseline | Optimized | Change |
+|---|---|---|---|
+| Wall-clock time | 10.04 s | 9.16 s | **-8.79%** |
+| Peak RSS memory | 799 MB | 564 MB | **-29.45%** |
+| Clusters found | 14 | 15 | ARI = 0.54 |
+
+Latest end-to-end real-data run on **April 5, 2026** (`results/LUSC_FULL_STRICT_ALLMODULES_20260405_173510`):
+- Pipeline wall time: **34.513 s**
+- Cells: `2588 -> 2382` after QC -> `2377` after doublet removal
+- Clusters: `17`
+- Module status: **24/24 ok** (3 mandatory + 21 optional)
+- Heaviest modules by wall-time: `evolution (12.206s)`, `differential_expression (11.548s)`, `rna_velocity (8.873s)`, `clustering (8.776s)`
+- Detailed module usage + result/performance report (LUSC example): `reports/LUSC_模块使用说明与结果性能报告_20260405.md`
+
+RNA velocity bottleneck benchmark on real LUSC data (strict mode, same inputs, **April 5, 2026**):
+- Cold run: `results/LUSC_VEL_STRICT_ONLY_20260405_173025`
+- Warm run (same cache dir): `results/LUSC_VEL_STRICT_ONLY_WARM_20260405_173113`
+
+| Metric | Cold | Warm | Change |
+|---|---:|---:|---:|
+| Pipeline wall time | 37.143 s | 15.116 s | **-59.3%** |
+| `rna_velocity` module time | 26.422 s | 4.418 s | **-83.3%** |
+| Velocity layer loading (`metadata.velocity_extract_seconds`) | 22.006 s | 0.090 s | **-99.6%** |
+| Mean velocity confidence | 0.86117 | 0.86117 | identical |
+
+Output reproducibility checks (cold vs warm): identical file hashes for `rna_velocity/velocity_confidence.csv`, `rna_velocity/velocity_top_genes.csv`, and `clustering/umap_leiden.png`.
+
+RNA velocity extraction parallel scaling on the same dataset (strict mode, cold cache):
+- `n_jobs=4`: `38.323 s`
+- `n_jobs=8`: `26.148 s` (**31.8% faster**)
+
+### Best Practice Configuration Recommendations
+
+1. **Large datasets (>50k cells)**: start with `--parallel-workers 2-4`, then scale up only if RAM headroom is sufficient.
+2. **DE for publication**: keep `--de-method wilcoxon`; use `t-test_overestim_var` only when speed is the top priority.
+3. **Single-sample runs**: `pseudobulk_de` is expected to skip (requires >=2 biological samples).
+4. **Batch correction**: only enable when a real batch column exists; otherwise keep skipped to avoid unnecessary recomputation.
+5. **Runtime tuning loop**: inspect `run_manifest.json -> metadata.module_runtime_sec` and optimize the top 3 slowest modules first.
+6. **RNA velocity repeated runs**: set `SCF_VELOCITY_CACHE_DIR` to a fast local SSD path and reuse it across reruns.
+7. **RNA velocity policy**: keep strict exon/intron classification for all runs; optimize with cache and parallelism instead of lossy shortcuts.
+8. **High-core hosts**: default velocity extraction auto-uses 8 workers on >=16 cores; set `--velocity-n-jobs` explicitly to override.
 
 ## Quality Verification Checklist
 
 1. Check `module_status.csv` — all modules should show "ok"
-2. Review `02_qc/qc_violin_*.png` — verify filter thresholds are reasonable
-3. Review `04_clustering/umap_leiden.png` — clusters should be well-separated
-4. Check `05_annotation/umap_cell_type.png` — cell types should be biologically coherent
-5. Review `14_immune_phenotyping/immune_signature_heatmap.png` — CD8_exhausted should correlate with exhaustion score
-6. Check `15_tumor_microenvironment/checkpoint_dotplot.png` — checkpoint expression patterns
+2. Review `qc/qc_violin_*.png` — verify filter thresholds are reasonable
+3. Review `clustering/umap_leiden.png` — clusters should be well-separated
+4. Check `annotation/umap_cell_type.png` — cell types should be biologically coherent
+5. Review `immune_phenotyping/immune_signature_heatmap.png` — CD8_exhausted should correlate with exhaustion score
+6. Check `tumor_microenvironment/checkpoint_dotplot.png` — checkpoint expression patterns
 
 ## Methodology & References
 
@@ -438,7 +544,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 | Item | Detail |
 |---|---|
 | **Normalization** | CPM (counts-per-million) + log1p, via `scanpy.pp.normalize_total()` |
-| **HVG selection** | Seurat v3 method — variance-stabilizing transformation flavor |
+| **HVG selection** | Seurat flavor HVG selection (`scanpy.pp.highly_variable_genes`) |
 | **PCA** | Truncated SVD via ARPACK solver on HVGs only (memory-optimized) |
 | **Neighbor graph** | k-nearest neighbors (k=15 default) in PCA space |
 | **Dimensionality reduction** | UMAP (Uniform Manifold Approximation and Projection) |
@@ -489,11 +595,11 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 
 | Item | Detail |
 |---|---|
-| **Statistical test** | Wilcoxon rank-sum test (non-parametric, no distribution assumption) |
-| **Implementation** | `scanpy.tl.rank_genes_groups(method="wilcoxon", use_raw=True, n_genes=500)` |
+| **Statistical test** | Wilcoxon rank-sum by default (configurable via `--de-method`) |
+| **Implementation** | `scanpy.tl.rank_genes_groups(method=<de_method>, use_raw=False, n_genes=<de_n_genes>, pts=True)` |
 | **Multiple testing** | Benjamini-Hochberg FDR correction (scanpy default) |
-| **Significance filter** | adjusted p-value < 0.05 AND |log2FC| > 0.25 |
-| **Output** | 500 genes per cluster (scores, p-values, fold changes) |
+| **Significance filter** | adjusted p-value < 0.05 AND |log2FC| > 0.25 (configurable via `--de-pval-threshold`, `--de-logfc-threshold`) |
+| **Output** | Ranked genes per cluster (`--de-n-genes`, default 300) with scores/p-values/fold changes |
 | **References** | **Wilcoxon, *Biometrics Bulletin*, 1945.** DOI: [10.2307/3001968](https://doi.org/10.2307/3001968); **Benjamini & Hochberg, *JRSS-B*, 1995.** DOI: [10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x) |
 
 ---
@@ -687,48 +793,93 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 | **Implementation** | `scipy.cluster.hierarchy.linkage()`, `scipy.spatial.distance.pdist()`, `scanpy.tl.rank_genes_groups()` |
 | **References** | **Patel et al., *Science*, 2014.** DOI: [10.1126/science.1254257](https://doi.org/10.1126/science.1254257); **Gao et al., *Nature Biotechnology*, 2021.** DOI: [10.1038/s41587-020-00795-2](https://doi.org/10.1038/s41587-020-00795-2) (CopyKAT); **Tirosh et al., *Science*, 2016.** DOI: [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) |
 
+## Automated Reference Management
+
+The pipeline includes an automated mechanism to keep the `Complete Citation List` up-to-date:
+
+1. **Module-Level Citations**: New modules should follow [module_template.py](file:///home/zerlinshen/singlecell_factory/workflow/modular/modules/module_template.py) and define a `__references__` dictionary.
+2. **Auto Discovery**: [update_references.py](file:///home/zerlinshen/singlecell_factory/scripts/update_references.py) parses `__references__` and also scans module source for DOI patterns, then enriches metadata via Crossref API when available.
+3. **Pre-commit Hook**: [pre-commit](file:///home/zerlinshen/singlecell_factory/.githooks/pre-commit) enforces sync; if references changed, commit is blocked until README is staged.
+4. **Enable Hook**: run `git config core.hooksPath .githooks`.
+
+## Validation Protocol (LUSC Real Run)
+
+Use [validate_optimizations.py](file:///home/zerlinshen/singlecell_factory/scripts/validate_optimizations.py) to validate acceleration without sacrificing reliability.
+
+- **Baseline set**: LUSC 3K (`data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix`).
+- **Control experiment**: baseline vs optimized with same hardware, same seed, repeated runs (`--repeats`).
+- **Core metrics**: ARI, pairwise Precision/Recall/F1, marker-gene F1, runtime, data-quality audit (`data_quality_audit.csv`).
+- **Stats**: 95% CI + significance test (`runtime_p_value`, `accuracy_p_value`) with threshold `p < 0.05`.
+- **Tolerance**: max metric loss threshold configurable (`--loss-threshold-pct`, default `0.5`).
+- **Robustness tests**: extreme dropout, low cell count, NaN injection sanitization.
+- **Rollback policy**: if thresholds fail, report emits `ROLLBACK_REQUIRED` and automated rollback steps.
+
+Example:
+
+```bash
+python scripts/validate_optimizations.py --repeats 5 --warmup-runs 1 --seed 42
+```
+
+Outputs are written to `reports/validation/`:
+- `optimization_validation_report.json`
+- `optimization_validation_report.md`
+- `perf_runs.csv`
+- `accuracy_runs.csv`
+- `data_quality_audit.csv`
+- `robustness_results.csv`
+- `runtime_boxplot.png`
+- `metric_distribution.png`
+- `marker_f1_distribution.png`
+
+## Standardized Module Docs
+
+Use [MODULE_TECH_DOC_TEMPLATE.md](file:///home/zerlinshen/singlecell_factory/docs/MODULE_TECH_DOC_TEMPLATE.md) for every new module technical document. The template standardizes:
+- Functional description
+- Implementation details and complexity
+- Benchmark and validation evidence
+- Citation and best-practice references
+
 ---
 
 ### Complete Citation List
 
 | # | Reference | DOI | Used by |
 |---|---|---|---|
-| 1 | Wolock et al., *Cell Systems*, 2019 | [10.1016/j.cels.2018.11.005](https://doi.org/10.1016/j.cels.2018.11.005) | doublet_detection |
-| 2 | Traag et al., *Scientific Reports*, 2019 | [10.1038/s41598-019-41695-z](https://doi.org/10.1038/s41598-019-41695-z) | clustering (Leiden) |
-| 3 | McInnes et al., *JOSS*, 2018 | [10.21105/joss.00861](https://doi.org/10.21105/joss.00861) | clustering (UMAP) |
-| 4 | Stuart et al., *Cell*, 2019 | [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031) | clustering (Seurat HVG) |
-| 5 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | cell_cycle, annotation, immune_phenotyping, cnv_inference |
-| 6 | Korsunsky et al., *Nature Methods*, 2019 | [10.1038/s41592-019-0619-0](https://doi.org/10.1038/s41592-019-0619-0) | batch_correction (Harmony) |
-| 7 | Polanski et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btz625](https://doi.org/10.1093/bioinformatics/btz625) | batch_correction (BBKNN) |
-| 8 | Johnson et al., *Biostatistics*, 2007 | [10.1093/biostatistics/kxj037](https://doi.org/10.1093/biostatistics/kxj037) | batch_correction (ComBat) |
-| 9 | Hie et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0113-3](https://doi.org/10.1038/s41587-019-0113-3) | batch_correction (Scanorama) |
-| 10 | Wilcoxon, *Biometrics Bulletin*, 1945 | [10.2307/3001968](https://doi.org/10.2307/3001968) | differential_expression |
-| 11 | Benjamini & Hochberg, *JRSS-B*, 1995 | [10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x) | differential_expression (FDR) |
-| 12 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | trajectory (DPT) |
-| 13 | Bergen et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | rna_velocity (scVelo) |
-| 14 | Patel et al., *Science*, 2014 | [10.1126/science.1254257](https://doi.org/10.1126/science.1254257) | cnv_inference |
-| 15 | Subramanian et al., *PNAS*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | pathway_analysis (GSEA) |
-| 16 | Liberzon et al., *Cell Systems*, 2015 | [10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004) | pathway_analysis (MSigDB) |
-| 17 | Schubert et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | pathway_analysis (PROGENy) |
-| 18 | Dimitrov et al., *Nature Communications*, 2022 | [10.1038/s41467-022-30755-0](https://doi.org/10.1038/s41467-022-30755-0) | cell_communication (LIANA) |
-| 19 | Garcia-Alonso et al., *Genome Research*, 2019 | [10.1101/gr.240663.118](https://doi.org/10.1101/gr.240663.118) | gene_regulatory_network (DoRothEA) |
-| 20 | Badia-i-Mompel et al., *Bioinformatics Advances*, 2022 | [10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016) | gene_regulatory_network (decoupler) |
-| 21 | Rooney et al., *Cell*, 2015 | [10.1016/j.cell.2014.12.033](https://doi.org/10.1016/j.cell.2014.12.033) | tumor_microenvironment (CYT) |
-| 22 | Ayers et al., *JCI*, 2017 | [10.1172/JCI91190](https://doi.org/10.1172/JCI91190) | tumor_microenvironment (TIS, IFN-gamma) |
-| 23 | Yoshihara et al., *Nature Communications*, 2013 | [10.1038/ncomms3612](https://doi.org/10.1038/ncomms3612) | tumor_microenvironment (ESTIMATE) |
-| 24 | Malta et al., *Cell*, 2018 | [10.1016/j.cell.2018.03.034](https://doi.org/10.1016/j.cell.2018.03.034) | gene_signature_scoring (stemness) |
-| 25 | Tan et al., *EMBO Mol Med*, 2014 | [10.15252/emmm.201404208](https://doi.org/10.15252/emmm.201404208) | gene_signature_scoring (EMT) |
-| 26 | Buffa et al., *Br J Cancer*, 2010 | [10.1038/sj.bjc.6605450](https://doi.org/10.1038/sj.bjc.6605450) | gene_signature_scoring (hypoxia) |
-| 27 | Zheng et al., *Cell*, 2017 | [10.1016/j.cell.2017.05.035](https://doi.org/10.1016/j.cell.2017.05.035) | immune_phenotyping |
-| 28 | Zhang et al., *Nature*, 2018 | [10.1038/s41586-018-0694-x](https://doi.org/10.1038/s41586-018-0694-x) | immune_phenotyping |
-| 29 | Luecken & Theis, *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | qc (best practices) |
-| 30 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | validate_cbioportal |
-| 32 | Gao et al., *Science Signaling*, 2013 | [10.1126/scisignal.2004088](https://doi.org/10.1126/scisignal.2004088) | validate_cbioportal |
-| 33 | Zheng et al., *Nature Communications*, 2017 | [10.1038/ncomms14049](https://doi.org/10.1038/ncomms14049) | cellranger (10X platform) |
-| 34 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | trajectory (PAGA) |
-| 35 | La Manno et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | pseudo_velocity (RNA velocity concept) |
-| 36 | Gao et al., *Nature Biotechnology*, 2021 | [10.1038/s41587-020-00795-2](https://doi.org/10.1038/s41587-020-00795-2) | evolution (CopyKAT clonal analysis) |
-
+| 1 | Zheng et al., *Nature Communications*, 2017 | [10.1038/ncomms14049](https://doi.org/10.1038/ncomms14049) | `cellranger` |
+| 2 | Luecken & Theis, *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | `qc` |
+| 3 | Wolock et al., *Cell Systems*, 2019 | [10.1016/j.cels.2018.11.005](https://doi.org/10.1016/j.cels.2018.11.005) | `doublet_detection` |
+| 4 | Stuart et al., *Cell*, 2019 | [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031) | `clustering` (Seurat HVG) |
+| 5 | McInnes et al., *JOSS*, 2018 | [10.21105/joss.00861](https://doi.org/10.21105/joss.00861) | `clustering` (UMAP) |
+| 6 | Traag et al., *Scientific Reports*, 2019 | [10.1038/s41598-019-41695-z](https://doi.org/10.1038/s41598-019-41695-z) | `clustering` (Leiden) |
+| 7 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `cell_cycle`, `annotation`, `immune_phenotyping`, `cnv_inference` |
+| 8 | Korsunsky et al., *Nature Methods*, 2019 | [10.1038/s41592-019-0619-0](https://doi.org/10.1038/s41592-019-0619-0) | `batch_correction` (Harmony) |
+| 9 | Polanski et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btz625](https://doi.org/10.1093/bioinformatics/btz625) | `batch_correction` (BBKNN) |
+| 10 | Johnson et al., *Biostatistics*, 2007 | [10.1093/biostatistics/kxj037](https://doi.org/10.1093/biostatistics/kxj037) | `batch_correction` (ComBat) |
+| 11 | Hie et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0113-3](https://doi.org/10.1038/s41587-019-0113-3) | `batch_correction` (Scanorama) |
+| 12 | Wilcoxon, *Biometrics Bulletin*, 1945 | [10.2307/3001968](https://doi.org/10.2307/3001968) | `differential_expression` |
+| 13 | Benjamini & Hochberg, *JRSS-B*, 1995 | [10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x) | `differential_expression` (FDR) |
+| 14 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (DPT) |
+| 15 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (PAGA) |
+| 16 | La Manno et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `pseudo_velocity` |
+| 17 | Bergen et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (scVelo) |
+| 18 | Patel et al., *Science*, 2014 | [10.1126/science.1254257](https://doi.org/10.1126/science.1254257) | `cnv_inference`, `evolution` |
+| 19 | Subramanian et al., *PNAS*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | `pathway_analysis` (GSEA) |
+| 20 | Liberzon et al., *Cell Systems*, 2015 | [10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004) | `pathway_analysis` (MSigDB) |
+| 21 | Schubert et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | `pathway_analysis` (PROGENy) |
+| 22 | Dimitrov et al., *Nature Communications*, 2022 | [10.1038/s41467-022-30755-0](https://doi.org/10.1038/s41467-022-30755-0) | `cell_communication` (LIANA) |
+| 23 | Garcia-Alonso et al., *Genome Research*, 2019 | [10.1101/gr.240663.118](https://doi.org/10.1101/gr.240663.118) | `gene_regulatory_network` (DoRothEA) |
+| 24 | Badia-i-Mompel et al., *Bioinformatics Advances*, 2022 | [10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016) | `gene_regulatory_network` (decoupler) |
+| 25 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` |
+| 26 | Gao et al., *Science Signaling*, 2013 | [10.1126/scisignal.2004088](https://doi.org/10.1126/scisignal.2004088) | `validate_cbioportal` |
+| 27 | Zheng et al., *Cell*, 2017 | [10.1016/j.cell.2017.05.035](https://doi.org/10.1016/j.cell.2017.05.035) | `immune_phenotyping` |
+| 28 | Zhang et al., *Nature*, 2018 | [10.1038/s41586-018-0694-x](https://doi.org/10.1038/s41586-018-0694-x) | `immune_phenotyping` |
+| 29 | Rooney et al., *Cell*, 2015 | [10.1016/j.cell.2014.12.033](https://doi.org/10.1016/j.cell.2014.12.033) | `tumor_microenvironment` (CYT) |
+| 30 | Ayers et al., *JCI*, 2017 | [10.1172/JCI91190](https://doi.org/10.1172/JCI91190) | `tumor_microenvironment` (TIS, IFN-gamma) |
+| 31 | Yoshihara et al., *Nature Communications*, 2013 | [10.1038/ncomms3612](https://doi.org/10.1038/ncomms3612) | `tumor_microenvironment` (ESTIMATE) |
+| 32 | Malta et al., *Cell*, 2018 | [10.1016/j.cell.2018.03.034](https://doi.org/10.1016/j.cell.2018.03.034) | `gene_signature_scoring` (stemness) |
+| 33 | Tan et al., *EMBO Mol Med*, 2014 | [10.15252/emmm.201404208](https://doi.org/10.15252/emmm.201404208) | `gene_signature_scoring` (EMT) |
+| 34 | Buffa et al., *Br J Cancer*, 2010 | [10.1038/sj.bjc.6605450](https://doi.org/10.1038/sj.bjc.6605450) | `gene_signature_scoring` (hypoxia) |
+| 35 | Gao et al., *Nature Biotechnology*, 2021 | [10.1038/s41587-020-00795-2](https://doi.org/10.1038/s41587-020-00795-2) | `evolution` (CopyKAT clonal analysis) |
 ---
 
 ## Results
@@ -736,7 +887,7 @@ Every analysis module uses publicly recognized, peer-reviewed methods. Below is 
 Each pipeline run creates an independent folder under `results/`. Example verified run:
 
 ```
-results/LUSC_3k_Analysis_20260404_062118/
+results/LUSC_REVIEW_OPT_FIX_20260405_20260405_142200/
 ├── cellranger/                   (data loading)
 ├── qc/                           (4 QC plots)
 ├── doublet_detection/            (1 doublet score plot)
@@ -755,7 +906,7 @@ results/LUSC_3k_Analysis_20260404_062118/
 ├── pseudo_velocity/              (4 plots + 2 CSV)
 ├── final_adata.h5ad
 ├── evolution/                    (4 plots + 3 CSV)
-├── module_status.csv             (17/17 modules: all OK)
+├── module_status.csv             (22/22 modules: all OK)
 └── run_manifest.json
 ```
 

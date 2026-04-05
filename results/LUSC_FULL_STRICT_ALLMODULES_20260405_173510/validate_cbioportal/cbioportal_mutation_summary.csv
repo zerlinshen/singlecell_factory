@@ -1,0 +1,21 @@
+gene,study_id,total_samples,mutated_samples,mutation_rate_pct,mutation_types,error
+TPSD1,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+CPA3,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+AGR3,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+CDH5,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+KRT6A,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},
+HDC,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+PITX1,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+CALML3,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+SMIM22,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+TRIM29,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+PTHLH,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+KRT15,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+MIR205HG,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+S100A14,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+KRT5,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},
+FXYD3,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+SLC18A2,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+SFN,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+HPGDS,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found
+KIT,lusc_tcga_pan_can_atlas_2018,484,0,0.0,{},gene symbol not found

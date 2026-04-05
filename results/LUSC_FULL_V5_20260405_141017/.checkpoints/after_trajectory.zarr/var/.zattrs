@@ -1,0 +1,14 @@
+{
+  "column-order": [
+    "gene_ids",
+    "feature_types",
+    "n_cells",
+    "highly_variable",
+    "means",
+    "dispersions",
+    "dispersions_norm"
+  ],
+  "_index": "_index",
+  "encoding-type": "dataframe",
+  "encoding-version": "0.2.0"
+}

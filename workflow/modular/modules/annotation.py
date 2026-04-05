@@ -37,7 +37,7 @@ class AnnotationModule:
 
         marker_map = ctx.cfg.markers or DEFAULT_MARKERS
         available = {
-            cell_type: [gene for gene in genes if gene in adata.raw.var_names]
+            cell_type: [gene for gene in genes if gene in adata.var_names]
             for cell_type, genes in marker_map.items()
         }
         available = {cell_type: genes for cell_type, genes in available.items() if genes}
@@ -45,7 +45,7 @@ class AnnotationModule:
             raise ValueError("No valid marker genes found in dataset.")
 
         for cell_type, genes in available.items():
-            sc.tl.score_genes(adata, genes, score_name=f"score_{cell_type}", use_raw=True)
+            sc.tl.score_genes(adata, genes, score_name=f"score_{cell_type}", use_raw=False)
 
         score_cols = [f"score_{cell_type}" for cell_type in available]
         score_mat = adata.obs[score_cols].copy()
@@ -62,7 +62,7 @@ class AnnotationModule:
         adata.obs["cell_type"] = score_mat.idxmax(axis=1).values
         adata.obs["annotation_confidence"] = confidence.values
         # Mark low-confidence assignments as Unknown
-        low_conf = max_scores < 0.1
+        low_conf = max_scores < ctx.cfg.annotation_confidence_threshold
         adata.obs.loc[low_conf, "cell_type"] = "Unknown"
 
         ctx.metadata["annotation_unknown_pct"] = round(

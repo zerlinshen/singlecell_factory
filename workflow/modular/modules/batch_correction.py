@@ -32,14 +32,12 @@ class BatchCorrectionModule:
         batch_key = cfg.batch_key
 
         if batch_key not in adata.obs.columns:
-            raise ValueError(
-                f"Batch key '{batch_key}' not found in adata.obs. "
-                f"Available columns: {list(adata.obs.columns[:20])}"
-            )
+            ctx.metadata["batch_correction_status"] = "skipped_missing_batch_key"
+            return
 
         n_batches = adata.obs[batch_key].nunique()
         if n_batches < 2:
-            ctx.status("batch_correction", True, f"Only 1 batch found in '{batch_key}', skipping")
+            ctx.metadata["batch_correction_status"] = "skipped_single_batch"
             return
 
         ctx.metadata["n_batches"] = n_batches
@@ -81,6 +79,7 @@ class BatchCorrectionModule:
             random_state=ctx.cfg.clustering.random_state,
         )
         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique())
+        ctx.metadata["batch_correction_status"] = "completed"
 
         # Post-correction UMAP
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -96,11 +95,23 @@ class BatchCorrectionModule:
     def _run_harmony(adata, batch_key: str, ctx) -> None:
         if "X_pca" not in adata.obsm:
             raise ValueError("Harmony requires PCA (run clustering first).")
-        sc.external.pp.harmony_integrate(adata, key=batch_key, basis="X_pca")
+        try:
+            sc.external.pp.harmony_integrate(adata, key=batch_key, basis="X_pca")
+        except (ImportError, AttributeError):
+            raise ImportError(
+                "harmonypy is required for Harmony batch correction. "
+                "Install with: pip install harmonypy"
+            )
 
     @staticmethod
     def _run_bbknn(adata, batch_key: str, ctx) -> None:
-        import bbknn
+        try:
+            import bbknn
+        except ImportError:
+            raise ImportError(
+                "bbknn is required for BBKNN batch correction. "
+                "Install with: pip install bbknn"
+            )
         if "X_pca" not in adata.obsm:
             raise ValueError("BBKNN requires PCA (run clustering first).")
         bbknn.bbknn(adata, batch_key=batch_key)
@@ -112,7 +123,13 @@ class BatchCorrectionModule:
     @staticmethod
     def _run_scanorama(adata, batch_key: str, ctx) -> None:
         """Scanorama integration (Hie et al., Nature Biotechnology 2019)."""
-        import scanorama
+        try:
+            import scanorama
+        except ImportError:
+            raise ImportError(
+                "scanorama is required for Scanorama batch correction. "
+                "Install with: pip install scanorama"
+            )
         import numpy as np
 
         if "X_pca" not in adata.obsm:

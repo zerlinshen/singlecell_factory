@@ -39,10 +39,10 @@ class CellCycleModule:
         if adata is None:
             raise ValueError("Cell cycle scoring requires AnnData.")
 
-        # Filter gene lists to those present in the dataset
-        var_names_upper = set(adata.var_names.str.upper())
-        s_genes = [g for g in S_GENES if g in adata.var_names or g.upper() in var_names_upper]
-        g2m_genes = [g for g in G2M_GENES if g in adata.var_names or g.upper() in var_names_upper]
+        # Filter gene lists to those present in the dataset (case-insensitive)
+        var_upper_to_actual = {v.upper(): v for v in adata.var_names}
+        s_genes = [var_upper_to_actual[g.upper()] for g in S_GENES if g.upper() in var_upper_to_actual]
+        g2m_genes = [var_upper_to_actual[g.upper()] for g in G2M_GENES if g.upper() in var_upper_to_actual]
 
         if not s_genes or not g2m_genes:
             ctx.status("cell_cycle", False, "Insufficient cell cycle genes found")

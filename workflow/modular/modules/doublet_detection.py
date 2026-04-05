@@ -50,9 +50,11 @@ class DoubletDetectionModule:
                     min_counts=2,
                     min_cells=3,
                     min_gene_variability_pctl=85,
-                    n_prin_comps=min(30, max(2, adata.n_obs - 1, adata.n_vars - 1)),
+                    n_prin_comps=max(2, min(30, adata.n_obs - 1, adata.n_vars - 1)),
                 )
                 threshold = getattr(scrub, "threshold_", None)
+                if threshold is not None:
+                    logger.info("Scrublet auto-threshold: %.4f", threshold)
                 ctx.metadata["doublet_method"] = "scrublet"
             except Exception as exc:
                 logger.warning("Scrublet failed, falling back to all singlets: %s", exc)

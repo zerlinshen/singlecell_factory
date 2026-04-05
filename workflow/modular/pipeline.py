@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+from time import perf_counter
 
 import pandas as pd
 from scipy import sparse
@@ -44,6 +45,10 @@ MODULE_DEPENDENCIES: dict[str, set[str]] = {
     "tumor_microenvironment": {"annotation"},
     "gene_signature_scoring": {"clustering"},
     "evolution": {"cnv_inference", "trajectory"},
+    "pseudobulk_de": {"differential_expression"},
+    "cell_fate": {"trajectory"},
+    "composition": {"annotation"},
+    "metacell": {"clustering"},
 }
 
 # Modules that mutate adata structurally (embeddings, X, layers).
@@ -121,6 +126,10 @@ def _build_registry() -> dict[str, object]:
     from .modules.trajectory import TrajectoryModule
     from .modules.tumor_microenvironment import TumorMicroenvironmentModule
     from .modules.validate_cbioportal import ValidateCbioPortalModule
+    from .modules.pseudobulk_de import PseudobulkDEModule
+    from .modules.cell_fate import CellFateModule
+    from .modules.composition import CompositionModule
+    from .modules.metacell import MetacellModule
 
     return {
         "cellranger": CellRangerModule(),
@@ -143,6 +152,10 @@ def _build_registry() -> dict[str, object]:
         "tumor_microenvironment": TumorMicroenvironmentModule(),
         "gene_signature_scoring": GeneSignatureScoringModule(),
         "evolution": EvolutionModule(),
+        "pseudobulk_de": PseudobulkDEModule(),
+        "cell_fate": CellFateModule(),
+        "composition": CompositionModule(),
+        "metacell": MetacellModule(),
     }
 
 
@@ -177,11 +190,32 @@ def _save_manifest(ctx: PipelineContext) -> Path:
 # ---------------------------------------------------------------------------
 
 
+# Estimated relative cost per module (higher = slower). Used for longest-job-first
+# scheduling within parallel tiers so heavy modules start first.
+_MODULE_COST: dict[str, int] = {
+    "rna_velocity": 10,
+    "cnv_inference": 5,
+    "evolution": 5,
+    "trajectory": 4,
+    "differential_expression": 3,
+    "clustering": 3,
+    "immune_phenotyping": 2,
+    "tumor_microenvironment": 2,
+    "pathway_analysis": 2,
+    "cell_communication": 2,
+    "pseudobulk_de": 2,
+    "metacell": 2,
+    "cell_fate": 2,
+}
+
+
 def _compute_tiers(execution_order: list[str], completed: set[str]) -> list[list[str]]:
     """Group remaining modules into tiers for parallel execution.
 
     A tier is a set of modules whose dependencies are all satisfied by
-    previously completed tiers plus the *completed* set.
+    previously completed tiers plus the *completed* set.  Within each tier,
+    modules are sorted by estimated cost (heaviest first) so that the
+    longest-running job starts first in the thread pool.
     """
     remaining = [m for m in execution_order if m not in completed]
     done = set(completed)
@@ -194,6 +228,8 @@ def _compute_tiers(execution_order: list[str], completed: set[str]) -> list[list
         if not tier:
             # Shouldn't happen with a valid topo sort, but be safe.
             tier = [remaining[0]]
+        # Sort by cost descending so heavy modules start first in parallel
+        tier.sort(key=lambda m: _MODULE_COST.get(m, 1), reverse=True)
         tiers.append(tier)
         done.update(tier)
         remaining = [m for m in remaining if m not in done]
@@ -203,6 +239,12 @@ def _compute_tiers(execution_order: list[str], completed: set[str]) -> list[list
 def _run_module(mod, ctx: PipelineContext) -> None:
     """Run a single module (used as ThreadPoolExecutor target)."""
     mod.run(ctx)
+
+
+def _record_module_runtime(ctx: PipelineContext, module_name: str, elapsed_seconds: float) -> None:
+    """Record per-module wall-time (seconds) in run metadata."""
+    runtimes = ctx.metadata.setdefault("module_runtime_sec", {})
+    runtimes[module_name] = round(float(elapsed_seconds), 3)
 
 
 def _estimate_adata_copy_bytes(adata) -> int:
@@ -219,6 +261,11 @@ def _estimate_adata_copy_bytes(adata) -> int:
     total += sum(_array_bytes(layer) for layer in adata.layers.values())
     total += sum(_array_bytes(obsm) for obsm in adata.obsm.values())
     total += sum(_array_bytes(varm) for varm in adata.varm.values())
+    # Include obs/var DataFrame memory for more accurate estimates
+    if hasattr(adata.obs, "memory_usage"):
+        total += int(adata.obs.memory_usage(deep=True).sum())
+    if hasattr(adata.var, "memory_usage"):
+        total += int(adata.var.memory_usage(deep=True).sum())
     return int(total)
 
 
@@ -284,6 +331,7 @@ def _execute_tier(
             ctx.status(stage, False, "unknown module")
             continue
         ctx.set_module_dir(stage)
+        t0 = perf_counter()
         try:
             mod.run(ctx)
             ctx.status(stage, True, "completed")
@@ -292,6 +340,8 @@ def _execute_tier(
             ctx.status(stage, False, str(exc))
             if stage in mandatory:
                 raise
+        finally:
+            _record_module_runtime(ctx, stage, perf_counter() - t0)
 
     # Run appending modules.
     if max_workers <= 1 or len(appending) <= 1:
@@ -302,6 +352,7 @@ def _execute_tier(
                 ctx.status(stage, False, "unknown module")
                 continue
             ctx.set_module_dir(stage)
+            t0 = perf_counter()
             try:
                 mod.run(ctx)
                 ctx.status(stage, True, "completed")
@@ -310,6 +361,8 @@ def _execute_tier(
                 ctx.status(stage, False, str(exc))
                 if stage in mandatory:
                     raise
+            finally:
+                _record_module_runtime(ctx, stage, perf_counter() - t0)
     else:
         safe_workers = _safe_parallel_worker_count(ctx, appending, max_workers)
         if safe_workers <= 1:
@@ -322,6 +375,7 @@ def _execute_tier(
                     ctx.status(stage, False, "unknown module")
                     continue
                 ctx.set_module_dir(stage)
+                t0 = perf_counter()
                 try:
                     mod.run(ctx)
                     ctx.status(stage, True, "completed")
@@ -330,6 +384,8 @@ def _execute_tier(
                     ctx.status(stage, False, str(exc))
                     if stage in mandatory:
                         raise
+                finally:
+                    _record_module_runtime(ctx, stage, perf_counter() - t0)
             return
         _run_parallel_appending(appending, registry, ctx, mandatory, safe_workers)
 
@@ -351,34 +407,36 @@ def _run_parallel_appending(
         branch_ctx.module_status = []
         branch_ctx.metadata = dict(ctx.metadata)
         branch_ctx._figure_futures = []
+        branch_ctx._module_dirs = dict(ctx._module_dirs)
+        branch_ctx._figure_pool = None
         branch_ctx.set_module_dir(mod_name)
         mod.run(branch_ctx)
         return mod_name, branch_ctx
 
-    results: dict[str, tuple[str, str]] = {}
+    results: dict[str, tuple[str, str, float]] = {}
     branch_contexts: dict[str, PipelineContext] = {}
     with ThreadPoolExecutor(max_workers=min(max_workers, len(modules))) as pool:
         futures = {pool.submit(_run_module_in_branch, name): name for name in modules}
+        starts = {future: perf_counter() for future in futures}
         for future in as_completed(futures):
             name = futures[future]
+            elapsed = perf_counter() - starts[future]
             try:
                 returned_name, branch_ctx = future.result()
                 branch_contexts[returned_name] = branch_ctx
-                results[name] = ("ok", "completed")
+                results[name] = ("ok", "completed", elapsed)
             except Exception as exc:
-                results[name] = ("failed", str(exc))
+                results[name] = ("failed", str(exc), elapsed)
 
     # Merge results back into the main context.
     main_obs_cols = set(ctx.adata.obs.columns)
     main_obsm_keys = set(ctx.adata.obsm.keys())
 
     for mod_name in modules:
-        if mod_name not in branch_contexts:
-            continue
-        branch_ctx = branch_contexts[mod_name]
-        ok, msg = results.get(mod_name, ("failed", "not run"))
+        ok, msg, elapsed = results.get(mod_name, ("failed", "not run", 0.0))
 
-        if ok == "ok":
+        if ok == "ok" and mod_name in branch_contexts:
+            branch_ctx = branch_contexts[mod_name]
             # Merge new obs columns.
             new_cols = set(branch_ctx.adata.obs.columns) - main_obs_cols
             for col in new_cols:
@@ -391,12 +449,14 @@ def _run_parallel_appending(
             for key in branch_ctx.adata.uns:
                 if key not in ctx.adata.uns:
                     ctx.adata.uns[key] = branch_ctx.adata.uns[key]
-            # Merge metadata.
+            # Merge metadata and module directory registrations.
             ctx.metadata.update(branch_ctx.metadata)
+            ctx._module_dirs.update(branch_ctx._module_dirs)
             # Flush any figures the branch produced.
             branch_ctx.flush_figures()
 
         ctx.status(mod_name, ok == "ok", msg)
+        _record_module_runtime(ctx, mod_name, elapsed)
         ctx.save_checkpoint(mod_name)
 
         if ok != "ok" and mod_name in mandatory:
@@ -411,6 +471,7 @@ def _run_parallel_appending(
 def run_pipeline(cfg: PipelineConfig) -> Path:
     """Run the modular workflow with mandatory and optional stages."""
 
+    pipeline_t0 = perf_counter()
     ctx = _prepare_output(cfg)
     registry = _build_registry()
     try:
@@ -457,6 +518,7 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
                     continue
                 ctx.set_module_dir(stage)
                 is_mandatory = stage in mandatory_set
+                t0 = perf_counter()
                 try:
                     mod.run(ctx)
                     ctx.status(stage, True, "completed")
@@ -465,7 +527,10 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
                     ctx.status(stage, False, str(exc))
                     if is_mandatory:
                         raise
+                finally:
+                    _record_module_runtime(ctx, stage, perf_counter() - t0)
 
+        ctx.metadata["pipeline_wall_seconds"] = round(perf_counter() - pipeline_t0, 3)
         return _save_manifest(ctx)
     finally:
         if ctx._figure_pool is not None:

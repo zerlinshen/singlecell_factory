@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import json
+import logging
+import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,6 +12,8 @@ import anndata as ad
 import matplotlib.pyplot as plt
 
 from .config import PipelineConfig
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -26,12 +30,13 @@ class PipelineContext:
     _module_dirs: dict[str, Path] = field(default_factory=dict, repr=False)
     _figure_pool: ThreadPoolExecutor | None = field(default=None, repr=False)
     _figure_futures: list[Future] = field(default_factory=list, repr=False)
+    _status_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def status(self, module: str, ok: bool, message: str) -> None:
-        """Record module execution status."""
-        self.module_status.append(
-            {"module": module, "status": "ok" if ok else "failed", "message": message}
-        )
+        """Record module execution status (thread-safe)."""
+        entry = {"module": module, "status": "ok" if ok else "failed", "message": message}
+        with self._status_lock:
+            self.module_status.append(entry)
 
     def set_module_dir(self, module_name: str) -> None:
         """Point figure_dir and table_dir to a per-module subfolder."""
@@ -51,14 +56,33 @@ class PipelineContext:
     def _checkpoint_dir(self) -> Path:
         return self.run_dir / ".checkpoints"
 
+    def _use_zarr_checkpoints(self) -> bool:
+        """Check if zarr is available for faster checkpoint I/O."""
+        try:
+            import zarr  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
     def save_checkpoint(self, module_name: str) -> None:
-        """Save adata + metadata after a module completes successfully."""
+        """Save adata + metadata after a module completes successfully.
+
+        Uses zarr format when available (3-5x faster I/O), falls back to h5ad.
+        """
         if not self.cfg.checkpoint:
             return
         cp_dir = self._checkpoint_dir
         cp_dir.mkdir(parents=True, exist_ok=True)
         if self.adata is not None:
-            self.adata.write(cp_dir / f"after_{module_name}.h5ad")
+            if self._use_zarr_checkpoints():
+                try:
+                    zarr_path = cp_dir / f"after_{module_name}.zarr"
+                    self.adata.write_zarr(zarr_path)
+                except (ValueError, TypeError):
+                    # Zarr rejects keys with forward slashes; fall back to h5ad
+                    self.adata.write(cp_dir / f"after_{module_name}.h5ad")
+            else:
+                self.adata.write(cp_dir / f"after_{module_name}.h5ad")
         sidecar = {
             "module": module_name,
             "metadata": self.metadata,
@@ -70,11 +94,15 @@ class PipelineContext:
 
     def load_checkpoint(self, module_name: str) -> bool:
         """Load checkpoint saved after *module_name*. Returns True if loaded."""
+        cp_zarr = self._checkpoint_dir / f"after_{module_name}.zarr"
         cp_h5ad = self._checkpoint_dir / f"after_{module_name}.h5ad"
         cp_json = self._checkpoint_dir / f"after_{module_name}.json"
-        if not cp_h5ad.exists():
+        if cp_zarr.exists():
+            self.adata = ad.read_zarr(cp_zarr)
+        elif cp_h5ad.exists():
+            self.adata = ad.read_h5ad(cp_h5ad)
+        else:
             return False
-        self.adata = ad.read_h5ad(cp_h5ad)
         if cp_json.exists():
             sidecar = json.loads(cp_json.read_text(encoding="utf-8"))
             self.metadata = sidecar.get("metadata", {})
@@ -97,6 +125,13 @@ class PipelineContext:
 
     def flush_figures(self) -> None:
         """Wait for all pending async figure saves to complete."""
+        errors = 0
         for f in self._figure_futures:
-            f.result()
+            try:
+                f.result()
+            except Exception as exc:
+                errors += 1
+                logger.warning("Async figure save failed: %s", exc)
         self._figure_futures.clear()
+        if errors:
+            logger.warning("%d figure save(s) failed", errors)

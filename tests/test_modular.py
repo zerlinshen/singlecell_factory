@@ -17,7 +17,7 @@ def test_modular_pipeline_minimal(monkeypatch, tmp_path):
         adata.obs_names = ["C1", "C2"]
         return adata
 
-    def fake_qc_metrics(adata, qc_vars=None, inplace=True):
+    def fake_qc_metrics(adata, qc_vars=None, inplace=True, **kwargs):
         adata.obs["n_genes_by_counts"] = np.array([500, 600])
         adata.obs["total_counts"] = np.array([1000.0, 2000.0])
         adata.obs["pct_counts_mt"] = np.array([1.0, 2.0])
@@ -60,8 +60,8 @@ def test_modular_cli_parse(monkeypatch):
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
-    # Verify all 21 modules are registered (including evolution)
-    assert len(MODULE_DEPENDENCIES) == 20
+    # Verify all modules are registered (3 mandatory + 21 optional = 24)
+    assert len(MODULE_DEPENDENCIES) == 24
 
     # Verify new modules exist with correct dependencies
     assert "immune_phenotyping" in MODULE_DEPENDENCIES
@@ -127,6 +127,28 @@ def test_cli_signature_json(monkeypatch):
     )
     args = mod.parse_args()
     assert args.signature_json == "/tmp/sigs.json"
+
+
+def test_cli_de_options(monkeypatch):
+    import workflow.modular.cli as mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--project",
+            "x",
+            "--sample-root",
+            "/tmp/s",
+            "--de-method",
+            "t-test",
+            "--de-n-genes",
+            "123",
+        ],
+    )
+    args = mod.parse_args()
+    assert args.de_method == "t-test"
+    assert args.de_n_genes == 123
 
 
 def test_dependency_resolution_auto_includes():

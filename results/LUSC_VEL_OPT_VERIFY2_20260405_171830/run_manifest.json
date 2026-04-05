@@ -1,0 +1,60 @@
+{
+  "project": "LUSC_VEL_OPT_VERIFY2",
+  "generated_at": "2026-04-05T09:18:42.102789Z",
+  "run_dir": "/home/zerlinshen/singlecell_factory/results/LUSC_VEL_OPT_VERIFY2_20260405_171830",
+  "optional_modules": [
+    "clustering",
+    "rna_velocity"
+  ],
+  "module_status": [
+    {
+      "module": "cellranger",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "qc",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "doublet_detection",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "clustering",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "rna_velocity",
+      "status": "failed",
+      "message": "No module named 'scvelo'"
+    }
+  ],
+  "metadata": {
+    "cellranger_outs": "data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix",
+    "raw_cells": 2588,
+    "raw_genes": 38606,
+    "module_runtime_sec": {
+      "cellranger": 0.386,
+      "qc": 1.466,
+      "doublet_detection": 0.665,
+      "clustering": 8.803,
+      "rna_velocity": 0.0
+    },
+    "cells_after_qc": 2382,
+    "genes_after_qc": 21993,
+    "qc_removed_cells": 206,
+    "doublet_method": "scrublet",
+    "doublets_detected": 5,
+    "doublet_rate_pct": 0.21,
+    "cells_after_doublet_removal": 2377,
+    "doublets_removed": 5,
+    "pca_cumulative_var_90pct": 40,
+    "n_clusters": 17,
+    "clustering_backend": "cpu",
+    "pipeline_wall_seconds": 11.365
+  }
+}
