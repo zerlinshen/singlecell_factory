@@ -1,6 +1,8 @@
 # data and outputs
 data/raw
 output
+results/
+reports/validation/
 rna_velocity_pseudotime_analysis/runtime
 cellranger_runs
 fastq
