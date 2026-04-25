@@ -1,9 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf'"
+addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf and not r_contract'"
 markers = [
     "perf: performance regression gate (run explicitly via `pytest -m perf`)",
+    "r_contract: Python <-> R bundle round-trip tests (require Rscript env; run explicitly via `pytest -m r_contract`)",
 ]
 
 [tool.coverage.run]

@@ -104,3 +104,14 @@ else:
 2. 跑了哪些验证命令
 3. 产物证据（尤其 manifest/status）
 4. 剩余风险与下一步
+
+## 10) R Contract Test Discipline (Phase 7D)
+
+`tests/test_r_bundle_contract.py` contains subprocess-based round-trip tests that export a synthetic v2 bundle from Python and read it back via `io_bundle.R` using `Rscript -e`. These tests guard against silent breakage of the Python exporter / R reader contract.
+
+- All tests are tagged `@pytest.mark.r_contract` and excluded from the default CI run via `pyproject.toml` `addopts`.
+- Run explicitly with: `pytest -m r_contract tests/test_r_bundle_contract.py`
+- Tests auto-skip when Rscript is absent or required R packages (`arrow`, `jsonlite`, `Matrix`) are not installed — they never fail hard due to missing R environment.
+- R output is parsed by scanning stdout for `KEY=VALUE` lines emitted via `sprintf` + `cat`. Never mix informational R output with these sentinel lines.
+- The `rscript_path` session fixture in `conftest.py` handles both binary detection and R package probing.
+- R source under test lives in `multiomics_r_factory/R_bundle/io_bundle.R` — never edit it from this repo (bridge symlink rule applies).
