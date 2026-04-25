@@ -172,4 +172,41 @@ class PipelineConfig:
     reference_min_confidence: float = 0.6
     reference_override_mode: str = "conservative"  # conservative, all
     gpu_mode: str = "auto"  # auto, off, force
-    scale_mode: str = "standard"  # standard, large, massive
+    scale_mode: str = "standard"  # standard, large, massive — kept as preset bundle for backwards compat
+    # Capability flags — set explicitly or expanded from scale_mode via scale_mode_to_capabilities()
+    lazy_read: str = "auto"          # auto, true, false
+    doublet_strategy: str = "auto"   # auto, grouped, whole, skip
+    clustering_engine: str = "auto"  # auto, sparse_exact, css, gpu
+    checkpoint_policy: str = "full"  # full, mandatory_only, metadata_only
+
+
+# Maps scale_mode preset names to their capability flag bundles.
+# "massive" = the canonical preset used by the NC2024 launch script.
+_SCALE_MODE_PRESETS: dict[str, dict[str, str]] = {
+    "standard": {
+        "lazy_read": "auto",
+        "doublet_strategy": "auto",
+        "clustering_engine": "auto",
+        "checkpoint_policy": "full",
+    },
+    "large": {
+        "lazy_read": "auto",
+        "doublet_strategy": "auto",
+        "clustering_engine": "auto",
+        "checkpoint_policy": "full",
+    },
+    "massive": {
+        "lazy_read": "true",
+        "doublet_strategy": "grouped",
+        "clustering_engine": "css",
+        "checkpoint_policy": "mandatory_only",
+    },
+}
+
+
+def scale_mode_to_capabilities(scale_mode: str) -> dict[str, str]:
+    """Return the capability flag bundle for a given scale_mode preset name.
+
+    Returns "standard" bundle if the preset is unknown, so old configs degrade safely.
+    """
+    return dict(_SCALE_MODE_PRESETS.get(scale_mode, _SCALE_MODE_PRESETS["standard"]))

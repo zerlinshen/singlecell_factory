@@ -42,6 +42,28 @@ class CellRangerModule:
     def _needs_counts_layer(ctx: PipelineContext) -> bool:
         return "pseudobulk_de" in set(ctx.cfg.optional_modules)
 
+    @staticmethod
+    def _should_lazy_read(zarr_path: Path, ctx: PipelineContext) -> bool:
+        """Decide whether to use lazy zarr loading.
+
+        Priority: SC_LAZY_READ env var > cfg.lazy_read > auto (file size > 5 GB).
+        """
+        import os as _os
+        flag = (
+            _os.environ.get("SC_LAZY_READ", "").strip().lower()
+            or getattr(ctx.cfg, "lazy_read", "auto")
+        )
+        if flag == "true":
+            return True
+        if flag == "false":
+            return False
+        # "auto": trigger lazy read when the zarr store is larger than 5 GB
+        try:
+            total = sum(f.stat().st_size for f in zarr_path.rglob("*") if f.is_file())
+            return total > 5 * 1024 ** 3
+        except Exception:
+            return False
+
     def _annotate_flex_probe_groups(self, adata, sample_root: Path, ctx: PipelineContext) -> None:
         if adata.n_obs == 0:
             return
@@ -81,7 +103,7 @@ class CellRangerModule:
                 adata = ad.read_h5ad(prepared_h5ad)
                 ctx.metadata["prepared_input_source"] = str(prepared_h5ad)
             else:
-                if ctx.cfg.scale_mode == "massive" and hasattr(ad.experimental, "read_lazy"):
+                if self._should_lazy_read(prepared_zarr, ctx) and hasattr(ad.experimental, "read_lazy"):
                     adata = ad.experimental.read_lazy(prepared_zarr)
                     ctx.metadata["prepared_input_loading_mode"] = "lazy_zarr"
                 else:

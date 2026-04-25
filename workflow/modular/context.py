@@ -73,15 +73,18 @@ class PipelineContext:
             return False
 
     def _should_save_adata_checkpoint(self, module_name: str) -> bool:
-        massive_policy = os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", "").strip().lower()
-        if (
-            self.cfg.scale_mode == "massive"
-            and massive_policy in {"metadata_only", "json_only", "sidecar_only"}
-        ):
+        # SC_CHECKPOINT_POLICY env var takes priority, then cfg.checkpoint_policy, then scale_mode fallback.
+        policy = (
+            os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
+            or os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", "").strip().lower()
+            or getattr(self.cfg, "checkpoint_policy", "full")
+        )
+        if policy in {"metadata_only", "json_only", "sidecar_only"}:
             return False
-        if self.cfg.scale_mode != "massive":
-            return True
-        return module_name not in {"cellranger", "qc", "doublet_detection"}
+        if policy == "mandatory_only":
+            return module_name not in {"cellranger", "qc", "doublet_detection"}
+        # "full" or unknown — save everything
+        return True
 
     def _compact_adata_for_checkpoint(self) -> None:
         if self.adata is None:

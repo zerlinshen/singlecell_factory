@@ -58,6 +58,31 @@ class DoubletDetectionModule:
             return x.tocsr()
         return np.asarray(x)
 
+    @staticmethod
+    def _resolve_doublet_strategy(ctx, adata) -> str:
+        """Return the effective doublet strategy string.
+
+        Priority: SC_DOUBLET_STRATEGY env var > cfg.doublet_strategy > "auto".
+        "auto" → "grouped" when n_obs >= 100k and sample column with >= 2 labels exists,
+                 otherwise "whole".
+        """
+        import os as _os
+        import pandas as _pd
+        flag = (
+            _os.environ.get("SC_DOUBLET_STRATEGY", "").strip().lower()
+            or getattr(ctx.cfg, "doublet_strategy", "auto")
+        )
+        if flag in {"grouped", "whole", "skip"}:
+            return flag
+        # "auto"
+        has_sample = (
+            "sample" in adata.obs.columns
+            and _pd.Series(adata.obs["sample"]).nunique() >= 2
+        )
+        if adata.n_obs >= 100000 and has_sample:
+            return "grouped"
+        return "whole"
+
     def _run_grouped_scrublet(self, adata, scrublet_cls, cfg, ctx):
         sample_key = 'sample' if 'sample' in adata.obs.columns else None
         if sample_key is None:
@@ -105,12 +130,8 @@ class DoubletDetectionModule:
             )
             ctx.metadata["doublet_method"] = "fallback_all_singlets"
         else:
-            use_grouped = (
-                ctx.cfg.scale_mode == 'massive'
-                and adata.n_obs >= 100000
-                and 'sample' in adata.obs.columns
-                and pd.Series(adata.obs['sample']).nunique() >= 2
-            )
+            strategy = self._resolve_doublet_strategy(ctx, adata)
+            use_grouped = strategy == "grouped"
             if use_grouped:
                 doublet_scores, predicted_doublets, threshold = self._run_grouped_scrublet(adata, scr.Scrublet, cfg, ctx)
             else:

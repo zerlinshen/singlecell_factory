@@ -17,6 +17,7 @@ from .config import (
     PseudobulkConfig,
     QCConfig,
     VelocityConfig,
+    scale_mode_to_capabilities,
 )
 from .pipeline import MODULE_DEPENDENCIES, run_pipeline
 
@@ -96,8 +97,37 @@ def parse_args() -> argparse.Namespace:
         choices=["standard", "large", "massive"],
         help=(
             "Dataset-size execution profile: standard (default), large (safer defaults for ~100k+ cells), "
-            "massive (minimal-memory first-pass for several-hundred-thousand to million-cell runs)"
+            "massive (minimal-memory first-pass for several-hundred-thousand to million-cell runs). "
+            "Acts as a preset bundle that expands to --lazy-read / --doublet-strategy / "
+            "--clustering-engine / --checkpoint-policy. Explicit capability flags override the preset."
         ),
+    )
+    parser.add_argument(
+        "--lazy-read",
+        default="",
+        choices=["", "auto", "true", "false"],
+        help="Control lazy zarr loading: auto (>5 GB triggers lazy), true, false. Overrides scale-mode preset.",
+    )
+    parser.add_argument(
+        "--doublet-strategy",
+        default="",
+        choices=["", "auto", "grouped", "whole", "skip"],
+        help=(
+            "Doublet detection strategy: auto (grouped when n_obs>=100k and sample column present), "
+            "grouped, whole, skip. Overrides scale-mode preset."
+        ),
+    )
+    parser.add_argument(
+        "--clustering-engine",
+        default="",
+        choices=["", "auto", "sparse_exact", "css", "gpu"],
+        help="Clustering engine: auto, sparse_exact, css, gpu. Overrides scale-mode preset.",
+    )
+    parser.add_argument(
+        "--checkpoint-policy",
+        default="",
+        choices=["", "full", "mandatory_only", "metadata_only"],
+        help="Checkpoint policy: full (save all), mandatory_only (skip early modules), metadata_only. Overrides scale-mode preset.",
     )
 
     # Differential expression
@@ -330,7 +360,23 @@ def _load_markers(markers_json: str) -> dict[str, list[str]]:
 
 
 def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
-    """Apply dataset-size presets while preserving explicit user overrides."""
+    """Expand scale_mode preset into capability flags, then apply numeric tuning.
+
+    Explicit capability flags (non-empty) always win over the preset bundle.
+    This preserves the contract that --scale-mode massive produces identical
+    behavior to the NC2024 launch script while allowing per-flag overrides.
+    """
+    # Expand the preset bundle first; explicit flags override below.
+    preset = scale_mode_to_capabilities(args.scale_mode)
+    if not args.lazy_read:
+        args.lazy_read = preset["lazy_read"]
+    if not args.doublet_strategy:
+        args.doublet_strategy = preset["doublet_strategy"]
+    if not args.clustering_engine:
+        args.clustering_engine = preset["clustering_engine"]
+    if not args.checkpoint_policy:
+        args.checkpoint_policy = preset["checkpoint_policy"]
+
     if args.scale_mode == "standard":
         return args
 
@@ -349,6 +395,7 @@ def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
             args.de_n_genes = 200
         return args
 
+    # massive
     if args.optional_modules == DEFAULT_OPTIONAL_MODULES:
         args.optional_modules = "clustering"
     if args.n_top_genes == 3000:
@@ -361,8 +408,6 @@ def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
         args.leiden_resolution = 0.4
     if args.de_n_genes == 300:
         args.de_n_genes = 100
-    if args.parallel_workers == 1:
-        args.parallel_workers = 1
     return args
 
 
@@ -511,6 +556,10 @@ def main() -> None:
         reference_override_mode=args.reference_override_mode,
         gpu_mode=args.gpu_mode,
         scale_mode=args.scale_mode,
+        lazy_read=args.lazy_read,
+        doublet_strategy=args.doublet_strategy,
+        clustering_engine=args.clustering_engine,
+        checkpoint_policy=args.checkpoint_policy,
     )
     ledger = None
     try:
