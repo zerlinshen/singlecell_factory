@@ -128,6 +128,7 @@ class CNVInferenceModule:
             )
         else:
             if hasattr(expr_raw, "toarray"):
+                # densify-allowed: default (non-chunked) CNV path; reached only when SC_CNV_ENGINE != 'chunked'; full matrix required for sliding-window smoothing
                 expr = expr_raw.toarray()
             else:
                 expr = expr_raw
@@ -213,9 +214,12 @@ class CNVInferenceModule:
         chrom_index_map = {chrom: np.where(chromosomes == chrom)[0]
                            for chrom in np.unique(chromosomes)}
 
+        from .._mem_guard import MemoryGuard, MemoryAbortError
         smoothed = np.empty((n_cells, n_genes), dtype=np.float32)
         offset = 0
         for block in chunked_row_densify(expr_sparse, chunk_rows=chunk_rows, dtype=np.float32):
+            if MemoryGuard.abort_requested():
+                raise MemoryAbortError("watchdog abort during CNV chunk loop")
             centered = block - ref_mean
             stop = offset + block.shape[0]
             for chrom, chrom_idx in chrom_index_map.items():

@@ -203,6 +203,7 @@ class TrajectoryModule:
         sort_idx = np.argsort(pt_vals)
         mat = expr_sub.X[:, top_idx]
         if sparse.issparse(mat):
+            # densify-allowed: subset of top_k genes × pseudotime-sorted cells; bounded by n_top_genes (default ≤200)
             mat = mat.toarray()
         mat = np.asarray(mat, dtype=np.float32)
         mat = mat[sort_idx].T

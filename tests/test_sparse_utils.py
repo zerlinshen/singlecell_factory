@@ -38,23 +38,19 @@ def test_safe_densify_sparse_small():
     np.testing.assert_allclose(result, X.toarray())
 
 
-def test_safe_densify_raises_on_abort(monkeypatch):
-    import workflow.modular._mem_guard as mg
-    monkeypatch.setattr(mg, "_quick_check", lambda b: "abort", raising=False)
-
-    # Patch via the function that safe_densify calls
-    import workflow.modular._sparse_utils as su
+def test_safe_densify_raises_on_abort():
     from unittest.mock import patch
-
-    with patch("workflow.modular._mem_guard.MemoryGuard._quick_check", staticmethod(lambda b: "abort")):
+    from workflow.modular._densify_policy import DensifyDecision
+    with patch("workflow.modular._sparse_utils.plan_densify", return_value=DensifyDecision.ABORT):
         X = sp.csr_matrix(np.ones((100, 100)))
         with pytest.raises(MemoryGuardError):
             safe_densify(X, reason="oom_test", dtype=np.float64)
 
 
-def test_safe_densify_chunk_no_allow(monkeypatch):
+def test_safe_densify_chunk_no_allow():
     from unittest.mock import patch
-    with patch("workflow.modular._mem_guard.MemoryGuard._quick_check", staticmethod(lambda b: "chunk")):
+    from workflow.modular._densify_policy import DensifyDecision
+    with patch("workflow.modular._sparse_utils.plan_densify", return_value=DensifyDecision.CHUNK):
         X = sp.csr_matrix(np.ones((50, 50)))
         with pytest.raises(MemoryGuardError):
             safe_densify(X, reason="chunk_test", dtype=np.float64, allow_chunk=False)

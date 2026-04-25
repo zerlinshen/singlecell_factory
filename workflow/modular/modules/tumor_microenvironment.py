@@ -128,7 +128,9 @@ class TumorMicroenvironmentModule:
         gzma = expr.X[:, gzma_idx]
         prf1 = expr.X[:, prf1_idx]
         if hasattr(gzma, "toarray"):
+            # densify-allowed: single-gene column vector (n_cells × 1); trivially small
             gzma = gzma.toarray().flatten()
+            # densify-allowed: single-gene column vector (n_cells × 1); trivially small
             prf1 = prf1.toarray().flatten()
         else:
             gzma = np.asarray(gzma).flatten()
@@ -154,6 +156,7 @@ class TumorMicroenvironmentModule:
                 idx = gene_to_idx[gene]
                 x = expr.X[mask, idx]
                 if hasattr(x, "toarray"):
+                    # densify-allowed: single-gene column slice per cell-type mask; byte cost = n_cells_in_mask × 1 × itemsize
                     x = x.toarray()
                 row[label] = round(float(np.mean(x)), 4)
                 row[f"{label}_pct"] = round(float(np.mean(np.asarray(x).flatten() > 0)) * 100, 2)

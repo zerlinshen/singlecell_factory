@@ -96,6 +96,7 @@ class EvolutionModule:
         if "X_cnv" in adata.obsm:
             cnv_mat = adata.obsm["X_cnv"]
             if hasattr(cnv_mat, "toarray"):
+                # densify-allowed: obsm["X_cnv"] clone-profile matrix; already reduced dimensionality, bounded by n_cells × n_cnv_bins
                 cnv_mat = cnv_mat.toarray()
             cnv_mat = np.asarray(cnv_mat, dtype=np.float32)
 
@@ -276,6 +277,7 @@ class EvolutionModule:
         """Hierarchical dendrogram of clone CNV profiles (phylogenetic tree proxy)."""
         cnv = adata.obsm["X_cnv"]
         if hasattr(cnv, "toarray"):
+            # densify-allowed: obsm["X_cnv"] used to compute per-clone centroids for dendrogram; same bounded shape as _cluster_clones
             cnv = cnv.toarray()
         cnv = np.asarray(cnv, dtype=np.float32)
 

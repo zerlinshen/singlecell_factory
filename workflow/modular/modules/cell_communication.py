@@ -161,14 +161,18 @@ class CellCommunicationModule:
                 ct_list.append(ct)
                 mean_mat_rows.append(np.asarray(mean_dict[ct], dtype=np.float32))
         else:
+            from .._mem_guard import MemoryGuard, MemoryAbortError
             mean_mat_rows = []
             for ct in cell_types:
+                if MemoryGuard.abort_requested():
+                    raise MemoryAbortError("watchdog abort during cell communication cell-type loop")
                 mask = (adata.obs["cell_type"] == ct).values
                 if mask.sum() < 5:
                     continue
                 ct_list.append(ct)
                 chunk = expr.X[mask][:, gene_indices]
                 if hasattr(chunk, "toarray"):
+                    # densify-allowed: per-cell-type row-slice (≥5 cells) × n_needed_genes; LIANA fallback path, size bounded by gene list
                     chunk = chunk.toarray()
                 mean_mat_rows.append(np.asarray(chunk, dtype=np.float32).mean(axis=0))
 

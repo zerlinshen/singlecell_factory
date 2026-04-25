@@ -50,7 +50,55 @@ $ralplan
 - 不要跳过文档同步（`README.md` / `PROTOCOL.md`）
 - 不要在无验证证据下宣称“完成”
 
-## 8) 交付输出建议
+## 8) Densify Policy（Phase 7A.2+，强制）
+
+所有在 `workflow/modular/modules/` 下的 `.toarray()` / `.todense()` 调用必须遵守以下协议：
+
+### 规则
+
+1. **新代码必须走 `safe_densify()`**（来自 `_sparse_utils`）或主动调用 `plan_densify()`（来自 `_densify_policy`）判断 budget，拒绝后 raise `MemoryGuardError` 或改为 chunked 路径。
+
+2. **已有代码（存量 allowlist）**：每个 `.toarray()` / `.todense()` 必须在同一行或紧邻上一行添加注释：
+   ```python
+   # densify-allowed: <reason explaining why this densification is bounded/safe>
+   ```
+
+3. **CI grep-ban**：`tests/test_densify_audit.py` 在每次 commit 时扫描 `modules/`，任何缺少标记的调用导致测试失败。
+
+### 判断标准（写 reason 时参考）
+
+| 场景 | 可接受理由 |
+|---|---|
+| 单列切片（n_cells × 1） | "single-gene column vector; trivially small" |
+| 有界子集（top-k 基因） | "subset of top_k genes × n_cells; bounded by n_top_genes" |
+| 引擎 flag 保护 | "only reached when SC_XX_ENGINE != 'chunked'; caller controls RAM" |
+| obsm 低维矩阵 | "already reduced dimensionality; n_cells × n_cnv_bins" |
+| 整矩阵但有上游 flag | 必须说明上游 flag + 说明无 chunked 替代 |
+
+### 添加新模块时
+
+```python
+from workflow.modular._densify_policy import DensifyDecision, plan_densify
+from workflow.modular._sparse_utils import MemoryGuardError
+
+decision = plan_densify(X.shape, np.float32, reason="my reason")
+if decision == DensifyDecision.ABORT:
+    raise MemoryGuardError("...")
+elif decision == DensifyDecision.CHUNK:
+    # use chunked_row_densify or implement chunked path
+    ...
+else:
+    dense = X.toarray()  # densify-allowed: covered by plan_densify GO decision
+```
+
+### 环境变量（覆盖默认 cap）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `SC_DENSIFY_SOFT_CAP_BYTES` | 4 GiB | 超过此值返回 CHUNK |
+| `SC_DENSIFY_HARD_CAP_BYTES` | 12 GiB | 超过此值返回 ABORT |
+
+## 9) 交付输出建议
 每次交付固定 4 项：
 1. 改了哪些文件
 2. 跑了哪些验证命令

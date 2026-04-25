@@ -182,6 +182,7 @@ class DifferentialExpressionModule:
 
         X = X_raw
         if sparse.issparse(X):
+            # densify-allowed: legacy dense Welch path; only reached when SC_DE_ENGINE != 'sparse'; caller is responsible for ensuring X fits in RAM
             X = X.toarray()
         X = np.asarray(X, dtype=float)
         if X.ndim != 2 or X.shape[1] == 0:

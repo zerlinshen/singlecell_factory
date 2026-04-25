@@ -5,6 +5,8 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.stats as stats
 
+from workflow.modular._densify_policy import DensifyDecision, plan_densify
+
 
 class MemoryGuardError(MemoryError):
     pass
@@ -17,11 +19,10 @@ def estimate_dense_bytes(shape: tuple[int, int], dtype) -> int:
 def safe_densify(x, *, reason: str, dtype, allow_chunk: bool = False):
     if sp.issparse(x):
         nbytes = estimate_dense_bytes(x.shape, dtype)
-        from workflow.modular._mem_guard import MemoryGuard
-        decision = MemoryGuard._quick_check(nbytes)
-        if decision == "abort":
+        decision = plan_densify(x.shape, dtype, reason=reason)
+        if decision == DensifyDecision.ABORT:
             raise MemoryGuardError(f"safe_densify blocked ({reason}): would need {nbytes:,} bytes")
-        if decision == "chunk" and not allow_chunk:
+        if decision == DensifyDecision.CHUNK and not allow_chunk:
             raise MemoryGuardError(f"safe_densify requires chunking ({reason}) but allow_chunk=False")
         return np.asarray(x.toarray(), dtype=dtype)
     return np.asarray(x, dtype=dtype)
