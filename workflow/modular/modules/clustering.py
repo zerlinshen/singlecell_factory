@@ -99,6 +99,10 @@ class ClusteringModule:
             ctx.metadata["clustering_backend"] = "gpu" if use_gpu else "cpu"
 
     def _should_use_css(self, ctx, adata) -> bool:
+        if os.environ.get("SC_CLUSTERING_ENGINE", "").lower() == "sparse_exact":
+            ctx.metadata["css_status"] = "disabled_sparse_exact_engine"
+            ctx.metadata["clustering_engine"] = "sparse_exact"
+            return False
         if ctx.cfg.scale_mode != "massive":
             return False
         if "sample" not in adata.obs.columns:
