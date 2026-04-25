@@ -14,6 +14,7 @@ sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 from ._gpu_utils import gpu_available
+from .._densify_policy import plan_densify, DensifyDecision
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +72,17 @@ class DifferentialExpressionModule:
                 use_gpu = False
 
         if not use_gpu:
+            corr_method = getattr(ctx.cfg, "de_correction", None)
             markers = self._run_cpu_rank_genes_groups(
                 adata=adata,
                 method=method,
                 rank_kwargs=rank_kwargs,
                 n_genes=n_genes,
+                corr_method=corr_method if corr_method != "benjamini-hochberg" else None,
             )
             ctx.metadata["de_backend"] = "cpu"
+            if corr_method:
+                ctx.metadata["de_correction"] = corr_method
         elif has_api(sc, "get.rank_genes_groups_df"):
             markers = sc.get.rank_genes_groups_df(adata, group=None)
         else:
@@ -150,13 +155,23 @@ class DifferentialExpressionModule:
         method: str,
         rank_kwargs: dict,
         n_genes: int,
+        corr_method: str | None = None,
     ) -> pd.DataFrame:
         if has_api(sc, "tl.rank_genes_groups") and has_api(sc, "get.rank_genes_groups_df"):
+            call_kwargs = dict(rank_kwargs)
+            if corr_method is not None:
+                import inspect as _inspect
+                try:
+                    sig = _inspect.signature(sc.tl.rank_genes_groups)
+                    if "corr_method" in sig.parameters:
+                        call_kwargs["corr_method"] = corr_method
+                except Exception:
+                    pass
             sc.tl.rank_genes_groups(
                 adata,
                 groupby="leiden",
                 method=method,
-                **rank_kwargs,
+                **call_kwargs,
             )
             return sc.get.rank_genes_groups_df(adata, group=None)
         logger.warning("scanpy DE APIs unavailable; using statistical fallback.")
@@ -182,8 +197,22 @@ class DifferentialExpressionModule:
 
         X = X_raw
         if sparse.issparse(X):
-            # densify-allowed: legacy dense Welch path; only reached when SC_DE_ENGINE != 'sparse'; caller is responsible for ensuring X fits in RAM
-            X = X.toarray()
+            decision = plan_densify(
+                X.shape, float,
+                reason="legacy dense Welch DE path; SC_DE_ENGINE != sparse",
+            )
+            if decision == DensifyDecision.ABORT:
+                from .._mem_guard import MemoryGuardError
+                raise MemoryGuardError(
+                    f"differential_expression: matrix too large to densify "
+                    f"({X.shape[0]} × {X.shape[1]}); set SC_DE_ENGINE=sparse to use sparse path"
+                )
+            if decision == DensifyDecision.CHUNK:
+                logger.warning(
+                    "differential_expression: DE densify in CHUNK range (%d × %d); proceeding",
+                    X.shape[0], X.shape[1],
+                )
+            X = X.toarray()  # densify-allowed: guarded by plan_densify above
         X = np.asarray(X, dtype=float)
         if X.ndim != 2 or X.shape[1] == 0:
             adata.uns["rank_genes_groups"] = {"fallback": True, "groupby": groupby}
