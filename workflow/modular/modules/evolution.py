@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import matplotlib
 
@@ -15,6 +16,9 @@ from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 from scipy.spatial.distance import pdist
 
 from ..context import PipelineContext
+from .._densify_policy import plan_densify, DensifyDecision
+
+logger = logging.getLogger(__name__)
 
 
 class EvolutionModule:
@@ -96,8 +100,21 @@ class EvolutionModule:
         if "X_cnv" in adata.obsm:
             cnv_mat = adata.obsm["X_cnv"]
             if hasattr(cnv_mat, "toarray"):
-                # densify-allowed: obsm["X_cnv"] clone-profile matrix; already reduced dimensionality, bounded by n_cells × n_cnv_bins
-                cnv_mat = cnv_mat.toarray()
+                decision = plan_densify(
+                    cnv_mat.shape, np.float32,
+                    reason="obsm X_cnv clone-profile matrix for hierarchical clustering",
+                )
+                if decision == DensifyDecision.ABORT:
+                    raise MemoryError(
+                        "evolution: CNV matrix too large to densify; "
+                        "sparse CNV path not yet implemented — skipping clone clustering"
+                    )
+                if decision == DensifyDecision.CHUNK:
+                    logger.warning(
+                        "evolution._cluster_clones: CNV densify in CHUNK range (%d × %d); proceeding",
+                        cnv_mat.shape[0], cnv_mat.shape[1],
+                    )
+                cnv_mat = cnv_mat.toarray()  # densify-allowed: guarded by plan_densify above
             cnv_mat = np.asarray(cnv_mat, dtype=np.float32)
 
             # Hierarchical clustering on CNV profiles
@@ -277,8 +294,21 @@ class EvolutionModule:
         """Hierarchical dendrogram of clone CNV profiles (phylogenetic tree proxy)."""
         cnv = adata.obsm["X_cnv"]
         if hasattr(cnv, "toarray"):
-            # densify-allowed: obsm["X_cnv"] used to compute per-clone centroids for dendrogram; same bounded shape as _cluster_clones
-            cnv = cnv.toarray()
+            decision = plan_densify(
+                cnv.shape, np.float32,
+                reason="obsm X_cnv for per-clone centroid computation (dendrogram)",
+            )
+            if decision == DensifyDecision.ABORT:
+                logger.warning(
+                    "evolution._plot_phylo_dendrogram: CNV matrix too large to densify; skipping dendrogram"
+                )
+                return
+            if decision == DensifyDecision.CHUNK:
+                logger.warning(
+                    "evolution._plot_phylo_dendrogram: CNV densify in CHUNK range (%d × %d); proceeding",
+                    cnv.shape[0], cnv.shape[1],
+                )
+            cnv = cnv.toarray()  # densify-allowed: guarded by plan_densify above
         cnv = np.asarray(cnv, dtype=np.float32)
 
         # Compute clone centroids
