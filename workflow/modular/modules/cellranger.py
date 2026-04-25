@@ -91,6 +91,43 @@ class CellRangerModule:
         ctx.metadata["sample_label_strategy"] = "probe_barcode_16plex_proxy"
         ctx.metadata["sample_label_nunique"] = int(pd.Series(adata.obs["sample"]).nunique())
 
+    @staticmethod
+    def _apply_cohort_subset(adata, ctx: PipelineContext):
+        """Filter adata to cohort subset defined by cfg.cohort_subset predicates."""
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+        cohort_subset = getattr(ctx.cfg, "cohort_subset", None)
+        if not cohort_subset:
+            return adata
+        if isinstance(cohort_subset, str):
+            cohort_subset = [cohort_subset]
+        mask = None
+        for spec in cohort_subset:
+            if "=" not in spec:
+                _log.warning("cohort_subset spec '%s' has no '='; skipping.", spec)
+                continue
+            col, vals_str = spec.split("=", 1)
+            col = col.strip()
+            vals = [v.strip() for v in vals_str.split(",") if v.strip()]
+            if col not in adata.obs.columns:
+                raise ValueError(f"cohort_subset column '{col}' not found in adata.obs.")
+            submask = adata.obs[col].isin(vals).values
+            mask = submask if mask is None else (mask & submask)
+        if mask is None:
+            return adata
+        n_before = int(adata.n_obs)
+        adata = adata[mask].copy()
+        n_after = int(adata.n_obs)
+        subset_str = "; ".join(cohort_subset) if isinstance(cohort_subset, list) else str(cohort_subset)
+        _log.info(
+            "Cohort subset applied: %s, n_obs reduced from %d to %d",
+            subset_str, n_before, n_after,
+        )
+        ctx.metadata["cohort_subset_applied"] = subset_str
+        ctx.metadata["cohort_subset_n_obs_before"] = n_before
+        ctx.metadata["cohort_subset_n_obs_after"] = n_after
+        return adata
+
     def run(self, ctx: PipelineContext) -> None:
         cfg = ctx.cfg.cellranger
         sample_root = cfg.sample_root
@@ -112,6 +149,7 @@ class CellRangerModule:
                 ctx.metadata["prepared_input_source"] = str(prepared_zarr)
             adata.var_names_make_unique()
             self._annotate_flex_probe_groups(adata, sample_root, ctx)
+            adata = self._apply_cohort_subset(adata, ctx)
             if self._needs_counts_layer(ctx) and "counts" not in adata.layers:
                 # Keep the logical raw-count layer available for pseudobulk but
                 # defer any heavy lazy-backend materialization until the
@@ -145,6 +183,7 @@ class CellRangerModule:
             raise ImportError(f"scanpy.read_10x_mtx is unavailable: {err}") from err
         adata = sc.read_10x_mtx(str(outs), var_names="gene_symbols", cache=False)
         adata.var_names_make_unique()
+        adata = self._apply_cohort_subset(adata, ctx)
         # Preserve raw UMI counts only when downstream modules require them
         # (notably pseudobulk_de). This avoids a large duplicate matrix for
         # massive clustering-first runs.

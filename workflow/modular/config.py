@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass
@@ -38,6 +39,7 @@ class DoubletConfig:
 
     expected_doublet_rate: float = 0.06
     remove_doublets: bool = True
+    n_prin_comps: int = 30  # Scrublet internal PCA; paper uses 30
 
 
 @dataclass
@@ -46,9 +48,9 @@ class ClusteringConfig:
 
     n_top_genes: int = 3000
     target_sum: float = 1e4
-    n_pcs: int = 40
+    n_pcs: int = 15  # paper: 15-PC Harmony space for Leiden clustering
     n_neighbors: int = 15
-    leiden_resolution: float = 0.8
+    leiden_resolution: float = 1.0  # paper: Leiden resolution=1.0
     random_state: int = 0
     scale_data: bool = False
 
@@ -115,6 +117,23 @@ class PaperReproConfig:
 
 
 @dataclass
+class DEConfig:
+    """Paper-aligned DE marker parameters."""
+
+    marker_min_pct: float = 0.10       # paper: 0.30 — only paper-aligned launcher sets this
+    logfc_threshold: float = 0.25      # paper: 0.0 — only paper-aligned launcher sets this
+    marker_correction: str = "benjamini-hochberg"  # paper uses bonferroni; default stays BH
+
+
+@dataclass
+class PseudobulkDEConfig:
+    """Paper-aligned pseudobulk DE thresholds."""
+
+    padj_threshold: float = 0.05       # paper: median(padj) <= 0.05
+    abs_logfc_threshold: float = 1.0   # paper: |median(logFC)| >= 1
+
+
+@dataclass
 class PseudobulkConfig:
     """Configuration for pseudobulk differential expression."""
 
@@ -156,6 +175,8 @@ class PipelineConfig:
     gene_signature: GeneSignatureConfig = field(default_factory=GeneSignatureConfig)
     paper_repro: PaperReproConfig = field(default_factory=PaperReproConfig)
     pseudobulk: PseudobulkConfig = field(default_factory=PseudobulkConfig)
+    de_config: DEConfig = field(default_factory=DEConfig)
+    pseudobulk_de: PseudobulkDEConfig = field(default_factory=PseudobulkDEConfig)
     regress_cell_cycle: bool = False
     trajectory_root_cluster: str | None = None
     checkpoint: bool = False
@@ -165,6 +186,8 @@ class PipelineConfig:
     de_n_genes: int = 300
     de_pval_threshold: float = 0.05
     de_logfc_threshold: float = 0.25
+    de_correction: str = "benjamini-hochberg"  # paper: bonferroni; default stays BH for backward compat
+    de_min_pct: float = 0.10                   # paper: 0.30; only paper-aligned launcher overrides
     annotation_confidence_threshold: float = 0.1
     reference_adata: Path | None = None
     reference_label_key: str = "cell_type"
@@ -178,6 +201,8 @@ class PipelineConfig:
     doublet_strategy: str = "auto"   # auto, grouped, whole, skip
     clustering_engine: str = "auto"  # auto, sparse_exact, css, gpu
     checkpoint_policy: str = "full"  # full, mandatory_only, metadata_only
+    # Cohort subset: obs_col=val1,val2 filter applied after loading (supports list for AND-chaining)
+    cohort_subset: Optional[list[str]] = None
 
 
 # Maps scale_mode preset names to their capability flag bundles.

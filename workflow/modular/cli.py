@@ -10,11 +10,13 @@ from .config import (
     CellRangerConfig,
     ClusteringConfig,
     CNVConfig,
+    DEConfig,
     DoubletConfig,
     GeneSignatureConfig,
     PaperReproConfig,
     PipelineConfig,
     PseudobulkConfig,
+    PseudobulkDEConfig,
     QCConfig,
     VelocityConfig,
     scale_mode_to_capabilities,
@@ -130,6 +132,20 @@ def parse_args() -> argparse.Namespace:
         help="Checkpoint policy: full (save all), mandatory_only (skip early modules), metadata_only. Overrides scale-mode preset.",
     )
 
+    # Cohort subset
+    parser.add_argument(
+        "--cohort-subset",
+        action="append",
+        default=None,
+        dest="cohort_subset",
+        metavar="OBS_COL=VAL1,VAL2",
+        help=(
+            "Filter cells to a subset: <obs_col>=<value1>,<value2>. "
+            "Multiple --cohort-subset flags are AND-combined. "
+            "E.g. --cohort-subset disease=lung_adenocarcinoma,lung_squamous_cell_carcinoma"
+        ),
+    )
+
     # Differential expression
     parser.add_argument(
         "--de-method",
@@ -142,6 +158,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=300,
         help="Maximum number of genes ranked per cluster in DE (default: 300)",
+    )
+    parser.add_argument(
+        "--de-correction",
+        default="benjamini-hochberg",
+        choices=["benjamini-hochberg", "bonferroni"],
+        help="Multiple-testing correction for marker DE (default: benjamini-hochberg; paper uses bonferroni)",
+    )
+    parser.add_argument(
+        "--de-min-pct",
+        type=float,
+        default=0.10,
+        help="Min fraction of cells expressing a gene for DE marker (default: 0.10; paper: 0.30)",
     )
 
     # Cell cycle
@@ -539,6 +567,12 @@ def main() -> None:
             use_de_genes=not args.no_cbioportal_de_genes,
             top_n_de_genes=args.cbioportal_top_n,
         ),
+        de_config=DEConfig(
+            marker_min_pct=args.de_min_pct,
+            logfc_threshold=args.de_logfc_threshold,
+            marker_correction=args.de_correction,
+        ),
+        pseudobulk_de=PseudobulkDEConfig(),
         regress_cell_cycle=args.regress_cell_cycle,
         trajectory_root_cluster=args.trajectory_root_cluster,
         checkpoint=args.checkpoint,
@@ -548,6 +582,8 @@ def main() -> None:
         de_n_genes=args.de_n_genes,
         de_pval_threshold=args.de_pval_threshold,
         de_logfc_threshold=args.de_logfc_threshold,
+        de_correction=args.de_correction,
+        de_min_pct=args.de_min_pct,
         annotation_confidence_threshold=args.annotation_confidence_threshold,
         reference_adata=Path(args.reference_adata) if args.reference_adata else None,
         reference_label_key=args.reference_label_key,
@@ -560,6 +596,7 @@ def main() -> None:
         doublet_strategy=args.doublet_strategy,
         clustering_engine=args.clustering_engine,
         checkpoint_policy=args.checkpoint_policy,
+        cohort_subset=args.cohort_subset,
     )
     ledger = None
     try:
