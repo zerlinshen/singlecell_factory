@@ -7,15 +7,28 @@ _ABORT_FRACTION = 0.90
 _CHUNK_FRACTION = 0.50
 
 
+class MemoryGuardError(Exception):
+    """Raised by MemoryGuard.check() when memory pressure exceeds thresholds."""
+
+
 class MemoryGuard:
     """Decision gate for large memory allocations.
 
     Decisions: "go" | "chunk" | "backed" | "abort"
+
+    Used as a context manager: records entry/exit in ctx.metadata['mem_traces'].
+    check() raises MemoryGuardError when decision is "abort".
     """
 
     def __init__(self, ctx=None, label: str = ""):
         self._ctx = ctx
         self._label = label
+
+    def __enter__(self) -> "MemoryGuard":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        return False
 
     @staticmethod
     def _quick_check(planned_bytes: int) -> str:
@@ -30,9 +43,20 @@ class MemoryGuard:
 
     def check(self, label: str = "") -> str:
         if self._ctx is None or self._ctx.adata is None:
-            return "go"
-        est = _estimate_adata_copy_bytes(self._ctx.adata)
-        return self._quick_check(est)
+            decision = "go"
+        else:
+            est = _estimate_adata_copy_bytes(self._ctx.adata)
+            decision = self._quick_check(est)
+
+        if self._ctx is not None:
+            trace = {"module": self._label, "label": label, "decision": decision}
+            self._ctx.metadata.setdefault("mem_traces", []).append(trace)
+
+        if decision == "abort":
+            raise MemoryGuardError(
+                f"MemoryGuard abort: module={self._label!r} label={label!r} decision={decision!r}"
+            )
+        return decision
 
     def estimate_and_decide(self, planned_bytes: int) -> str:
         available = _get_available_memory_bytes()

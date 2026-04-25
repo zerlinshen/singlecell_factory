@@ -521,6 +521,16 @@ def main() -> None:
         logging.getLogger(__name__).warning("RunLedger.record_start failed: %s", _ledger_exc)
         ledger = None
 
+    import os as _os
+    _watchdog_thread = None
+    if _os.environ.get("SC_MEM_WATCHDOG", "").lower() == "on":
+        try:
+            from ._mem_watchdog import start as _watchdog_start
+            _watchdog_ctx = type("_WatchdogCtx", (), {"metadata": {}})()
+            _watchdog_thread = _watchdog_start(_watchdog_ctx)
+        except Exception as _wd_exc:
+            logging.getLogger(__name__).warning("MemoryWatchdog start failed: %s", _wd_exc)
+
     manifest = run_pipeline(cfg, ledger=ledger)
     print(manifest)
 

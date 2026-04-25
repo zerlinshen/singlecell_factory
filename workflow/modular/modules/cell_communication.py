@@ -25,6 +25,23 @@ class CellCommunicationModule:
     requires_keys = {"obs": ["cell_type"]}
 
     def run(self, ctx: PipelineContext) -> None:
+        import os
+        if os.environ.get("SC_MEM_GUARD", "").lower() == "on":
+            import logging as _logging
+            from .._mem_guard import MemoryGuard, MemoryGuardError
+            _logger = _logging.getLogger(__name__)
+            try:
+                with MemoryGuard(ctx, self.name) as mg:
+                    mg.check("entry")
+                    return self._run_impl(ctx)
+            except MemoryGuardError as exc:
+                _logger.warning("MemoryGuard: %s", exc)
+                ctx.metadata.setdefault("mem_warnings", []).append(
+                    {"module": self.name, "error": str(exc)}
+                )
+        return self._run_impl(ctx)
+
+    def _run_impl(self, ctx: PipelineContext) -> None:
         adata = ctx.adata
         if adata is None:
             raise ValueError("Cell communication requires AnnData.")
