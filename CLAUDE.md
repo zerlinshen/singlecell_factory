@@ -1,5 +1,14 @@
 # singlecell_factory: Claude Project Instructions
 
+## Project Precedence (Overrides Global OMC Defaults)
+- This project's rules take precedence over global `~/.claude/CLAUDE.md` orchestration defaults.
+- If global OMC behavior conflicts with project safety/reproducibility constraints, follow this file.
+- Default to single-agent, minimal, targeted edits for optimization, bugfixes, and parameter tuning.
+- Multi-agent orchestration is allowed for new module creation and cross-module major refactors when it improves delivery quality.
+- For multi-agent work, require an explicit plan and clear ownership boundaries before parallel execution.
+- For high-impact changes (pipeline contracts, `adata` structure, output schema), require verification evidence before claiming completion.
+- Always prioritize reproducibility, deterministic outputs, and stable pipeline contracts over speed.
+
 ## Scope
 - Use this repository's modular workflow as the default entry point.
 - Prefer minimal, targeted edits that preserve scientific reproducibility and output compatibility.
@@ -25,6 +34,7 @@
   `module_status.csv`, `run_manifest.json`.
 
 ## Change Rules
+- **Bridge symlink rule**: `bridges/local_r_pipeline_macbook/R` and `bridges/local_r_pipeline_macbook/R_bundle` must always be symlinks pointing to `multiomics_r_factory/R` and `multiomics_r_factory/R_bundle` respectively. Never place real R files under these bridge paths. Edit R sources in `multiomics_r_factory/` only. Verify with `bash scripts/ci/check_bridge_symlink.sh`.
 - When adding a module, update all required integration points:
   - `workflow/modular/modules/<module>.py`
   - `MODULE_DEPENDENCIES` and `_build_registry()` in `workflow/modular/pipeline.py`
@@ -36,18 +46,24 @@
 - Do not paste large external code blocks directly; re-implement/adapt to this codebase style and contracts.
 
 ## Skills In This Project
-- `/run-modular-pipeline`
+- `/orchestrate-large-task`
+- `/execute-and-recover-pipeline`
+- `/develop-and-integrate-module`
+- `/review-and-validate-quality`
+- `/optimize-and-guard-performance`
 - `/download-large-file`
-- `/diagnose-modular-run`
-- `/add-pipeline-module`
-- `/validate-analysis-outputs`
-- `/optimize-modular-performance`
-- `/integrate-paper-algorithm`
-- `/triage-failure`
-- `/safe-refactor`
-- `/code-review-risk`
-- `/dependency-upgrade`
-- `/perf-regression-check`
-- `/docs-sync`
 
-Use these skills for repeatable workflows and faster context loading.
+Use these skills as a composition set, not as isolated tools.
+
+Default combo routing:
+- Large cross-domain work: `/orchestrate-large-task` then delegated specialized skills.
+- Run/triage/recovery work: `/execute-and-recover-pipeline` -> `/review-and-validate-quality`.
+- Feature/module work: `/develop-and-integrate-module` -> `/review-and-validate-quality`.
+- Performance-sensitive changes: add `/optimize-and-guard-performance` before final quality gate.
+
+Consolidation map (legacy -> active):
+- `run-modular-pipeline`, `diagnose-modular-run`, `triage-failure` -> `/execute-and-recover-pipeline`
+- `add-pipeline-module`, `integrate-paper-algorithm`, `safe-refactor`, `dependency-upgrade` -> `/develop-and-integrate-module`
+- `code-review-risk`, `validate-analysis-outputs`, `docs-sync` -> `/review-and-validate-quality`
+- `optimize-modular-performance`, `perf-regression-check` -> `/optimize-and-guard-performance`
+- `download-large-file` -> `/download-large-file`

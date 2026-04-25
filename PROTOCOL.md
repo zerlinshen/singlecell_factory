@@ -1,59 +1,85 @@
-# Single-Cell RNA-seq Analysis Protocol
+# singlecell_factory Beginner Protocol (Complete, Practical)
 
-A step-by-step guide for beginners using the **singlecell_factory** pipeline.
+This protocol is a beginner-friendly, end-to-end guide for running the current modular scRNA-seq pipeline.
+
+It is aligned with the current codebase (`workflow/modular/*`) and CLI (`python -m workflow.modular.cli`).
+
+
+## Bridge Architecture
+
+The canonical R source of truth is `multiomics_r_factory/`:
+
+- `multiomics_r_factory/R/` — Seurat-based high-level analysis modules (12 files)
+- `multiomics_r_factory/R_bundle/` — bundle-path-specific helpers (`remote_bundle_manifest.R`)
+
+The bridge at `bridges/local_r_pipeline_macbook/` references these via symlinks:
+
+- `bridges/local_r_pipeline_macbook/R` → `../../../multiomics_r_factory/R`
+- `bridges/local_r_pipeline_macbook/R_bundle` → `../../../multiomics_r_factory/R_bundle`
+
+**Rule**: `bridges/.../R` and `bridges/.../R_bundle` must always be symlinks, never real directories.
+Verify with: `bash scripts/ci/check_bridge_symlink.sh`
+
+Do NOT place real R files under `bridges/local_r_pipeline_macbook/R/` or `bridges/local_r_pipeline_macbook/R_bundle/`.
+Edit R sources in `multiomics_r_factory/` only.
 
 ---
 
-## 1. What Is This Pipeline?
+## 0. Before Every Meaningful Remote Run
 
-### 1.1 Background: Single-Cell RNA Sequencing
+Read first:
+- `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+- the newest relevant entry under `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/`
 
-Traditional RNA sequencing ("bulk RNA-seq") measures gene expression averaged across millions of cells. You get one number per gene — but tumors, immune systems, and developing tissues contain dozens of different cell types mixed together. You lose all that complexity.
+Operational rule for the NC2024 full cohort:
+- `execution_mode = debug_massive`
+  - use direct `massive`
+  - stop at first failing module
+  - patch only that module
+- `execution_mode = controller_validation`
+  - use the official orchestration path `large -> massive`
+  - treat `large` as a capacity probe, not the main completion lane
 
-**Single-cell RNA sequencing (scRNA-seq)** measures gene expression in *individual cells*. A typical experiment captures 1,000-100,000 cells, each with expression levels for 20,000-30,000 genes. This lets you:
+After a meaningful remote run finishes or fails:
+- update `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/`
+- update `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+- keep one evidence-rich failed run if it explains the winning fix
 
-- Discover cell types you didn't know were there
-- See how cancer cells differ from immune cells within the same tumor
-- Track how cells change over time (pseudotime / trajectory analysis)
-- Identify which genes are turned on/off in each cell type
+Targeted evidence lane for NC2024 subtype checkpoint closure:
+- If stage-1 baseline is already proven, do not rerun the full cohort just to inspect subtype checkpoint hierarchy.
+- Prefer the rerunnable audit script over existing subtype LIANA outputs:
+  - `python scripts/audit_nc2024_subtype_checkpoint_pairs.py --luad-raw-csv ... --lusc-raw-csv ... --luad-top20-csv ... --lusc-top20-csv ... --output-dir ...`
+- After the raw pair audit, generate the higher-level hierarchy summary:
+  - `python scripts/summarize_nc2024_checkpoint_hierarchy.py --audit-dir <checkpoint-audit-run-dir>`
+- For the standard verification lane, prefer:
+  - `bash scripts/verify_nc2024_subtype_checkpoint_audit.sh`
+- Canonical example inputs:
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/luad/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/lusc/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_adenocarcinoma_checkpoint_top20.csv`
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_squamous_cell_carcinoma_checkpoint_top20.csv`
+- Use this lane to separate:
+  - raw subtype LIANA pair presence
+  - current paper-facing top20 visibility
+- Keep the checkpoint verdict `partial` unless the paper-facing hierarchy itself is reproduced, not merely because the raw pairs are present.
 
-### 1.2 What This Pipeline Does
 
-This pipeline takes raw 10X Genomics scRNA-seq data and runs a complete analysis workflow:
+---
 
-```
-Raw count matrix (cells x genes)
-    |
-    v
-Quality control --> Doublet removal --> Clustering --> Cell type annotation
-    |                                       |
-    v                                       v
-Differential expression         Trajectory / Pseudotime
-    |                                       |
-    v                                       v
-Pathway analysis              Pseudo-velocity (flow arrows)
-    |
-    v
-Immune phenotyping --> TME scoring --> Tumor evolution
-```
+## 1. What You Will Do
 
-The pipeline produces output files (figures + tables) organized into 18 analysis folders.
+You will:
+1. Set up the environment.
+2. Validate your 10X input directory.
+3. Run a minimal analysis first.
+4. Run a full analysis.
+5. Read outputs (`run_manifest.json`, `module_status.csv`, figures/tables).
+6. Recover from failures with checkpoint/resume.
+7. Tune parameters safely.
 
-### 1.3 Who Is This For?
-
-- Bioinformatics students learning scRNA-seq analysis
-- Biologists who want to analyze their own 10X data
-- Researchers who need a reproducible, citable analysis pipeline
-
-### 1.4 Example Dataset
-
-Throughout this protocol, we use **lung squamous cell carcinoma (LUSC)** data from 10X Genomics — approximately 3,000 cells from a human lung tumor sample. By the end, we identified:
-
-- **2,377 cells** passing quality filters (from 2,588 raw)
-- **17 clusters** of cells
-- **10 cell types** (T cells, macrophages, B cells, tumor epithelial, etc.)
-- **3 evolutionary clones** with distinct CNV profiles
-- **6,551 differentially expressed genes** across clusters
+Pipeline structure:
+- Mandatory modules (always): `cellranger -> qc -> doublet_detection`
+- Optional modules (22): selected by `--optional-modules` with auto dependency resolution.
 
 ---
 
@@ -62,737 +88,411 @@ Throughout this protocol, we use **lung squamous cell carcinoma (LUSC)** data fr
 ### 2.1 Software
 
 ```bash
-# Create conda environment
+cd /home/zerlinshen/singlecell_factory
 conda env create -f environment.yml
 conda activate sc10x
+export MPLCONFIGDIR=$PWD/.mplconfig
+export NUMBA_CACHE_DIR=/tmp/numba_cache
 ```
 
-**Key dependencies** (installed automatically):
-| Package | Purpose |
-|---|---|
-| scanpy | Core scRNA-seq analysis |
-| anndata | Data structure for single-cell data |
-| scrublet | Doublet detection |
-| igraph + leidenalg | Community detection (clustering) |
-| infercnvpy | Copy number variation inference |
-| pybiomart | Gene position annotation |
-| matplotlib | Visualization |
+Recommended for stable plotting/JIT behavior:
+- `MPLCONFIGDIR`
+- `NUMBA_CACHE_DIR`
 
-### 2.2 Input Data
+### 2.2 Input Data Format
 
-You need a **Cell Ranger output directory** containing the filtered count matrix:
+Your sample root must contain:
 
-```
-data/raw/your_dataset/outs/filtered_feature_bc_matrix/
-    barcodes.tsv.gz    # Cell barcodes (one per cell)
-    features.tsv.gz    # Gene names and IDs
-    matrix.mtx.gz      # Sparse count matrix (cells x genes)
+```text
+data/raw/<your_sample>/outs/filtered_feature_bc_matrix/
+├── barcodes.tsv.gz
+├── features.tsv.gz
+└── matrix.mtx.gz
 ```
 
-This is the standard output from 10X Genomics Cell Ranger `count` pipeline. If you have FASTQ files instead, run Cell Ranger first.
-
-### 2.3 Hardware
-
-| Dataset size | RAM needed | Time estimate |
-|---|---|---|
-| 1,000-5,000 cells | 8 GB | 5-15 minutes |
-| 5,000-20,000 cells | 16 GB | 15-45 minutes |
-| 20,000-100,000 cells | 32-64 GB | 1-4 hours |
+If this folder is missing, either:
+- point `--outs-dir` to the real matrix folder, or
+- provide Cell Ranger inputs and allow rerun (`--fastq-dir`, `--transcriptome-dir`).
 
 ---
 
-## 3. Pipeline Overview
-
-### 3.1 Module Dependency Graph
-
-Modules are connected by dependencies. When you request a module, all its upstream dependencies are automatically included:
-
-```
-cellranger --> qc --> doublet_detection --> clustering
-                                              |
-              +-------------------------------+-------------------------------+
-              |               |               |               |               |
-              v               v               v               v               v
-        annotation    diff_expression    trajectory      cnv_inference    cell_cycle
-              |               |               |               |
-              v               v               v               v
-      immune_pheno     pathway_analysis  pseudo_velocity   evolution
-      tumor_microenv   validate_cbio
-      cell_communic
-```
-
-### 3.2 Mandatory vs Optional
-
-| Type | Modules | Why mandatory? |
-|---|---|---|
-| **Mandatory** (always run) | cellranger, qc, doublet_detection | Every analysis needs clean, de-duplicated data |
-| **Optional** (you choose) | All 17 others | Pick what's relevant to your biological question |
-
-### 3.3 How to Run
+## 3. Quick Validation Before First Run
 
 ```bash
-# Minimal run (just QC + clustering)
+test -d data/raw/<your_sample>/outs/filtered_feature_bc_matrix && echo "matrix found"
+```
+
+Optional (recommended):
+```bash
+ls data/raw/<your_sample>/outs/filtered_feature_bc_matrix
+```
+
+---
+
+## 4. First Run (Minimal, Safe)
+
+Run the smallest useful workflow first:
+
+```bash
 python -m workflow.modular.cli \
-  --project my_analysis \
-  --sample-root data/raw/my_dataset \
+  --project demo_minimal \
+  --sample-root data/raw/<your_sample> \
   --optional-modules clustering
+```
 
-# Full analysis (all optional modules)
+What this gives you:
+- QC-filtered and de-doubleted data
+- PCA/UMAP/Leiden clusters
+- baseline figures to confirm data quality
+
+---
+
+## 5. Full Run (Local, No Network Dependency)
+
+```bash
 python -m workflow.modular.cli \
-  --project LUSC_3k_Analysis \
-  --sample-root data/raw/lung_carcinoma_3k_count \
-  --optional-modules clustering,cell_cycle,differential_expression,annotation,\
-trajectory,pseudo_velocity,cnv_inference,pathway_analysis,cell_communication,\
-gene_regulatory_network,immune_phenotyping,tumor_microenvironment,\
-gene_signature_scoring,evolution
+  --project demo_full_local \
+  --sample-root data/raw/<your_sample> \
+  --optional-modules clustering,cell_cycle,batch_correction,differential_expression,annotation,trajectory,pseudo_velocity,rna_velocity,cnv_inference,pathway_analysis,cell_communication,gene_regulatory_network,immune_phenotyping,tumor_microenvironment,gene_signature_scoring,evolution,pseudobulk_de,cell_fate,composition,metacell \
+  --velocity-bam data/raw/<your_sample>/outs/possorted_genome_bam.bam \
+  --transcriptome-dir /path/to/refdata-gex-GRCh38-2024-A
+```
+
+Notes:
+- `rna_velocity` needs either `--velocity-loom` OR (`--velocity-bam` + resolvable GTF via `--velocity-gtf` or `--transcriptome-dir`).
+- `validate_cbioportal` is not included above (avoids network dependency).
+
+---
+
+## 6. Module Catalog (Current Pipeline)
+
+Mandatory:
+- `cellranger`
+- `qc`
+- `doublet_detection`
+
+Optional (22):
+- `clustering`
+- `cell_cycle`
+- `batch_correction`
+- `differential_expression`
+- `annotation`
+- `trajectory`
+- `pseudo_velocity`
+- `rna_velocity`
+- `cnv_inference`
+- `pathway_analysis`
+- `cell_communication`
+- `gene_regulatory_network`
+- `validate_cbioportal`
+- `immune_phenotyping`
+- `tumor_microenvironment`
+- `gene_signature_scoring`
+- `evolution`
+- `pseudobulk_de`
+- `cell_fate`
+- `composition`
+- `metacell`
+- `paper_repro`
+
+Dependency handling is automatic: if you request a downstream module, upstream modules are auto-included.
+
+---
+
+## 7. Where Results Go
+
+Default output root:
+- `/home/zerlinshen/singlecell_factory/results`
+
+Run directory format:
+
+```text
+<output-dir>/<project>_<timestamp>/
+├── final_adata.h5ad
+├── run_manifest.json
+├── module_status.csv
+├── .checkpoints/              # only if --checkpoint
+└── <module_name>/             # figures/tables per module
 ```
 
 ---
 
-## 4. Step-by-Step Module Guide
+## 8. How To Read Success/Failure Correctly
 
-### Module 1: Cell Ranger Data Loading (`cellranger`)
+Use `module_status.csv` and `run_manifest.json`.
 
-**What it does:** Loads the 10X Cell Ranger count matrix into memory as an AnnData object — the standard data structure for scRNA-seq in Python.
+Normalized status values:
+- `ok`: module completed successfully.
+- `skipped`: module intentionally skipped (for example: missing prerequisite keys, single-batch/single-sample conditions, or unavailable input-specific requirements).
+- `failed`: module error.
 
-**Method:** `scanpy.read_10x_mtx()` reads the sparse matrix files (barcodes, features, matrix).
-
-**What you get:**
-- An AnnData object with shape (n_cells x n_genes)
-- In our LUSC example: 2,588 cells x 38,606 genes
-
-**How to interpret:** This is just data loading — nothing to interpret yet. If this fails, check that your `filtered_feature_bc_matrix/` directory contains all three `.gz` files.
-
----
-
-### Module 2: Quality Control (`qc`)
-
-**What it does:** Removes low-quality cells and uninformative genes. Bad cells include:
-- Empty droplets (too few genes detected)
-- Dying cells (high mitochondrial gene %, because mRNA leaks from damaged cells)
-- Multiplets/debris (abnormally high gene counts)
-
-**Method:** Threshold-based filtering on QC metrics computed by scanpy.
-- Reference: Luecken & Theis, *Molecular Systems Biology*, 2019. DOI: [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746)
-
-**Key parameters and when to change them:**
-
-| Parameter | Default | When to increase | When to decrease |
-|---|---|---|---|
-| `--min-genes` | 200 | Very noisy data | High-quality data with low gene detection |
-| `--max-genes` | 7000 | Cell types with naturally high complexity | Suspected doublets |
-| `--max-mito-pct` | 20% | Metabolically active tissues (heart, muscle) | Strict filtering |
-| `--max-ribo-pct` | 50% | Immune cells (high ribo) | Non-immune tissues |
-
-**Output files:**
-| File | What to look for |
-|---|---|
-| `qc_violin_pre_filter.png` | Distribution of genes/cell, UMI/cell, mito%, ribo% BEFORE filtering |
-| `qc_violin_post_filter.png` | Same metrics AFTER filtering — distributions should be cleaner |
-| `qc_scatter_pre_filter.png` | Genes vs UMI counts, colored by mito% |
-| `qc_scatter_post_filter.png` | Same after filtering |
-
-**How to interpret:**
-- **Good:** Post-filter violin plots show tight, unimodal distributions. Mito% should be low (< 10% for most cells).
-- **Bad:** Bimodal distributions in post-filter plots suggest your thresholds are too loose. Very few cells remaining suggests thresholds are too strict.
-
-**LUSC example:** 2,588 raw cells -> 2,382 after QC (206 removed, 8.0%).
+Important:
+- Mandatory modules must be `ok`.
+- Optional modules can be `ok` or `skipped` with a meaningful reason.
 
 ---
 
-### Module 3: Doublet Detection (`doublet_detection`)
+## 9. Crash Recovery (Checkpoint + Resume)
 
-**What it does:** Identifies "doublets" — droplets that accidentally captured two cells instead of one. Doublets appear as hybrid cell types and can create false clusters.
-
-**Method:** Scrublet (Wolock et al., *Cell Systems*, 2019. DOI: [10.1016/j.cels.2018.11.005](https://doi.org/10.1016/j.cels.2018.11.005))
-
-Scrublet works by:
-1. Simulating artificial doublets by averaging random pairs of cells
-2. Building a shared k-NN graph of real + simulated cells
-3. Scoring each real cell by how similar it is to simulated doublets
-4. Automatically finding a threshold to call doublets
-
-**Robust fallback:** If the dataset is too small/degenerate for Scrublet, the module falls back to all-singlets (no cells removed) and records `doublet_method=fallback_all_singlets` in run metadata.
-
-**Output:** `doublet_scores.png` — histogram showing the distribution of doublet scores. There should be a clear bimodal distribution with a small peak of doublets on the right.
-
-**How to interpret:**
-- **Good:** Clear separation between singlet peak (left) and doublet peak (right). Low doublet rate (< 10%).
-- **Bad:** No clear threshold — the two peaks overlap heavily. Consider adjusting `--expected-doublet-rate`.
-
-**LUSC example:** 5 doublets detected (0.2%), final cell count: 2,377.
-
----
-
-### Module 4: Clustering (`clustering`)
-
-**What it does:** This is the core analysis step that groups cells with similar expression profiles into clusters. It involves:
-
-1. **Normalization** — Makes cell-to-cell comparisons fair (CPM + log transform)
-2. **Highly Variable Gene (HVG) selection** — Finds genes that vary most across cells (3,000 by default)
-3. **PCA** — Reduces 20,000+ genes to 40 principal components
-4. **Neighbor graph** — Builds a k-nearest-neighbor graph (k=15) in PCA space
-5. **UMAP** — Projects the high-dimensional data to 2D for visualization
-6. **Leiden clustering** — Finds communities (clusters) in the neighbor graph
-
-**Methods and citations:**
-- UMAP: McInnes et al., *JOSS*, 2018. DOI: [10.21105/joss.00861](https://doi.org/10.21105/joss.00861)
-- Leiden: Traag et al., *Scientific Reports*, 2019. DOI: [10.1038/s41598-019-41695-z](https://doi.org/10.1038/s41598-019-41695-z)
-- Seurat HVG: Stuart et al., *Cell*, 2019. DOI: [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031)
-
-**Key parameters:**
-
-| Parameter | Default | Effect of increasing | Effect of decreasing |
-|---|---|---|---|
-| `--leiden-resolution` | 0.8 | More clusters (finer subtypes) | Fewer clusters (broader groups) |
-| `--n-top-genes` | 3000 | More genes in analysis | Fewer, more variable genes |
-| `--n-pcs` | 40 | Captures more variance | Faster, less noise |
-| `--n-neighbors` | 15 | Smoother clusters | More local structure preserved |
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `pca_variance_explained.png` | Elbow plot — how many PCs to keep. Look for the "elbow" where the curve flattens |
-| `umap_leiden.png` | UMAP colored by cluster. This is the most important overview figure |
-
-**How to interpret:**
-- **Good UMAP:** Distinct, well-separated clusters. Each cluster is a potential cell type.
-- **Bad UMAP:** One big blob (resolution too low), or 50+ tiny clusters (resolution too high), or fragmented clouds (poor normalization).
-
-**LUSC example:** 17 clusters found at resolution 0.8. PCA: 40 PCs capture 90% of variance.
-
----
-
-### Module 5: Cell Type Annotation (`annotation`)
-
-**What it does:** Assigns biological names (T cell, Macrophage, Tumor cell, etc.) to each cluster by scoring cells against known marker gene panels.
-
-**Method:** Scanpy gene set scoring (`sc.tl.score_genes`) with marker panels for 10 cell types. Each cell gets a score for each cell type; the highest score wins. Confidence = max_score - second_best_score.
-
-**Reference:** Tirosh et al., *Science*, 2016. DOI: [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501)
-
-**Built-in cell type markers:**
-
-| Cell type | Key markers |
-|---|---|
-| Tumor epithelial | EPCAM, KRT7, KRT8, KRT18, KRT19, MUC1 |
-| T cell | CD3D, CD3E, CD4, CD8A, IL7R |
-| NK cell | NKG7, GNLY, KLRD1 |
-| B cell | MS4A1, CD79A, CD19 |
-| Myeloid/Macrophage | CD68, CD14, LYZ |
-| Fibroblast | DCN, LUM, COL1A1 |
-| Endothelial | PECAM1, VWF |
-| Plasma cell | MZB1, JCHAIN |
-| Mast cell | TPSAB1, TPSB2 |
-| Dendritic cell | FCER1A, CD1C |
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `umap_cell_type.png` | UMAP colored by assigned cell type |
-| `umap_annotation_confidence.png` | UMAP colored by confidence score (brighter = more confident) |
-| `cell_type_composition.png` | Stacked bar chart: what fraction of each cluster is each cell type |
-| `cell_type_annotation.csv` | Per-cell annotation with confidence scores |
-
-**How to interpret:**
-- **Good:** Each cluster is dominated by one cell type. Confidence scores are high (> 0.2). Few "Unknown" cells (< 10%).
-- **Bad:** Many "Unknown" cells, or one cell type assigned to clusters that look very different on UMAP. This means your marker panels don't match your tissue type — consider custom markers via `--markers-json`.
-
-**LUSC example:** 10 cell types identified, 4.4% Unknown. T cells dominate (5 clusters), with macrophages, B cells, tumor epithelial, and smaller populations.
-
----
-
-### Module 6: Cell Cycle Scoring (`cell_cycle`)
-
-**What it does:** Assigns each cell a cell cycle phase (G1, S, or G2M) and continuous S/G2M scores. This helps you determine whether clusters are driven by biology or just by proliferation state.
-
-**Method:** Gene set scoring using 47 S-phase genes and 49 G2M-phase genes from the Tirosh/Regev lab.
-- Reference: Tirosh et al., *Science*, 2016. DOI: [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501)
-
-**Output:** `cell_cycle_umap.png` — UMAP colored by cell cycle phase.
-
-**How to interpret:**
-- If a cluster is entirely S/G2M cells, it may be a "proliferating" subpopulation rather than a distinct cell type.
-- Use `--regress-cell-cycle` if cell cycle effects dominate your UMAP.
-
-**LUSC example:** G1: 1,683 cells (71%), S: 280 (12%), G2M: 414 (17%).
-
----
-
-### Module 7: CNV Inference (`cnv_inference`)
-
-**What it does:** Infers copy number variations (gains/losses of chromosomal regions) from gene expression patterns. This is critical for distinguishing **malignant** cells from **normal** cells in tumor samples.
-
-**Method:** Sliding-window smoothing of gene expression along chromosomal positions. Gene positions are auto-fetched from Ensembl BioMart. Per-cell CNV score = variance of the smoothed signal.
-- Reference: Patel et al., *Science*, 2014. DOI: [10.1126/science.1254257](https://doi.org/10.1126/science.1254257)
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `cnv_heatmap.png` | Rows = cells, columns = genes ordered by chromosome. Red/blue = gains/losses |
-| `cnv_score_umap.png` | UMAP colored by CNV score. Bright = likely malignant |
-| `cnv_scores.csv` | Per-cell CNV score |
-| `cnv_classification.json` | Malignant vs normal cell counts |
-
-**How to interpret:**
-- **cnv_heatmap.png:** Look for horizontal bands of red (gains) or blue (losses) in specific chromosomal regions. Malignant cells often show clear chromosome-arm level events (e.g., 3q gain in LUSC).
-- **cnv_score_umap.png:** Malignant cells should cluster together with high CNV scores.
-
-**LUSC example:** 594 cells classified as malignant (25%). Mean CNV score: 0.0025.
-
----
-
-### Module 8: Differential Expression (`differential_expression`)
-
-**What it does:** Finds "marker genes" — genes that are significantly higher or lower in one cluster compared to all others. These markers define what makes each cluster biologically distinct.
-
-**Method:** Wilcoxon rank-sum test (non-parametric, no distribution assumptions) with Benjamini-Hochberg FDR correction.
-- References: Wilcoxon, *Biometrics Bulletin*, 1945. DOI: [10.2307/3001968](https://doi.org/10.2307/3001968); Benjamini & Hochberg, *JRSS-B*, 1995. DOI: [10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x)
-
-**Significance filters:** adjusted p-value < 0.05 AND |log2 fold change| > 0.25.
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `marker_genes.csv` | All significant markers (filtered) |
-| `marker_top5_by_cluster.csv` | Top 5 markers per cluster — your "cheat sheet" for naming clusters |
-| `de_dotplot_top5.png` | Dot plot: size = fraction of cells expressing, color = mean expression |
-| `de_heatmap_top5.png` | Heatmap of top markers across clusters |
-| `de_volcano.png` | Volcano plot: log2FC vs -log10(p-value) |
-
-**How to interpret:**
-- **de_dotplot_top5.png** is the most informative. Each row is a gene, each column is a cluster. Big, dark dots = strong, consistent markers.
-- Compare your top markers to known biology. For example, if cluster 5 shows high EPCAM, KRT7, KRT18 — that's an epithelial/tumor cluster.
-
-**LUSC example:** 6,551 significant marker genes found across 17 clusters.
-
----
-
-### Module 9: Gene Regulatory Network (`gene_regulatory_network`)
-
-**What it does:** Infers which transcription factors (TFs) are active in each cluster. TFs are master regulators that control downstream gene programs.
-
-**Method (primary):** decoupler + DoRothEA. DoRothEA provides a curated database of TF-target gene relationships (confidence levels A/B/C). decoupler uses Univariate Linear Models to infer TF activity from target gene expression.
-- References: Garcia-Alonso et al., *Genome Research*, 2019. DOI: [10.1101/gr.240663.118](https://doi.org/10.1101/gr.240663.118); Badia-i-Mompel et al., *Bioinformatics Advances*, 2022. DOI: [10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016)
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `tf_activity_heatmap.png` | TF activity per cluster — which regulators drive each cluster? |
-| `tf_activity_per_cluster.csv` | Numeric TF activity scores |
-
-**How to interpret:** High TF activity in a cluster suggests that TF's program is active there. Example: high STAT1 in immune clusters (interferon signaling), high MYC in proliferating tumor cells.
-
----
-
-### Module 10: Gene Signature Scoring (`gene_signature_scoring`)
-
-**What it does:** Scores each cell against 10 cancer hallmark gene signatures. This reveals which biological processes are active where.
-
-**Built-in signatures:**
-
-| Signature | What it measures | Key reference |
-|---|---|---|
-| Proliferation | Active cell division (MKI67, TOP2A) | Standard oncology panel |
-| Apoptosis resistance | Resistance to cell death (BCL2 family) | BCL2 family biology |
-| Angiogenesis | Blood vessel formation (VEGF pathway) | VEGF/FLT pathway |
-| EMT mesenchymal | Epithelial-to-mesenchymal transition | Tan et al., *EMBO Mol Med*, 2014. DOI: [10.15252/emmm.201404208](https://doi.org/10.15252/emmm.201404208) |
-| Stemness | Cancer stem cell features | Malta et al., *Cell*, 2018. DOI: [10.1016/j.cell.2018.03.034](https://doi.org/10.1016/j.cell.2018.03.034) |
-| Hypoxia | Low oxygen response | Buffa et al., *Br J Cancer*, 2010. DOI: [10.1038/sj.bjc.6605450](https://doi.org/10.1038/sj.bjc.6605450) |
-| Glycolysis | Warburg effect (tumor metabolism) | Warburg effect biology |
-| DDR | DNA damage response | DDR pathway |
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `signature_heatmap.png` | Signature scores per cluster |
-| `signature_umap.png` | Top 4 most variable signatures on UMAP |
-| `signature_correlation.png` | Which signatures co-occur? (Pearson correlation matrix) |
-
-**How to interpret:**
-- Tumor clusters should score high on proliferation, glycolysis, EMT
-- Immune clusters should score low on tumor-associated signatures
-- High EMT + low epithelial = mesenchymal phenotype (more invasive)
-
----
-
-### Module 11: Trajectory / Pseudotime (`trajectory`)
-
-**What it does:** Orders cells along a continuous "pseudotime" axis that represents biological progression — for example, from stem-like to differentiated, or from naive to exhausted T cells. Also builds a PAGA graph showing how clusters connect.
-
-**Methods:**
-- PAGA: Wolf et al., *Genome Biology*, 2019. DOI: [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x)
-- DPT: Haghverdi et al., *Nature Methods*, 2016. DOI: [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971)
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `pseudotime_dpt_umap.png` | UMAP colored by pseudotime (yellow = early, purple = late) + diffusion map |
-| `paga_trajectory.png` | PAGA graph: nodes = clusters, edges = connectivity strength |
-| `pseudotime_gene_heatmap.png` | Top 30 genes correlated with pseudotime, ordered by time |
-| `pseudotime_violin_per_cluster.png` | Pseudotime distribution per cluster |
-| `pseudotime_per_cluster.csv` | Per-cluster pseudotime statistics |
-| `pseudotime_top_genes.csv` | Genes most correlated with pseudotime |
-
-**How to interpret:**
-- **pseudotime_gene_heatmap.png** is the key figure. It shows how gene expression changes along the trajectory. Look for waves of activation/repression — these represent biological programs turning on/off.
-- **paga_trajectory.png** shows which clusters are connected. Thick edges = strong transitions. This reveals the "path" cells take.
-- **pseudotime_violin_per_cluster.png** shows where each cluster falls on the timeline. Clusters with early pseudotime are "source" populations; late pseudotime are "destination" populations.
-
-**LUSC example:** Cluster 0 has the lowest mean pseudotime (0.02) — likely the starting population. Cluster 12 has the highest (0.85) — the most differentiated.
-
----
-
-### Module 12: Cell Communication (`cell_communication`)
-
-**What it does:** Identifies ligand-receptor interactions between cell types — which cell types are "talking" to which, and through what signaling pathways.
-
-**Method (primary):** LIANA multi-method consensus (Dimitrov et al., *Nature Communications*, 2022. DOI: [10.1038/s41467-022-30755-0](https://doi.org/10.1038/s41467-022-30755-0))
-
-**Fallback:** Manual scoring of 18 curated TME ligand-receptor pairs (PD-L1/PD-1, VEGFA/KDR, TGFB1/TGFBR2, etc.)
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `cell_communication_lr.csv` | All scored L-R interactions with source/target cell types |
-| `cell_communication_heatmap.png` | Top L-R interactions as a heatmap |
-
-**How to interpret:**
-- Look for **immune checkpoint** interactions: PD-L1 (tumor) -> PD-1 (T cell) indicates immune evasion
-- **VEGFA -> KDR** between tumor and endothelial cells indicates angiogenesis signaling
-- High TGFB1 interactions suggest immunosuppressive microenvironment
-
-**LUSC example:** 50 significant L-R interaction pairs identified.
-
----
-
-### Module 13: Immune Phenotyping (`immune_phenotyping`)
-
-**What it does:** Assigns fine-grained immune subtypes to immune cells (15 subtypes) and computes functional scores for exhaustion, cytotoxicity, and activation.
-
-**References:**
-- Zheng et al., *Cell*, 2017. DOI: [10.1016/j.cell.2017.05.035](https://doi.org/10.1016/j.cell.2017.05.035)
-- Zhang et al., *Nature*, 2018. DOI: [10.1038/s41586-018-0694-x](https://doi.org/10.1038/s41586-018-0694-x)
-
-**15 immune subtypes identified:**
-
-| Category | Subtypes |
-|---|---|
-| CD4 T cells | CD4 naive, CD4 memory, Treg, Th1, Th2, Th17 |
-| CD8 T cells | CD8 effector, CD8 memory, CD8 exhausted |
-| NK cells | NK cytotoxic |
-| Macrophages | M1 (pro-inflammatory), M2 (anti-inflammatory) |
-| Dendritic cells | cDC1, cDC2, pDC |
-
-**Functional scores:**
-- **Exhaustion** (LAG3, PDCD1, TIGIT, TOX, ...) — are T cells "tired"?
-- **Cytotoxicity** (GZMB, PRF1, NKG7, ...) — are T cells actively killing?
-- **Activation** (CD69, CD38, ICOS, ...) — are T cells recently activated?
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `umap_immune_subtype.png` | UMAP colored by immune subtype |
-| `immune_subtype_composition.png` | Stacked bar: immune subtype proportions per cluster |
-| `immune_signature_heatmap.png` | Exhaustion/cytotoxicity/activation scores per subtype |
-| `immune_exhaustion_umap.png` | UMAP colored by exhaustion score |
-| `immune_cytotoxicity_umap.png` | UMAP colored by cytotoxicity score |
-
-**How to interpret:**
-- High CD8 exhausted + high exhaustion score = T cells are being suppressed by the tumor
-- High M2/low M1 ratio = immunosuppressive macrophage polarization
-- High Treg proportion = active immune suppression
-
-**LUSC example:** CD4 memory (461 cells), CD8 effector (303), M2 macrophages (298), CD8 exhausted (121), Tregs (84).
-
----
-
-### Module 14: Tumor Microenvironment (`tumor_microenvironment`)
-
-**What it does:** Computes established immunotherapy-relevant scores that predict response to immune checkpoint inhibitors.
-
-**Published signatures:**
-
-| Score | What it predicts | Reference |
-|---|---|---|
-| **CYT** (Cytolytic Activity) | Active immune killing in the tumor | Rooney et al., *Cell*, 2015. DOI: [10.1016/j.cell.2014.12.033](https://doi.org/10.1016/j.cell.2014.12.033) |
-| **TIS** (T-cell Inflamed, 18-gene) | Response to anti-PD-1 therapy | Ayers et al., *JCI*, 2017. DOI: [10.1172/JCI91190](https://doi.org/10.1172/JCI91190) |
-| **IFN-gamma** (10-gene) | Interferon gamma signaling | Ayers et al., *JCI*, 2017 |
-| **Immune ESTIMATE** | Immune cell infiltration level | Yoshihara et al., *Nat Commun*, 2013. DOI: [10.1038/ncomms3612](https://doi.org/10.1038/ncomms3612) |
-| **Stromal ESTIMATE** | Stromal/fibroblast content | Yoshihara et al., 2013 |
-
-**Checkpoint molecules profiled:** PD-1, PD-L1, CTLA-4, LAG-3, TIM-3, TIGIT, VISTA, IDO1, B7-H3
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `tme_signature_heatmap.png` | TME scores per cluster |
-| `checkpoint_dotplot.png` | Checkpoint molecule expression per cell type (size = % expressing, color = mean level) |
-| `tme_cyt_umap.png` | CYT score on UMAP |
-| `tme_immune_stromal_bar.png` | Immune vs stromal ESTIMATE per cluster |
-
-**How to interpret:**
-- **checkpoint_dotplot.png** is clinically actionable. If PD-L1 is high on tumor cells and PD-1 is high on T cells, the patient may benefit from anti-PD-1/PD-L1 therapy.
-- High TIS score = "inflamed" tumor (better immunotherapy response)
-- High stromal + low immune ESTIMATE = "cold" tumor (poor immunotherapy candidate)
-
-**LUSC example:** Mean CYT = 0.15. 6 TME signatures scored across all clusters.
-
----
-
-### Module 15: Pathway Analysis (`pathway_analysis`)
-
-**What it does:** Identifies which biological pathways are enriched in the differentially expressed genes.
-
-**Method (primary):** Over-representation analysis with MSigDB Hallmark gene sets via gseapy.
-- References: Subramanian et al., *PNAS*, 2005. DOI: [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102); Liberzon et al., *Cell Systems*, 2015. DOI: [10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004)
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `pathway_enrichment.csv` | All enriched pathways with p-values and overlapping genes |
-| `pathway_enrichment_bar.png` | Bar chart of top enriched pathways |
-
-**How to interpret:** Look for pathways consistent with your tissue type. In LUSC: EMT, interferon-gamma response, angiogenesis, TNF-alpha signaling, MYC targets, and hypoxia are all expected in a lung tumor.
-
----
-
-### Module 16: Pseudo-Velocity (`pseudo_velocity`)
-
-**What it does:** Computes velocity vectors showing the *direction* cells are moving in gene expression space, based on pseudotime gradients. This produces flow arrows and stream plots on UMAP.
-
-**Method:** For each cell, calculate the average direction to k-nearest neighbors weighted by their pseudotime difference. Speed = magnitude of the velocity vector.
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `pseudo_velocity_arrows.png` | Quiver plot: arrows show direction of cell state transitions |
-| `pseudo_velocity_stream.png` | Streamline plot: continuous flow field interpolated on a grid |
-| `pseudo_velocity_speed_umap.png` | UMAP colored by velocity speed (fast-changing vs stable cells) |
-| `pseudo_velocity_speed_boxplot.png` | Speed distribution per cluster |
-
-**How to interpret:**
-- **Arrows** should flow from early (stem/naive) to late (differentiated/exhausted) populations
-- **High speed** cells are actively transitioning between states
-- **Low speed** cells are in stable terminal states
-- Arrows pointing in multiple directions suggest a branching decision point
-
----
-
-### Module 17: Tumor Evolution (`evolution`)
-
-**What it does:** Reconstructs the clonal architecture of the tumor by clustering cells based on their CNV profiles, then orders clones along pseudotime to reveal the evolutionary trajectory.
-
-**Method:** Hierarchical clustering (Ward's method) on CNV profiles to identify clones. Clone-specific marker genes via Wilcoxon test. Phylogenetic dendrogram from clone centroid distances.
-- Reference: Gao et al., *Nature Biotechnology*, 2021. DOI: [10.1038/s41587-020-00795-2](https://doi.org/10.1038/s41587-020-00795-2)
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `evolution_clone_umap.png` | UMAP colored by clone assignment |
-| `evolution_phylo_dendrogram.png` | Phylogenetic tree of clones based on CNV similarity |
-| `evolution_timeline.png` | Pseudotime distribution per clone (violin + density) — reveals temporal ordering |
-| `evolution_clone_composition.png` | Clone proportions per Leiden cluster |
-| `evolution_cnv_by_clone.png` | CNV score distribution per clone |
-| `evolution_clone_stats.csv` | Per-clone summary: size, CNV score, pseudotime, dominant cell type |
-| `evolution_clone_markers.csv` | Clone-specific differentially expressed genes |
-
-**How to interpret:**
-- **evolution_phylo_dendrogram.png** is the key figure. It shows how clones are related — like a family tree of cancer. Closely branched clones share more CNV events.
-- **evolution_timeline.png** reveals temporal ordering. If Clone_1 has early pseudotime and Clone_3 has late pseudotime, Clone_3 likely evolved *from* Clone_1.
-- **evolution_clone_markers.csv** identifies genes that distinguish clones — potential drivers of clonal evolution.
-
-**LUSC example:** 3 clones identified. Clone_1 (54% of cells, early pseudotime, T cell dominant), Clone_2 (20%, late pseudotime, Myeloid dominant), Clone_3 (26%, early pseudotime, T cell dominant).
-
----
-
-### Module 18: RNA Velocity (`rna_velocity`)
-
-**What it does:** Estimates transcriptional state transitions from spliced/unspliced RNA kinetics using scVelo.
-
-**Method:** scVelo stochastic mode (`scv.tl.velocity`) or dynamical mode (`scv.tl.recover_dynamics` + `scv.tl.latent_time`).
-- Reference: Bergen et al., *Nature Biotechnology*, 2020. DOI: [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3)
-
-**Input data sources (priority order):**
-1. `--velocity-loom` (pre-computed loom with `spliced`/`unspliced`)
-2. `--velocity-bam` + `--velocity-gtf` (direct extraction from Cell Ranger BAM)
-2b. `--velocity-bam` + `--transcriptome-dir` (auto-discover `genes.gtf(.gz)` from Cell Ranger reference)
-
-**BAM extraction details:** Reads are classified as spliced/unspliced from CIGAR splice junctions plus exon/intron overlap against GTF annotations. Chromosomes are scanned in parallel (`--velocity-n-jobs`) and accumulated with COO sparse matrices before CSR conversion.
-
-**Architecture note:** The module runs on an internal `adata.copy()` and transfers only cell-level outputs (`obs`/`obsm`/selected `uns`) back to the main object, so the shared gene index stays unchanged and the module remains parallel-safe in the pipeline.
-
-**Dynamical mode outputs:** `--velocity-mode dynamical` additionally produces latent time (`adata.obs["latent_time"]`) and phase portraits.
-
-**Additional parameters:** `--velocity-min-shared-counts` (gene filter threshold), `--velocity-n-pcs` (PCA for moments), `--velocity-n-neighbors` (neighbors for moments).
-
-**Output files:**
-| File | What it shows |
-|---|---|
-| `velocity_stream_umap.png` | Main velocity stream field on UMAP |
-| `velocity_grid_umap.png` | Grid-based velocity field on UMAP |
-| `velocity_length_distribution.png` | Distribution of velocity magnitudes (QC) |
-| `velocity_confidence.csv` | Per-cell velocity confidence and length (plus latent time if available) |
-| `velocity_top_genes.csv` | Top ranked velocity genes |
-| `velocity_latent_time_umap.png` | UMAP colored by latent time (dynamical mode only) |
-| `velocity_phase_portraits.png` | Phase portraits for top genes (dynamical mode only) |
-
----
-
-## 5. Running the Pipeline
-
-### 5.1 Common Commands
+Enable checkpoints:
 
 ```bash
-# Activate environment
-conda activate sc10x
-
-# Full analysis (recommended for first run)
 python -m workflow.modular.cli \
-  --project LUSC_3k_Analysis \
-  --sample-root data/raw/lung_carcinoma_3k_count \
-  --optional-modules clustering,cell_cycle,differential_expression,annotation,\
-trajectory,pseudo_velocity,cnv_inference,pathway_analysis,cell_communication,\
-gene_regulatory_network,immune_phenotyping,tumor_microenvironment,\
-gene_signature_scoring,evolution
-
-# Quick exploratory run (just clustering + DE)
-python -m workflow.modular.cli \
-  --project quick_look \
-  --sample-root data/raw/lung_carcinoma_3k_count \
-  --optional-modules clustering,differential_expression
-
-# Immuno-oncology focused
-python -m workflow.modular.cli \
-  --project immuno_deep \
-  --sample-root data/raw/lung_carcinoma_3k_count \
-  --optional-modules clustering,annotation,differential_expression,\
-immune_phenotyping,tumor_microenvironment,cell_communication,pathway_analysis
-
-# With crash recovery
-python -m workflow.modular.cli \
-  --project my_run \
-  --sample-root data/raw/my_dataset \
-  --optional-modules clustering,annotation \
+  --project demo_resume \
+  --sample-root data/raw/<your_sample> \
+  --optional-modules clustering,differential_expression,annotation \
   --checkpoint
-
-# Resume after a crash
-python -m workflow.modular.cli \
-  --project my_run \
-  --sample-root data/raw/my_dataset \
-  --optional-modules clustering,annotation \
-  --checkpoint --resume-from annotation
 ```
 
-### 5.2 Adjusting Parameters
+Resume:
 
 ```bash
-# Finer clustering (more clusters)
-python -m workflow.modular.cli ... --leiden-resolution 1.5
+python -m workflow.modular.cli \
+  --project demo_resume \
+  --sample-root data/raw/<your_sample> \
+  --optional-modules clustering,differential_expression,annotation \
+  --checkpoint \
+  --resume-from annotation
+```
 
-# Stricter QC
-python -m workflow.modular.cli ... --max-mito-pct 10 --min-genes 500
+Current resume behavior:
+- Reuses the latest run directory for that `--project` containing `.checkpoints`.
+- Finds checkpoint nearest before `--resume-from` by searching backward in execution order.
+- Raises explicit `FileNotFoundError` if no suitable checkpoint exists.
 
-# Custom cell type markers
-python -m workflow.modular.cli ... --markers-json my_markers.json
+---
 
-# Use normal fibroblasts as CNV reference
-python -m workflow.modular.cli ... --cnv-reference-group Fibroblast
+## 9A. NC2024 Full-Cohort Remote Reproduction
+
+For the current `E-MTAB-13526` reproduction lane, do not use the older tumor-only scripts.
+
+Use this owned full-cohort path instead:
+
+```bash
+cd /home/zerlinshen/singlecell_factory
+bash scripts/run_emtab13526_full_cohort_with_fallback.sh
+```
+
+This controller will:
+1. write a preflight inventory under `results/`
+2. delete stale derived artifacts from earlier failed attempts
+3. build or validate `data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr`
+4. run one `large` stage-1 probe
+5. auto-fallback once to `massive` only if the `large` failure is clearly capacity-related
+
+Owned scripts:
+- `scripts/prepare_emtab13526_full_cohort_zarr.py`
+- `scripts/run_emtab13526_full_cohort_stage1.sh`
+- `scripts/run_emtab13526_full_cohort_with_fallback.sh`
+
+Expected prepared-input artifacts:
+- `data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr`
+- `data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.summary.json`
+- `data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.ready`
+
+The prepare contract is:
+- one unsplit object for all `81` samples
+- zarr parts only
+- write `prepared_input.summary.json` with sample-level retained barcode counts
+- CSR sparse storage
+- require `prepared_input.summary.json` and `X.shape[0] == retained_barcodes_total` before trusting reuse or writing `prepared_input.ready`
+- required merged `obs` columns:
+  - `sample`
+  - `patient`
+  - `batch`
+  - `disease`
+  - `condition`
+  - `sorting`
+  - `sampling_site`
+  - `sex`
+  - `original_source_name`
+  - `tumor_type`
+
+Do not judge success only by directory existence or a stale ready sentinel; reuse must pass the summary-backed shape check.
+
+For a successful run, verify:
+- `run_manifest.json`
+- `module_status.csv`
+- `module_status.csv` has `ok` for:
+  - `cellranger`
+  - `qc`
+  - `doublet_detection`
+  - `clustering`
+  - `annotation`
+  - `composition`
+  - `immune_phenotyping`
+  - `tumor_microenvironment`
+- required result tables exist:
+  - `annotation/cell_type_annotation.csv`
+  - `composition/composition_proportions.csv`
+  - `immune_phenotyping/immune_phenotyping.csv`
+  - `tumor_microenvironment/tme_scores_per_cell.csv`
+
+Final controller states:
+- `FINAL_STATUS=SUCCESS_LARGE`
+- `FINAL_STATUS=SUCCESS_MASSIVE`
+- `FINAL_STATUS=STOP_NO_FALLBACK`
+- `FINAL_STATUS=STOP_AFTER_MASSIVE_FAILURE`
+
+Current verified state for this lane:
+- The frozen full-cohort prepared input validates at `884050 x 33538` with `81` samples and `retention_fraction = 0.001642391120829157`.
+- Direct solo debug baseline: `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO_20260423_031222` has all stage-1 modules `ok`.
+- Controller validation baseline: `results/NC2024_NSCLC_FULL_COHORT_STAGE1_WITH_FALLBACK.launch.log` now records truthful promotion from `large` to `massive`, and the promoted run `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552` completes with all stage-1 modules `ok`.
+- Operational rule: use direct `massive` for blocker-by-blocker debugging; use the controller when validating end-to-end orchestration.
+
+Interpretation note:
+- `large` is only a probe here.
+- `massive` is the scale-protective fallback and should be expected when eager full-object loading or standard clustering paths exceed memory.
+
+---
+
+## 10. Beginner Parameter Cheat Sheet
+
+### 10.1 High-impact, safe-to-change
+
+- `--leiden-resolution` (default `0.8`)
+  - higher: more/smaller clusters
+  - lower: fewer/larger clusters
+
+- `--n-pcs` (default `40`)
+  - lower for speed, higher for complex datasets
+
+- `--de-method` (default `wilcoxon`)
+  - keep `wilcoxon` for most biological use cases
+
+- `--batch-method` (default `harmony`)
+  - only use when true multi-batch effect exists
+
+### 10.2 QC thresholds
+
+Defaults:
+- `--min-genes 200`
+- `--max-genes 7000`
+- `--min-counts 500`
+- `--max-counts 50000`
+- `--max-mito-pct 20`
+- `--max-ribo-pct 50`
+- `--min-cells 3`
+
+Change carefully and rerun QC/clustering for sanity.
+
+---
+
+## 11. Parallelism and Reliability Notes
+
+- `--parallel-workers > 1` enables tiered parallel execution for safe appending modules.
+- Structurally mutating modules run sequentially.
+- Memory safety guard can reduce effective parallel worker count.
+- Runtime telemetry is recorded in `run_manifest.json -> metadata.module_runtime_sec` and `metadata.pipeline_wall_seconds`.
+
+---
+
+## 12. RNA Velocity (Common Confusion)
+
+To enable `rna_velocity`, provide at least one of:
+1. `--velocity-loom`
+2. `--velocity-bam` plus GTF resolution (`--velocity-gtf` or `--transcriptome-dir`)
+
+Helpful details:
+- Velocity extraction cache default: `/tmp/singlecell_factory_velocity_cache`
+- Override cache directory:
+
+```bash
+export SCF_VELOCITY_CACHE_DIR=/path/to/fast_ssd_cache
 ```
 
 ---
 
-## 6. Interpreting Results
+## 13. Pseudobulk DE (Accuracy-Critical)
 
-### 6.1 First Things to Check
+`pseudobulk_de` uses raw UMI counts from `adata.layers["counts"]`.
 
-After a run completes, follow this order:
-
-| Step | File | What to verify |
-|---|---|---|
-| 1 | `module_status.csv` | All modules show "ok" |
-| 2 | `qc/qc_violin_post_filter.png` | Distributions are clean, no bimodality |
-| 3 | `clustering/umap_leiden.png` | Clusters are well-separated |
-| 4 | `annotation/umap_cell_type.png` | Cell types make biological sense |
-| 5 | `differential_expression/de_dotplot_top5.png` | Marker genes match expected biology |
-| 6 | `trajectory/paga_trajectory.png` | Cluster connectivity is biologically plausible |
-| 7 | `evolution/evolution_phylo_dendrogram.png` | Clone relationships make sense with CNV data |
-
-### 6.2 Red Flags
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| > 50% cells removed by QC | Thresholds too strict, or bad sample quality | Relax thresholds; check sample prep |
-| One giant cluster + many tiny ones | Leiden resolution wrong | Try `--leiden-resolution 0.5` or `1.2` |
-| > 20% "Unknown" cell types | Marker panels don't match tissue | Use `--markers-json` with tissue-specific markers |
-| All cells labeled same type | Too few marker genes present, or normalization issue | Check `--n-top-genes`, try `--scale-data` |
-| CNV inference fails | No gene position data | Auto-fetched from Ensembl; check internet connection |
-| UMAP is a single blob | Insufficient biological variation, or batch effects | Try `--batch-method harmony` if multi-sample |
-
-### 6.3 Output File Types
-
-| Extension | What it is | How to open |
-|---|---|---|
-| `.png` | Figure / plot | Any image viewer |
-| `.csv` | Table (comma-separated) | Excel, R, Python (pandas) |
-| `.json` | Structured metadata | Text editor, Python (json) |
-| `.h5ad` | AnnData object (all data + results) | Python: `import anndata; adata = anndata.read_h5ad("final_adata.h5ad")` |
+Current behavior:
+- If counts layer is missing or invalid, module is skipped with explicit status.
+- Single-sample input will skip pseudobulk comparison (expected behavior).
 
 ---
 
-## 7. FAQ / Troubleshooting
+## 14. Basic Interpretation Checklist
 
-**Q: How long does the full pipeline take?**
-A: For 3,000 cells with all modules: approximately 5-10 minutes. Larger datasets scale roughly linearly.
-
-**Q: Can I add my own gene signatures?**
-A: Yes. Create a JSON file: `{"my_signature": ["GENE1", "GENE2", "GENE3"]}` and pass `--signature-json my_sigs.json`.
-
-**Q: What if I don't have a loom file for RNA velocity?**
-A: The `rna_velocity` module can extract spliced/unspliced counts directly from a Cell Ranger BAM file (parallelized by chromosome for ~4-5x speedup). Use `--velocity-bam` and either: (1) `--velocity-gtf`, or (2) `--transcriptome-dir` so the pipeline auto-detects `genes.gtf(.gz)` from the reference directory. Use `--velocity-n-jobs` to control parallelism. If neither a loom file nor BAM+GTF/reference are available, use `pseudo_velocity` instead — it works from pseudotime alone and does not require spliced/unspliced data.
-
-**Q: Can I run on mouse data?**
-A: The pipeline is designed for human data (human gene names, human marker panels, Ensembl human gene positions). For mouse, you would need to customize marker panels and change the BioMart organism.
-
-**Q: How do I compare two conditions (e.g., treated vs untreated)?**
-A: Load both samples with a shared batch key column. Use `--batch-method harmony --batch-key condition` to integrate, then look for condition-specific clusters and DE genes.
-
-**Q: What does "checkpoint" do?**
-A: `--checkpoint` saves the AnnData object after each module completes. If the pipeline crashes at module 15, you can `--resume-from` module 15 instead of re-running everything from scratch.
-
-**Q: How do I cite this pipeline?**
-A: Cite the methods used by each module. The README contains a complete citation list with 33 DOIs. At minimum, cite scanpy (Wolf et al., Genome Biology, 2018), plus the specific methods you used (e.g., Leiden, Scrublet, DPT, etc.).
+After a run:
+1. Check `module_status.csv` first.
+2. Inspect `qc/qc_violin_post_filter.png`.
+3. Inspect `clustering/umap_leiden.png`.
+4. If annotation enabled, inspect `annotation/umap_cell_type.png`.
+5. If DE enabled, inspect `differential_expression/marker_genes.csv` and volcano/heatmap outputs.
+6. Open `run_manifest.json` for backends, runtimes, skip reasons, and metadata.
 
 ---
 
-## 8. Complete Output Inventory
+## 15. Troubleshooting (Beginner FAQ)
 
-A full pipeline run produces this structure:
+### 15.1 "Cell Ranger output not found"
 
+- Verify `--sample-root` and `--outs-dir`.
+- Confirm `filtered_feature_bc_matrix` exists.
+
+### 15.2 "No checkpoint directory found"
+
+- You must run once with `--checkpoint` before using `--resume-from`.
+
+### 15.3 "Optional module skipped"
+
+- This is often expected.
+- Read skip message in `module_status.csv` / `run_manifest.json`.
+
+### 15.4 "GPU not used"
+
+- Pipeline auto-detects GPU backends.
+- If unavailable or failure occurs, it falls back to CPU and records backend metadata.
+
+### 15.5 "RNA velocity failed"
+
+- Usually missing loom/BAM/GTF requirements.
+- Re-run with valid `--velocity-bam` and `--transcriptome-dir` (or `--velocity-gtf`).
+
+---
+
+## 16. Reproducibility Protocol (Recommended)
+
+For every production run:
+1. Keep command line in a `run.sh` file.
+2. Keep `run_manifest.json`, `module_status.csv`, and `final_adata.h5ad` together.
+3. Record environment (`conda list > conda_env_export.txt`).
+4. If using network-dependent modules (`validate_cbioportal`), note run date and connectivity.
+
+---
+
+## 17. Copy-Paste Templates
+
+### 17.1 Local full run with checkpointing
+
+```bash
+python -m workflow.modular.cli \
+  --project my_project_full \
+  --sample-root data/raw/<your_sample> \
+  --optional-modules clustering,cell_cycle,batch_correction,differential_expression,annotation,trajectory,pseudo_velocity,rna_velocity,cnv_inference,pathway_analysis,cell_communication,gene_regulatory_network,immune_phenotyping,tumor_microenvironment,gene_signature_scoring,evolution,pseudobulk_de,cell_fate,composition,metacell \
+  --velocity-bam data/raw/<your_sample>/outs/possorted_genome_bam.bam \
+  --transcriptome-dir /path/to/ref \
+  --checkpoint
 ```
-results/{project}_{timestamp}/
-├── final_adata.h5ad              # Complete AnnData (load in Python for further analysis)
-├── run_manifest.json             # Run parameters and metadata
-├── module_status.csv             # Pass/fail status for each module
-│
-├── cellranger/                   # [M1] Data loading
-├── qc/                           # [M2] 4 QC plots
-├── doublet_detection/            # [M3] Doublet score histogram
-├── clustering/                   # [M4] PCA elbow + UMAP
-├── annotation/                   # [M5] Cell type UMAP + composition + CSVs
-├── cell_cycle/                   # [M6] Cell cycle UMAP + scores CSV
-├── cnv_inference/                # [M7] CNV heatmap + UMAP + classification
-├── differential_expression/      # [M8] Volcano + dotplot + heatmap + CSVs
-├── gene_regulatory_network/      # [M9] TF activity heatmap + CSVs
-├── gene_signature_scoring/       # [M10] Signature heatmap + UMAP + correlation
-├── trajectory/                   # [M11] PAGA + pseudotime heatmap + violin + CSVs
-├── cell_communication/           # [M12] L-R heatmap + CSV
-├── immune_phenotyping/           # [M13] Immune UMAP + composition + signatures
-├── tumor_microenvironment/       # [M14] TME heatmap + checkpoint dotplot + CSVs
-├── pathway_analysis/             # [M15] Enrichment bar + CSV
-├── pseudo_velocity/              # [M16] Arrows + stream + speed UMAP + boxplot
-├── evolution/                    # [M17] Clone UMAP + dendrogram + timeline + CSVs
-└── rna_velocity/                 # [M18] scVelo velocity plots + confidence tables
+
+### 17.2 Resume template
+
+```bash
+python -m workflow.modular.cli \
+  --project my_project_full \
+  --sample-root data/raw/<your_sample> \
+  --optional-modules clustering,cell_cycle,batch_correction,differential_expression,annotation,trajectory,pseudo_velocity,rna_velocity,cnv_inference,pathway_analysis,cell_communication,gene_regulatory_network,immune_phenotyping,tumor_microenvironment,gene_signature_scoring,evolution,pseudobulk_de,cell_fate,composition,metacell \
+  --checkpoint \
+  --resume-from <module_name>
 ```
 
-**Total: 18 module folders.**
+---
+
+## 18. Final Notes
+
+- Start small (`clustering` only), verify quality, then scale to full modules.
+- Treat `skipped` as informative, not automatically bad.
+- Use checkpoint/resume for long runs.
+- Prefer stable defaults unless you have a concrete biological reason to change parameters.
