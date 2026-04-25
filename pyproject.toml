@@ -1,7 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml"
+addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf'"
+markers = [
+    "perf: performance regression gate (run explicitly via `pytest -m perf`)",
+]
 
 [tool.coverage.run]
 source = ["workflow"]

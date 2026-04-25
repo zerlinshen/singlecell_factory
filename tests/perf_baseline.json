@@ -1,0 +1,21 @@
+{
+  "schema_version": "perf_baseline_v1",
+  "captured_on": "synthetic-fixture",
+  "thresholds": {
+    "wall_seconds_max_ratio": 1.5,
+    "rss_peak_bytes_max_ratio": 1.5
+  },
+  "fixtures": {
+    "synth_5k": {
+      "n_cells": 5000,
+      "n_genes": 2000,
+      "density": 0.1,
+      "modules": ["qc"],
+      "baseline": {
+        "wall_seconds": 5.0,
+        "rss_peak_bytes": 524288000
+      }
+    }
+  },
+  "notes": "Baselines are coarse upper bounds (1.5x slack) to catch egregious regressions, not precise benchmarks. Refresh via scripts/update_perf_baseline.py after intentional perf changes. Skip this gate by default; run explicitly with `pytest -m perf`."
+}
