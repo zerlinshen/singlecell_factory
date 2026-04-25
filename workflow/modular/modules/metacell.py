@@ -119,11 +119,14 @@ class MetacellModule:
         import anndata as ad
         from scipy import sparse
 
+        from .._mem_guard import MemoryGuard, MemoryAbortError
         X = adata.X
         records = []
         mc_X_rows = []
 
         for mc_id in range(n_metacells):
+            if MemoryGuard.abort_requested():
+                raise MemoryAbortError("watchdog abort during metacell aggregation loop")
             mask = labels == mc_id
             n_cells = int(mask.sum())
             if n_cells == 0:

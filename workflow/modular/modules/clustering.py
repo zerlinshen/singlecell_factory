@@ -80,9 +80,17 @@ class ClusteringModule:
             use_gpu = False
         else:
             use_gpu = gpu_available(ctx.cfg.gpu_mode)
-            if ctx.cfg.scale_mode == "massive" and ctx.cfg.gpu_mode == "auto":
-                logger.info("Massive scale-mode: prefer CPU clustering path to avoid GPU copy overhead")
-                ctx.metadata["clustering_gpu_disabled_reason"] = "massive_scale_mode"
+            engine = (
+                os.environ.get("SC_CLUSTERING_ENGINE", "").strip().lower()
+                or getattr(ctx.cfg, "clustering_engine", "auto")
+            )
+            _cp_policy = (
+                os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
+                or getattr(ctx.cfg, "checkpoint_policy", "full")
+            )
+            if engine not in {"gpu"} and ctx.cfg.gpu_mode == "auto" and _cp_policy != "full":
+                logger.info("Non-full checkpoint policy: prefer CPU clustering to avoid GPU copy overhead")
+                ctx.metadata["clustering_gpu_disabled_reason"] = "checkpoint_policy_non_full"
                 use_gpu = False
             if use_gpu:
                 logger.info("GPU detected — using rapids-singlecell for PCA/neighbors/UMAP/Leiden")
@@ -113,10 +121,33 @@ class ClusteringModule:
             ctx.metadata["clustering_backend"] = "gpu" if use_gpu else "cpu"
 
     def _should_use_css(self, ctx, adata) -> bool:
-        if os.environ.get("SC_CLUSTERING_ENGINE", "").lower() == "sparse_exact":
+        engine = (
+            os.environ.get("SC_CLUSTERING_ENGINE", "").strip().lower()
+            or getattr(ctx.cfg, "clustering_engine", "auto")
+        )
+        if engine == "sparse_exact":
             ctx.metadata["css_status"] = "disabled_sparse_exact_engine"
             ctx.metadata["clustering_engine"] = "sparse_exact"
             return False
+        if engine == "css":
+            # Explicit CSS requested — validate that sample labels exist.
+            if "sample" not in adata.obs.columns:
+                ctx.metadata["css_status"] = "unavailable_no_sample_labels"
+                return False
+            n_samples = int(pd.Series(adata.obs["sample"]).nunique())
+            if n_samples < 2:
+                ctx.metadata["css_status"] = "unavailable_single_sample"
+                return False
+            ctx.metadata["css_status"] = "enabled"
+            ctx.metadata["css_n_samples"] = n_samples
+            ctx.metadata["clustering_engine"] = "css"
+            return True
+        if engine == "gpu":
+            # Explicit GPU engine — CSS not applicable.
+            return False
+        # engine == "auto": fall through to the scale_mode heuristic so that
+        # scale_mode=massive (which sets clustering_engine=css via preset) still
+        # routes to CSS, and scale_mode=standard/large does not.
         if ctx.cfg.scale_mode != "massive":
             return False
         if "sample" not in adata.obs.columns:
@@ -173,9 +204,12 @@ class ClusteringModule:
         centroid_norm = np.linalg.norm(centroids, axis=1, keepdims=True) + 1e-8
         centroids = centroids / centroid_norm
 
+        from .._mem_guard import MemoryGuard, MemoryAbortError
         chunk_size = 10000 if adata.n_obs > 500000 else 20000
         css = np.empty((adata.n_obs, centroids.shape[0]), dtype=np.float32)
         for start in range(0, adata.n_obs, chunk_size):
+            if MemoryGuard.abort_requested():
+                raise MemoryAbortError("watchdog abort during CSS chunk loop")
             stop = min(start + chunk_size, adata.n_obs)
             chunk = np.asarray(X_latent[start:stop], dtype=np.float32)
             chunk_norm = np.linalg.norm(chunk, axis=1, keepdims=True) + 1e-8
@@ -212,7 +246,7 @@ class ClusteringModule:
         try:
             sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
             sc.pp.log1p(adata)
-            if adata.raw is None and ctx.cfg.scale_mode != "massive":
+            if adata.raw is None and self._should_preserve_raw(ctx):
                 adata.raw = adata
             is_sparse = sparse.issparse(adata.X)
             adata.X = self._materialize_matrix(adata.X)
@@ -235,11 +269,24 @@ class ClusteringModule:
             ctx.metadata["clustering_hybrid_error"] = str(exc)
             return False
 
+    @staticmethod
+    def _should_preserve_raw(ctx) -> bool:
+        """Return True when it is safe/desired to preserve adata.raw.
+
+        Skipped under mandatory_only/metadata_only checkpoint policies to avoid
+        doubling memory footprint during large-cohort runs.
+        """
+        policy = (
+            os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
+            or getattr(ctx.cfg, "checkpoint_policy", "full")
+        )
+        return policy == "full"
+
     def _run_cpu(self, adata, cfg, ctx) -> None:
         """Standard scanpy CPU clustering pipeline."""
         sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
         sc.pp.log1p(adata)
-        if adata.raw is None and ctx.cfg.scale_mode != "massive":
+        if adata.raw is None and self._should_preserve_raw(ctx):
             # Preserve normalized/log-transformed matrix for marker-level downstream tasks.
             adata.raw = adata
         is_sparse = sparse.issparse(adata.X)
@@ -276,7 +323,7 @@ class ClusteringModule:
 
         sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
         sc.pp.log1p(adata)
-        if adata.raw is None and ctx.cfg.scale_mode != "massive":
+        if adata.raw is None and self._should_preserve_raw(ctx):
             adata.raw = adata
         adata.X = self._materialize_matrix(adata.X)
         if cfg.scale_data:

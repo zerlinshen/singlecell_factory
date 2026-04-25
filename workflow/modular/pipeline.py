@@ -346,7 +346,7 @@ def _compute_tiers(execution_order: list[str], completed: set[str]) -> list[list
 
 
 class _SkipModule(Exception):
-    """Raised when a non-mandatory module should be skipped due to missing keys."""
+    """Raised when a non-mandatory module should be skipped due to missing keys or memory."""
 
 
 def _run_module(mod, ctx: PipelineContext, *, mandatory: bool = False) -> None:
@@ -359,7 +359,21 @@ def _run_module(mod, ctx: PipelineContext, *, mandatory: bool = False) -> None:
             raise ValueError(msg)
         logger.warning("%s — skipping.", msg)
         raise _SkipModule(msg)
-    mod.run(ctx)
+    try:
+        mod.run(ctx)
+    except Exception as exc:
+        # Convert cooperative memory-abort signals to _SkipModule so the
+        # pipeline records status="skipped_memory" and continues.
+        try:
+            from ._mem_guard import MemoryAbortError
+        except ImportError:
+            raise
+        if isinstance(exc, MemoryAbortError):
+            name = getattr(mod, "name", type(mod).__name__)
+            msg = f"memory abort: {exc}"
+            logger.warning("Module '%s' cooperatively aborted: %s", name, exc)
+            raise _SkipModule(msg) from exc
+        raise
 
 
 def _record_module_runtime(ctx: PipelineContext, module_name: str, elapsed_seconds: float) -> None:
@@ -473,8 +487,12 @@ def _run_sequential(
                 raise RuntimeError(f"Mandatory module {stage} reported {status}: {message}")
             ctx.save_checkpoint(stage)
         except _SkipModule as exc:
-            status, message = "skipped", str(exc)
-            ctx.status(stage, "skipped", str(exc))
+            msg_str = str(exc)
+            if "memory" in msg_str.lower() or "abort" in msg_str.lower():
+                status, message = "skipped_memory", msg_str
+            else:
+                status, message = "skipped", msg_str
+            ctx.status(stage, status, msg_str)
             ctx.save_checkpoint(stage)
         except Exception as exc:
             status, message = "failed", str(exc)
@@ -681,10 +699,18 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
         ctx._ledger = ledger
     registry = _build_registry()
     mutating_set = _discover_mutating(registry)
+    _watchdog_thread = None
     try:
         # Enable async figure pool if parallel workers > 1.
         if cfg.parallel_workers > 1:
             ctx._figure_pool = ThreadPoolExecutor(max_workers=1)
+
+        # Start memory watchdog when SC_MEM_GUARD is active.
+        if os.environ.get("SC_MEM_GUARD", "").lower() == "on":
+            from . import _mem_watchdog
+            from ._mem_guard import MemoryGuard
+            MemoryGuard.clear_abort()
+            _watchdog_thread = _mem_watchdog.start(ctx)
 
         mandatory = ["cellranger", "qc", "doublet_detection"]
         mandatory_set = set(mandatory)
@@ -743,6 +769,12 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
             logger.warning("RunLedger finalization failed: %s", _ledger_exc)
         return manifest_path
     finally:
+        if _watchdog_thread is not None:
+            try:
+                from . import _mem_watchdog
+                _mem_watchdog.stop(_watchdog_thread)
+            except Exception as _wd_exc:
+                logger.warning("Watchdog stop failed: %s", _wd_exc)
         if ctx._figure_pool is not None:
             try:
                 ctx.flush_figures()

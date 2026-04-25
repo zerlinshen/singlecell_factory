@@ -446,12 +446,15 @@ class PseudobulkDEModule:
     # -- backend: generic rank test (MWU / ranksums) ---------------------
     @staticmethod
     def _de_ranktest(counts, meta, cond_col, ca, cb, test_fn, two_sided_kw=None):
+        from .._mem_guard import MemoryGuard, MemoryAbortError
         kw = two_sided_kw or {}
         ia = meta[meta[cond_col] == ca].index
         ib = meta[meta[cond_col] == cb].index
         ma, mb = counts.loc[ia].values, counts.loc[ib].values
         genes, pvals, lfcs = [], [], []
         for j, g in enumerate(counts.columns):
+            if MemoryGuard.abort_requested():
+                raise MemoryAbortError("watchdog abort during pseudobulk DE gene loop")
             va, vb = ma[:, j], mb[:, j]
             lfc = np.log2((va.mean() + 1) / (vb.mean() + 1))
             try:
