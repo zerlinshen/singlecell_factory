@@ -96,39 +96,50 @@ class CNVInferenceModule:
             raise ValueError(f"Only {len(common)} genes with position data — too few for CNV.")
 
         gene_pos = gene_pos.loc[common].sort_values(["chromosome", "start"])
-        expr = adata[:, gene_pos.index].X
-        if hasattr(expr, "toarray"):
-            expr = expr.toarray()
-        expr = np.array(expr, dtype=np.float32)
-
-        # Center expression per gene
-        if reference_group and "cell_type" in adata.obs:
-            ref_mask = adata.obs["cell_type"] == reference_group
-            if ref_mask.sum() > 10:
-                ref_mean = expr[ref_mask].mean(axis=0)
-            else:
-                ref_mean = expr.mean(axis=0)
-        else:
-            ref_mean = expr.mean(axis=0)
-
-        centered = expr - ref_mean
-
-        # Sliding window smoothing per chromosome (vectorized)
+        expr_raw = adata[:, gene_pos.index].X
         chromosomes = gene_pos["chromosome"].values
-        smoothed = np.zeros_like(centered)
         window = cfg.window_size
 
-        for chrom in np.unique(chromosomes):
-            chrom_idx = np.where(chromosomes == chrom)[0]
-            if len(chrom_idx) < 3:
-                smoothed[:, chrom_idx] = centered[:, chrom_idx]
-                continue
-            smoothed[:, chrom_idx] = uniform_filter1d(
-                centered[:, chrom_idx],
-                size=min(window, len(chrom_idx)),
-                axis=1,
-                mode="nearest",
+        import os
+        engine = os.environ.get("SC_CNV_ENGINE", "dense").lower()
+
+        if engine == "chunked" and hasattr(expr_raw, "tocsr"):
+            smoothed = self._compute_smoothed_chunked(
+                expr_raw, adata, reference_group, chromosomes, window,
+                int(os.environ.get("SC_CNV_CHUNK_ROWS", 4096)),
             )
+        else:
+            if hasattr(expr_raw, "toarray"):
+                expr = expr_raw.toarray()
+            else:
+                expr = expr_raw
+            expr = np.array(expr, dtype=np.float32)
+
+            # Center expression per gene
+            if reference_group and "cell_type" in adata.obs:
+                ref_mask = adata.obs["cell_type"] == reference_group
+                if ref_mask.sum() > 10:
+                    ref_mean = expr[ref_mask].mean(axis=0)
+                else:
+                    ref_mean = expr.mean(axis=0)
+            else:
+                ref_mean = expr.mean(axis=0)
+
+            centered = expr - ref_mean
+
+            # Sliding window smoothing per chromosome (vectorized)
+            smoothed = np.zeros_like(centered)
+            for chrom in np.unique(chromosomes):
+                chrom_idx = np.where(chromosomes == chrom)[0]
+                if len(chrom_idx) < 3:
+                    smoothed[:, chrom_idx] = centered[:, chrom_idx]
+                    continue
+                smoothed[:, chrom_idx] = uniform_filter1d(
+                    centered[:, chrom_idx],
+                    size=min(window, len(chrom_idx)),
+                    axis=1,
+                    mode="nearest",
+                )
 
         # CNV score per cell: variance of smoothed signal
         cnv_score = np.var(smoothed, axis=1)
@@ -160,6 +171,47 @@ class CNVInferenceModule:
             }, indent=2),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _compute_smoothed_chunked(
+        expr_sparse, adata, reference_group, chromosomes, window, chunk_rows,
+    ) -> np.ndarray:
+        """Compute centered + smoothed CNV matrix without densifying the full sparse expression."""
+        from .._sparse_utils import chunked_row_densify
+
+        n_cells, n_genes = expr_sparse.shape
+
+        # Reference mean: sparse-aware, no full densify
+        if reference_group and "cell_type" in adata.obs:
+            ref_mask = (adata.obs["cell_type"] == reference_group).values
+            if ref_mask.sum() > 10:
+                ref_mean = np.asarray(expr_sparse[ref_mask].mean(axis=0), dtype=np.float32).ravel()
+            else:
+                ref_mean = np.asarray(expr_sparse.mean(axis=0), dtype=np.float32).ravel()
+        else:
+            ref_mean = np.asarray(expr_sparse.mean(axis=0), dtype=np.float32).ravel()
+
+        # Pre-compute chrom-to-indices map once
+        chrom_index_map = {chrom: np.where(chromosomes == chrom)[0]
+                           for chrom in np.unique(chromosomes)}
+
+        smoothed = np.empty((n_cells, n_genes), dtype=np.float32)
+        offset = 0
+        for block in chunked_row_densify(expr_sparse, chunk_rows=chunk_rows, dtype=np.float32):
+            centered = block - ref_mean
+            stop = offset + block.shape[0]
+            for chrom, chrom_idx in chrom_index_map.items():
+                if len(chrom_idx) < 3:
+                    smoothed[offset:stop, chrom_idx] = centered[:, chrom_idx]
+                    continue
+                smoothed[offset:stop, chrom_idx] = uniform_filter1d(
+                    centered[:, chrom_idx],
+                    size=min(window, len(chrom_idx)),
+                    axis=1,
+                    mode="nearest",
+                )
+            offset = stop
+        return smoothed
 
     @staticmethod
     def _plot_cnv_heatmap(adata, smoothed, gene_pos, ctx: PipelineContext) -> None:
