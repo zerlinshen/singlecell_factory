@@ -1,0 +1,1461 @@
+[2026-04-20 23:24:24] monitor started
+[2026-04-20 23:24:24] prepared_input.h5ad is ready; launching NSCLC_900K_BASELINE_AUTO
+[2026-04-20 23:24:24] launched NSCLC_900K_BASELINE_AUTO pid=14511
+[2026-04-20 23:24:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=55G
+[2026-04-20 23:24:24] 40k_active: zerlins+   14231    7280  2 23:16 ?        00:00:10 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_4/40k_NSCLC_DTC_3p_HT_nextgem_donor_4_count_sample_alignments.bam
+[2026-04-20 23:24:24] 900k_active: zerlins+   14511   14500 99 23:24 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03
+[2026-04-20 23:24:24] 40k_tail: 6320750K .....
+[2026-04-20 23:24:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:24:24] 900k_run_tail: 
+[2026-04-20 23:29:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=62G
+[2026-04-20 23:29:24] 40k_active: zerlins+   15089    7280  3 23:25 ?        00:00:09 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_5/40k_NSCLC_DTC_3p_HT_nextgem_donor_5_count_sample_alignments.bam
+[2026-04-20 23:29:24] 40k_tail: 5363900K .......... .......... .......... .......
+[2026-04-20 23:29:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:29:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-20 23:34:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=68G
+[2026-04-20 23:34:24] 40k_active: zerlins+   15089    7280  3 23:25 ?        00:00:20 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_5/40k_NSCLC_DTC_3p_HT_nextgem_donor_5_count_sample_alignments.bam
+[2026-04-20 23:34:24] 40k_tail: 12172550K .......... .
+[2026-04-20 23:34:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:34:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-20 23:39:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=75G
+[2026-04-20 23:39:24] 40k_active: zerlins+   15089    7280  3 23:25 ?        00:00:30 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_5/40k_NSCLC_DTC_3p_HT_nextgem_donor_5_count_sample_alignments.bam
+[2026-04-20 23:39:24] 40k_tail: 18889250K .......... .......... ......
+[2026-04-20 23:39:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:39:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-20 23:44:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=81G
+[2026-04-20 23:44:24] 40k_active: zerlins+   15089    7280  3 23:25 ?        00:00:41 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_5/40k_NSCLC_DTC_3p_HT_nextgem_donor_5_count_sample_alignments.bam
+[2026-04-20 23:44:24] 40k_tail: 25722850K .......... .........
+[2026-04-20 23:44:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:44:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-20 23:49:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=88G
+[2026-04-20 23:49:24] 40k_active: zerlins+   15797    7280  3 23:45 ?        00:00:09 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_6/40k_NSCLC_DTC_3p_HT_nextgem_donor_6_count_sample_alignments.bam
+[2026-04-20 23:49:24] 40k_tail: 5705350K .......... .......... .........
+[2026-04-20 23:49:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:49:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-20 23:54:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=94G
+[2026-04-20 23:54:24] 40k_active: zerlins+   15797    7280  3 23:45 ?        00:00:20 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_6/40k_NSCLC_DTC_3p_HT_nextgem_donor_6_count_sample_alignments.bam
+[2026-04-20 23:54:24] 40k_tail: 12708600K .......... .......... .....
+[2026-04-20 23:54:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:54:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-20 23:59:24] status 900k_dir=22G prepared_input=9.8G 40k_dir=101G
+[2026-04-20 23:59:24] 40k_active: zerlins+   15797    7280  3 23:45 ?        00:00:31 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_6/40k_NSCLC_DTC_3p_HT_nextgem_donor_6_count_sample_alignments.bam
+[2026-04-20 23:59:24] 40k_tail: 19760450K .......... .......... .....
+[2026-04-20 23:59:24] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-20 23:59:24] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_BASELINE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering,differential_expression,annotation,immune_phenotyping,tumor_microenvironment,metacell --checkpoint --gpu-mode auto --n-top-genes 2000 --n-pcs 30 --n-neighbors 15 --leiden-resolution 0.6 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-21 00:01:43] monitor started
+[2026-04-21 00:01:43] prepared_input.h5ad is ready; launching NSCLC_900K_LITE_AUTO
+[2026-04-21 00:01:43] launched NSCLC_900K_LITE_AUTO pid=16658
+[2026-04-21 00:01:43] status 900k_dir=22G prepared_input=9.8G 40k_dir=104G
+[2026-04-21 00:01:43] 40k_active: zerlins+   15797    7280  3 Apr20 ?        00:00:36 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_6/40k_NSCLC_DTC_3p_HT_nextgem_donor_6_count_sample_alignments.bam
+[2026-04-21 00:01:43] 900k_active: zerlins+   16658   16647  0 00:01 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_LITE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03
+[2026-04-21 00:01:43] 40k_tail: 22915350K .......... .......... .......... .........
+[2026-04-21 00:01:43] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:01:43] 900k_run_tail: 
+[2026-04-21 00:06:43] status 900k_dir=22G prepared_input=9.8G 40k_dir=110G
+[2026-04-21 00:06:43] 40k_active: zerlins+   15797    7280  3 Apr20 ?        00:00:47 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_6/40k_NSCLC_DTC_3p_HT_nextgem_donor_6_count_sample_alignments.bam
+[2026-04-21 00:06:43] 40k_tail: 29310550K ....
+[2026-04-21 00:06:43] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:06:43] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_LITE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-21 00:11:43] status 900k_dir=22G prepared_input=9.8G 40k_dir=117G
+[2026-04-21 00:11:43] 40k_active: zerlins+   17390    7280  2 00:10 ?        00:00:01 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_7/40k_NSCLC_DTC_3p_HT_nextgem_donor_7_count_sample_alignments.bam
+[2026-04-21 00:11:43] 40k_tail: 944350K .......... ......
+[2026-04-21 00:11:43] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:11:43] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_LITE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-21 00:16:43] status 900k_dir=22G prepared_input=9.8G 40k_dir=123G
+[2026-04-21 00:16:43] 40k_active: zerlins+   17390    7280  3 00:10 ?        00:00:11 wget -c https://cf.10xgenomics.com/samples/cell-exp/6.1.0/40k_NSCLC_DTC_3p_HT_nextgem_donor_7/40k_NSCLC_DTC_3p_HT_nextgem_donor_7_count_sample_alignments.bam
+[2026-04-21 00:16:43] 40k_tail: 7106750K .......... ..
+[2026-04-21 00:16:43] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:16:43] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_LITE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-21 00:21:43] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:21:43] 40k_tail: 
+[2026-04-21 00:21:43] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:21:43] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_LITE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-21 00:22:35] monitor started
+[2026-04-21 00:22:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:22:35] 40k_tail: 
+[2026-04-21 00:22:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:22:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_LITE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03` failed. (See above for error)
+[2026-04-21 00:24:04] monitor started
+[2026-04-21 00:24:04] prepared_input.h5ad is ready; launching NSCLC_900K_MASSIVE_AUTO
+[2026-04-21 00:24:04] launched NSCLC_900K_MASSIVE_AUTO pid=20351
+[2026-04-21 00:24:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:24:04] 900k_active: zerlins+   20351   20340  0 00:24 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 00:24:04] 40k_tail: 
+[2026-04-21 00:24:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:24:04] 900k_run_tail: 
+[2026-04-21 00:29:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:29:04] 40k_tail: 
+[2026-04-21 00:29:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:29:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 00:34:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:34:04] 40k_tail: 
+[2026-04-21 00:34:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:34:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 00:39:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:39:04] 40k_tail: 
+[2026-04-21 00:39:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:39:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 00:44:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:44:04] 40k_tail: 
+[2026-04-21 00:44:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:44:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 00:49:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:49:04] 40k_tail: 
+[2026-04-21 00:49:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:49:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 00:54:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:54:04] 40k_tail: 
+[2026-04-21 00:54:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:54:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 00:59:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 00:59:04] 40k_tail: 
+[2026-04-21 00:59:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 00:59:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 01:04:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:04:04] 40k_tail: 
+[2026-04-21 01:04:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:04:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 01:09:04] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:09:04] 40k_tail: 
+[2026-04-21 01:09:04] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:09:04] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 01:10:11] monitor started
+[2026-04-21 01:10:11] prepared_input.h5ad is ready; launching NSCLC_900K_MASSIVE_V2_AUTO
+[2026-04-21 01:10:11] launched NSCLC_900K_MASSIVE_V2_AUTO pid=24486
+[2026-04-21 01:10:12] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:10:12] 900k_active: zerlins+   24486   24475  0 01:10 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:10:12] 40k_tail: 
+[2026-04-21 01:10:12] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:10:12] 900k_run_tail: 
+[2026-04-21 01:15:12] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:15:12] 900k_active: zerlins+   24486   24475  0 01:10 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   24543   24531 99 01:10 ?        00:32:36 python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:15:12] 40k_tail: 
+[2026-04-21 01:15:12] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:15:12] 900k_run_tail: 
+[2026-04-21 01:20:12] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:20:12] 900k_active: zerlins+   24486   24475  0 01:10 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   24543   24531 99 01:10 ?        00:37:45 python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:20:12] 40k_tail: 
+[2026-04-21 01:20:12] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:20:12] 900k_run_tail: 
+[2026-04-21 01:25:12] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:25:12] 900k_active: zerlins+   24486   24475  0 01:10 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   24543   24531 99 01:10 ?        00:42:45 python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:25:12] 40k_tail: 
+[2026-04-21 01:25:12] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:25:12] 900k_run_tail: 
+[2026-04-21 01:30:12] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:30:12] 900k_active: zerlins+   24486   24475  0 01:10 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   24543   24531 99 01:10 ?        00:47:45 python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:30:12] 40k_tail: 
+[2026-04-21 01:30:12] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:30:12] 900k_run_tail: 
+[2026-04-21 01:35:12] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:35:12] 40k_tail: 
+[2026-04-21 01:35:12] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:35:12] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_MASSIVE_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 01:39:35] monitor started
+[2026-04-21 01:39:35] prepared_input.h5ad is ready; launching NSCLC_900K_CSS_PROXY_AUTO
+[2026-04-21 01:39:35] launched NSCLC_900K_CSS_PROXY_AUTO pid=30276
+[2026-04-21 01:39:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:39:35] 900k_active: zerlins+   30276   30265  0 01:39 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:39:35] 40k_tail: 
+[2026-04-21 01:39:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:39:35] 900k_run_tail: 
+[2026-04-21 01:44:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:44:35] 900k_active: zerlins+   30276   30265  0 01:39 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   30333   30321 99 01:39 ?        00:32:33 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:44:35] 40k_tail: 
+[2026-04-21 01:44:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:44:35] 900k_run_tail: 
+[2026-04-21 01:49:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:49:35] 900k_active: zerlins+   30276   30265  0 01:39 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   30333   30321 99 01:39 ?        00:37:40 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:49:35] 40k_tail: 
+[2026-04-21 01:49:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:49:35] 900k_run_tail: 
+[2026-04-21 01:54:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:54:35] 900k_active: zerlins+   30276   30265  0 01:39 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   30333   30321 99 01:39 ?        00:42:40 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:54:35] 40k_tail: 
+[2026-04-21 01:54:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:54:35] 900k_run_tail: 
+[2026-04-21 01:59:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 01:59:35] 900k_active: zerlins+   30276   30265  0 01:39 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   30333   30321 99 01:39 ?        00:47:40 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 01:59:35] 40k_tail: 
+[2026-04-21 01:59:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 01:59:35] 900k_run_tail: 
+[2026-04-21 02:04:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:04:35] 40k_tail: 
+[2026-04-21 02:04:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:04:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:09:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:09:35] 40k_tail: 
+[2026-04-21 02:09:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:09:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:14:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:14:35] 40k_tail: 
+[2026-04-21 02:14:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:14:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:19:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:19:35] 40k_tail: 
+[2026-04-21 02:19:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:19:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:24:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:24:35] 40k_tail: 
+[2026-04-21 02:24:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:24:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:29:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:29:35] 40k_tail: 
+[2026-04-21 02:29:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:29:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:34:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:34:35] 40k_tail: 
+[2026-04-21 02:34:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:34:35] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 02:37:16] monitor started
+[2026-04-21 02:37:16] prepared_input.h5ad is ready; launching NSCLC_900K_CSS_PROXY_V2_AUTO
+[2026-04-21 02:37:16] launched NSCLC_900K_CSS_PROXY_V2_AUTO pid=33130
+[2026-04-21 02:37:16] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:37:16] 900k_active: zerlins+   33130   33119 99 02:37 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 02:37:16] 40k_tail: 
+[2026-04-21 02:37:16] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:37:16] 900k_run_tail: 
+[2026-04-21 02:42:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:42:17] 900k_active: zerlins+   33130   33119  0 02:37 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   33188   33176 99 02:37 ?        00:32:34 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 02:42:17] 40k_tail: 
+[2026-04-21 02:42:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:42:17] 900k_run_tail: 
+[2026-04-21 02:47:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:47:17] 900k_active: zerlins+   33130   33119  0 02:37 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   33188   33176 99 02:37 ?        00:37:36 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 02:47:17] 40k_tail: 
+[2026-04-21 02:47:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:47:17] 900k_run_tail: 
+[2026-04-21 02:52:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:52:17] 900k_active: zerlins+   33130   33119  0 02:37 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   33188   33176 99 02:37 ?        00:42:36 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 02:52:17] 40k_tail: 
+[2026-04-21 02:52:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:52:17] 900k_run_tail: 
+[2026-04-21 02:57:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 02:57:17] 900k_active: zerlins+   33130   33119  0 02:37 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   33188   33176 99 02:37 ?        00:47:36 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 02:57:17] 40k_tail: 
+[2026-04-21 02:57:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 02:57:17] 900k_run_tail: 
+[2026-04-21 03:02:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:02:17] 40k_tail: 
+[2026-04-21 03:02:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:02:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:07:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:07:17] 40k_tail: 
+[2026-04-21 03:07:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:07:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:12:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:12:17] 40k_tail: 
+[2026-04-21 03:12:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:12:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:17:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:17:17] 40k_tail: 
+[2026-04-21 03:17:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:17:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:22:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:22:17] 40k_tail: 
+[2026-04-21 03:22:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:22:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:27:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:27:17] 40k_tail: 
+[2026-04-21 03:27:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:27:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:32:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:32:17] 40k_tail: 
+[2026-04-21 03:32:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:32:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:37:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:37:17] 40k_tail: 
+[2026-04-21 03:37:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:37:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:42:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:42:17] 40k_tail: 
+[2026-04-21 03:42:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:42:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:47:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:47:17] 40k_tail: 
+[2026-04-21 03:47:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:47:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:52:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:52:17] 40k_tail: 
+[2026-04-21 03:52:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:52:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 03:57:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 03:57:17] 40k_tail: 
+[2026-04-21 03:57:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 03:57:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:02:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:02:17] 40k_tail: 
+[2026-04-21 04:02:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:02:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:07:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:07:17] 40k_tail: 
+[2026-04-21 04:07:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:07:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:12:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:12:17] 40k_tail: 
+[2026-04-21 04:12:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:12:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:17:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:17:17] 40k_tail: 
+[2026-04-21 04:17:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:17:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:22:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:22:17] 40k_tail: 
+[2026-04-21 04:22:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:22:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:27:17] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:27:17] 40k_tail: 
+[2026-04-21 04:27:17] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:27:17] 900k_run_tail: ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V2_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive` failed. (See above for error)
+[2026-04-21 04:30:32] monitor started
+[2026-04-21 04:30:32] prepared_input.h5ad is ready; launching NSCLC_900K_CSS_PROXY_V3_AUTO
+[2026-04-21 04:30:32] launched NSCLC_900K_CSS_PROXY_V3_AUTO pid=50139
+[2026-04-21 04:30:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:30:32] 900k_active: zerlins+   50139   50128 50 04:30 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 04:30:32] 40k_tail: 
+[2026-04-21 04:30:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:30:32] 900k_run_tail: 
+[2026-04-21 04:35:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:35:32] 900k_active: zerlins+   50139   50128  0 04:30 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   50197   50184 99 04:30 ?        00:16:39 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 04:35:32] 40k_tail: 
+[2026-04-21 04:35:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:35:32] 900k_run_tail: 
+[2026-04-21 04:40:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:40:32] 900k_active: zerlins+   50139   50128  0 04:30 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   50197   50184 99 04:30 ?        00:32:42 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 04:40:32] 40k_tail: 
+[2026-04-21 04:40:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:40:32] 900k_run_tail: 
+[2026-04-21 04:45:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:45:32] 900k_active: zerlins+   50139   50128  0 04:30 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+zerlins+   50197   50184 99 04:30 ?        02:07:45 python -m workflow.modular.cli --project NSCLC_900K_CSS_PROXY_V3_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/10x_nsclc_900k_flex --optional-modules clustering --checkpoint --gpu-mode auto --n-top-genes 1000 --n-pcs 20 --n-neighbors 10 --leiden-resolution 0.4 --expected-doublet-rate 0.03 --scale-mode massive
+[2026-04-21 04:45:32] 40k_tail: 
+[2026-04-21 04:45:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:45:32] 900k_run_tail: 
+[2026-04-21 04:50:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:50:32] 40k_tail: 
+[2026-04-21 04:50:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:50:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 04:55:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 04:55:32] 40k_tail: 
+[2026-04-21 04:55:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 04:55:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:00:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:00:32] 40k_tail: 
+[2026-04-21 05:00:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:00:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:05:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:05:32] 40k_tail: 
+[2026-04-21 05:05:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:05:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:10:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:10:32] 40k_tail: 
+[2026-04-21 05:10:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:10:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:15:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:15:32] 40k_tail: 
+[2026-04-21 05:15:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:15:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:20:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:20:32] 40k_tail: 
+[2026-04-21 05:20:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:20:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:25:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:25:32] 40k_tail: 
+[2026-04-21 05:25:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:25:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:30:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:30:32] 40k_tail: 
+[2026-04-21 05:30:32] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:30:32] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:35:32] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:35:33] 40k_tail: 
+[2026-04-21 05:35:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:35:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:40:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:40:33] 40k_tail: 
+[2026-04-21 05:40:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:40:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:45:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:45:33] 40k_tail: 
+[2026-04-21 05:45:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:45:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:50:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:50:33] 40k_tail: 
+[2026-04-21 05:50:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:50:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 05:55:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 05:55:33] 40k_tail: 
+[2026-04-21 05:55:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 05:55:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:00:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:00:33] 40k_tail: 
+[2026-04-21 06:00:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:00:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:05:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:05:33] 40k_tail: 
+[2026-04-21 06:05:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:05:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:10:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:10:33] 40k_tail: 
+[2026-04-21 06:10:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:10:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:15:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:15:33] 40k_tail: 
+[2026-04-21 06:15:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:15:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:20:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:20:33] 40k_tail: 
+[2026-04-21 06:20:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:20:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:25:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:25:33] 40k_tail: 
+[2026-04-21 06:25:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:25:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:30:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:30:33] 40k_tail: 
+[2026-04-21 06:30:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:30:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:35:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:35:33] 40k_tail: 
+[2026-04-21 06:35:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:35:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:40:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:40:33] 40k_tail: 
+[2026-04-21 06:40:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:40:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:45:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:45:33] 40k_tail: 
+[2026-04-21 06:45:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:45:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:50:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:50:33] 40k_tail: 
+[2026-04-21 06:50:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:50:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 06:55:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 06:55:33] 40k_tail: 
+[2026-04-21 06:55:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 06:55:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:00:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:00:33] 40k_tail: 
+[2026-04-21 07:00:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:00:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:05:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:05:33] 40k_tail: 
+[2026-04-21 07:05:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:05:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:10:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:10:33] 40k_tail: 
+[2026-04-21 07:10:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:10:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:15:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:15:33] 40k_tail: 
+[2026-04-21 07:15:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:15:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:20:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:20:33] 40k_tail: 
+[2026-04-21 07:20:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:20:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:25:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:25:33] 40k_tail: 
+[2026-04-21 07:25:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:25:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:30:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:30:33] 40k_tail: 
+[2026-04-21 07:30:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:30:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:35:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:35:33] 40k_tail: 
+[2026-04-21 07:35:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:35:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:40:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:40:33] 40k_tail: 
+[2026-04-21 07:40:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:40:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:45:33] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:45:33] 40k_tail: 
+[2026-04-21 07:45:33] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:45:33] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:50:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:50:34] 40k_tail: 
+[2026-04-21 07:50:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:50:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 07:55:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 07:55:34] 900k_active: zerlins+   86702   86695  0 07:54 ?        00:00:00 /home/zerlinshen/conda/bin/python /home/zerlinshen/conda/bin/conda run -n r_multiomics Rscript --vanilla scripts/plot_remote_bundle_large.R /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/r_plot_bundle /home/zerlinshen/multiomics_r_factory/output/nsclc_900k_css_proxy_v3_remote_rplots cell_type leiden 200000
+zerlins+   86790   86711 99 07:54 ?        00:00:55 /home/zerlinshen/conda/envs/r_multiomics/lib/R/bin/exec/R --no-echo --no-restore --vanilla --file=scripts/plot_remote_bundle_large.R --args /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/r_plot_bundle /home/zerlinshen/multiomics_r_factory/output/nsclc_900k_css_proxy_v3_remote_rplots cell_type leiden 200000
+[2026-04-21 07:55:34] 40k_tail: 
+[2026-04-21 07:55:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 07:55:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:00:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:00:34] 40k_tail: 
+[2026-04-21 08:00:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:00:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:05:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:05:34] 40k_tail: 
+[2026-04-21 08:05:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:05:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:10:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:10:34] 40k_tail: 
+[2026-04-21 08:10:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:10:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:15:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:15:34] 40k_tail: 
+[2026-04-21 08:15:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:15:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:20:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:20:34] 40k_tail: 
+[2026-04-21 08:20:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:20:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:25:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:25:34] 40k_tail: 
+[2026-04-21 08:25:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:25:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:30:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:30:34] 40k_tail: 
+[2026-04-21 08:30:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:30:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:35:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:35:34] 40k_tail: 
+[2026-04-21 08:35:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:35:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:40:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:40:34] 40k_tail: 
+[2026-04-21 08:40:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:40:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:45:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:45:34] 40k_tail: 
+[2026-04-21 08:45:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:45:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:50:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:50:34] 40k_tail: 
+[2026-04-21 08:50:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:50:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 08:55:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 08:55:34] 40k_tail: 
+[2026-04-21 08:55:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 08:55:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:00:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:00:34] 40k_tail: 
+[2026-04-21 09:00:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:00:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:05:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:05:34] 40k_tail: 
+[2026-04-21 09:05:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:05:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:10:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:10:34] 40k_tail: 
+[2026-04-21 09:10:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:10:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:15:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:15:34] 40k_tail: 
+[2026-04-21 09:15:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:15:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:20:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:20:34] 40k_tail: 
+[2026-04-21 09:20:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:20:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:25:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:25:34] 40k_tail: 
+[2026-04-21 09:25:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:25:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:30:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:30:34] 40k_tail: 
+[2026-04-21 09:30:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:30:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:35:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:35:34] 40k_tail: 
+[2026-04-21 09:35:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:35:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:40:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:40:34] 40k_tail: 
+[2026-04-21 09:40:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:40:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:45:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:45:34] 40k_tail: 
+[2026-04-21 09:45:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:45:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:50:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:50:34] 40k_tail: 
+[2026-04-21 09:50:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:50:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 09:55:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 09:55:34] 40k_tail: 
+[2026-04-21 09:55:34] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 09:55:34] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:00:34] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:00:35] 40k_tail: 
+[2026-04-21 10:00:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:00:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:05:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:05:35] 40k_tail: 
+[2026-04-21 10:05:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:05:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:10:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:10:35] 40k_tail: 
+[2026-04-21 10:10:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:10:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:15:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:15:35] 40k_tail: 
+[2026-04-21 10:15:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:15:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:20:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:20:35] 40k_tail: 
+[2026-04-21 10:20:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:20:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:25:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:25:35] 40k_tail: 
+[2026-04-21 10:25:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:25:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:30:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:30:35] 40k_tail: 
+[2026-04-21 10:30:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:30:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:35:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:35:35] 40k_tail: 
+[2026-04-21 10:35:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:35:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:40:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:40:35] 40k_tail: 
+[2026-04-21 10:40:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:40:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:45:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:45:35] 40k_tail: 
+[2026-04-21 10:45:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:45:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:50:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:50:35] 40k_tail: 
+[2026-04-21 10:50:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:50:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 10:55:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 10:55:35] 40k_tail: 
+[2026-04-21 10:55:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 10:55:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:00:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:00:35] 40k_tail: 
+[2026-04-21 11:00:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:00:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:05:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:05:35] 40k_tail: 
+[2026-04-21 11:05:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:05:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:10:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:10:35] 40k_tail: 
+[2026-04-21 11:10:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:10:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:15:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:15:35] 40k_tail: 
+[2026-04-21 11:15:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:15:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:20:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:20:35] 40k_tail: 
+[2026-04-21 11:20:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:20:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:25:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:25:35] 40k_tail: 
+[2026-04-21 11:25:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:25:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:30:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:30:35] 40k_tail: 
+[2026-04-21 11:30:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:30:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:35:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:35:35] 40k_tail: 
+[2026-04-21 11:35:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:35:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:40:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:40:35] 40k_tail: 
+[2026-04-21 11:40:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:40:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:45:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:45:35] 40k_tail: 
+[2026-04-21 11:45:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:45:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:50:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:50:35] 40k_tail: 
+[2026-04-21 11:50:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:50:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 11:55:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 11:55:35] 40k_tail: 
+[2026-04-21 11:55:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 11:55:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:00:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:00:35] 40k_tail: 
+[2026-04-21 12:00:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:00:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:05:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:05:35] 40k_tail: 
+[2026-04-21 12:05:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:05:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:10:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:10:35] 40k_tail: 
+[2026-04-21 12:10:35] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:10:35] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:15:35] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:15:36] 40k_tail: 
+[2026-04-21 12:15:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:15:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:20:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:20:36] 40k_tail: 
+[2026-04-21 12:20:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:20:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:25:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:25:36] 40k_tail: 
+[2026-04-21 12:25:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:25:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:30:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:30:36] 40k_tail: 
+[2026-04-21 12:30:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:30:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:35:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:35:36] 40k_tail: 
+[2026-04-21 12:35:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:35:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:40:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:40:36] 40k_tail: 
+[2026-04-21 12:40:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:40:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:45:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:45:36] 40k_tail: 
+[2026-04-21 12:45:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:45:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:50:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:50:36] 40k_tail: 
+[2026-04-21 12:50:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:50:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 12:55:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 12:55:36] 40k_tail: 
+[2026-04-21 12:55:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 12:55:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:00:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:00:36] 40k_tail: 
+[2026-04-21 13:00:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:00:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:05:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:05:36] 40k_tail: 
+[2026-04-21 13:05:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:05:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:10:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:10:36] 40k_tail: 
+[2026-04-21 13:10:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:10:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:15:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:15:36] 40k_tail: 
+[2026-04-21 13:15:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:15:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:20:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:20:36] 40k_tail: 
+[2026-04-21 13:20:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:20:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:25:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:25:36] 40k_tail: 
+[2026-04-21 13:25:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:25:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:30:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:30:36] 40k_tail: 
+[2026-04-21 13:30:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:30:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:35:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:35:36] 40k_tail: 
+[2026-04-21 13:35:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:35:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:40:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:40:36] 40k_tail: 
+[2026-04-21 13:40:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:40:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:45:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:45:36] 40k_tail: 
+[2026-04-21 13:45:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:45:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:50:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:50:36] 40k_tail: 
+[2026-04-21 13:50:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:50:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 13:55:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 13:55:36] 40k_tail: 
+[2026-04-21 13:55:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 13:55:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:00:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:00:36] 40k_tail: 
+[2026-04-21 14:00:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:00:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:05:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:05:36] 40k_tail: 
+[2026-04-21 14:05:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:05:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:10:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:10:36] 40k_tail: 
+[2026-04-21 14:10:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:10:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:15:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:15:36] 40k_tail: 
+[2026-04-21 14:15:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:15:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:20:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:20:36] 40k_tail: 
+[2026-04-21 14:20:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:20:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:25:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:25:36] 40k_tail: 
+[2026-04-21 14:25:36] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:25:36] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:30:36] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:30:37] 40k_tail: 
+[2026-04-21 14:30:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:30:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:35:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:35:37] 40k_tail: 
+[2026-04-21 14:35:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:35:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:40:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:40:37] 40k_tail: 
+[2026-04-21 14:40:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:40:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:45:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:45:37] 40k_tail: 
+[2026-04-21 14:45:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:45:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:50:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:50:37] 40k_tail: 
+[2026-04-21 14:50:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:50:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 14:55:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 14:55:37] 40k_tail: 
+[2026-04-21 14:55:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 14:55:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:00:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:00:37] 40k_tail: 
+[2026-04-21 15:00:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:00:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:05:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:05:37] 40k_tail: 
+[2026-04-21 15:05:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:05:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:10:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:10:37] 40k_tail: 
+[2026-04-21 15:10:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:10:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:15:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:15:37] 40k_tail: 
+[2026-04-21 15:15:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:15:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:20:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:20:37] 40k_tail: 
+[2026-04-21 15:20:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:20:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:25:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:25:37] 40k_tail: 
+[2026-04-21 15:25:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:25:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:30:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:30:37] 40k_tail: 
+[2026-04-21 15:30:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:30:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:35:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:35:37] 40k_tail: 
+[2026-04-21 15:35:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:35:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:40:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:40:37] 40k_tail: 
+[2026-04-21 15:40:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:40:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:45:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:45:37] 40k_tail: 
+[2026-04-21 15:45:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:45:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:50:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:50:37] 40k_tail: 
+[2026-04-21 15:50:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:50:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 15:55:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 15:55:37] 40k_tail: 
+[2026-04-21 15:55:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 15:55:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:00:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:00:37] 40k_tail: 
+[2026-04-21 16:00:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:00:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:05:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:05:37] 40k_tail: 
+[2026-04-21 16:05:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:05:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:10:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:10:37] 40k_tail: 
+[2026-04-21 16:10:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:10:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:15:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:15:37] 40k_tail: 
+[2026-04-21 16:15:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:15:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:20:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:20:37] 40k_tail: 
+[2026-04-21 16:20:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:20:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:25:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:25:37] 40k_tail: 
+[2026-04-21 16:25:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:25:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:30:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:30:37] 40k_tail: 
+[2026-04-21 16:30:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:30:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:35:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:35:37] 40k_tail: 
+[2026-04-21 16:35:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:35:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:40:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:40:37] 40k_tail: 
+[2026-04-21 16:40:37] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:40:37] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:45:37] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:45:38] 40k_tail: 
+[2026-04-21 16:45:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:45:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:50:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:50:38] 40k_tail: 
+[2026-04-21 16:50:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:50:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 16:55:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 16:55:38] 40k_tail: 
+[2026-04-21 16:55:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 16:55:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:00:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:00:38] 40k_tail: 
+[2026-04-21 17:00:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:00:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:05:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:05:38] 40k_tail: 
+[2026-04-21 17:05:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:05:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:10:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:10:38] 40k_tail: 
+[2026-04-21 17:10:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:10:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:15:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:15:38] 40k_tail: 
+[2026-04-21 17:15:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:15:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:20:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:20:38] 40k_tail: 
+[2026-04-21 17:20:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:20:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:25:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:25:38] 40k_tail: 
+[2026-04-21 17:25:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:25:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:30:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:30:38] 40k_tail: 
+[2026-04-21 17:30:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:30:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:35:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:35:38] 40k_tail: 
+[2026-04-21 17:35:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:35:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:40:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:40:38] 40k_tail: 
+[2026-04-21 17:40:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:40:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:45:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:45:38] 40k_tail: 
+[2026-04-21 17:45:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:45:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:50:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:50:38] 40k_tail: 
+[2026-04-21 17:50:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:50:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 17:55:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 17:55:38] 40k_tail: 
+[2026-04-21 17:55:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 17:55:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:00:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:00:38] 40k_tail: 
+[2026-04-21 18:00:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:00:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:05:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:05:38] 40k_tail: 
+[2026-04-21 18:05:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:05:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:10:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:10:38] 40k_tail: 
+[2026-04-21 18:10:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:10:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:15:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:15:38] 40k_tail: 
+[2026-04-21 18:15:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:15:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:20:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:20:38] 40k_tail: 
+[2026-04-21 18:20:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:20:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:25:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:25:38] 40k_tail: 
+[2026-04-21 18:25:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:25:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:30:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:30:38] 40k_tail: 
+[2026-04-21 18:30:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:30:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:35:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:35:38] 40k_tail: 
+[2026-04-21 18:35:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:35:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:40:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:40:38] 40k_tail: 
+[2026-04-21 18:40:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:40:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:45:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:45:38] 40k_tail: 
+[2026-04-21 18:45:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:45:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:50:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:50:38] 40k_tail: 
+[2026-04-21 18:50:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:50:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 18:55:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 18:55:38] 40k_tail: 
+[2026-04-21 18:55:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 18:55:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:00:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:00:38] 40k_tail: 
+[2026-04-21 19:00:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:00:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:05:38] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:05:38] 40k_tail: 
+[2026-04-21 19:05:38] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:05:38] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:10:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:10:39] 40k_tail: 
+[2026-04-21 19:10:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:10:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:15:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:15:39] 40k_tail: 
+[2026-04-21 19:15:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:15:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:20:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:20:39] 40k_tail: 
+[2026-04-21 19:20:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:20:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:25:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:25:39] 40k_tail: 
+[2026-04-21 19:25:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:25:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:30:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:30:39] 40k_tail: 
+[2026-04-21 19:30:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:30:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:35:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:35:39] 40k_tail: 
+[2026-04-21 19:35:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:35:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:40:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:40:39] 40k_tail: 
+[2026-04-21 19:40:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:40:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:45:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:45:39] 40k_tail: 
+[2026-04-21 19:45:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:45:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:50:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:50:39] 40k_tail: 
+[2026-04-21 19:50:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:50:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 19:55:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 19:55:39] 40k_tail: 
+[2026-04-21 19:55:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 19:55:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:00:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:00:39] 40k_tail: 
+[2026-04-21 20:00:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:00:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:05:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:05:39] 40k_tail: 
+[2026-04-21 20:05:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:05:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:10:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:10:39] 40k_tail: 
+[2026-04-21 20:10:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:10:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:15:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:15:39] 40k_tail: 
+[2026-04-21 20:15:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:15:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:20:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:20:39] 40k_tail: 
+[2026-04-21 20:20:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:20:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:25:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:25:39] 40k_tail: 
+[2026-04-21 20:25:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:25:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:30:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:30:39] 40k_tail: 
+[2026-04-21 20:30:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:30:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:35:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:35:39] 40k_tail: 
+[2026-04-21 20:35:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:35:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:40:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:40:39] 40k_tail: 
+[2026-04-21 20:40:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:40:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:45:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:45:39] 40k_tail: 
+[2026-04-21 20:45:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:45:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:50:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:50:39] 40k_tail: 
+[2026-04-21 20:50:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:50:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 20:55:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 20:55:39] 40k_tail: 
+[2026-04-21 20:55:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 20:55:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:00:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:00:39] 40k_tail: 
+[2026-04-21 21:00:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:00:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:05:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:05:39] 40k_tail: 
+[2026-04-21 21:05:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:05:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:10:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:10:39] 40k_tail: 
+[2026-04-21 21:10:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:10:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:15:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:15:39] 40k_tail: 
+[2026-04-21 21:15:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:15:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:20:39] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:20:39] 40k_tail: 
+[2026-04-21 21:20:39] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:20:39] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:25:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:25:40] 40k_tail: 
+[2026-04-21 21:25:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:25:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:30:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:30:40] 40k_tail: 
+[2026-04-21 21:30:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:30:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:35:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:35:40] 40k_tail: 
+[2026-04-21 21:35:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:35:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:40:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:40:40] 40k_tail: 
+[2026-04-21 21:40:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:40:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:45:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:45:40] 40k_tail: 
+[2026-04-21 21:45:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:45:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:50:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:50:40] 40k_tail: 
+[2026-04-21 21:50:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:50:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 21:55:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 21:55:40] 40k_tail: 
+[2026-04-21 21:55:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 21:55:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:00:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:00:40] 40k_tail: 
+[2026-04-21 22:00:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:00:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:05:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:05:40] 40k_tail: 
+[2026-04-21 22:05:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:05:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:10:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:10:40] 40k_tail: 
+[2026-04-21 22:10:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:10:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:15:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:15:40] 40k_tail: 
+[2026-04-21 22:15:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:15:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:20:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:20:40] 40k_tail: 
+[2026-04-21 22:20:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:20:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:25:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:25:40] 40k_tail: 
+[2026-04-21 22:25:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:25:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:30:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:30:40] 40k_tail: 
+[2026-04-21 22:30:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:30:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:35:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:35:40] 40k_tail: 
+[2026-04-21 22:35:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:35:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:40:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:40:40] 40k_tail: 
+[2026-04-21 22:40:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:40:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:45:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:45:40] 40k_tail: 
+[2026-04-21 22:45:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:45:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:50:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:50:40] 40k_tail: 
+[2026-04-21 22:50:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:50:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 22:55:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 22:55:40] 40k_tail: 
+[2026-04-21 22:55:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 22:55:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:00:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:00:40] 40k_tail: 
+[2026-04-21 23:00:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:00:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:05:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:05:40] 40k_tail: 
+[2026-04-21 23:05:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:05:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:10:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:10:40] 40k_tail: 
+[2026-04-21 23:10:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:10:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:15:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:15:40] 40k_tail: 
+[2026-04-21 23:15:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:15:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:20:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:20:40] 40k_tail: 
+[2026-04-21 23:20:40] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:20:40] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:25:40] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:25:41] 40k_tail: 
+[2026-04-21 23:25:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:25:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:30:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:30:41] 40k_tail: 
+[2026-04-21 23:30:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:30:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:35:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:35:41] 40k_tail: 
+[2026-04-21 23:35:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:35:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:40:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:40:41] 40k_tail: 
+[2026-04-21 23:40:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:40:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:45:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:45:41] 40k_tail: 
+[2026-04-21 23:45:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:45:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:50:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:50:41] 40k_tail: 
+[2026-04-21 23:50:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:50:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-21 23:55:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-21 23:55:41] 40k_tail: 
+[2026-04-21 23:55:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-21 23:55:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:00:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:00:41] 40k_tail: 
+[2026-04-22 00:00:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:00:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:05:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:05:41] 40k_tail: 
+[2026-04-22 00:05:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:05:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:10:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:10:41] 40k_tail: 
+[2026-04-22 00:10:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:10:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:15:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:15:41] 40k_tail: 
+[2026-04-22 00:15:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:15:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:20:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:20:41] 40k_tail: 
+[2026-04-22 00:20:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:20:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:25:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:25:41] 40k_tail: 
+[2026-04-22 00:25:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:25:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:30:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:30:41] 40k_tail: 
+[2026-04-22 00:30:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:30:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:35:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:35:41] 40k_tail: 
+[2026-04-22 00:35:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:35:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:40:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:40:41] 40k_tail: 
+[2026-04-22 00:40:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:40:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:45:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:45:41] 40k_tail: 
+[2026-04-22 00:45:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:45:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:50:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:50:41] 40k_tail: 
+[2026-04-22 00:50:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:50:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 00:55:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 00:55:41] 40k_tail: 
+[2026-04-22 00:55:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 00:55:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:00:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:00:41] 40k_tail: 
+[2026-04-22 01:00:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:00:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:05:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:05:41] 40k_tail: 
+[2026-04-22 01:05:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:05:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:10:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:10:41] 40k_tail: 
+[2026-04-22 01:10:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:10:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:15:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:15:41] 40k_tail: 
+[2026-04-22 01:15:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:15:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:20:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:20:41] 40k_tail: 
+[2026-04-22 01:20:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:20:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:25:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:25:41] 40k_tail: 
+[2026-04-22 01:25:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:25:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:30:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:30:41] 40k_tail: 
+[2026-04-22 01:30:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:30:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:35:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:35:41] 40k_tail: 
+[2026-04-22 01:35:41] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:35:41] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:40:41] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:40:42] 40k_tail: 
+[2026-04-22 01:40:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:40:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:45:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:45:42] 40k_tail: 
+[2026-04-22 01:45:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:45:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:50:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:50:42] 40k_tail: 
+[2026-04-22 01:50:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:50:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 01:55:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 01:55:42] 40k_tail: 
+[2026-04-22 01:55:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 01:55:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:00:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:00:42] 40k_tail: 
+[2026-04-22 02:00:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:00:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:05:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:05:42] 40k_tail: 
+[2026-04-22 02:05:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:05:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:10:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:10:42] 40k_tail: 
+[2026-04-22 02:10:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:10:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:15:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:15:42] 40k_tail: 
+[2026-04-22 02:15:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:15:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:20:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:20:42] 40k_tail: 
+[2026-04-22 02:20:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:20:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:25:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:25:42] 40k_tail: 
+[2026-04-22 02:25:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:25:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:30:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:30:42] 40k_tail: 
+[2026-04-22 02:30:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:30:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:35:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:35:42] 40k_tail: 
+[2026-04-22 02:35:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:35:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:40:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:40:42] 40k_tail: 
+[2026-04-22 02:40:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:40:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:45:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:45:42] 40k_tail: 
+[2026-04-22 02:45:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:45:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:50:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:50:42] 40k_tail: 
+[2026-04-22 02:50:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:50:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 02:55:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 02:55:42] 40k_tail: 
+[2026-04-22 02:55:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 02:55:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:00:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:00:42] 40k_tail: 
+[2026-04-22 03:00:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:00:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:05:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:05:42] 40k_tail: 
+[2026-04-22 03:05:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:05:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:10:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:10:42] 40k_tail: 
+[2026-04-22 03:10:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:10:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:15:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:15:42] 40k_tail: 
+[2026-04-22 03:15:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:15:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:20:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:20:42] 40k_tail: 
+[2026-04-22 03:20:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:20:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:25:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:25:42] 40k_tail: 
+[2026-04-22 03:25:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:25:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:30:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:30:42] 40k_tail: 
+[2026-04-22 03:30:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:30:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:35:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:35:42] 40k_tail: 
+[2026-04-22 03:35:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:35:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:40:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:40:42] 40k_tail: 
+[2026-04-22 03:40:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:40:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:45:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:45:42] 40k_tail: 
+[2026-04-22 03:45:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:45:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:50:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:50:42] 40k_tail: 
+[2026-04-22 03:50:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:50:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
+[2026-04-22 03:55:42] status 900k_dir=22G prepared_input=9.8G 40k_dir=126G
+[2026-04-22 03:55:42] 40k_tail: 
+[2026-04-22 03:55:42] 900k_prepare_tail: SHAPE 897733 18082
+[2026-04-22 03:55:42] 900k_run_tail: /home/zerlinshen/singlecell_factory/results/NSCLC_900K_CSS_PROXY_V3_AUTO_20260421_043033/run_manifest.json
