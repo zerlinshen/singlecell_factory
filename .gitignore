@@ -46,3 +46,7 @@ coverage.xml
 
 # ops/run_ledger JSON audit records are intentionally tracked by git
 !ops/run_ledger/*.json
+
+# Runtime-generated paper_repro spec dirs (regenerated per launch)
+ops/nc2024_sparse_exact/
+ops/nc2024_extended_real_run/

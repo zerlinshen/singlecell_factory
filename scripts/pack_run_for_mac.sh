@@ -130,6 +130,14 @@ rm -rf "$REPORT_STAGING"
 # Step 6 — generate mac_pull_command.sh
 # ---------------------------------------------------------------------------
 HOSTNAME_FULL="$(hostname -f 2>/dev/null || hostname)"
+# Prefer Tailscale MagicDNS name when available — Mac can always resolve it
+# regardless of LAN/DNS state. Falls back to hostname -f.
+TAILSCALE_DNS="$(tailscale status --json 2>/dev/null \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('Self',{}).get('DNSName','').rstrip('.'))" 2>/dev/null \
+  || true)"
+if [[ -n "${TAILSCALE_DNS}" ]]; then
+  HOSTNAME_FULL="${TAILSCALE_DNS}"
+fi
 REMOTE_USER="${USER:-ubuntu}"
 
 # Build file list of what actually exists
