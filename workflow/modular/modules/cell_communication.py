@@ -124,17 +124,36 @@ class CellCommunicationModule:
         gene_col_map = {g: i for i, g in enumerate(needed_genes)}
 
         # Pre-compute mean expression matrix: (n_cell_types, n_needed_genes)
+        import os
+        engine = os.environ.get("SC_CELLCOMM_ENGINE", "dense").lower()
         ct_list = []
-        mean_mat_rows = []
-        for ct in cell_types:
-            mask = (adata.obs["cell_type"] == ct).values
-            if mask.sum() < 5:
-                continue
-            ct_list.append(ct)
-            chunk = expr.X[mask][:, gene_indices]
-            if hasattr(chunk, "toarray"):
-                chunk = chunk.toarray()
-            mean_mat_rows.append(np.asarray(chunk, dtype=np.float32).mean(axis=0))
+        if engine == "sparse" and hasattr(expr.X, "tocsr"):
+            from .._sparse_utils import sparse_groupby_mean
+            X_sub = expr.X[:, gene_indices]
+            valid_cts = [ct for ct in cell_types
+                         if (adata.obs["cell_type"] == ct).values.sum() >= 5]
+            if not valid_cts:
+                raise ValueError("No cell types with >= 5 cells.")
+            ct_array = adata.obs["cell_type"].values
+            keep_mask = np.isin(ct_array, valid_cts)
+            X_kept = X_sub[keep_mask]
+            labels_kept = ct_array[keep_mask]
+            mean_dict = sparse_groupby_mean(X_kept, labels_kept)
+            mean_mat_rows = []
+            for ct in valid_cts:
+                ct_list.append(ct)
+                mean_mat_rows.append(np.asarray(mean_dict[ct], dtype=np.float32))
+        else:
+            mean_mat_rows = []
+            for ct in cell_types:
+                mask = (adata.obs["cell_type"] == ct).values
+                if mask.sum() < 5:
+                    continue
+                ct_list.append(ct)
+                chunk = expr.X[mask][:, gene_indices]
+                if hasattr(chunk, "toarray"):
+                    chunk = chunk.toarray()
+                mean_mat_rows.append(np.asarray(chunk, dtype=np.float32).mean(axis=0))
 
         if not ct_list:
             raise ValueError("No cell types with >= 5 cells.")
