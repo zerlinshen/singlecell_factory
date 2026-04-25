@@ -1,10 +1,13 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf and not r_contract'"
+addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf and not r_contract and not small_real and not medium_real and not full_real'"
 markers = [
     "perf: performance regression gate (run explicitly via `pytest -m perf`)",
     "r_contract: Python <-> R bundle round-trip tests (require Rscript env; run explicitly via `pytest -m r_contract`)",
+    "small_real: real-data tier ~100k cells (NC2024 subset; run via `pytest -m small_real`; requires fixtures from scripts/build_staircase_fixtures.py)",
+    "medium_real: real-data tier ~500k cells (NC2024 subset; run via `pytest -m medium_real`)",
+    "full_real: full NC2024 cohort 884k cells (publication-grade; run via `pytest -m full_real`)",
 ]
 
 [tool.coverage.run]

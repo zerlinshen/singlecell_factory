@@ -115,3 +115,24 @@ else:
 - R output is parsed by scanning stdout for `KEY=VALUE` lines emitted via `sprintf` + `cat`. Never mix informational R output with these sentinel lines.
 - The `rscript_path` session fixture in `conftest.py` handles both binary detection and R package probing.
 - R source under test lives in `multiomics_r_factory/R_bundle/io_bundle.R` — never edit it from this repo (bridge symlink rule applies).
+
+## 11) Staircase Testing Discipline (Phase 7C)
+
+为防止 5k synthetic 测试无法触发的真实数据 bug（典型例子：doublet auto-threshold 在 100k 才生效），所有改动按"最低 tier"原则跑测试：
+
+| 改动类别 | 必经 gate |
+|---|---|
+| 纯数值算法（DE / parity / 单 module 改进） | nano (默认 `pytest`) |
+| 内存 / 密度 / chunked 路径 | nano + `pytest -m small_real` |
+| 论文方法对齐 / capability flag 改动 | nano + small_real + `pytest -m medium_real` |
+| 发表前最终复现 | nano + small_real + medium_real + `pytest -m full_real` + paper-aligned 完整 launcher |
+
+工具链:
+- `scripts/build_staircase_fixtures.py` 从 NC2024 prepared zarr 生成 `tests/data/staircase/{small_real,medium_real}.zarr` 子集（按 sample 分层抽样，seed=42 确定性）。运行一次即可，结果不入仓 (`tests/data/.gitignore` 排除大文件)。
+- `tests/test_staircase_smoke.py` 是入口测试集合，验证 grouped Scrublet 阈值触发、disease 列覆盖等真实数据特性。
+- 每次添加新 module 或修改内存敏感路径时必须扩展 staircase smoke 测试。
+- pytest markers 注册在 `pyproject.toml`；默认 `addopts` 排除 `small_real / medium_real / full_real`，CI 速度不受影响。
+- nano 是 synthetic（5k cells × 2k genes，density 0.1，CSR），永远在默认 suite 中跑——保证最快回归信号。
+- full_real 不复制数据，写 `tests/data/staircase/full_real.path` 路径指针指向原 zarr。
+
+参见 `tests/data/staircase/README.md` 获取每个 tier 的详细规模、用途与生成命令。

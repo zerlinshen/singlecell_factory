@@ -1,0 +1,10 @@
+# Staircase test fixtures (large h5ad / zarr) are not tracked.
+*.h5ad
+*.zarr
+*.zarr.zip
+
+# Path pointers to full-cohort sources (regenerated; commit by hand if needed).
+*.path
+
+# Keep generated metadata for reproducibility checks.
+!*.summary.json
