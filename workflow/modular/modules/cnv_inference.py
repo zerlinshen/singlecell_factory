@@ -8,7 +8,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 from scipy.ndimage import uniform_filter1d
 
 from ..context import PipelineContext
@@ -23,6 +25,7 @@ class CNVInferenceModule:
     """
 
     name = "cnv_inference"
+    provides_keys = {"obs": ["cnv_score"], "obsm": ["X_cnv"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

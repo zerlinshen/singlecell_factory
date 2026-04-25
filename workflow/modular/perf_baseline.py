@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import scanpy as sc
 from sklearn.neighbors import NearestNeighbors
 
 
@@ -14,6 +13,8 @@ def baseline_qc(
     min_cells: int,
 ):
     """Baseline QC implementation before memory optimization."""
+    import scanpy as sc
+
     gene_upper = adata.var_names.astype(str).str.upper()
     adata.var["mt"] = gene_upper.str.startswith("MT-")
     adata.var["ribo"] = gene_upper.str.startswith(("RPS", "RPL"))
@@ -36,6 +37,8 @@ def baseline_clustering(
     random_state: int,
 ):
     """Baseline clustering implementation before PCA memory optimization."""
+    import scanpy as sc
+
     sc.pp.normalize_total(adata, target_sum=target_sum)
     sc.pp.log1p(adata)
     adata.raw = adata
@@ -58,18 +61,18 @@ def baseline_clustering(
 
 
 def baseline_pseudo_velocity(adata, n_neighbors: int = 15):
-    """Baseline pseudo-velocity with Python loop."""
+    """Baseline pseudo-velocity (vectorized)."""
     umap = adata.obsm["X_umap"]
     pseudotime = adata.obs["dpt_pseudotime"].to_numpy()
     knn = NearestNeighbors(n_neighbors=n_neighbors)
     knn.fit(umap)
     _, idx = knn.kneighbors(umap)
-    velocity = np.zeros_like(umap)
-    for i in range(umap.shape[0]):
-        nbr = idx[i, 1:]
-        dt = pseudotime[nbr] - pseudotime[i]
-        direction = umap[nbr] - umap[i]
-        if np.allclose(dt, 0.0):
-            continue
-        velocity[i] = (direction * dt[:, None]).mean(axis=0)
+    # Vectorized: compute all neighbor deltas at once
+    nbr_umap = umap[idx[:, 1:]]                          # (n, k, 2)
+    dt = pseudotime[idx[:, 1:]] - pseudotime[:, None]     # (n, k)
+    direction = nbr_umap - umap[:, None, :]                # (n, k, 2)
+    velocity = (direction * dt[:, :, None]).mean(axis=1)   # (n, 2)
+    # Zero out cells where all neighbor pseudotime deltas are ~0
+    mask = np.isclose(dt, 0.0).all(axis=1)
+    velocity[mask] = 0.0
     return velocity

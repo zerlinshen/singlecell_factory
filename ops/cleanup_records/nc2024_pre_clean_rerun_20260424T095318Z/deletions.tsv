@@ -1,0 +1,2 @@
+path	classification	action	reason
+/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.pid	superseded_transient	delete	stale pid file from prior project name; not part of canonical scientific outputs

@@ -262,6 +262,13 @@ class RNAVelocityModule:
         if adata is None or "X_umap" not in adata.obsm:
             raise ValueError("RNA velocity requires AnnData with UMAP embedding.")
 
+        eligible, reason = self._velocity_eligibility(adata, ctx)
+        if not eligible:
+            ctx.metadata["rna_velocity_status"] = "skipped_missing_splicing_modality"
+            ctx.metadata["rna_velocity_eligibility_reason"] = reason
+            ctx.status(self.name, "skipped", reason)
+            return
+
         import scvelo as scv
 
         # Apply numpy 2.x patch BEFORE any scVelo operations
@@ -335,6 +342,24 @@ class RNAVelocityModule:
     # ------------------------------------------------------------------
     # Data loading
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _velocity_eligibility(adata, ctx: PipelineContext) -> tuple[bool, str]:
+        """Return whether RNA velocity has enough modality/input to run."""
+        cfg = ctx.cfg.velocity
+        if "spliced" in adata.layers and "unspliced" in adata.layers:
+            return True, "adata already contains spliced/unspliced layers"
+        if cfg.loom_path and cfg.loom_path.exists():
+            return True, f"loom file configured: {cfg.loom_path}"
+        resolved_gtf = RNAVelocityModule._resolve_gtf_path(ctx)
+        if cfg.bam_path and cfg.bam_path.exists() and resolved_gtf and resolved_gtf.exists():
+            return True, f"BAM+GTF extraction configured: {cfg.bam_path}"
+        return (
+            False,
+            "RNA velocity is not eligible for this run: no spliced/unspliced layers "
+            "and no usable loom or BAM+GTF source. Use pseudo_velocity unless true "
+            "splicing inputs are available.",
+        )
 
     @staticmethod
     def _resolve_gtf_path(ctx: PipelineContext) -> Path | None:

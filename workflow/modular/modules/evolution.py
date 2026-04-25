@@ -8,7 +8,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 from scipy.spatial.distance import pdist
 
@@ -35,6 +37,8 @@ class EvolutionModule:
     """
 
     name = "evolution"
+    requires_keys = {}  # CNV presence checked at runtime; pseudotime is optional
+    provides_keys = {"obs": ["clone"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata
@@ -164,17 +168,24 @@ class EvolutionModule:
         """Find top DE genes per clone."""
         if adata.obs["clone"].nunique() < 2:
             return None
-        try:
-            from ._gpu_utils import gpu_available
-            if gpu_available():
+        from ._gpu_utils import gpu_available
+
+        if gpu_available():
+            try:
                 import rapids_singlecell as rsc
                 rsc.tl.rank_genes_groups(
                     adata, groupby="clone", method="wilcoxon",
                     use_raw=False, n_genes=50, key_added="rank_genes_clone",
                 )
-            else:
-                raise ImportError("GPU not available")
-        except Exception:
+            except Exception:
+                try:
+                    sc.tl.rank_genes_groups(
+                        adata, groupby="clone", method="wilcoxon",
+                        use_raw=False, n_genes=50, key_added="rank_genes_clone",
+                    )
+                except Exception:
+                    return None
+        else:
             try:
                 sc.tl.rank_genes_groups(
                     adata, groupby="clone", method="wilcoxon",

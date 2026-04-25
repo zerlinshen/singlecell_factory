@@ -1,0 +1,33 @@
+{
+  "module": "qc",
+  "metadata": {
+    "prepared_input_loading_mode": "lazy_zarr",
+    "prepared_input_source": "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr",
+    "counts_layer_preserved": false,
+    "prepared_input_h5ad": "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr",
+    "raw_cells": 884050,
+    "raw_genes": 33538,
+    "module_runtime_sec": {
+      "cellranger": 0.499
+    },
+    "cells_after_qc": 834980,
+    "genes_after_qc": 30374,
+    "qc_removed_cells": 49070
+  },
+  "module_status": [
+    {
+      "module": "cellranger",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "qc",
+      "status": "ok",
+      "message": "completed"
+    }
+  ],
+  "module_dirs": {
+    "cellranger": "/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552/cellranger",
+    "qc": "/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552/qc"
+  }
+}

@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
-import scanpy as sc
+import anndata as ad
+import pandas as pd
+
+from ._scanpy_compat import has_api, import_scanpy_or_stub, scanpy_import_error
+
+sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 
@@ -14,9 +19,88 @@ class CellRangerModule:
     name = "cellranger"
     required = True
 
+    FLEX_16_PROBE_MAP = {
+        "ACTTTAGG": "BC001",
+        "AACGGGAA": "BC002",
+        "AGTAGGCT": "BC003",
+        "ATGTTGAC": "BC004",
+        "ACAGACCT": "BC005",
+        "ATCCCAAC": "BC006",
+        "AAGTAGAG": "BC007",
+        "AGCTGTGA": "BC008",
+        "ACAGTCTG": "BC009",
+        "AGTGAGTG": "BC010",
+        "AGAGGCAA": "BC011",
+        "ACTACTCA": "BC012",
+        "ATACGTCA": "BC013",
+        "ATCATGTG": "BC014",
+        "AACGCCGA": "BC015",
+        "ATTCGGTT": "BC016",
+    }
+
+    @staticmethod
+    def _needs_counts_layer(ctx: PipelineContext) -> bool:
+        return "pseudobulk_de" in set(ctx.cfg.optional_modules)
+
+    def _annotate_flex_probe_groups(self, adata, sample_root: Path, ctx: PipelineContext) -> None:
+        if adata.n_obs == 0:
+            return
+        if "sample" in adata.obs.columns and pd.Series(adata.obs["sample"]).nunique() > 1:
+            return
+        suffixes = pd.Index(adata.obs_names.astype(str)).str.split("-").str[0].str[-8:]
+        mapped = suffixes.map(self.FLEX_16_PROBE_MAP)
+        nunique = mapped.nunique(dropna=True)
+        if nunique < 2:
+            return
+        adata.obs["probe_barcode_seq"] = suffixes.values
+        adata.obs["probe_barcode_id"] = mapped.fillna("UNKNOWN").values
+        adata.obs["sample"] = adata.obs["probe_barcode_id"].astype(str).values
+        adata.obs["sample_label_strategy"] = "probe_barcode_16plex_proxy"
+        agg = sample_root / "16plex_900k_32_NSCLC_multiplex_aggregation.csv"
+        if agg.exists():
+            try:
+                meta = pd.read_csv(agg)
+                if {"description", "sample_id"}.issubset(meta.columns):
+                    meta["probe_barcode_id"] = meta["description"].astype(str).str.extract(r"_(BC\d+)$", expand=False)
+                    per_bc = meta.dropna(subset=["probe_barcode_id"]).groupby("probe_barcode_id")["description"].apply(lambda s: "|".join(sorted(set(map(str, s)))))
+                    adata.obs["probe_barcode_description_pool"] = adata.obs["probe_barcode_id"].map(per_bc).fillna("")
+            except Exception as exc:
+                ctx.metadata["flex_probe_annotation_warning"] = str(exc)
+        ctx.metadata["sample_label_strategy"] = "probe_barcode_16plex_proxy"
+        ctx.metadata["sample_label_nunique"] = int(pd.Series(adata.obs["sample"]).nunique())
+
     def run(self, ctx: PipelineContext) -> None:
         cfg = ctx.cfg.cellranger
+        sample_root = cfg.sample_root
+        prepared_h5ad = sample_root / "prepared_input.h5ad"
+        prepared_zarr = sample_root / "prepared_input.zarr"
         outs = cfg.outs_dir
+
+        if prepared_h5ad.exists() or prepared_zarr.exists():
+            if prepared_h5ad.exists():
+                adata = ad.read_h5ad(prepared_h5ad)
+                ctx.metadata["prepared_input_source"] = str(prepared_h5ad)
+            else:
+                if ctx.cfg.scale_mode == "massive" and hasattr(ad.experimental, "read_lazy"):
+                    adata = ad.experimental.read_lazy(prepared_zarr)
+                    ctx.metadata["prepared_input_loading_mode"] = "lazy_zarr"
+                else:
+                    adata = ad.read_zarr(prepared_zarr)
+                    ctx.metadata["prepared_input_loading_mode"] = "eager_zarr"
+                ctx.metadata["prepared_input_source"] = str(prepared_zarr)
+            adata.var_names_make_unique()
+            self._annotate_flex_probe_groups(adata, sample_root, ctx)
+            if self._needs_counts_layer(ctx) and "counts" not in adata.layers:
+                # Keep the logical raw-count layer available for pseudobulk but
+                # defer any heavy lazy-backend materialization until the
+                # pseudobulk module actually needs it.
+                adata.layers["counts"] = adata.X.copy()
+            ctx.metadata["counts_layer_preserved"] = bool(self._needs_counts_layer(ctx))
+            ctx.adata = adata
+            ctx.metadata["prepared_input_h5ad"] = str(prepared_h5ad) if prepared_h5ad.exists() else str(prepared_zarr)
+            ctx.metadata["raw_cells"] = int(adata.n_obs)
+            ctx.metadata["raw_genes"] = int(adata.n_vars)
+            return
 
         # If user requests force run or no previous Cell Ranger output exists, run `cellranger count`.
         if cfg.force_run or not outs.exists():
@@ -34,8 +118,17 @@ class CellRangerModule:
         if not outs.exists():
             raise FileNotFoundError(f"Cell Ranger output still missing after attempt: {outs}")
 
+        if not has_api(sc, "read_10x_mtx"):
+            err = scanpy_import_error(sc)
+            raise ImportError(f"scanpy.read_10x_mtx is unavailable: {err}") from err
         adata = sc.read_10x_mtx(str(outs), var_names="gene_symbols", cache=False)
         adata.var_names_make_unique()
+        # Preserve raw UMI counts only when downstream modules require them
+        # (notably pseudobulk_de). This avoids a large duplicate matrix for
+        # massive clustering-first runs.
+        if self._needs_counts_layer(ctx):
+            adata.layers["counts"] = adata.X.copy()
+        ctx.metadata["counts_layer_preserved"] = bool(self._needs_counts_layer(ctx))
         ctx.adata = adata
         ctx.metadata["cellranger_outs"] = str(outs)
         ctx.metadata["raw_cells"] = int(adata.n_obs)

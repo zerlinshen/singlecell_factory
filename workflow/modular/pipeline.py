@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import logging
 import os
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,11 +50,96 @@ MODULE_DEPENDENCIES: dict[str, set[str]] = {
     "cell_fate": {"trajectory"},
     "composition": {"annotation"},
     "metacell": {"clustering"},
+    "paper_repro": {"clustering"},
 }
 
-# Modules that mutate adata structurally (embeddings, X, layers).
-# These MUST run sequentially, not in parallel branches.
-MUTATING_MODULES = {"batch_correction"}
+# Static fallback for modules that mutate adata structurally.
+# Prefer the class-level `mutates_structure = True` attribute on modules;
+# this set is a safety net for modules that forget to declare it.
+_MUTATING_MODULES_FALLBACK = {"batch_correction"}
+# Backward-compatibility alias used by older tests/importers.
+MUTATING_MODULES = set(_MUTATING_MODULES_FALLBACK)
+
+
+def _discover_mutating(registry: dict) -> set[str]:
+    """Build the set of mutating modules from class attributes + static fallback."""
+    discovered = {name for name, mod in registry.items()
+                  if getattr(mod, "mutates_structure", False)}
+    return discovered | MUTATING_MODULES
+
+
+def _normalize_status(value: str) -> str:
+    token = (value or "").strip().lower()
+    if token in {"ok", "completed", "success"}:
+        return "ok"
+    if token in {"skipped", "skip"}:
+        return "skipped"
+    return "failed"
+
+
+def _consume_module_report(
+    ctx: PipelineContext,
+    module_name: str,
+    start_idx: int,
+) -> tuple[str, str] | None:
+    """Return module-reported status emitted during this stage, if any."""
+    for entry in reversed(ctx.module_status[start_idx:]):
+        if entry.get("module") != module_name:
+            continue
+        status = _normalize_status(str(entry.get("status", "failed")))
+        message = str(entry.get("message", ""))
+        entry["status"] = status
+        return status, message
+    return None
+
+
+def _infer_status_from_metadata(ctx: PipelineContext, module_name: str) -> tuple[str, str] | None:
+    """Infer skipped status from `<module>_status` metadata conventions."""
+    key = f"{module_name}_status"
+    raw = ctx.metadata.get(key)
+    if not isinstance(raw, str):
+        return None
+    token = raw.strip().lower()
+    if token.startswith("skip") or token.startswith("no_"):
+        return "skipped", raw
+    return None
+
+
+def _finalize_stage_success(
+    ctx: PipelineContext,
+    module_name: str,
+    start_idx: int,
+) -> tuple[str, str]:
+    """Finalize stage status after a successful module return."""
+    reported = _consume_module_report(ctx, module_name, start_idx)
+    if reported is not None:
+        return reported
+    inferred = _infer_status_from_metadata(ctx, module_name)
+    if inferred is not None:
+        status, message = inferred
+        ctx.status(module_name, status, message)
+        return status, message
+    ctx.status(module_name, True, "completed")
+    return "ok", "completed"
+
+
+def _check_requires(mod, ctx: PipelineContext) -> list[str]:
+    """Return list of missing keys declared in mod.requires_keys."""
+    missing = []
+    adata = ctx.adata
+    if adata is None:
+        return missing
+    reqs = getattr(mod, "requires_keys", {})
+    for key in reqs.get("obs", []):
+        if key not in adata.obs.columns:
+            missing.append(f"obs.{key}")
+    for key in reqs.get("obsm", []):
+        if key not in adata.obsm:
+            missing.append(f"obsm.{key}")
+    for key in reqs.get("uns", []):
+        if key not in adata.uns:
+            missing.append(f"uns.{key}")
+    return missing
 
 
 def _resolve_execution_order(mandatory: list[str], optional: list[str]) -> list[str]:
@@ -78,12 +164,12 @@ def _resolve_execution_order(mandatory: list[str], optional: list[str]) -> list[
     for mod in all_requested:
         for dep in MODULE_DEPENDENCIES.get(mod, set()):
             if dep in all_requested:
-                in_degree[mod] = in_degree.get(mod, 0) + 1
+                in_degree[mod] += 1
 
-    queue = sorted([m for m, d in in_degree.items() if d == 0])
-    order = []
+    queue = deque(sorted(m for m, d in in_degree.items() if d == 0))
+    order: list[str] = []
     while queue:
-        node = queue.pop(0)
+        node = queue.popleft()
         order.append(node)
         for mod in sorted(all_requested):
             if node in MODULE_DEPENDENCIES.get(mod, set()):
@@ -130,6 +216,7 @@ def _build_registry() -> dict[str, object]:
     from .modules.cell_fate import CellFateModule
     from .modules.composition import CompositionModule
     from .modules.metacell import MetacellModule
+    from .modules.paper_repro import PaperReproModule
 
     return {
         "cellranger": CellRangerModule(),
@@ -156,12 +243,34 @@ def _build_registry() -> dict[str, object]:
         "cell_fate": CellFateModule(),
         "composition": CompositionModule(),
         "metacell": MetacellModule(),
+        "paper_repro": PaperReproModule(),
     }
 
 
+def _find_latest_resume_run_dir(cfg: PipelineConfig) -> Path | None:
+    """Return the latest run dir for `project` that contains checkpoints."""
+    if not cfg.output_dir.exists():
+        return None
+    candidates = [
+        p for p in cfg.output_dir.glob(f"{cfg.project}_*")
+        if p.is_dir() and (p / ".checkpoints").exists()
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime)
+    return candidates[-1]
+
+
 def _prepare_output(cfg: PipelineConfig) -> PipelineContext:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = cfg.output_dir / f"{cfg.project}_{ts}"
+    cfg.output_dir.mkdir(parents=True, exist_ok=True)
+    run_dir: Path
+    if cfg.resume_from:
+        run_dir = _find_latest_resume_run_dir(cfg) or (  # fallback keeps old behavior/error path
+            cfg.output_dir / f"{cfg.project}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+    else:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = cfg.output_dir / f"{cfg.project}_{ts}"
     run_dir.mkdir(parents=True, exist_ok=True)
     # figure_dir and table_dir will be set per-module via ctx.set_module_dir()
     return PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
@@ -236,8 +345,20 @@ def _compute_tiers(execution_order: list[str], completed: set[str]) -> list[list
     return tiers
 
 
-def _run_module(mod, ctx: PipelineContext) -> None:
-    """Run a single module (used as ThreadPoolExecutor target)."""
+class _SkipModule(Exception):
+    """Raised when a non-mandatory module should be skipped due to missing keys."""
+
+
+def _run_module(mod, ctx: PipelineContext, *, mandatory: bool = False) -> None:
+    """Validate requires_keys then run a module. Raises _SkipModule for optional modules."""
+    missing = _check_requires(mod, ctx)
+    if missing:
+        name = getattr(mod, "name", type(mod).__name__)
+        msg = f"Module '{name}' missing required keys: {', '.join(missing)}"
+        if mandatory:
+            raise ValueError(msg)
+        logger.warning("%s — skipping.", msg)
+        raise _SkipModule(msg)
     mod.run(ctx)
 
 
@@ -312,29 +433,29 @@ def _safe_parallel_worker_count(
     )
 
 
-def _execute_tier(
-    tier: list[str],
+def _run_sequential(
+    modules: list[str],
     registry: dict,
     ctx: PipelineContext,
     mandatory: set[str],
-    max_workers: int,
 ) -> None:
-    """Execute a tier of modules, potentially in parallel."""
-    # Split into mutating (must run sequentially) and appending (can parallelize).
-    mutating = [m for m in tier if m in MUTATING_MODULES]
-    appending = [m for m in tier if m not in MUTATING_MODULES]
-
-    # Run mutating modules sequentially first.
-    for stage in mutating:
+    """Run a list of modules sequentially with checkpoint, status, and timing."""
+    for stage in modules:
         mod = registry.get(stage)
         if mod is None:
             ctx.status(stage, False, "unknown module")
             continue
         ctx.set_module_dir(stage)
+        pre_status_len = len(ctx.module_status)
         t0 = perf_counter()
         try:
-            mod.run(ctx)
-            ctx.status(stage, True, "completed")
+            _run_module(mod, ctx, mandatory=stage in mandatory)
+            status, message = _finalize_stage_success(ctx, stage, pre_status_len)
+            if status != "ok" and stage in mandatory:
+                raise RuntimeError(f"Mandatory module {stage} reported {status}: {message}")
+            ctx.save_checkpoint(stage)
+        except _SkipModule as exc:
+            ctx.status(stage, "skipped", str(exc))
             ctx.save_checkpoint(stage)
         except Exception as exc:
             ctx.status(stage, False, str(exc))
@@ -343,51 +464,103 @@ def _execute_tier(
         finally:
             _record_module_runtime(ctx, stage, perf_counter() - t0)
 
+
+def _execute_tier(
+    tier: list[str],
+    registry: dict,
+    ctx: PipelineContext,
+    mandatory: set[str],
+    max_workers: int,
+    mutating_modules: set[str] | None = None,
+) -> None:
+    """Execute a tier of modules, potentially in parallel."""
+    _mutating_set = mutating_modules if mutating_modules is not None else _MUTATING_MODULES_FALLBACK
+    # Split into mutating (must run sequentially) and appending (can parallelize).
+    mutating = [m for m in tier if m in _mutating_set]
+    appending = [m for m in tier if m not in _mutating_set]
+
+    # Run mutating modules sequentially first.
+    _run_sequential(mutating, registry, ctx, mandatory)
+
     # Run appending modules.
     if max_workers <= 1 or len(appending) <= 1:
-        # Sequential execution.
-        for stage in appending:
-            mod = registry.get(stage)
-            if mod is None:
-                ctx.status(stage, False, "unknown module")
-                continue
-            ctx.set_module_dir(stage)
-            t0 = perf_counter()
-            try:
-                mod.run(ctx)
-                ctx.status(stage, True, "completed")
-                ctx.save_checkpoint(stage)
-            except Exception as exc:
-                ctx.status(stage, False, str(exc))
-                if stage in mandatory:
-                    raise
-            finally:
-                _record_module_runtime(ctx, stage, perf_counter() - t0)
+        _run_sequential(appending, registry, ctx, mandatory)
     else:
         safe_workers = _safe_parallel_worker_count(ctx, appending, max_workers)
         if safe_workers <= 1:
             logger.warning(
                 "Falling back to sequential appending execution due to memory safety guard."
             )
-            for stage in appending:
-                mod = registry.get(stage)
-                if mod is None:
-                    ctx.status(stage, False, "unknown module")
-                    continue
-                ctx.set_module_dir(stage)
-                t0 = perf_counter()
-                try:
-                    mod.run(ctx)
-                    ctx.status(stage, True, "completed")
-                    ctx.save_checkpoint(stage)
-                except Exception as exc:
-                    ctx.status(stage, False, str(exc))
-                    if stage in mandatory:
-                        raise
-                finally:
-                    _record_module_runtime(ctx, stage, perf_counter() - t0)
+            _run_sequential(appending, registry, ctx, mandatory)
             return
         _run_parallel_appending(appending, registry, ctx, mandatory, safe_workers)
+
+
+def _warn_dropped_changes(mod_name: str, branch_ad, main_ad) -> None:
+    """Log warnings when a parallel branch modified data that merge-back cannot capture."""
+    import numpy as np
+    from scipy.sparse import issparse
+
+    # --- X mutation check: shape, dtype, and sampled rows ---
+    if branch_ad.X is not None and main_ad.X is not None and branch_ad.n_obs > 0:
+        x_mutated = False
+        if branch_ad.X.shape != main_ad.X.shape:
+            x_mutated = True
+        elif hasattr(branch_ad.X, "dtype") and hasattr(main_ad.X, "dtype"):
+            if branch_ad.X.dtype != main_ad.X.dtype:
+                x_mutated = True
+        if not x_mutated:
+            try:
+                # Sample first, middle, and last rows for coverage without full comparison
+                n = branch_ad.n_obs
+                indices = sorted({0, n // 2, n - 1})
+                for idx in indices:
+                    b_row = branch_ad.X[idx]
+                    m_row = main_ad.X[idx]
+                    b_arr = b_row.toarray().ravel() if issparse(b_row) else np.asarray(b_row).ravel()
+                    m_arr = m_row.toarray().ravel() if issparse(m_row) else np.asarray(m_row).ravel()
+                    if not np.array_equal(b_arr, m_arr):
+                        x_mutated = True
+                        break
+            except Exception:
+                pass  # shape mismatch or other edge case — skip check
+        if x_mutated:
+            logger.warning(
+                "Module '%s' modified adata.X but runs as appending "
+                "— X changes dropped. Consider adding mutates_structure = True.",
+                mod_name,
+            )
+
+    # --- Layer checks: new layers AND modifications to existing layers ---
+    for layer in set(branch_ad.layers) - set(main_ad.layers):
+        logger.warning(
+            "Module '%s' added layer '%s' — dropped in parallel merge-back.", mod_name, layer,
+        )
+    for layer in set(branch_ad.layers) & set(main_ad.layers):
+        try:
+            b_val = branch_ad.layers[layer]
+            m_val = main_ad.layers[layer]
+            b_arr = b_val.toarray().ravel()[:100] if issparse(b_val) else np.asarray(b_val).ravel()[:100]
+            m_arr = m_val.toarray().ravel()[:100] if issparse(m_val) else np.asarray(m_val).ravel()[:100]
+            if not np.array_equal(b_arr, m_arr):
+                logger.warning(
+                    "Module '%s' modified existing layer '%s' — changes dropped in parallel merge-back.",
+                    mod_name, layer,
+                )
+        except Exception:
+            pass
+
+    # --- varm / obsp: new keys ---
+    if hasattr(branch_ad, "varm"):
+        for key in set(branch_ad.varm) - set(main_ad.varm):
+            logger.warning(
+                "Module '%s' added varm['%s'] — dropped in parallel merge-back.", mod_name, key,
+            )
+    if hasattr(branch_ad, "obsp"):
+        for key in set(branch_ad.obsp) - set(main_ad.obsp):
+            logger.warning(
+                "Module '%s' added obsp['%s'] — dropped in parallel merge-back.", mod_name, key,
+            )
 
 
 def _run_parallel_appending(
@@ -398,7 +571,7 @@ def _run_parallel_appending(
     max_workers: int,
 ) -> None:
     """Run appending-only modules in parallel with copy-on-branch, merge-back."""
-    def _run_module_in_branch(mod_name: str) -> tuple[str, PipelineContext]:
+    def _run_module_in_branch(mod_name: str) -> tuple[str, str, str, PipelineContext]:
         mod = registry.get(mod_name)
         if mod is None:
             raise ValueError(f"unknown module: {mod_name}")
@@ -410,8 +583,14 @@ def _run_parallel_appending(
         branch_ctx._module_dirs = dict(ctx._module_dirs)
         branch_ctx._figure_pool = None
         branch_ctx.set_module_dir(mod_name)
-        mod.run(branch_ctx)
-        return mod_name, branch_ctx
+        pre_status_len = len(branch_ctx.module_status)
+        try:
+            _run_module(mod, branch_ctx, mandatory=mod_name in mandatory)
+        except _SkipModule as exc:
+            branch_ctx.status(mod_name, "skipped", str(exc))
+            return mod_name, "skipped", str(exc), branch_ctx
+        status, message = _finalize_stage_success(branch_ctx, mod_name, pre_status_len)
+        return mod_name, status, message, branch_ctx
 
     results: dict[str, tuple[str, str, float]] = {}
     branch_contexts: dict[str, PipelineContext] = {}
@@ -422,9 +601,9 @@ def _run_parallel_appending(
             name = futures[future]
             elapsed = perf_counter() - starts[future]
             try:
-                returned_name, branch_ctx = future.result()
+                returned_name, status, message, branch_ctx = future.result()
                 branch_contexts[returned_name] = branch_ctx
-                results[name] = ("ok", "completed", elapsed)
+                results[name] = (status, message, elapsed)
             except Exception as exc:
                 results[name] = ("failed", str(exc), elapsed)
 
@@ -449,13 +628,15 @@ def _run_parallel_appending(
             for key in branch_ctx.adata.uns:
                 if key not in ctx.adata.uns:
                     ctx.adata.uns[key] = branch_ctx.adata.uns[key]
+            # Warn about structural changes that cannot be merged back.
+            _warn_dropped_changes(mod_name, branch_ctx.adata, ctx.adata)
             # Merge metadata and module directory registrations.
             ctx.metadata.update(branch_ctx.metadata)
             ctx._module_dirs.update(branch_ctx._module_dirs)
             # Flush any figures the branch produced.
             branch_ctx.flush_figures()
 
-        ctx.status(mod_name, ok == "ok", msg)
+        ctx.status(mod_name, ok, msg)
         _record_module_runtime(ctx, mod_name, elapsed)
         ctx.save_checkpoint(mod_name)
 
@@ -474,10 +655,11 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
     pipeline_t0 = perf_counter()
     ctx = _prepare_output(cfg)
     registry = _build_registry()
+    mutating_set = _discover_mutating(registry)
     try:
         # Enable async figure pool if parallel workers > 1.
         if cfg.parallel_workers > 1:
-            ctx._figure_pool = ThreadPoolExecutor(max_workers=2)
+            ctx._figure_pool = ThreadPoolExecutor(max_workers=1)
 
         mandatory = ["cellranger", "qc", "doublet_detection"]
         mandatory_set = set(mandatory)
@@ -485,6 +667,11 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
 
         # --- Resume from checkpoint ---
         if cfg.resume_from:
+            if not ctx._checkpoint_dir.exists():
+                raise FileNotFoundError(
+                    f"No checkpoint directory found for project '{cfg.project}'. "
+                    "Run once with --checkpoint before using --resume-from."
+                )
             # Find the module just before resume_from in execution order.
             try:
                 resume_idx = execution_order.index(cfg.resume_from)
@@ -493,13 +680,19 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
                     f"Cannot resume from '{cfg.resume_from}': not in execution order."
                 )
             if resume_idx > 0:
-                prev_module = execution_order[resume_idx - 1]
-                if not ctx.load_checkpoint(prev_module):
+                # Search backwards for the nearest available checkpoint.
+                loaded = False
+                for search_idx in range(resume_idx - 1, -1, -1):
+                    candidate = execution_order[search_idx]
+                    if ctx.load_checkpoint(candidate):
+                        logger.info("Resumed from checkpoint after '%s'", candidate)
+                        loaded = True
+                        break
+                if not loaded:
                     raise FileNotFoundError(
-                        f"No checkpoint found after '{prev_module}'. "
+                        f"No checkpoint found before '{cfg.resume_from}'. "
                         f"Run the pipeline with --checkpoint first."
                     )
-                logger.info("Resumed from checkpoint after '%s'", prev_module)
             execution_order = execution_order[resume_idx:]
 
         # --- Execute ---
@@ -508,27 +701,10 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
             completed = {m for m in all_modules if m not in execution_order}
             tiers = _compute_tiers(execution_order, completed)
             for tier in tiers:
-                _execute_tier(tier, registry, ctx, mandatory_set, cfg.parallel_workers)
+                _execute_tier(tier, registry, ctx, mandatory_set, cfg.parallel_workers, mutating_set)
         else:
             # Original sequential execution.
-            for stage in execution_order:
-                mod = registry.get(stage)
-                if mod is None:
-                    ctx.status(stage, False, "unknown module")
-                    continue
-                ctx.set_module_dir(stage)
-                is_mandatory = stage in mandatory_set
-                t0 = perf_counter()
-                try:
-                    mod.run(ctx)
-                    ctx.status(stage, True, "completed")
-                    ctx.save_checkpoint(stage)
-                except Exception as exc:
-                    ctx.status(stage, False, str(exc))
-                    if is_mandatory:
-                        raise
-                finally:
-                    _record_module_runtime(ctx, stage, perf_counter() - t0)
+            _run_sequential(execution_order, registry, ctx, mandatory_set)
 
         ctx.metadata["pipeline_wall_seconds"] = round(perf_counter() - pipeline_t0, 3)
         return _save_manifest(ctx)

@@ -12,11 +12,16 @@ from .config import (
     CNVConfig,
     DoubletConfig,
     GeneSignatureConfig,
+    PaperReproConfig,
     PipelineConfig,
+    PseudobulkConfig,
     QCConfig,
     VelocityConfig,
 )
 from .pipeline import MODULE_DEPENDENCIES, run_pipeline
+
+
+DEFAULT_OPTIONAL_MODULES = "clustering,differential_expression,annotation,trajectory,pseudo_velocity"
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,14 +37,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="/home/zerlinshen/singlecell_factory/results")
     parser.add_argument(
         "--optional-modules",
-        default="clustering,differential_expression,annotation,trajectory,pseudo_velocity",
+        default=DEFAULT_OPTIONAL_MODULES,
         help=(
             "Comma-separated optional modules. Available: clustering, cell_cycle, "
             "batch_correction, differential_expression, annotation, trajectory, "
             "pseudo_velocity, rna_velocity, cnv_inference, pathway_analysis, "
             "cell_communication, gene_regulatory_network, validate_cbioportal, "
             "immune_phenotyping, tumor_microenvironment, gene_signature_scoring, "
-            "pseudobulk_de, cell_fate, composition, metacell"
+            "pseudobulk_de, cell_fate, composition, metacell, paper_repro"
         ),
     )
     parser.add_argument("--markers-json", default="", help="Optional custom marker dictionary JSON file")
@@ -79,6 +84,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-neighbors", type=int, default=15)
     parser.add_argument("--leiden-resolution", type=float, default=0.8)
     parser.add_argument("--scale-data", action="store_true", help="Apply sc.pp.scale() before PCA")
+    parser.add_argument(
+        "--gpu-mode",
+        default="auto",
+        choices=["auto", "off", "force"],
+        help="GPU policy: auto (try GPU, fall back to CPU), off (CPU only), force (require GPU)",
+    )
+    parser.add_argument(
+        "--scale-mode",
+        default="standard",
+        choices=["standard", "large", "massive"],
+        help=(
+            "Dataset-size execution profile: standard (default), large (safer defaults for ~100k+ cells), "
+            "massive (minimal-memory first-pass for several-hundred-thousand to million-cell runs)"
+        ),
+    )
 
     # Differential expression
     parser.add_argument(
@@ -99,7 +119,28 @@ def parse_args() -> argparse.Namespace:
 
     # Batch correction
     parser.add_argument("--batch-key", default="sample", help="Column in obs for batch labels")
-    parser.add_argument("--batch-method", default="harmony", choices=["harmony", "bbknn", "combat", "scanorama"])
+    parser.add_argument(
+        "--batch-method",
+        default="harmony",
+        choices=["harmony", "bbknn", "combat", "scanorama", "scvi", "mnn", "fastmnn"],
+    )
+    parser.add_argument(
+        "--scvi-max-epochs",
+        type=int,
+        default=200,
+        help="Max training epochs for scVI when --batch-method scvi (default: 200)",
+    )
+    parser.add_argument(
+        "--scvi-n-latent",
+        type=int,
+        default=30,
+        help="Latent dimension for scVI when --batch-method scvi (default: 30)",
+    )
+    parser.add_argument(
+        "--no-scvi-early-stopping",
+        action="store_true",
+        help="Disable early stopping for scVI when --batch-method scvi.",
+    )
 
     # Trajectory
     parser.add_argument("--trajectory-root-cluster", default=None, help="Leiden cluster ID for DPT root")
@@ -130,6 +171,19 @@ def parse_args() -> argparse.Namespace:
         "--signature-json", default="",
         help="JSON file with custom gene signatures: {name: [gene1, gene2, ...]}",
     )
+    parser.add_argument(
+        "--paper-spec-json",
+        default="",
+        help=(
+            "JSON spec for paper-driven reproduction tracking "
+            "(paper metadata + figure parity checks)."
+        ),
+    )
+    parser.add_argument(
+        "--paper-repro-strict",
+        action="store_true",
+        help="Fail the run if paper_repro reports missing provenance or failed figure checks.",
+    )
 
     # cBioPortal validation
     parser.add_argument(
@@ -154,6 +208,45 @@ def parse_args() -> argparse.Namespace:
         help="Number of top DE genes to include in cBioPortal validation (default: 20)",
     )
 
+    # Pseudobulk DE
+    parser.add_argument(
+        "--pseudobulk-sample-col",
+        default="",
+        help="obs column identifying biological samples for pseudobulk DE. Defaults to --batch-key, then sample/batch/donor/patient.",
+    )
+    parser.add_argument(
+        "--pseudobulk-group-col",
+        default="cell_type",
+        help="obs column used for stratified pseudobulk contrasts or exploratory group-vs-rest output (default: cell_type).",
+    )
+    parser.add_argument(
+        "--pseudobulk-contrast-col",
+        default="",
+        help="obs column containing the confirmatory pseudobulk condition labels, e.g. condition or disease.",
+    )
+    parser.add_argument(
+        "--pseudobulk-contrast-a",
+        default="",
+        help="First condition label for confirmatory pseudobulk DE.",
+    )
+    parser.add_argument(
+        "--pseudobulk-contrast-b",
+        default="",
+        help="Second condition label for confirmatory pseudobulk DE.",
+    )
+    parser.add_argument(
+        "--pseudobulk-contrast-json",
+        default="",
+        help="Optional JSON list of pseudobulk contrasts with contrast_col/contrast_a/contrast_b/name fields.",
+    )
+    parser.add_argument(
+        "--pseudobulk-exploratory-group-vs-rest",
+        action="store_true",
+        help="Allow exploratory group-vs-rest pseudobulk when no explicit contrast is provided.",
+    )
+    parser.add_argument("--pseudobulk-min-cells-per-sample", type=int, default=3)
+    parser.add_argument("--pseudobulk-min-samples-per-condition", type=int, default=2)
+
     # Configurable thresholds
     parser.add_argument("--de-pval-threshold", type=float, default=0.05,
                         help="Adjusted p-value threshold for significant DE genes (default: 0.05)")
@@ -161,6 +254,40 @@ def parse_args() -> argparse.Namespace:
                         help="Minimum absolute log fold change for DE genes (default: 0.25)")
     parser.add_argument("--annotation-confidence-threshold", type=float, default=0.1,
                         help="Minimum score for confident cell type assignment (default: 0.1)")
+    parser.add_argument(
+        "--reference-adata",
+        default="",
+        help=(
+            "Optional reference h5ad for annotation label transfer. "
+            "When provided, annotation will run marker scoring + KNN reference mapping."
+        ),
+    )
+    parser.add_argument(
+        "--reference-label-key",
+        default="cell_type",
+        help="Column in reference obs used for label transfer (default: cell_type)",
+    )
+    parser.add_argument(
+        "--reference-k",
+        type=int,
+        default=15,
+        help="K neighbors for reference label transfer (default: 15)",
+    )
+    parser.add_argument(
+        "--reference-min-confidence",
+        type=float,
+        default=0.6,
+        help="Min reference confidence to override marker label (default: 0.6)",
+    )
+    parser.add_argument(
+        "--reference-override-mode",
+        default="conservative",
+        choices=["conservative", "all"],
+        help=(
+            "How reference mapping overrides marker labels: "
+            "'conservative' (Unknown/low-confidence only) or 'all'."
+        ),
+    )
 
     # Checkpointing & resume
     parser.add_argument(
@@ -202,6 +329,43 @@ def _load_markers(markers_json: str) -> dict[str, list[str]]:
     return {str(k): [str(g) for g in v] for k, v in payload.items()}
 
 
+def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
+    """Apply dataset-size presets while preserving explicit user overrides."""
+    if args.scale_mode == "standard":
+        return args
+
+    if args.scale_mode == "large":
+        if args.optional_modules == DEFAULT_OPTIONAL_MODULES:
+            args.optional_modules = "clustering,annotation,differential_expression"
+        if args.n_top_genes == 3000:
+            args.n_top_genes = 2000
+        if args.n_pcs == 40:
+            args.n_pcs = 30
+        if args.n_neighbors == 15:
+            args.n_neighbors = 12
+        if args.leiden_resolution == 0.8:
+            args.leiden_resolution = 0.6
+        if args.de_n_genes == 300:
+            args.de_n_genes = 200
+        return args
+
+    if args.optional_modules == DEFAULT_OPTIONAL_MODULES:
+        args.optional_modules = "clustering"
+    if args.n_top_genes == 3000:
+        args.n_top_genes = 1000
+    if args.n_pcs == 40:
+        args.n_pcs = 20
+    if args.n_neighbors == 15:
+        args.n_neighbors = 10
+    if args.leiden_resolution == 0.8:
+        args.leiden_resolution = 0.4
+    if args.de_n_genes == 300:
+        args.de_n_genes = 100
+    if args.parallel_workers == 1:
+        args.parallel_workers = 1
+    return args
+
+
 def _validate_args(args: argparse.Namespace) -> None:
     """Validate CLI arguments before pipeline execution."""
     if args.min_genes >= args.max_genes:
@@ -222,11 +386,22 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise SystemExit(f"Error: --leiden-resolution must be > 0, got {args.leiden_resolution}")
     if args.de_n_genes < 1:
         raise SystemExit(f"Error: --de-n-genes must be >= 1, got {args.de_n_genes}")
+    if args.scvi_max_epochs < 1:
+        raise SystemExit(f"Error: --scvi-max-epochs must be >= 1, got {args.scvi_max_epochs}")
+    if args.scvi_n_latent < 1:
+        raise SystemExit(f"Error: --scvi-n-latent must be >= 1, got {args.scvi_n_latent}")
+    if args.reference_k < 1:
+        raise SystemExit(f"Error: --reference-k must be >= 1, got {args.reference_k}")
+    if not (0 <= args.reference_min_confidence <= 1):
+        raise SystemExit(
+            "Error: --reference-min-confidence must be in [0, 1], "
+            f"got {args.reference_min_confidence}"
+        )
 
 
 def main() -> None:
     """CLI entrypoint."""
-    args = parse_args()
+    args = _apply_scale_mode(parse_args())
     _validate_args(args)
     sample_root = Path(args.sample_root)
     outs_dir = (
@@ -272,6 +447,9 @@ def main() -> None:
         batch=BatchConfig(
             batch_key=args.batch_key,
             method=args.batch_method,
+            scvi_max_epochs=args.scvi_max_epochs,
+            scvi_n_latent=args.scvi_n_latent,
+            scvi_early_stopping=not args.no_scvi_early_stopping,
         ),
         cnv=CNVConfig(
             reference_group=args.cnv_reference_group,
@@ -292,6 +470,21 @@ def main() -> None:
         gene_signature=GeneSignatureConfig(
             signature_json=Path(args.signature_json) if args.signature_json else None,
         ),
+        paper_repro=PaperReproConfig(
+            spec_json=Path(args.paper_spec_json) if args.paper_spec_json else None,
+            strict=args.paper_repro_strict,
+        ),
+        pseudobulk=PseudobulkConfig(
+            sample_col=args.pseudobulk_sample_col or None,
+            group_col=args.pseudobulk_group_col,
+            contrast_col=args.pseudobulk_contrast_col or None,
+            contrast_a=args.pseudobulk_contrast_a or None,
+            contrast_b=args.pseudobulk_contrast_b or None,
+            contrast_json=Path(args.pseudobulk_contrast_json) if args.pseudobulk_contrast_json else None,
+            exploratory_group_vs_rest=args.pseudobulk_exploratory_group_vs_rest,
+            min_cells_per_sample=args.pseudobulk_min_cells_per_sample,
+            min_samples_per_condition=args.pseudobulk_min_samples_per_condition,
+        ),
         cbioportal=CbioPortalConfig(
             genes=[g.strip() for g in args.cbioportal_genes.split(",") if g.strip()],
             study_id=args.cbioportal_study,
@@ -308,6 +501,13 @@ def main() -> None:
         de_pval_threshold=args.de_pval_threshold,
         de_logfc_threshold=args.de_logfc_threshold,
         annotation_confidence_threshold=args.annotation_confidence_threshold,
+        reference_adata=Path(args.reference_adata) if args.reference_adata else None,
+        reference_label_key=args.reference_label_key,
+        reference_k=args.reference_k,
+        reference_min_confidence=args.reference_min_confidence,
+        reference_override_mode=args.reference_override_mode,
+        gpu_mode=args.gpu_mode,
+        scale_mode=args.scale_mode,
     )
     manifest = run_pipeline(cfg)
     print(manifest)

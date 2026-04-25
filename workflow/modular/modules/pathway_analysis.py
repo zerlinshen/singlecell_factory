@@ -25,6 +25,7 @@ class PathwayAnalysisModule:
     """
 
     name = "pathway_analysis"
+    requires_keys = {"uns": ["rank_genes_groups"]}
 
     # Hallmark gene sets subset for fallback mode
     HALLMARK_SETS = {

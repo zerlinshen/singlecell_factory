@@ -1,0 +1,2 @@
+/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_LARGE_AUTO_20260423_035243/.checkpoints/after_qc.json
+/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_LARGE_AUTO_20260423_035243/.checkpoints/after_cellranger.json

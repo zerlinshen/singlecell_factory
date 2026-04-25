@@ -1,0 +1,27 @@
+{
+  "papers": [
+    {
+      "paper_id": "nc2024_nsclc_single_cell",
+      "title": "Nature Communications 2024 NSCLC single-cell reproduction",
+      "source": {
+        "paper_path": "",
+        "repo_url": "local-reproduction-workspace",
+        "repo_commit": "workspace-artifact",
+        "license": "research-reproduction"
+      },
+      "adaptation_targets": [
+        "clustering",
+        "annotation",
+        "composition",
+        "immune_phenotyping",
+        "tumor_microenvironment",
+        "cell_communication",
+        "gene_signature_scoring",
+        "pseudobulk_de",
+        "metacell"
+      ],
+      "reproductions": [],
+      "notes": "Non-strict provenance ledger for the 2026-04-24 NC2024 full-cohort extended real run. Figure-level comparison is packaged locally from remote outputs and existing paper boards."
+    }
+  ]
+}

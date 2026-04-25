@@ -6,7 +6,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 from scipy import sparse
 
 from ..context import PipelineContext
@@ -27,6 +29,8 @@ class TrajectoryModule:
     """
 
     name = "trajectory"
+    requires_keys = {"obsm": ["X_umap"]}
+    provides_keys = {"obs": ["dpt_pseudotime"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

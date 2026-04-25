@@ -24,6 +24,7 @@ class CellFateModule:
     """
 
     name = "cell_fate"
+    requires_keys = {"obs": ["dpt_pseudotime"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

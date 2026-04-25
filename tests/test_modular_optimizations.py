@@ -1,9 +1,26 @@
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from sklearn.neighbors import NearestNeighbors
 
 from workflow.modular.modules.pseudo_velocity import compute_pseudo_velocity_vectorized
 from workflow.modular.perf_baseline import baseline_pseudo_velocity
+
+
+def _reference_pseudo_velocity_loop(umap, pseudotime, n_neighbors=15):
+    """Original per-cell Python loop — kept as ground-truth reference for regression tests."""
+    knn = NearestNeighbors(n_neighbors=n_neighbors)
+    knn.fit(umap)
+    _, idx = knn.kneighbors(umap)
+    velocity = np.zeros_like(umap)
+    for i in range(umap.shape[0]):
+        nbr = idx[i, 1:]
+        dt = pseudotime[nbr] - pseudotime[i]
+        direction = umap[nbr] - umap[i]
+        if np.allclose(dt, 0.0):
+            continue
+        velocity[i] = (direction * dt[:, None]).mean(axis=0)
+    return velocity
 
 
 def test_vectorized_pseudo_velocity_matches_baseline():
@@ -15,9 +32,11 @@ def test_vectorized_pseudo_velocity_matches_baseline():
     adata.obsm["X_umap"] = umap
     adata.obs["dpt_pseudotime"] = pseudotime
 
+    reference = _reference_pseudo_velocity_loop(umap, pseudotime, n_neighbors=15)
     baseline = baseline_pseudo_velocity(adata, n_neighbors=15)
     optimized = compute_pseudo_velocity_vectorized(umap, pseudotime, n_neighbors=15)
-    assert np.allclose(baseline, optimized, atol=1e-10, rtol=1e-7)
+    assert np.allclose(reference, baseline, atol=1e-10, rtol=1e-7)
+    assert np.allclose(reference, optimized, atol=1e-10, rtol=1e-7)
 
 
 def test_annotation_second_score_vectorized():

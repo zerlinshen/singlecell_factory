@@ -39,3 +39,4 @@ coverage.xml
 
 # IDE/system
 .DS_Store
+.omx/

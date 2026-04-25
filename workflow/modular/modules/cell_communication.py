@@ -22,6 +22,7 @@ class CellCommunicationModule:
     """
 
     name = "cell_communication"
+    requires_keys = {"obs": ["cell_type"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

@@ -1,0 +1,10 @@
+/home/zerlinshen/conda/envs/sc_gpu/lib/python3.13/site-packages/anndata/_io/zarr.py:44: UserWarning: Writing zarr v2 data will no longer be the default in the next minor release. v3 data will be written by default. If you are explicitly setting this configuration, consider migrating to the zarr v3 file format.
+  f = open_write_group(store)
+/home/zerlinshen/singlecell_factory/workflow/modular/modules/qc.py:111: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  plt.tight_layout()
+/home/zerlinshen/singlecell_factory/workflow/modular/modules/qc.py:111: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  plt.tight_layout()
+/home/zerlinshen/conda/envs/sc_gpu/lib/python3.13/site-packages/anndata/_io/zarr.py:44: UserWarning: Writing zarr v2 data will no longer be the default in the next minor release. v3 data will be written by default. If you are explicitly setting this configuration, consider migrating to the zarr v3 file format.
+  f = open_write_group(store)
+/tmp/tmpk6jh9lvc: line 23: 221894 Killed                  python -m workflow.modular.cli --project NC2024_NSCLC_FULL_COHORT_STAGE1_LARGE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort --output-dir /home/zerlinshen/singlecell_factory/results --optional-modules clustering,annotation,composition,immune_phenotyping,tumor_microenvironment --batch-key sample --checkpoint --gpu-mode auto --scale-mode large
+ERROR conda.cli.main_run:execute(142): `conda run python -m workflow.modular.cli --project NC2024_NSCLC_FULL_COHORT_STAGE1_LARGE_AUTO --sample-root /home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort --output-dir /home/zerlinshen/singlecell_factory/results --optional-modules clustering,annotation,composition,immune_phenotyping,tumor_microenvironment --batch-key sample --checkpoint --gpu-mode auto --scale-mode large` failed. (See above for error)

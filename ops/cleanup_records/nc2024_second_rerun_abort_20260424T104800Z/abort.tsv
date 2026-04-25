@@ -1,0 +1,2 @@
+reason	action
+known stale counts-layer materialization path	abort second rerun and relaunch with lazy-preserving hotfix

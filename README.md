@@ -1,19 +1,198 @@
 # singlecell_factory v5.0 — Modular scRNA-seq Pipeline
 
-A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 21 optional analysis modules + automatic dependency resolution + GPU acceleration + categorized output**.
+A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 22 optional analysis modules + automatic dependency resolution + GPU acceleration + categorized output**.
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells.
+
+Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
+
+## Current Operational Defaults For NC2024-Style Full-Cohort Runs
+
+- Read run memory first:
+  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+- For the NC2024 full cohort, treat `large` as a capacity probe rather than the main completion lane.
+- Use direct `massive` for debug and recovery work.
+- Use controller `large -> massive` only for orchestration validation.
+- The canonical prepared input is:
+  - `/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr`
+- Historical stage-1 direct/controller success runs from `2026-04-23` were
+  superseded for storage governance and then deleted after metadata archival:
+  - archive:
+    `/home/zerlinshen/singlecell_factory/ops/cleanup_records/nc2024_pre_extended_real_run_20260424T051809Z`
+  - deleted direct success:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO_20260423_031222`
+  - deleted controller-fallback success:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552`
+- The retained fresh stage-1 evidence run is:
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329`
+- The current extended full-cohort real-run source of truth is:
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003`
+  - launch log:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.launch.log`
+  - final object:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/final_adata.h5ad`
+  - result summary: `810218 x 30374`, `33G` final H5AD, `20 ok` modules plus
+    one original `pseudobulk_de` failure row recovered post-run from
+    `final_adata.h5ad`
+  - recovery outputs:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/pseudobulk_de_recovery`
+  - remote R report bundle:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/r_plots/extended_real_run_main_20260424`
+- The local machine is now treated as an organization/review surface for processed outputs, not as a maintained local R pipeline.
+- For reproduce-stage NC2024 full-cohort work, interpret "all modules" as
+  "all eligible modules", not "every imaginable module regardless of modality
+  or contrast contract".
+- Current eligibility guardrails:
+  - `rna_velocity` is eligible only when true splicing modality is available
+    (`spliced/unspliced` layers, loom, or BAM+GTF).
+  - `pseudobulk_de` is eligible only when raw counts exist and either:
+    - an explicit confirmatory contrast contract is provided, or
+    - exploratory `group_vs_rest` is explicitly enabled.
+- Plotting boundary:
+  - Python still emits module-native QC, diagnostic, and exact pipeline figures.
+  - R is preferred for publication-style large-cohort figures where it is
+    better: rasterized UMAPs, dot plots, heatmaps, composition panels, and
+    presentation-ready figure boards.
+- R plotting/reporting for large NC2024 outputs is remote-side:
+  - R runtime: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
+  - bridge scripts: `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/scripts/`
+  - historical note: the bridge folder name still says `local_r_pipeline_macbook`, but current operation is remote-first.
+  - preferred command:
+    ```bash
+    bash bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh \
+      /home/zerlinshen/singlecell_factory/results/<run> \
+      /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+      cell_type leiden
+    ```
+  - bridge controls for prettier/high-throughput remote plots:
+    ```bash
+    R_PLOT_THREADS=8 \
+    R_BUNDLE_MARKERS=ELF3,EPCAM,KRT8,KRT18,PTPRC,CD3E,LYZ,MS4A1,NKG7 \
+    bash bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh \
+      /home/zerlinshen/singlecell_factory/results/<run> \
+      /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+      cell_type leiden 200000
+    ```
+  - reuse guard: the wrapper reuses a bundle only when source paths match,
+    `final_adata.h5ad` size/mtime metadata match the manifest, optional
+    `R_BUNDLE_MARKERS` / effective `R_BUNDLE_OBS_COLS` / effective
+    `R_BUNDLE_OBSM` requests match, and the R validator passes file SHA256
+    checks.
+  - parameter contract: `R_BUNDLE_OBS_COLS` and `R_BUNDLE_OBSM` are additive,
+    not replacement controls. The wrapper always keeps selected `group_by`,
+    selected `cluster_by`, `X_umap`, and `X_pca`; ROI marker-dot plots use every
+    numeric marker column exported in `marker_expr.csv.gz`.
+  - plotting guard: R UMAPs use rasterized points through `ggrastr` when
+    available, so R can draw publication-style large-cohort figures without
+    repeatedly loading the full expression matrix.
+- Remote R environment hardening from `2026-04-24`:
+  - environment: `/home/zerlinshen/conda/envs/r_multiomics`
+  - installed and validated for NC2024 reporting:
+    `Seurat 5.4.0`, `SeuratObject 5.4.0`, `readr`, `ggrastr`,
+    `scattermore`, `pheatmap`, `ComplexHeatmap`, `circlize`, `hdf5r`,
+    `harmony`, `BiocManager`, `R.utils`, `zellkonverter`, and `remotes`
+  - validation artifact:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/r_env_dependency_smoke_20260424`
+  - validation used the existing manifest-backed `r_bundle`, sampled `100000`
+    cells for raster UMAP, generated `pheatmap` and `ComplexHeatmap` outputs,
+    and opened `final_adata.h5ad` via `hdf5r` without converting the full object
+    into Seurat.
+  - `SeuratDisk` is intentionally not installed in this environment: the
+    conda-forge package currently conflicts with R 4.5 / `zellkonverter`
+    through old `spatstat` requirements. Use `zellkonverter`/`hdf5r` for small
+    H5AD bridge checks and the compact bundle for NC2024-scale plotting.
+  - bridge code-review hardening from `2026-04-24T04:10:07Z` produced:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_export_20260424`
+    and verified reuse at:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_reuse_20260424`
+  - Ralph follow-up at `2026-04-24T04:15:10Z` refreshed the canonical
+    `r_bundle` itself with the stricter manifest keys and then verified default
+    wrapper reuse:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_refresh_20260424`
+    and
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_reuse_20260424`
+- Artifact inventory cleanup from `2026-04-24T04:50:00Z` used
+  `execution_mode=verification_cleanup`, not a pipeline rerun:
+  - preserved canonical prepared input, prior successful direct/controller
+    runs, the fresh `massive` run, fresh `final_adata.h5ad`, fresh `r_bundle`,
+    and the fallback proof log
+  - deleted only disposable `/tmp` bridge bundles/logs:
+    `/tmp/nc2024_bridge_review_bundle_20260424`,
+    `/tmp/nc2024_bridge_custom_contract_bundle_20260424`,
+    `/tmp/nc2024_bridge_custom_contract_20260424.log`,
+    `/tmp/nc2024_bridge_custom_contract_reuse_20260424.log`,
+    `/tmp/nc2024_bridge_canonical_reuse_after_contract_fix_20260424.log`, and
+    `/tmp/nc2024_remote_parse_after_deslop.log`
+  - reclaimed about `226M`
+  - no prepare, controller, benchmark, or full-cohort stage-1 run was launched
+  - cleanliness alone is not a reason to rerun NC2024 full cohort; require a
+    concrete reproducibility gap or acceptance criterion first
+- Pre-extended-run cleanup from `2026-04-24T05:18:09Z` used
+  `execution_mode=storage_governance_cleanup` before the approved full-cohort
+  extended real run:
+  - preserved raw/reference data, canonical prepared Zarr, fresh retained
+    stage-1 run, cleanup metadata, launch logs, final H5ADs, manifests, and
+    local-synced reproduction packages
+  - deleted old superseded 2026-04-23 result directories and bulky checkpoint
+    AnnData objects whose metadata sidecars had already been archived
+  - reclaimed enough disk for the extended run without compromising the run
+    ledger
+  - deletion of test/reproduction result directories is acceptable only when
+    each run is recorded and the current canonical artifacts are explicitly
+    named in `ops/before_every_run/LATEST.md`
+- Extended real-run execution from `2026-04-24T13:20:03+08:00` used
+  `execution_mode=debug_massive`, direct `massive`, and
+  `SCF_MASSIVE_CHECKPOINT_POLICY=metadata_only`:
+  - no prepare rerun was performed; input was the canonical prepared Zarr
+  - `pydeseq2` API drift in `pseudobulk_de` was patched after the original
+    pipeline row failed; a synthetic contrast smoke test and post-run recovery
+    from `final_adata.h5ad` passed
+  - original `module_status.csv` remains unedited and still records
+    `pseudobulk_de` as failed; use the recovery directory above for recovered
+    pseudobulk evidence
+  - known fallbacks are evidence, not hidden failures: `pathway_analysis` used
+    fallback when decoupler PROGENy was unavailable, `composition` used
+    chi-squared fallback when pertpy/scCODA was unavailable, and `metacell`
+    used MiniBatchKMeans fallback when SEACells was unavailable
+
+## NC2024 Targeted Post-Baseline Evidence Lanes
+
+Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted evidence lanes over repeating stage-1.
+
+- Do not rerun full-cohort stage-1 just to inspect subtype checkpoint hierarchy.
+- Use the existing subtype communication outputs as inputs when the question is:
+  - which paper-relevant checkpoint pairs exist in LUAD/LUSC raw subtype LIANA outputs
+  - which of those pairs are hidden by the current checkpoint top20 summary surface
+- Rerunnable checkpoint audit script:
+  - `python scripts/audit_nc2024_subtype_checkpoint_pairs.py --luad-raw-csv ... --lusc-raw-csv ... --luad-top20-csv ... --lusc-top20-csv ... --output-dir ...`
+- Higher-level checkpoint hierarchy summary:
+  - `python scripts/summarize_nc2024_checkpoint_hierarchy.py --audit-dir <checkpoint-audit-run-dir>`
+- One-command verification + regeneration wrapper:
+  - `bash scripts/verify_nc2024_subtype_checkpoint_audit.sh`
+- Current canonical example inputs:
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/luad/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/lusc/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_adenocarcinoma_checkpoint_top20.csv`
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_squamous_cell_carcinoma_checkpoint_top20.csv`
+- This lane is intended to answer a paper-facing summary question, not to replace the full baseline or to silently upgrade the checkpoint verdict to `matched`.
+
 
 ## Features
 
 - **3 mandatory modules** (cellranger, QC, doublet detection) ensure data quality baseline
-- **21 optional analysis modules** covering the full scRNA-seq workflow
+- **22 optional analysis modules** covering the full scRNA-seq workflow
 - Automatic topological dependency resolution — just list what you want, dependencies are auto-included
 - **GPU acceleration** — auto-detected rapids-singlecell backend for clustering, batch post-processing, DE ranking, and evolution clone markers
 - **Categorized output** — each module's figures and tables in its own subfolder
-- **Checkpoint & resume** — zarr-accelerated checkpoints with h5ad fallback
-- **Parallel execution** — thread-safe parallel tiers with cost-aware scheduling
+- **Checkpoint & resume** — zarr-accelerated checkpoints with h5ad fallback; `--resume-from` reuses the latest checkpointed run for the same project and backtracks to the nearest available checkpoint
+- **Massive checkpoint policy** — set `SCF_MASSIVE_CHECKPOINT_POLICY=metadata_only` with `--checkpoint` to keep per-module JSON sidecars without writing 10GB+ AnnData checkpoints for every full-cohort module.
+- **Large-dataset modes** — `--scale-mode large|massive` selects safer defaults for 100k+ and several-hundred-thousand+ cell datasets without changing the underlying biological model family
+- **Parallel execution** — thread-safe parallel tiers with cost-aware scheduling, merge-back safety warnings for structural mutations
+- **Module contracts** — `requires_keys` / `provides_keys` declarations enable pre-flight validation; missing upstream data skips optional modules gracefully instead of crashing
+- **Normalized status tracking** — module results are recorded as `ok` / `skipped` / `failed` in both `run_manifest.json` and `module_status.csv`
 - **Module runtime telemetry** — per-module wall-time automatically stored in `run_manifest.json`
+- **Raw-count integrity for pseudobulk** — `cellranger` stores raw UMI matrix in `adata.layers["counts"]`; `pseudobulk_de` consumes this layer only
+- **Reference-aware annotation (optional)** — KNN label transfer from reference `h5ad` can override low-certainty marker labels
 - Multi-backend support: each module auto-detects the best available tool
 - Validated against cBioPortal mutation data
 - Engineering principle: **accuracy and reproducibility first, performance second**
@@ -34,7 +213,7 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 |---|---|---|
 | `clustering` | Normalization, HVG, PCA, UMAP, Leiden clustering | doublet_detection |
 | `cell_cycle` | Cell cycle scoring (S/G2M), optional regression | clustering |
-| `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama) | clustering |
+| `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama/scVI/MNN/fastMNN-style) | clustering |
 | `differential_expression` | Cluster marker genes (`wilcoxon` default, configurable), significance filtering | clustering |
 | `annotation` | Marker-based cell type annotation with confidence scores | clustering |
 | `trajectory` | PAGA trajectory graph + DPT pseudotime + gene expression dynamics | clustering |
@@ -53,6 +232,7 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 | `cell_fate` | Probabilistic cell fate mapping (CellRank / diffusion-based fallback) | trajectory |
 | `composition` | Differential cell type composition analysis (pertpy/scCODA / chi-squared fallback) | annotation |
 | `metacell` | Metacell aggregation (SEACells / MiniBatchKMeans fallback) — noise reduction for large datasets | clustering |
+| `paper_repro` | Paper-driven reproduction ledger: track paper/repo/commit/license and validate figure parity against pipeline outputs | clustering |
 
 ### Module Dependency DAG
 
@@ -74,6 +254,7 @@ cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression
                                                       +-> gene_regulatory_network
                                                       +-> gene_signature_scoring
                                                       +-> metacell
+                                                      +-> paper_repro
 ```
 
 Standalone flowchart artifact (generated from `workflow/modular/pipeline.py`):
@@ -98,7 +279,7 @@ singlecell_factory/
 │   ├── context.py          # Runtime context (per-module output dirs, checkpointing)
 │   ├── pipeline.py         # Pipeline orchestration + dependency resolution
 │   ├── perf_baseline.py    # Performance baselines
-│   └── modules/            # 24 analysis modules
+│   └── modules/            # 25 analysis modules
 ├── data/raw/               # Input datasets
 ├── results/                # Pipeline output (each run = timestamped folder with analysis subfolders)
 ├── tests/                  # Test suite
@@ -134,7 +315,7 @@ export NUMBA_CACHE_DIR=/tmp/numba_cache
 - Mandatory-module runtime: `scrublet`
 - Optional backends (auto-detected at runtime):
   - `rapids-singlecell`, `cupy` (GPU clustering + batch post-processing + DE + evolution clone-marker ranking)
-  - `harmonypy` / `bbknn` / `scanorama` (batch correction)
+  - `harmonypy` / `bbknn` / `scanorama` / `scvi-tools` / `mnnpy` (batch correction)
   - `infercnvpy`, `pybiomart` (CNV)
   - `gseapy`, `decoupler` (pathway / TF activity)
   - `liana` (cell-cell communication)
@@ -162,6 +343,12 @@ data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix/
 
 Use one of the following copy-paste profiles directly.
 
+Eligibility note:
+- Only include `rna_velocity` when true splicing inputs are available.
+- Only include `pseudobulk_de` as a confirmatory module when an explicit
+  contrast contract is provided. Otherwise treat it as exploratory and enable it
+  intentionally.
+
 1. **Full local analysis (recommended, no external network dependency)**
 
 ```bash
@@ -170,7 +357,8 @@ python -m workflow.modular.cli \
   --sample-root data/raw/lung_carcinoma_3k_count \
   --optional-modules clustering,cell_cycle,batch_correction,differential_expression,annotation,trajectory,pseudo_velocity,rna_velocity,cnv_inference,pathway_analysis,cell_communication,gene_regulatory_network,immune_phenotyping,tumor_microenvironment,gene_signature_scoring,evolution,pseudobulk_de,cell_fate,composition,metacell \
   --velocity-bam data/raw/lung_carcinoma_3k_count/outs/possorted_genome_bam.bam \
-  --transcriptome-dir ref/reference/refdata-gex-GRCh38-2024-A
+  --transcriptome-dir ref/reference/refdata-gex-GRCh38-2024-A \
+  --pseudobulk-exploratory-group-vs-rest
 ```
 
 2. **Full analysis with online cancer-cohort validation**
@@ -181,7 +369,8 @@ python -m workflow.modular.cli \
   --sample-root data/raw/lung_carcinoma_3k_count \
   --optional-modules clustering,cell_cycle,batch_correction,differential_expression,annotation,trajectory,pseudo_velocity,rna_velocity,cnv_inference,pathway_analysis,cell_communication,gene_regulatory_network,validate_cbioportal,immune_phenotyping,tumor_microenvironment,gene_signature_scoring,evolution,pseudobulk_de,cell_fate,composition,metacell \
   --velocity-bam data/raw/lung_carcinoma_3k_count/outs/possorted_genome_bam.bam \
-  --transcriptome-dir ref/reference/refdata-gex-GRCh38-2024-A
+  --transcriptome-dir ref/reference/refdata-gex-GRCh38-2024-A \
+  --pseudobulk-exploratory-group-vs-rest
 ```
 
 3. **Fast baseline (no RNA velocity)**
@@ -193,6 +382,204 @@ python -m workflow.modular.cli \
   --optional-modules clustering,differential_expression,annotation,trajectory,pseudo_velocity,cnv_inference,pathway_analysis
 ```
 
+### Large Dataset Modes
+
+Use `--scale-mode` to switch from convenience defaults to memory-safer presets:
+
+| Mode | Intended scale | Default optional modules when not overridden | Key parameter shifts |
+|---|---|---|---|
+| `standard` | up to ~100k cells | `clustering,differential_expression,annotation,trajectory,pseudo_velocity` | full default behavior |
+| `large` | ~100k-300k cells | `clustering,annotation,differential_expression` | fewer HVGs/PCs, slightly lower graph density |
+| `massive` | ~300k to ~1M cells | `clustering` | clustering-first pass, reduced HVGs/PCs/neighbors, lighter memory footprint; auto-prefers CSS-style representation when sample labels are available |
+
+Examples:
+
+```bash
+python -m workflow.modular.cli \
+  --project NSCLC_100K_large \
+  --sample-root data/raw/my_large_dataset \
+  --scale-mode large \
+  --checkpoint
+```
+
+```bash
+python -m workflow.modular.cli \
+  --project NSCLC_900K_massive \
+  --sample-root data/raw/my_massive_dataset \
+  --scale-mode massive \
+  --checkpoint
+```
+
+Recommended interpretation:
+- `~100k cells` is already a large dataset, but it is not an extreme scale for a 96 GB workstation if runs are staged sensibly.
+- `300k+ cells` is a very large dataset and should usually start with `--scale-mode massive` or a staged subset-first workflow.
+- `~1M cells` is an extreme scale for classic full-object scRNA workflows and should be treated as clustering-first, then subset/refine later.
+- In `--scale-mode massive`, the pipeline now prefers a CSS-style clustering representation when `adata.obs["sample"]` is available; otherwise it automatically falls back to the lighter clustering-first route.
+
+### Memory Pressure and Swap Guidance
+
+When large runs approach RAM limits:
+
+- Prefer reducing module scope first (`--scale-mode large` or `--scale-mode massive`) before changing hardware assumptions.
+- A moderate SSD-backed swapfile (for example `30-40 GB`) can help prevent abrupt OOM kills and make checkpoint-heavy runs more forgiving.
+- On this workstation, Harmony batch correction is intentionally routed to CPU in normal `auto/off` usage because the current `harmonypy` wrapper path was unstable under the previous GPU route; the core Harmony algorithm itself remains valid and was verified separately on both CPU and CUDA.
+- Current GPU reality on this workstation is module-specific rather than globally broken: basic CUDA, PyTorch CUDA, CuPy, and Harmony core all work; the main unstable paths are RAPIDS PCA (`CUSOLVER_STATUS_INTERNAL_ERROR`) and RAPIDS DE (`CUBLAS_STATUS_NOT_INITIALIZED`) on real workloads.
+- For clustering, the pipeline now supports a hybrid fallback path: CPU PCA followed by GPU neighbors/UMAP/Leiden when GPU PCA is the failing substep.
+- Swap is a safety buffer, not real RAM: it may keep a run alive, but it can become much slower once the workflow starts paging heavily.
+- For large but not extreme runs (for example around `100k` cells), swap can be a useful bridge before a RAM upgrade.
+- For extreme runs (several hundred thousand to ~1M cells), swap alone is usually not enough; use staged execution, lighter module sets, subset-first refinement, and consider adding RAM.
+- Put swap on fast NVMe storage when possible.
+- If a run is repeatedly `Killed`, treat that as a sign to lower memory pressure first, then add swap, then consider hardware upgrades.
+
+Practical order of operations for large datasets:
+1. Switch to `--scale-mode large` or `--scale-mode massive`.
+2. Reduce modules to the minimum biologically necessary first pass.
+3. Add `30-40 GB` swap as an OOM safety net if RAM is tight.
+4. Split downstream analysis into subset-specific second-stage runs.
+5. Upgrade RAM when very large runs become routine rather than exceptional.
+
+## NC2024 Full-Cohort Remote Lane
+
+The NC2024 `E-MTAB-13526` reproduction lane now has a dedicated full-cohort remote path.
+Use these owned scripts instead of the older tumor-only launchers:
+
+- `scripts/prepare_emtab13526_full_cohort_zarr.py`
+- `scripts/run_emtab13526_full_cohort_stage1.sh`
+- `scripts/run_emtab13526_full_cohort_with_fallback.sh`
+
+Behavior contract:
+- build one unsplit `full_cohort/prepared_input.zarr` covering all `81` samples
+- emit `full_cohort/prepared_input.summary.json` with per-sample retained-barcode accounting
+- use zarr parts only, never `h5ad` parts
+- validate CSR sparse storage and require `X.shape[0] == retained_barcodes_total` before writing `prepared_input.ready`
+- treat stale `prepared_input.zarr` directories without the matching summary JSON as invalid for reuse
+- run one `large` stage-1 probe first
+- auto-promote once to `massive` only on explicit capacity failures
+
+Primary human entrypoint:
+
+```bash
+bash scripts/run_emtab13526_full_cohort_with_fallback.sh
+```
+
+The controller owns:
+- preflight inventory capture
+- cleanup of stale derived artifacts
+- prepare-if-missing or validate-only prepare checks
+- summary-backed prepared-input reuse checks (directory + ready sentinel + `prepared_input.summary.json`)
+- one `large` run
+- one optional `massive` retry
+- final terminal status logging
+
+Final controller states:
+- `FINAL_STATUS=SUCCESS_LARGE`
+- `FINAL_STATUS=SUCCESS_MASSIVE`
+- `FINAL_STATUS=STOP_NO_FALLBACK`
+- `FINAL_STATUS=STOP_AFTER_MASSIVE_FAILURE`
+
+Current verified NC2024 status:
+- Frozen prepared input is validated at `884050 x 33538` with `81` samples and `retention_fraction = 0.001642391120829157`.
+- A direct solo `massive` stage-1 run now succeeds end-to-end at `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO_20260423_031222`.
+- A full controller validation also succeeds truthfully: `large` is capacity-killed after `qc`, controller logs `LARGE_FAILED_CAPACITY_PROMOTING_TO_MASSIVE`, and the promoted `massive` run succeeds at `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552` with `FINAL_STATUS=SUCCESS_MASSIVE`.
+- Recommended usage now is: direct `massive` for module debugging, controller for production-like orchestration validation.
+
+Success for either mode is defined by both:
+- `run_manifest.json`
+- `module_status.csv`
+
+Required `module_status.csv == ok` modules:
+- `cellranger`
+- `qc`
+- `doublet_detection`
+- `clustering`
+- `annotation`
+- `composition`
+- `immune_phenotyping`
+- `tumor_microenvironment`
+
+Required downstream artifacts:
+- `annotation/cell_type_annotation.csv`
+- `composition/composition_proportions.csv`
+- `immune_phenotyping/immune_phenotyping.csv`
+- `tumor_microenvironment/tme_scores_per_cell.csv`
+
+Important caveat:
+- `large` is only a bounded probe in this lane.
+- The protected scale-aware fallback is `massive`, because lazy zarr loading, grouped scrublet, and CSS sparse/SVD protections are `massive`-only in the current codebase.
+
+### Sample-wise / Batch-wise Staging for Massive Cohorts
+
+This is a common and recommended strategy for very large datasets, especially multiplex or cohort-scale studies.
+
+Important distinction:
+- The reason to stage by sample/batch is not only to save RAM.
+- It also improves data hygiene by applying QC and doublet handling before all cells are merged into one giant object.
+
+Use this strategy when the dataset contains multiple samples, donors, batches, lanes, or multiplexed barcodes. For example, the 900k NSCLC example includes many per-sample entries in its aggregation sheet rather than one biologically homogeneous sample.
+
+Practical note for this pipeline:
+- CSS-style integration needs per-cell sample labels in `adata.obs["sample"]`.
+- If an aggregated matrix lacks those labels, massive mode will not force CSS blindly; it will fall back to the simpler clustering-first path until sample mapping is restored.
+- For public multiplex datasets that expose stable probe-barcode groups but not full per-cell sample assignment, a probe-group proxy can still be used as an engineering-stage CSS approximation for large-data staging. This is useful for RAM-constrained first-pass processing, but it should be described as a proxy strategy rather than a final publication-grade sample assignment.
+
+Recommended workflow:
+1. Run the same QC logic per sample or per multiplexed sample group.
+2. Remove low-quality cells and doublets before full aggregation when possible.
+3. Build a first-pass clustering or reference on a reduced representative object.
+4. Integrate or map the remaining cells back onto that reference.
+5. Run heavier downstream modules on biologically relevant subsets rather than the full giant object.
+
+How this relates to batch effects:
+- Batch effects are not created by QC itself.
+- Batch effects usually come from differences in donor, library prep, lane, chemistry, run, or processing time.
+- Applying the same QC standard across samples helps reduce technical noise and makes later integration more consistent, but it does not by itself remove batch effects.
+- Proper integration or batch-aware modeling is still needed when multiple samples are combined.
+
+Practical guidance for a 96 GB workstation:
+- Around `100k` cells: often manageable with staged execution.
+- Several hundred thousand cells: strongly prefer sample-wise staging plus `--scale-mode massive`.
+- Near `1M` cells: do not treat as an ordinary single-object run; use clustering-first, reference mapping, and subset refinement.
+
+### Relationship to multiomics_r_factory
+
+`singlecell_factory` is the upstream analysis engine.
+
+It is responsible for:
+- raw and processed single-cell data handling
+- checkpointed analysis runs
+- module outputs and analysis artifacts
+- producing the result directories that downstream reporting consumes
+
+`multiomics_r_factory` is the downstream R/report workspace that depends on outputs generated here.
+
+Practical dependency direction:
+- `singlecell_factory` -> `multiomics_r_factory`
+
+That means:
+- large objects and primary analysis should originate here
+- downstream R plotting/report work is remote-side by default, either through the bridge mirror under `singlecell_factory` or the broader remote `multiomics_r_factory`
+- the local Mac is a review/organization surface, not the maintained R plotting runtime for NC2024-scale work
+- the two remote workspaces should be treated as linked analysis/report layers rather than unrelated repositories
+
+### Remote R Pipeline Bridge
+
+A remote R plotting/report workflow is kept in two forms:
+- Bridge mirror inside singlecell_factory:
+  - `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/`
+- Recommended independent remote R workspace:
+  - `/home/zerlinshen/multiomics_r_factory/`
+
+Rationale:
+- `singlecell_factory` should remain the main compute/analysis engine for remote single-cell workflows.
+- The R layer is broader than scRNA-seq alone and may later cover spatial transcriptomics, polished publication graphics, multi-omics summaries, and other R-native plotting/report tasks.
+- Therefore the long-term cleaner architecture is: analysis engine (`singlecell_factory`) + independent R workspace (`multiomics_r_factory`) + explicit bridge between them.
+
+Intended use:
+- Use the bridge mirror inside `singlecell_factory` when tight co-location with pipeline outputs is convenient.
+- Use `/home/zerlinshen/multiomics_r_factory/` as the preferred long-term home for broader R analysis and figure workflows.
+- Use compact manifest-backed bundles rather than forcing direct `.h5ad` conversion in R for NC2024-scale cohorts.
+- Keep Mac-side work focused on reviewing and organizing the remote-generated figures/reports.
+
 ### AI / Automation Checklist
 
 Before launching a run, verify:
@@ -202,6 +589,23 @@ Before launching a run, verify:
 3. If `rna_velocity` is enabled without `--velocity-gtf`, ensure `--transcriptome-dir` points to a reference containing `genes/genes.gtf(.gz)` or `genes.gtf(.gz)`.
 4. In restricted-network environments, remove `validate_cbioportal` from `--optional-modules`.
 5. Export `MPLCONFIGDIR` and `NUMBA_CACHE_DIR` to avoid startup/cache issues.
+
+### Paper-Driven Continuous Optimization
+
+To continuously improve the pipeline by learning from external papers/repos, enable `paper_repro` and provide a spec file:
+
+```bash
+python -m workflow.modular.cli \
+  --project LUSC_paper_repro \
+  --sample-root data/raw/lung_carcinoma_3k_count \
+  --optional-modules clustering,paper_repro \
+  --paper-spec-json docs/paper_repro/paper_spec.json
+```
+
+`paper_repro` outputs:
+- provenance ledger (paper path, repo URL, commit, license)
+- figure parity checks against current run outputs
+- machine-readable reproduction report for iterative pipeline optimization
 
 ### Full Analysis (recommended)
 
@@ -234,6 +638,12 @@ python -m workflow.modular.cli \
   --optional-modules clustering,differential_expression,annotation \
   --checkpoint --resume-from annotation
 ```
+
+Resume behavior details:
+- `--resume-from` requires an existing `.checkpoints/` directory from a prior run of the same `--project`.
+- The pipeline reuses the latest run directory for that project that contains checkpoints.
+- If checkpoint `after_<resume-from-1>` is missing, it automatically searches backward for the nearest earlier checkpoint in execution order.
+- If no earlier checkpoint exists, the run exits with an explicit `FileNotFoundError`.
 
 ### Parallel Execution
 
@@ -272,112 +682,42 @@ You can still pass `--velocity-gtf` explicitly to override auto-discovery.
 
 ## Output Structure
 
-Each run creates an independent timestamped folder under `results/`. Subfolders are named by analysis type:
+Each run creates an independent timestamped folder under `--output-dir` (CLI default: `/home/zerlinshen/singlecell_factory/results`):
 
 ```
-results/LUSC_3k_Analysis_{timestamp}/
-├── final_adata.h5ad                          # Final AnnData object
-├── run_manifest.json                         # Run metadata
-├── module_status.csv                         # Module execution status
-│
-├── cellranger/                               # Data loading
-├── qc/                                       # Quality control
-│   ├── qc_violin_pre_filter.png
-│   ├── qc_violin_post_filter.png
-│   ├── qc_scatter_pre_filter.png
-│   └── qc_scatter_post_filter.png
-├── doublet_detection/
-│   └── doublet_scores.png
-├── clustering/
-│   ├── pca_variance_explained.png
-│   └── umap_leiden.png
-├── annotation/
-│   ├── cell_type_annotation.csv
-│   ├── cluster_majority_cell_type.csv
-│   ├── umap_cell_type.png
-│   ├── umap_annotation_confidence.png
-│   └── cell_type_composition.png
-├── cell_cycle/
-│   ├── cell_cycle_scores.csv
-│   └── cell_cycle_umap.png
-├── cnv_inference/
-│   ├── cnv_scores.csv
-│   ├── cnv_classification.json
-│   ├── cnv_score_umap.png
-│   └── cnv_heatmap.png
-├── differential_expression/
-│   ├── marker_genes.csv
-│   ├── marker_genes_all.csv
-│   ├── marker_top5_by_cluster.csv
-│   ├── de_dotplot_top5.png
-│   ├── de_heatmap_top5.png
-│   └── de_volcano.png
-├── gene_regulatory_network/
-│   ├── tf_activity_per_cluster.csv
-│   ├── tf_top_per_cluster.json
-│   └── tf_activity_heatmap.png
-├── gene_signature_scoring/
-│   ├── gene_signature_scores.csv
-│   ├── gene_signature_per_cluster.csv
-│   ├── signature_heatmap.png
-│   ├── signature_umap.png
-│   └── signature_correlation.png
-├── trajectory/
-│   ├── dpt_pseudotime.csv
-│   ├── pseudotime_per_cluster.csv
-│   ├── pseudotime_top_genes.csv
-│   ├── pseudotime_dpt_umap.png
-│   ├── paga_trajectory.png
-│   ├── pseudotime_gene_heatmap.png
-│   └── pseudotime_violin_per_cluster.png
-├── cell_communication/
-│   ├── cell_communication_lr.csv
-│   └── cell_communication_heatmap.png
-├── immune_phenotyping/
-│   ├── immune_phenotyping.csv
-│   ├── immune_subtype_summary.csv
-│   ├── umap_immune_subtype.png
-│   ├── immune_exhaustion_umap.png
-│   ├── immune_cytotoxicity_umap.png
-│   ├── immune_subtype_composition.png
-│   └── immune_signature_heatmap.png
-├── tumor_microenvironment/
-│   ├── tme_scores_per_cell.csv
-│   ├── tme_scores_per_cluster.csv
-│   ├── checkpoint_expression.csv
-│   ├── tme_cyt_umap.png
-│   ├── tme_tis_umap.png
-│   ├── tme_signature_heatmap.png
-│   ├── checkpoint_dotplot.png
-│   └── tme_immune_stromal_bar.png
-├── pathway_analysis/
-│   ├── pathway_enrichment.csv
-│   └── pathway_enrichment_bar.png
-├── pseudo_velocity/
-│   ├── pseudo_velocity_speed.csv
-│   ├── pseudo_velocity_per_cluster.csv
-│   ├── pseudo_velocity_arrows.png
-│   ├── pseudo_velocity_stream.png
-│   ├── pseudo_velocity_speed_umap.png
-│   └── pseudo_velocity_speed_boxplot.png
-├── rna_velocity/
-│   ├── velocity_confidence.csv
-│   ├── velocity_top_genes.csv
-│   ├── velocity_stream_umap.png
-│   ├── velocity_grid_umap.png
-│   ├── velocity_length_distribution.png
-│   ├── velocity_latent_time_umap.png         # dynamical mode only
-│   └── velocity_phase_portraits.png          # dynamical mode only
-└── evolution/
-    ├── evolution_clone_assignment.csv
-    ├── evolution_clone_stats.csv
-    ├── evolution_clone_markers.csv
-    ├── evolution_clone_umap.png
-    ├── evolution_clone_composition.png
-    ├── evolution_phylo_dendrogram.png
-    ├── evolution_timeline.png
-    └── evolution_cnv_by_clone.png
+<output-dir>/<project>_<timestamp>/
+├── final_adata.h5ad
+├── run_manifest.json
+├── module_status.csv
+├── .checkpoints/                    # only when --checkpoint is enabled
+└── <module_name>/                   # one subfolder per executed module
 ```
+
+Current module output folders (as implemented):
+- `annotation`: `cell_type_annotation.csv`, `cluster_majority_cell_type.csv`, `umap_cell_type.png`
+- `batch_correction`: `umap_batch_before.png`, `umap_batch_after.png`
+- `cell_communication`: `cell_communication_liana.csv`, `cell_communication_lr.csv`, `cell_communication_dotplot.png`, `cell_communication_heatmap.png`
+- `cell_cycle`: `cell_cycle_scores.csv`, `cell_cycle_umap.png`
+- `cell_fate`: `fate_probabilities.csv`, `terminal_states.csv`, `fate_heatmap.png`, `fate_umap_cellrank.png`
+- `clustering`: `pca_variance_explained.png`, `umap_leiden.png`
+- `cnv_inference`: `cnv_scores.csv`, `cnv_classification.json`, `cnv_score_umap.png`, `cnv_heatmap.png`
+- `composition`: `composition_counts.csv`, `composition_proportions.csv`, `composition_test_results.csv`, `composition_barplot.png`, `composition_boxplot.png`
+- `differential_expression`: `marker_genes.csv`, `marker_genes_all.csv`, `marker_top5_by_cluster.csv`, `de_dotplot_top5.png`, `de_heatmap_top5.png`, `de_volcano.png`
+- `doublet_detection`: `doublet_scores.png`
+- `evolution`: `evolution_clone_assignment.csv`, `evolution_clone_stats.csv`, `evolution_clone_markers.csv`, `evolution_clone_umap.png`
+- `gene_regulatory_network`: `tf_activity_per_cell.csv`, `tf_activity_per_cluster.csv`, `tf_top_per_cluster.json`, `tf_activity_heatmap.png`, `tf_activity_umap.png`
+- `gene_signature_scoring`: `gene_signature_scores.csv`, `gene_signature_per_cluster.csv`, `signature_heatmap.png`, `signature_umap.png`, `signature_correlation.png`
+- `immune_phenotyping`: `immune_phenotyping.csv`, `immune_subtype_summary.csv`, `umap_immune_subtype.png`, `immune_signature_heatmap.png`
+- `metacell`: `metacell_assignments.csv`, `metacell_summary.csv`, `metacells.h5ad`, `metacell_size_hist.png`, `metacell_umap.png`
+- `paper_repro`: `paper_repro_registry.csv`, `paper_repro_figures.csv`, `paper_repro_report.json` (and `paper_repro_spec.template.json` when no spec is provided)
+- `pathway_analysis`: `pathway_enrichment.csv`, `pathway_activity_per_cluster.csv`, `pathway_enrichment_bar.png`, `pathway_activity_heatmap.png`
+- `pseudo_velocity`: `pseudo_velocity_speed.csv`, `pseudo_velocity_per_cluster.csv`, `pseudo_velocity_arrows*.png`, `pseudo_velocity_stream*.png`, `pseudo_velocity_speed_umap.png`, `pseudo_velocity_speed_boxplot.png`
+- `pseudobulk_de`: `pseudobulk_counts.csv`, `pseudobulk_de_results.csv`, `pseudobulk_volcano.png`, `pseudobulk_heatmap.png`
+- `qc`: `qc_violin_pre_filter.png`, `qc_violin_post_filter.png`, `qc_scatter_pre_filter.png`, `qc_scatter_post_filter.png`
+- `rna_velocity`: `velocity_confidence.csv`, `velocity_top_genes.csv`, `velocity_stream_umap.png`, `velocity_grid_umap.png`, `velocity_length_distribution.png` (+ dynamical-mode plots)
+- `trajectory`: `dpt_pseudotime.csv`, `pseudotime_per_cluster.csv`, `pseudotime_top_genes.csv`, `pseudotime_dpt_umap.png`, `paga_trajectory.png`
+- `tumor_microenvironment`: `tme_scores_per_cell.csv`, `tme_scores_per_cluster.csv`, `checkpoint_expression.csv`, `tme_cyt_umap.png`, `tme_tis_umap.png`
+- `validate_cbioportal`: `cbioportal_mutation_summary.csv`, `cbioportal_validation_report.json`
 
 Each run is fully independent. Multiple runs accumulate under `results/`:
 
@@ -396,16 +736,35 @@ results/
 |---|---|
 | `--project` | Run name (used in output directory naming) |
 | `--sample-root` | Dataset root directory |
-| `--output-dir` | Output root (default: `results/`) |
+| `--outs-dir` | Explicit path to Cell Ranger `filtered_feature_bc_matrix` (default: `<sample-root>/outs/filtered_feature_bc_matrix`) |
+| `--output-dir` | Output root (default: `/home/zerlinshen/singlecell_factory/results`) |
 | `--optional-modules` | Comma-separated module list (dependencies auto-included) |
+| `--paper-spec-json` | JSON spec for paper-driven provenance + figure reproduction checks |
+| `--paper-repro-strict` | Fail run when paper_repro has unresolved metadata/figure checks |
+| `--markers-json` | Optional custom marker dictionary JSON for annotation |
 | `--checkpoint` | Save checkpoints after each module for crash recovery |
 | `--resume-from MODULE` | Resume from a specific module using saved checkpoints |
 | `--parallel-workers N` | Number of parallel workers (default: 1 = sequential) |
-| `--de-method` | DE method for `scanpy.tl.rank_genes_groups` (default: `wilcoxon`) |
-| `--de-n-genes` | Max genes ranked per cluster in DE (default: 300) |
-| `--de-pval-threshold` | Adjusted p-value cutoff for DE significance (default: 0.05) |
-| `--de-logfc-threshold` | Minimum absolute log fold change for DE (default: 0.25) |
-| `--annotation-confidence-threshold` | Minimum score for confident cell type assignment (default: 0.1) |
+
+For NC2024-scale full-cohort runs, prefer:
+
+```bash
+SCF_MASSIVE_CHECKPOINT_POLICY=metadata_only python -m workflow.modular.cli ... --scale-mode massive --checkpoint
+```
+
+This preserves `.checkpoints/after_<module>.json` status/metadata sidecars while skipping full AnnData checkpoint writes in `massive` mode. It does not change numerical analysis results; it only avoids repeated 10GB+ checkpoint writes when disk headroom is more important than full-object resume after every optional module.
+
+### Cell Ranger
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--fastq-dir` | empty | FASTQ directory for running `cellranger count` when needed |
+| `--transcriptome-dir` | empty | Cell Ranger reference dir (also used for RNA-velocity GTF auto-discovery) |
+| `--sample-id` | `lusc` | Sample ID passed to Cell Ranger |
+| `--localcores` | 8 | CPU cores for Cell Ranger |
+| `--localmem` | 64 | RAM (GB) for Cell Ranger |
+| `--force-cellranger` | false | Force rerun of `cellranger count` |
+| `--no-run-cellranger-if-missing` | false | Do not run Cell Ranger even if `outs-dir` is missing |
 
 ### QC
 
@@ -417,8 +776,16 @@ results/
 | `--max-counts` | 50000 | Maximum UMI counts |
 | `--max-mito-pct` | 20 | Maximum mitochondrial % |
 | `--max-ribo-pct` | 50 | Maximum ribosomal % |
+| `--min-cells` | 3 | Minimum cells per gene after filtering |
 
-### Clustering
+### Doublet Detection
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--expected-doublet-rate` | 0.06 | Expected doublet fraction for Scrublet |
+| `--no-remove-doublets` | false | Keep doublets (mark only, do not filter) |
+
+### Clustering / DE / Annotation
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -426,13 +793,46 @@ results/
 | `--n-pcs` | 40 | PCA dimensions |
 | `--n-neighbors` | 15 | k-NN neighbors |
 | `--leiden-resolution` | 0.8 | Leiden clustering resolution |
+| `--scale-data` | false | Apply `sc.pp.scale()` before PCA |
+| `--de-method` | `wilcoxon` | DE method (`wilcoxon`, `t-test`, `t-test_overestim_var`, `logreg`) |
+| `--de-n-genes` | 300 | Max genes ranked per cluster |
+| `--de-pval-threshold` | 0.05 | Adjusted p-value cutoff for significant DE |
+| `--de-logfc-threshold` | 0.25 | Minimum absolute log fold-change cutoff for DE |
+| `--annotation-confidence-threshold` | 0.1 | Minimum annotation confidence score before assigning `Unknown` |
+| `--reference-adata` | empty | Optional reference `h5ad` for annotation label transfer |
+| `--reference-label-key` | `cell_type` | Label column in reference `obs` used for transfer |
+| `--reference-k` | 15 | K neighbors for reference mapping |
+| `--reference-min-confidence` | 0.6 | Min confidence needed to override marker label |
+| `--reference-override-mode` | `conservative` | `conservative` (override Unknown/low-confidence only) or `all` |
 
 ### Batch Correction
 
 | Parameter | Default | Description |
 |---|---|---|
 | `--batch-key` | sample | Batch column in adata.obs |
-| `--batch-method` | harmony | Method: harmony/bbknn/combat/scanorama |
+| `--batch-method` | harmony | Method: harmony/bbknn/combat/scanorama/scvi/mnn/fastmnn |
+| `--scvi-max-epochs` | 200 | Max epochs for scVI training when `--batch-method scvi` |
+| `--scvi-n-latent` | 30 | Latent dimension for scVI embedding |
+| `--no-scvi-early-stopping` | false | Disable scVI early stopping (default behavior is enabled) |
+
+### Trajectory / Cell Cycle / CNV / Signatures
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--regress-cell-cycle` | false | Regress out `S_score` and `G2M_score` after cell-cycle scoring |
+| `--trajectory-root-cluster` | empty | Leiden cluster ID used as DPT root |
+| `--cnv-reference-group` | empty | Reference group for CNV normalization |
+| `--cnv-window-size` | 100 | Sliding-window size for CNV smoothing |
+| `--signature-json` | empty | Custom signature JSON for `gene_signature_scoring` |
+
+### cBioPortal Validation
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--cbioportal-genes` | empty | Comma-separated gene list for validation |
+| `--cbioportal-study` | `lusc_tcga_pan_can_atlas_2018` | cBioPortal study ID |
+| `--no-cbioportal-de-genes` | false | Disable auto-inclusion of top DE genes |
+| `--cbioportal-top-n` | 20 | Number of top DE genes used for validation |
 
 ### RNA Velocity
 
@@ -468,16 +868,6 @@ On hosts with >=16 logical CPU cores, if `--velocity-n-jobs` is left at default 
 
 **Dynamical mode** additionally outputs latent time UMAP and phase portraits for top velocity genes.
 
-### Other
-
-| Parameter | Description |
-|---|---|
-| `--regress-cell-cycle` | Regress out cell cycle effects |
-| `--trajectory-root-cluster` | Leiden cluster ID for DPT root |
-| `--cnv-reference-group` | Normal reference cell type for CNV (e.g., Fibroblast) |
-| `--signature-json` | Custom gene signature JSON file |
-| `--cbioportal-genes` | Comma-separated gene list for cBioPortal validation |
-
 ## Multi-Backend Support
 
 | Module | Primary | Fallback |
@@ -499,12 +889,15 @@ On hosts with >=16 logical CPU cores, if `--velocity-n-jobs` is left at default 
 - Safe fallback behavior:
   - If GPU backend is unavailable, modules transparently use CPU scanpy.
   - If GPU clustering fails mid-run, the module reruns on a pristine CPU input object (no partial GPU-state reuse).
+  - If `--batch-method scvi` is selected but `scvi-tools` is unavailable (or scVI training/input checks fail), `batch_correction` is marked `skipped` with explicit reason instead of crashing downstream optional workflow.
+- Backend metadata tracking: `clustering_backend`, `de_backend`, `batch_post_backend` recorded in `run_manifest.json` for reproducibility auditing.
 
 ### Memory & I/O
 - **Memory guard**: Parallel worker count is constrained by estimated AnnData copy size + available RAM to avoid OOM in branch execution.
 - **Raw matrix policy**: Normalized/log1p matrix is stored in `adata.raw` before downstream analyses to improve biological interpretability for marker/score modules.
 - **Zarr checkpoints**: 3-5x faster checkpoint I/O via `adata.write_zarr()` with automatic h5ad fallback for incompatible key names.
-- **Async figure I/O**: Background disk writes with error-resilient flush.
+- **Massive metadata-only checkpoints**: `SCF_MASSIVE_CHECKPOINT_POLICY=metadata_only` keeps checkpoint JSON sidecars but skips full AnnData checkpoint files in `--scale-mode massive`.
+- **Async figure I/O**: Full render+write offloaded to background thread pool (PNG encoding no longer blocks the main thread).
 
 ### Computation
 - **Clustering**: PCA on HVGs only, optional scaling via `--scale-data`, CPU/GPU branches now both produce UMAP outputs.
@@ -513,12 +906,16 @@ On hosts with >=16 logical CPU cores, if `--velocity-n-jobs` is left at default 
 - **Trajectory**: Pseudotime-gene correlation refactored to sparse-friendly computation, avoiding full-matrix densification.
 - **Cell communication**: Vectorized `np.where` scoring — eliminates O(n^2) Python loops.
 - **CNV inference**: `scipy.ndimage.uniform_filter1d` vectorized sliding window.
+- **Pseudo-velocity baseline**: Fully vectorized numpy broadcasting replaces per-cell Python loop.
 - **RNA velocity**: BAM extraction parallelized by chromosome (~4-5x speedup).
 
 ### Pipeline Orchestration
 - **Cost-aware tier scheduling**: Heavy modules (rna_velocity, cnv_inference) start first in parallel tiers.
 - **Thread-safe status tracking**: `threading.Lock` on module status writes.
-- **Copy-on-write branching**: Parallel modules get isolated AnnData copies with proper merge-back of obs/obsm/uns/metadata/module_dirs.
+- **Copy-on-write branching**: Parallel modules get isolated AnnData copies with proper merge-back of obs/obsm/uns/metadata/module_dirs. Structural mutations (X, layers, varm, obsp) are detected and logged as warnings if an appending module makes changes that merge-back cannot capture.
+- **Mutating module discovery**: Modules that modify adata structure declare `mutates_structure = True` as a class attribute. The pipeline automatically discovers these at registry build time and forces them into sequential execution. A static fallback set provides safety for modules that omit the declaration.
+- **Module contract validation**: Modules declare `requires_keys` (e.g., `{"obs": ["leiden"]}`) and `provides_keys`. Before each `mod.run(ctx)`, the pipeline checks that required keys exist in adata. Optional modules with unmet requirements are skipped with a warning; mandatory modules raise immediately.
+- **O(1) dependency resolution**: Topological sort uses `collections.deque` for O(1) queue operations; sequential execution logic is DRY-extracted into a single `_run_sequential()` helper shared by mutating, appending, and memory-fallback paths.
 - **Runtime telemetry**: `metadata.module_runtime_sec` + `metadata.pipeline_wall_seconds` are persisted in each `run_manifest.json`.
 - **Checkpoint/resume**: `--checkpoint` + `--resume-from` for crash recovery.
 
@@ -579,7 +976,7 @@ RNA velocity extraction parallel scaling on the same dataset (strict mode, cold 
 
 ## Quality Verification Checklist
 
-1. Check `module_status.csv` — all modules should show "ok"
+1. Check `module_status.csv` — mandatory modules should be `ok`; optional modules may be `ok` or `skipped` with a clear reason
 2. Review `qc/qc_violin_*.png` — verify filter thresholds are reasonable
 3. Review `clustering/umap_leiden.png` — clusters should be well-separated
 4. Check `annotation/umap_cell_type.png` — cell types should be biologically coherent
@@ -590,7 +987,7 @@ RNA velocity extraction parallel scaling on the same dataset (strict mode, cold 
 
 Every analysis module uses publicly recognized, peer-reviewed methods. Below is the complete methodology audit with citations.
 
-Module coverage check: **24 / 24 modules documented and citation-aligned**.
+Module coverage check: **25 / 25 modules documented and citation-aligned**.
 
 ---
 
@@ -855,6 +1252,7 @@ Module coverage check: **24 / 24 modules documented and citation-aligned**.
 | **Implementation** | `scvelo.tl.velocity()`, `scvelo.tl.velocity_graph()`, `scvelo.tl.velocity_confidence()` |
 | **Architecture** | Copy-on-write execution (`adata.copy()`), then transfer only cell-level outputs back to main adata (non-mutating, parallel-safe) |
 | **Requirements** | Spliced/unspliced count layers (from loom file, velocyto, or BAM extraction) |
+| **Eligibility policy** | If no spliced/unspliced layers and no usable loom or BAM+GTF source are available, the module should be recorded as `skipped`, not treated as an unexpected failure. |
 | **BAM extraction** | If no loom file is provided, spliced/unspliced counts are extracted directly from Cell Ranger BAM output (`possorted_genome_bam.bam`) using pysam + GTF-based exon/intron classification |
 | **Outputs** | `velocity_stream_umap.png`, `velocity_grid_umap.png`, `velocity_length_distribution.png`, `velocity_confidence.csv`, `velocity_top_genes.csv` (+ `velocity_latent_time_umap.png`, `velocity_phase_portraits.png` in dynamical mode) |
 | **Reference** | **Bergen et al., *Nature Biotechnology*, 2020.** DOI: [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) |
@@ -891,10 +1289,13 @@ Module coverage check: **24 / 24 modules documented and citation-aligned**.
 
 | Item | Detail |
 |---|---|
-| **Method** | Aggregate cell counts by sample and group, then perform bulk-style DE |
+| **Method** | Aggregate raw counts by biological sample plus grouping columns, then perform bulk-style DE |
 | **Primary backend** | `pydeseq2` (`DeseqDataSet`, `DeseqStats`) |
 | **Fallbacks** | Mann-Whitney U, then Wilcoxon rank-sum |
 | **Multiple testing** | Benjamini-Hochberg FDR (`_bh_adjust`) |
+| **Confirmatory mode** | Requires an explicit contrast contract: `--pseudobulk-contrast-col`, `--pseudobulk-contrast-a`, `--pseudobulk-contrast-b` (or `--pseudobulk-contrast-json`) |
+| **Exploratory mode** | Optional `group_vs_rest` output only when `--pseudobulk-exploratory-group-vs-rest` is explicitly enabled |
+| **Eligibility policy** | Missing counts, missing contrast contract, or too few biological replicates should be recorded as `skipped`, not as silent paper-grade output |
 | **Implementation** | `workflow/modular/modules/pseudobulk_de.py` |
 | **References** | **Love et al., *Genome Biology*, 2014.** DOI: [10.1186/s13059-014-0550-8](https://doi.org/10.1186/s13059-014-0550-8); **Wilcoxon, 1945** DOI: [10.2307/3001968](https://doi.org/10.2307/3001968) |
 
@@ -932,11 +1333,23 @@ Module coverage check: **24 / 24 modules documented and citation-aligned**.
 | **Implementation** | `workflow/modular/modules/metacell.py` |
 | **References** | **Persad et al., *Nature Biotechnology*, 2023.** DOI: [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9); **Sculley, KDD 2010.** DOI: [10.1145/1772690.1772862](https://doi.org/10.1145/1772690.1772862) |
 
+---
+
+### 25. Paper-Driven Reproduction (`paper_repro`)
+
+| Item | Detail |
+|---|---|
+| **Method** | Spec-driven provenance tracking + figure parity checks against pipeline outputs |
+| **Primary checks** | Source completeness (`paper_path`, `repo_url`, `repo_commit`, `license`) and figure similarity (`mae` or `pearson`) |
+| **Outputs** | `paper_repro_registry.csv`, `paper_repro_figures.csv`, `paper_repro_report.json` |
+| **Implementation** | `workflow/modular/modules/paper_repro.py` |
+| **References** | **Sandve et al., *PLOS Computational Biology*, 2013.** DOI: [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) |
+
 ## Automated Reference Management
 
 The pipeline includes an automated mechanism to keep the `Complete Citation List` up-to-date:
 
-1. **Module-Level Citations**: New modules should follow [`workflow/modular/modules/module_template.py`](workflow/modular/modules/module_template.py) and define a `__references__` dictionary.
+1. **Module-Level Citations**: New modules should follow [`workflow/modular/modules/module_template.py`](workflow/modular/modules/module_template.py) and define a `__references__` dictionary. The template also includes `requires_keys`, `provides_keys`, and `mutates_structure` declarations for pipeline contract validation.
 2. **Auto Discovery**: [`scripts/update_references.py`](scripts/update_references.py) parses `__references__` and also scans module source for DOI patterns, then enriches metadata via Crossref API when available.
 3. **Pre-commit Hook**: [`.githooks/pre-commit`](.githooks/pre-commit) enforces sync; if references changed, commit is blocked until README is staged.
 4. **Enable Hook**: run `git config core.hooksPath .githooks`.
@@ -1024,6 +1437,7 @@ Use [`docs/MODULE_TECH_DOC_TEMPLATE.md`](docs/MODULE_TECH_DOC_TEMPLATE.md) for e
 | 38 | Büttner et al., *Nature Communications*, 2021 | [10.1038/s41467-021-27150-6](https://doi.org/10.1038/s41467-021-27150-6) | `composition` (scCODA backend) |
 | 39 | Persad et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (SEACells backend) |
 | 40 | Sculley, *KDD*, 2010 | [10.1145/1772690.1772862](https://doi.org/10.1145/1772690.1772862) | `metacell` (MiniBatchKMeans fallback) |
+| 41 | Sandve et al., *PLOS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` |
 ---
 
 ## Results

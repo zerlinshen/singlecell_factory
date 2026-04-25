@@ -58,7 +58,10 @@ class BatchConfig:
     """Configuration for batch correction."""
 
     batch_key: str = "sample"
-    method: str = "harmony"  # harmony, bbknn, combat
+    method: str = "harmony"  # harmony, bbknn, combat, scanorama, scvi, mnn, fastmnn
+    scvi_max_epochs: int = 200
+    scvi_n_latent: int = 30
+    scvi_early_stopping: bool = True
 
 
 @dataclass
@@ -104,6 +107,29 @@ class GeneSignatureConfig:
 
 
 @dataclass
+class PaperReproConfig:
+    """Configuration for the optional paper_repro module."""
+
+    spec_json: Path | None = None
+    strict: bool = False
+
+
+@dataclass
+class PseudobulkConfig:
+    """Configuration for pseudobulk differential expression."""
+
+    sample_col: str | None = None
+    group_col: str = "cell_type"
+    contrast_col: str | None = None
+    contrast_a: str | None = None
+    contrast_b: str | None = None
+    contrast_json: Path | None = None
+    exploratory_group_vs_rest: bool = False
+    min_cells_per_sample: int = 3
+    min_samples_per_condition: int = 2
+
+
+@dataclass
 class PipelineConfig:
     """Top-level modular workflow configuration."""
 
@@ -128,6 +154,8 @@ class PipelineConfig:
     markers: dict[str, list[str]] = field(default_factory=dict)
     cbioportal: CbioPortalConfig = field(default_factory=CbioPortalConfig)
     gene_signature: GeneSignatureConfig = field(default_factory=GeneSignatureConfig)
+    paper_repro: PaperReproConfig = field(default_factory=PaperReproConfig)
+    pseudobulk: PseudobulkConfig = field(default_factory=PseudobulkConfig)
     regress_cell_cycle: bool = False
     trajectory_root_cluster: str | None = None
     checkpoint: bool = False
@@ -138,3 +166,10 @@ class PipelineConfig:
     de_pval_threshold: float = 0.05
     de_logfc_threshold: float = 0.25
     annotation_confidence_threshold: float = 0.1
+    reference_adata: Path | None = None
+    reference_label_key: str = "cell_type"
+    reference_k: int = 15
+    reference_min_confidence: float = 0.6
+    reference_override_mode: str = "conservative"  # conservative, all
+    gpu_mode: str = "auto"  # auto, off, force
+    scale_mode: str = "standard"  # standard, large, massive

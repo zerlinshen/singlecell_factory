@@ -18,6 +18,7 @@ class CompositionModule:
     """Optional module: differential cell type composition analysis across samples."""
 
     name = "composition"
+    requires_keys = {"obs": ["cell_type"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

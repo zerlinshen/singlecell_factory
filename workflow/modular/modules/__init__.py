@@ -1,8 +1,6 @@
 """Optional and mandatory modules for modular workflow."""
 from __future__ import annotations
 
-import scanpy as sc
-
 
 def score_gene_sets(
     adata,
@@ -17,6 +15,8 @@ def score_gene_sets(
     Returns the list of gene set names that were successfully scored
     (had at least *min_genes* present in the dataset).
     """
+    import scanpy as sc
+
     var_names = set(adata.var_names if adata.raw is None else adata.raw.var_names)
     scored: list[str] = []
     for name, genes in gene_sets.items():

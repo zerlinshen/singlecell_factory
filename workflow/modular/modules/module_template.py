@@ -15,7 +15,9 @@ import logging
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 
@@ -42,6 +44,9 @@ class MyNewModule:
 
     name = "my_new_module"
     required = False # Set to True if this module must run in every pipeline execution
+    mutates_structure = False  # True if module modifies X, layers, or embeddings structurally
+    requires_keys: dict[str, list[str]] = {}  # {"obs": ["leiden"], "obsm": ["X_pca"]}
+    provides_keys: dict[str, list[str]] = {}  # {"obs": ["my_score"], "uns": ["my_result"]}
 
     def run(self, ctx: PipelineContext) -> None:
         """

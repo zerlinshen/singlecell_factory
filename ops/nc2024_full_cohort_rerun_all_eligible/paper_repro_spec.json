@@ -1,0 +1,28 @@
+{
+  "papers": [
+    {
+      "paper_id": "nc2024_nsclc_single_cell_rerun_all_eligible",
+      "title": "Nature Communications 2024 NSCLC single-cell rerun after pseudobulk repair",
+      "source": {
+        "paper_path": "",
+        "repo_url": "local-reproduction-workspace",
+        "repo_commit": "workspace-artifact",
+        "license": "research-reproduction"
+      },
+      "adaptation_targets": [
+        "clustering",
+        "annotation",
+        "composition",
+        "immune_phenotyping",
+        "tumor_microenvironment",
+        "cell_communication",
+        "gene_signature_scoring",
+        "pseudobulk_de",
+        "metacell",
+        "paper_repro"
+      ],
+      "reproductions": [],
+      "notes": "Clean full-cohort rerun with all eligible modules only. validate_cbioportal excluded for determinism; rna_velocity/cnv_inference/evolution excluded for modality or scale-safety reasons. pseudobulk_de runs in explicit exploratory mode."
+    }
+  ]
+}

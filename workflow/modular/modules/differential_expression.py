@@ -7,7 +7,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scanpy as sc
+from scipy import sparse, stats
+from ._scanpy_compat import has_api, import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 from ._gpu_utils import gpu_available
@@ -19,6 +22,8 @@ class DifferentialExpressionModule:
     """Optional module: identify cluster marker genes with significance filtering and visualizations."""
 
     name = "differential_expression"
+    requires_keys = {"obs": ["leiden"]}
+    provides_keys = {"uns": ["rank_genes_groups"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata
@@ -31,7 +36,7 @@ class DifferentialExpressionModule:
         if method == "wilcoxon":
             rank_kwargs["tie_correct"] = True
 
-        use_gpu = gpu_available() and method in ("wilcoxon", "t-test", "t-test_overestim_var")
+        use_gpu = gpu_available(ctx.cfg.gpu_mode) and method in ("wilcoxon", "t-test", "t-test_overestim_var")
         if use_gpu:
             try:
                 import rapids_singlecell as rsc
@@ -44,18 +49,29 @@ class DifferentialExpressionModule:
                 )
                 ctx.metadata["de_backend"] = "gpu"
             except Exception as exc:
+                if ctx.cfg.gpu_mode == "force":
+                    raise RuntimeError(f"GPU DE failed in force mode: {exc}") from exc
                 logger.warning("GPU DE failed (%s), falling back to CPU", exc)
+                ctx.metadata["de_gpu_fallback_reason"] = str(exc)
                 use_gpu = False
 
         if not use_gpu:
-            sc.tl.rank_genes_groups(
-                adata,
-                groupby="leiden",
+            markers = self._run_cpu_rank_genes_groups(
+                adata=adata,
                 method=method,
-                **rank_kwargs,
+                rank_kwargs=rank_kwargs,
+                n_genes=n_genes,
             )
             ctx.metadata["de_backend"] = "cpu"
-        markers = sc.get.rank_genes_groups_df(adata, group=None)
+        elif has_api(sc, "get.rank_genes_groups_df"):
+            markers = sc.get.rank_genes_groups_df(adata, group=None)
+        else:
+            # GPU wrote ranking state but scanpy accessor is unavailable in this environment.
+            markers = self._fallback_rank_genes_groups_df(
+                adata=adata,
+                groupby="leiden",
+                n_genes=n_genes,
+            )
         if "pvals_adj" not in markers.columns:
             markers["pvals_adj"] = 1.0
         if "logfoldchanges" not in markers.columns:
@@ -81,6 +97,7 @@ class DifferentialExpressionModule:
 
         ctx.metadata["de_significant_genes"] = int(len(sig_markers))
         ctx.metadata["de_method"] = method
+        ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
         ctx.metadata["de_n_genes"] = int(n_genes)
 
         # --- Visualizations ---
@@ -111,6 +128,111 @@ class DifferentialExpressionModule:
 
         # Volcano plot (all clusters combined)
         self._volcano_plot(sig_markers, ctx)
+
+    @staticmethod
+    def _run_cpu_rank_genes_groups(
+        adata,
+        method: str,
+        rank_kwargs: dict,
+        n_genes: int,
+    ) -> pd.DataFrame:
+        if has_api(sc, "tl.rank_genes_groups") and has_api(sc, "get.rank_genes_groups_df"):
+            sc.tl.rank_genes_groups(
+                adata,
+                groupby="leiden",
+                method=method,
+                **rank_kwargs,
+            )
+            return sc.get.rank_genes_groups_df(adata, group=None)
+        logger.warning("scanpy DE APIs unavailable; using statistical fallback.")
+        return DifferentialExpressionModule._fallback_rank_genes_groups_df(
+            adata=adata,
+            groupby="leiden",
+            n_genes=n_genes,
+        )
+
+    @staticmethod
+    def _fallback_rank_genes_groups_df(adata, groupby: str, n_genes: int) -> pd.DataFrame:
+        if groupby not in adata.obs:
+            adata.uns["rank_genes_groups"] = {"fallback": True, "groupby": groupby}
+            return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
+
+        X = adata.X
+        if sparse.issparse(X):
+            X = X.toarray()
+        X = np.asarray(X, dtype=float)
+        if X.ndim != 2 or X.shape[1] == 0:
+            adata.uns["rank_genes_groups"] = {"fallback": True, "groupby": groupby}
+            return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
+
+        genes = np.asarray(adata.var_names.astype(str))
+        groups = pd.Categorical(adata.obs[groupby].astype(str))
+        rows: list[dict[str, object]] = []
+        per_group_names: dict[str, list[str]] = {}
+
+        for group in groups.categories:
+            in_mask = np.asarray(groups == group)
+            out_mask = ~in_mask
+            if in_mask.sum() == 0 or out_mask.sum() == 0:
+                continue
+            in_x = X[in_mask]
+            out_x = X[out_mask]
+            mean_in = in_x.mean(axis=0) + 1e-9
+            mean_out = out_x.mean(axis=0) + 1e-9
+            logfc = np.log2(mean_in / mean_out)
+            try:
+                _, pvals = stats.ttest_ind(
+                    in_x,
+                    out_x,
+                    axis=0,
+                    equal_var=False,
+                    nan_policy="omit",
+                )
+            except Exception:
+                pvals = np.ones(X.shape[1], dtype=float)
+            pvals = np.nan_to_num(np.asarray(pvals, dtype=float), nan=1.0, posinf=1.0, neginf=1.0)
+            pvals_adj = DifferentialExpressionModule._benjamini_hochberg(pvals)
+            order = np.lexsort((-np.abs(logfc), pvals_adj))
+            keep = order[: max(1, min(n_genes, len(order)))]
+            per_group_names[str(group)] = genes[keep].tolist()
+            for idx in keep:
+                rows.append(
+                    {
+                        "group": str(group),
+                        "names": genes[idx],
+                        "scores": float(logfc[idx]),
+                        "pvals_adj": float(pvals_adj[idx]),
+                        "logfoldchanges": float(logfc[idx]),
+                    }
+                )
+
+        adata.uns["rank_genes_groups"] = {
+            "fallback": True,
+            "groupby": groupby,
+            "names": per_group_names,
+        }
+        if not rows:
+            return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    def _benjamini_hochberg(pvals: np.ndarray) -> np.ndarray:
+        p = np.clip(np.asarray(pvals, dtype=float), 0.0, 1.0)
+        n = p.size
+        if n == 0:
+            return p
+        order = np.argsort(p)
+        ranked = p[order]
+        adjusted = np.empty_like(ranked)
+        prev = 1.0
+        for i in range(n - 1, -1, -1):
+            rank = i + 1
+            val = ranked[i] * n / rank
+            prev = min(prev, val)
+            adjusted[i] = prev
+        out = np.empty_like(adjusted)
+        out[order] = np.clip(adjusted, 0.0, 1.0)
+        return out
 
     @staticmethod
     def _volcano_plot(markers: pd.DataFrame, ctx: PipelineContext) -> None:

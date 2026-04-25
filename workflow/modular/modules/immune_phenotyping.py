@@ -6,7 +6,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 from . import score_gene_sets
@@ -58,6 +60,7 @@ class ImmunePhenotypingModule:
     """
 
     name = "immune_phenotyping"
+    requires_keys = {"obs": ["cell_type"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

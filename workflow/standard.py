@@ -7,7 +7,29 @@ import argparse
 import time
 import json
 
-import scanpy as sc
+_SCANPY_IMPORT_ERROR: Exception | None = None
+try:
+    import scanpy as sc
+except Exception as exc:  # pragma: no cover - environment-dependent import issue
+    sc = None
+    _SCANPY_IMPORT_ERROR = exc
+
+
+def _get_scanpy():
+    """Lazily resolve scanpy with a clear error when unavailable."""
+    global sc, _SCANPY_IMPORT_ERROR
+    if sc is not None:
+        return sc
+    try:
+        import scanpy as _scanpy
+    except Exception as exc:  # pragma: no cover - environment-dependent import issue
+        _SCANPY_IMPORT_ERROR = exc
+        raise RuntimeError(
+            "scanpy import failed. Configure a compatible environment before running "
+            "the standard workflow."
+        ) from exc
+    sc = _scanpy
+    return sc
 
 
 @dataclass(frozen=True)
@@ -58,29 +80,30 @@ def run_standard_workflow(cfg: StandardWorkflowConfig) -> Path:
     if cfg.use_cache and out.exists():
         return out
 
-    if hasattr(sc, "settings"):
-        sc.settings.n_jobs = max(1, cfg.n_jobs)
+    scanpy = _get_scanpy()
+    if hasattr(scanpy, "settings"):
+        scanpy.settings.n_jobs = max(1, cfg.n_jobs)
     t0 = time.perf_counter()
-    adata = sc.read_10x_mtx(str(cfg.tenx_dir), var_names="gene_symbols", cache=False)
+    adata = scanpy.read_10x_mtx(str(cfg.tenx_dir), var_names="gene_symbols", cache=False)
     if "gene_symbols" in adata.var.columns:
         gene_symbols = adata.var["gene_symbols"].astype(str).str.upper()
     else:
         gene_symbols = adata.var_names.astype(str).str.upper()
     adata.var["mt"] = gene_symbols.str.startswith("MT-")
-    sc.pp.calculate_qc_metrics(adata, qc_vars=["mt"], inplace=True)
+    scanpy.pp.calculate_qc_metrics(adata, qc_vars=["mt"], inplace=True)
     adata = adata[adata.obs["n_genes_by_counts"] > 200, :].copy()
     adata = adata[adata.obs["pct_counts_mt"] < 5, :].copy()
-    sc.pp.filter_genes(adata, min_cells=3)
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
-    sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=2000)
+    scanpy.pp.filter_genes(adata, min_cells=3)
+    scanpy.pp.normalize_total(adata, target_sum=1e4)
+    scanpy.pp.log1p(adata)
+    scanpy.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=2000)
     adata.raw = adata
     adata = adata[:, adata.var["highly_variable"]].copy()
-    sc.pp.scale(adata, max_value=10)
-    sc.tl.pca(adata, svd_solver="arpack")
-    sc.pp.neighbors(adata, n_neighbors=15, n_pcs=40)
-    sc.tl.umap(adata, random_state=0)
-    sc.tl.leiden(adata, resolution=0.5, flavor="igraph", directed=False, random_state=0)
+    scanpy.pp.scale(adata, max_value=10)
+    scanpy.tl.pca(adata, svd_solver="arpack")
+    scanpy.pp.neighbors(adata, n_neighbors=15, n_pcs=40)
+    scanpy.tl.umap(adata, random_state=0)
+    scanpy.tl.leiden(adata, resolution=0.5, flavor="igraph", directed=False, random_state=0)
     adata.write(out)
     elapsed = time.perf_counter() - t0
     stats_path.write_text(

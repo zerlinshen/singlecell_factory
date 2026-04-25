@@ -4,7 +4,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+
+sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 
@@ -45,7 +47,7 @@ class CellCycleModule:
         g2m_genes = [var_upper_to_actual[g.upper()] for g in G2M_GENES if g.upper() in var_upper_to_actual]
 
         if not s_genes or not g2m_genes:
-            ctx.status("cell_cycle", False, "Insufficient cell cycle genes found")
+            ctx.status("cell_cycle", "skipped", "Insufficient cell cycle genes found")
             return
 
         sc.tl.score_genes_cell_cycle(adata, s_genes=s_genes, g2m_genes=g2m_genes)

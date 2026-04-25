@@ -2,15 +2,39 @@ from __future__ import annotations
 
 import logging
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import scanpy as sc
+from ._scanpy_compat import import_scanpy_or_stub
+from scipy import sparse
+
+sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 from ._gpu_utils import gpu_available
 
 logger = logging.getLogger(__name__)
+
+
+def _to_cpu_value(value):
+    if sparse.issparse(value):
+        data = getattr(value, "data", None)
+        if hasattr(data, "get"):
+            value.data = data.get()
+        return value
+    if hasattr(value, "get"):
+        return value.get()
+    return value
+
+
+def _ensure_cpu_batch_inputs(adata) -> None:
+    adata.X = _to_cpu_value(adata.X)
+    for layer_key in list(adata.layers.keys()):
+        adata.layers[layer_key] = _to_cpu_value(adata.layers[layer_key])
+    for rep_key in ["X_pca", "X_pca_harmony", "X_scanorama", "X_scvi", "X_mnn", "X_fastmnn"]:
+        if rep_key in adata.obsm:
+            adata.obsm[rep_key] = _to_cpu_value(adata.obsm[rep_key])
 
 
 class BatchCorrectionModule:
@@ -20,12 +44,17 @@ class BatchCorrectionModule:
     1. Harmony (default) — fast, PCA-based correction
     2. BBKNN — batch-balanced k-nearest-neighbors
     3. Combat — linear model-based correction
+    4. Scanorama — manifold alignment integration
+    5. scVI — variational latent integration
 
     Should run after clustering (specifically after PCA), before downstream analysis.
     The batch key must be present in adata.obs.
     """
 
     name = "batch_correction"
+    mutates_structure = True
+    requires_keys = {"obs": ["leiden"]}
+    provides_keys = {"obs": ["leiden"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata
@@ -37,15 +66,22 @@ class BatchCorrectionModule:
 
         if batch_key not in adata.obs.columns:
             ctx.metadata["batch_correction_status"] = "skipped_missing_batch_key"
+            ctx.status(
+                self.name,
+                "skipped",
+                f"Batch key '{batch_key}' not found in adata.obs.",
+            )
             return
 
         n_batches = adata.obs[batch_key].nunique()
         if n_batches < 2:
             ctx.metadata["batch_correction_status"] = "skipped_single_batch"
+            ctx.status(self.name, "skipped", f"Only one batch found in '{batch_key}'.")
             return
 
         ctx.metadata["n_batches"] = n_batches
         ctx.metadata["batch_method"] = cfg.method
+        ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
 
         # Pre-correction UMAP (for comparison)
         if "X_umap" in adata.obsm:
@@ -56,15 +92,33 @@ class BatchCorrectionModule:
             plt.close()
 
         if cfg.method == "harmony":
-            self._run_harmony(adata, batch_key, ctx)
+            backend = self._run_harmony
         elif cfg.method == "bbknn":
-            self._run_bbknn(adata, batch_key, ctx)
+            backend = self._run_bbknn
         elif cfg.method == "combat":
-            self._run_combat(adata, batch_key, ctx)
+            backend = self._run_combat
         elif cfg.method == "scanorama":
-            self._run_scanorama(adata, batch_key, ctx)
+            backend = self._run_scanorama
+        elif cfg.method == "scvi":
+            backend = self._run_scvi
+        elif cfg.method == "mnn":
+            backend = self._run_mnn
+        elif cfg.method == "fastmnn":
+            backend = self._run_fastmnn
         else:
             raise ValueError(f"Unknown batch correction method: {cfg.method}")
+        _ensure_cpu_batch_inputs(adata)
+        try:
+            backend(adata, batch_key, ctx)
+        except Exception as exc:
+            if cfg.method not in {"scvi", "mnn", "fastmnn"}:
+                raise
+            msg = f"{cfg.method} backend unavailable or failed: {exc}"
+            logger.warning("%s", msg)
+            ctx.metadata["batch_correction_status"] = f"skipped_{cfg.method}_unavailable_or_failed"
+            ctx.metadata["batch_correction_skip_reason"] = str(exc)
+            ctx.status(self.name, "skipped", msg)
+            return
 
         # Recompute UMAP + Leiden on corrected representation
         use_rep = "X_pca"
@@ -72,8 +126,14 @@ class BatchCorrectionModule:
             use_rep = "X_pca_harmony"
         elif cfg.method == "scanorama":
             use_rep = "X_scanorama"
+        elif cfg.method == "scvi":
+            use_rep = "X_scvi"
+        elif cfg.method == "mnn":
+            use_rep = "X_mnn"
+        elif cfg.method == "fastmnn":
+            use_rep = "X_fastmnn"
 
-        use_gpu = gpu_available()
+        use_gpu = gpu_available(ctx.cfg.gpu_mode)
         if use_gpu:
             try:
                 import rapids_singlecell as rsc
@@ -84,21 +144,33 @@ class BatchCorrectionModule:
                 rsc.tl.leiden(adata, resolution=ctx.cfg.clustering.leiden_resolution,
                               random_state=ctx.cfg.clustering.random_state)
             except Exception as exc:
+                if ctx.cfg.gpu_mode == "force":
+                    raise RuntimeError(f"GPU batch post-processing failed in force mode: {exc}") from exc
                 logger.warning("GPU batch post-processing failed (%s), falling back to CPU", exc)
+                ctx.metadata["batch_gpu_fallback_reason"] = str(exc)
                 use_gpu = False
 
         if not use_gpu:
-            if cfg.method != "bbknn":
-                sc.pp.neighbors(adata, use_rep=use_rep)
-            sc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
-            sc.tl.leiden(
-                adata,
-                resolution=ctx.cfg.clustering.leiden_resolution,
-                flavor="igraph",
-                directed=False,
-                random_state=ctx.cfg.clustering.random_state,
-            )
-        ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique())
+            try:
+                if cfg.method != "bbknn":
+                    sc.pp.neighbors(adata, use_rep=use_rep)
+                sc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
+                sc.tl.leiden(
+                    adata,
+                    resolution=ctx.cfg.clustering.leiden_resolution,
+                    flavor="igraph",
+                    directed=False,
+                    random_state=ctx.cfg.clustering.random_state,
+                )
+            except Exception as exc:
+                # Keep prior clustering outputs rather than failing the module.
+                logger.warning(
+                    "CPU batch post-processing failed (%s); keeping existing UMAP/leiden.",
+                    exc,
+                )
+                ctx.metadata["batch_post_error"] = str(exc)
+        ctx.metadata["batch_post_backend"] = "gpu" if use_gpu else "cpu"
+        ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique()) if "leiden" in adata.obs else 0
         ctx.metadata["batch_correction_status"] = "completed"
 
         # Post-correction UMAP
@@ -116,12 +188,37 @@ class BatchCorrectionModule:
         if "X_pca" not in adata.obsm:
             raise ValueError("Harmony requires PCA (run clustering first).")
         try:
-            sc.external.pp.harmony_integrate(adata, key=batch_key, basis="X_pca")
-        except (ImportError, AttributeError):
+            import harmonypy
+        except ImportError:
             raise ImportError(
                 "harmonypy is required for Harmony batch correction. "
                 "Install with: pip install harmonypy"
             )
+
+        def _apply(device: str):
+            x = np.asarray(adata.obsm["X_pca"], dtype=np.float64)
+            ho = harmonypy.run_harmony(x, adata.obs, batch_key, device=device)
+            z = np.asarray(ho.Z_corr)
+            if z.shape == x.shape:
+                corrected = z
+            elif z.T.shape == x.shape:
+                corrected = z.T
+            else:
+                raise ValueError(
+                    f"Harmony output shape mismatch: got {z.shape}, expected {x.shape} or {x.T.shape}"
+                )
+            adata.obsm["X_pca_harmony"] = corrected.astype(np.float32, copy=False)
+
+        try:
+            device = "cuda" if ctx.cfg.gpu_mode == "force" else "cpu"
+            ctx.metadata["harmony_device"] = device
+            _apply(device)
+        except Exception as exc:
+            if ctx.cfg.gpu_mode == "force":
+                raise
+            ctx.metadata["harmony_fallback_reason"] = str(exc)
+            ctx.metadata["harmony_device"] = "cpu"
+            _apply("cpu")
 
     @staticmethod
     def _run_bbknn(adata, batch_key: str, ctx) -> None:
@@ -150,7 +247,6 @@ class BatchCorrectionModule:
                 "scanorama is required for Scanorama batch correction. "
                 "Install with: pip install scanorama"
             )
-        import numpy as np
 
         if "X_pca" not in adata.obsm:
             raise ValueError("Scanorama requires PCA (run clustering first).")
@@ -164,3 +260,120 @@ class BatchCorrectionModule:
         for b, sub in zip(batches, adatas):
             mask = adata.obs[batch_key] == b
             adata.obsm["X_scanorama"][mask] = sub.obsm["X_scanorama"]
+
+    @staticmethod
+    def _run_mnn(adata, batch_key: str, ctx) -> None:
+        """MNN correction via scanpy.external.pp.mnn_correct (Haghverdi et al., 2018)."""
+        if "X_pca" not in adata.obsm:
+            raise ValueError("MNN requires PCA (run clustering first).")
+        try:
+            _ = sc.external.pp.mnn_correct
+        except (AttributeError, ImportError):
+            raise ImportError(
+                "mnn_correct is unavailable. Install mnnpy and ensure scanpy.external is available. "
+                "Example: pip install mnnpy"
+            )
+
+        batches = adata.obs[batch_key].astype(str)
+        batch_levels = list(dict.fromkeys(batches.tolist()))
+        if len(batch_levels) < 2:
+            raise ValueError("MNN requires at least two batches.")
+        adatas = [adata[batches == b].copy() for b in batch_levels]
+
+        try:
+            corrected = sc.external.pp.mnn_correct(*adatas, batch_key=None, index_unique=None)[0]
+        except TypeError:
+            # Fallback for older mnnpy/scanpy signatures.
+            corrected = sc.external.pp.mnn_correct(*adatas)[0]
+        corrected = corrected[adata.obs_names, :].copy()
+        sc.pp.pca(corrected, n_comps=ctx.cfg.clustering.n_pcs)
+        adata.obsm["X_mnn"] = corrected.obsm["X_pca"].copy()
+
+    @staticmethod
+    def _run_fastmnn(adata, batch_key: str, ctx) -> None:
+        """Fast-MNN style approximation using mnn_correct with reduced SVD dimension."""
+        if "X_pca" not in adata.obsm:
+            raise ValueError("fastMNN requires PCA (run clustering first).")
+        try:
+            _ = sc.external.pp.mnn_correct
+        except (AttributeError, ImportError):
+            raise ImportError(
+                "mnn_correct is unavailable. Install mnnpy and ensure scanpy.external is available. "
+                "Example: pip install mnnpy"
+            )
+
+        batches = adata.obs[batch_key].astype(str)
+        batch_levels = list(dict.fromkeys(batches.tolist()))
+        if len(batch_levels) < 2:
+            raise ValueError("fastMNN requires at least two batches.")
+        adatas = [adata[batches == b].copy() for b in batch_levels]
+
+        svd_dim = max(10, int(ctx.cfg.clustering.n_pcs))
+        try:
+            corrected = sc.external.pp.mnn_correct(
+                *adatas, batch_key=None, index_unique=None, svd_dim=svd_dim
+            )[0]
+        except TypeError:
+            corrected = sc.external.pp.mnn_correct(*adatas)[0]
+        corrected = corrected[adata.obs_names, :].copy()
+        sc.pp.pca(corrected, n_comps=ctx.cfg.clustering.n_pcs)
+        adata.obsm["X_fastmnn"] = corrected.obsm["X_pca"].copy()
+        ctx.metadata["fastmnn_backend"] = "mnn_correct_svd_approx"
+        ctx.metadata["fastmnn_svd_dim"] = svd_dim
+
+    @staticmethod
+    def _matrix_looks_integer_like(matrix, sample_size: int = 2048) -> bool:
+        """Heuristic: check if matrix resembles raw integer counts."""
+        if sparse.issparse(matrix):
+            values = matrix.data
+        else:
+            values = np.asarray(matrix).ravel()
+        if values.size == 0:
+            return True
+        if values.size > sample_size:
+            idx = np.linspace(0, values.size - 1, sample_size, dtype=int)
+            values = values[idx]
+        finite = values[np.isfinite(values)]
+        if finite.size == 0:
+            return False
+        if np.any(finite < 0):
+            return False
+        return bool(np.allclose(finite, np.round(finite), atol=1e-6))
+
+    @staticmethod
+    def _run_scvi(adata, batch_key: str, ctx) -> None:
+        """scVI latent integration (Lopez et al., Nature Methods 2018)."""
+        try:
+            import scvi
+        except ImportError:
+            raise ImportError(
+                "scvi-tools is required for scVI batch correction. "
+                "Install with: pip install scvi-tools"
+            )
+
+        batch_cfg = ctx.cfg.batch
+        if "counts" in adata.layers:
+            layer = "counts"
+            input_source = "layers.counts"
+        else:
+            layer = None
+            if not BatchCorrectionModule._matrix_looks_integer_like(adata.X):
+                raise ValueError(
+                    "scVI requires raw count-like input. 'counts' layer is missing and adata.X "
+                    "does not appear to be integer UMI counts."
+                )
+            input_source = "adata.X"
+
+        scvi.model.SCVI.setup_anndata(adata, batch_key=batch_key, layer=layer)
+        model = scvi.model.SCVI(adata, n_latent=batch_cfg.scvi_n_latent)
+        model.train(
+            max_epochs=batch_cfg.scvi_max_epochs,
+            early_stopping=batch_cfg.scvi_early_stopping,
+        )
+        adata.obsm["X_scvi"] = model.get_latent_representation()
+        ctx.metadata["scvi_input_source"] = input_source
+        ctx.metadata["scvi_train_config"] = {
+            "max_epochs": batch_cfg.scvi_max_epochs,
+            "n_latent": batch_cfg.scvi_n_latent,
+            "early_stopping": batch_cfg.scvi_early_stopping,
+        }

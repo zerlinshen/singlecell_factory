@@ -41,6 +41,7 @@ class PseudoVelocityModule:
     """
 
     name = "pseudo_velocity"
+    requires_keys = {"obs": ["dpt_pseudotime"]}
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

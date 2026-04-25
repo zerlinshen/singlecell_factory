@@ -1,0 +1,67 @@
+# 2026-04-23 - remote-run-draft
+
+## Objective
+
+- [draft] Fill in what this run was supposed to prove or complete.
+
+## Starting Context
+
+- [draft] Fill in the canonical input or run that was used.
+- [draft] Confirm what lesson was carried forward from LATEST.md.
+
+## What Was Run
+
+- Host: \`ubuntu-tail\`
+- Command or controlling script:
+\`\`\`bash
+ssh ubuntu-tail "cd /home/zerlinshen/singlecell_factory && bash scripts/run_emtab13526_full_cohort_with_fallback.sh"
+\`\`\`
+
+## Outcome
+
+- \`partial\`
+- Hook-observed shell exit code: \`0\`
+
+## Evidence
+
+- [draft] Add run directory, module_status.csv, run_manifest.json, logs, checkpoints, and key artifacts.
+
+## Hook Capture
+
+### stdout tail
+
+\`\`\`text
+RUN_DIR=/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552
+FINAL_STATUS=SUCCESS_MASSIVE
+\`\`\`
+
+### stderr tail
+
+\`\`\`text
+[empty]
+\`\`\`
+
+## Problems Encountered
+
+- [draft] Fill in the first real blocker or confirm there was none.
+
+## What Was Changed
+
+- [draft] Fill in code, parameter, or execution strategy changes.
+
+## Resolution
+
+- [draft] Fill in whether this fully solved the issue or only moved the frontier.
+
+## Cautions for the Next Run
+
+- [draft] Fill in what the next operator must remember.
+
+## Improvement Ideas
+
+- [draft] Fill in any automation, code, or documentation improvement ideas.
+
+## Classification
+
+- \`evidence-only\`
+
