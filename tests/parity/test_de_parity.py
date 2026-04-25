@@ -120,7 +120,7 @@ def test_sparse_vs_dense_top50_overlap(synthetic_adata):
     out_mask = ~in_mask
     X = adata.X  # CSR sparse
 
-    t_stat, pvals = sparse_welch_t(X, in_mask, out_mask)
+    t_stat, pvals, _, _ = sparse_welch_t(X, in_mask, out_mask)
     mean_in = np.asarray(X[in_mask].mean(axis=0)).ravel() + 1e-9
     mean_out = np.asarray(X[out_mask].mean(axis=0)).ravel() + 1e-9
     logfc = np.log2(mean_in / mean_out)
@@ -147,7 +147,7 @@ def test_sparse_vs_dense_logfc_pearson(synthetic_adata):
     out_mask = ~in_mask
     X = adata.X
 
-    _, pvals = sparse_welch_t(X, in_mask, out_mask)
+    _, pvals, _, _ = sparse_welch_t(X, in_mask, out_mask)
     mean_in = np.asarray(X[in_mask].mean(axis=0)).ravel() + 1e-9
     mean_out = np.asarray(X[out_mask].mean(axis=0)).ravel() + 1e-9
     sparse_logfc = np.log2(mean_in / mean_out)
@@ -179,7 +179,7 @@ def test_sparse_vs_dense_pval_spearman(synthetic_adata):
     out_mask = ~in_mask
     X = adata.X
 
-    _, sparse_raw_pvals = sparse_welch_t(X, in_mask, out_mask)
+    _, sparse_raw_pvals, _, _ = sparse_welch_t(X, in_mask, out_mask)
     # Apply BH correction to match the dense fallback's pvals_adj
     sparse_pvals_adj = DifferentialExpressionModule._benjamini_hochberg(sparse_raw_pvals)
 
@@ -191,3 +191,37 @@ def test_sparse_vs_dense_pval_spearman(synthetic_adata):
 
     rho, _ = spearmanr(dense_pv, sparse_pv)
     assert rho >= 0.99, f"p-value Spearman = {rho:.6f} (need >= 0.99)"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2B: SC_DE_ENGINE=sparse end-to-end parity through the module API
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not _try_import_sparse_welch(), reason="phase 2 not enabled")
+def test_de_engine_env_flag_routes_to_sparse(synthetic_adata, monkeypatch):
+    """Setting SC_DE_ENGINE=sparse must route _fallback_rank_genes_groups_df to sparse path."""
+    monkeypatch.setenv("SC_DE_ENGINE", "sparse")
+    df = _run_dense_fallback(synthetic_adata, n_genes=50)
+    assert not df.empty
+    assert synthetic_adata.uns["rank_genes_groups"].get("engine") == "sparse_welch"
+
+
+@pytest.mark.skipif(not _try_import_sparse_welch(), reason="phase 2 not enabled")
+def test_de_engine_default_is_dense(synthetic_adata, monkeypatch):
+    """No env var means default dense path; uns must NOT have engine=sparse_welch."""
+    monkeypatch.delenv("SC_DE_ENGINE", raising=False)
+    df = _run_dense_fallback(synthetic_adata, n_genes=50)
+    assert not df.empty
+    assert synthetic_adata.uns["rank_genes_groups"].get("engine") != "sparse_welch"
+
+
+@pytest.mark.skipif(not _try_import_sparse_welch(), reason="phase 2 not enabled")
+def test_de_engine_sparse_top50_matches_dense(synthetic_adata, monkeypatch):
+    """End-to-end: SC_DE_ENGINE=sparse top-50 must overlap default top-50 by >= 48/50."""
+    monkeypatch.delenv("SC_DE_ENGINE", raising=False)
+    dense_df = _run_dense_fallback(synthetic_adata, n_genes=50)
+    monkeypatch.setenv("SC_DE_ENGINE", "sparse")
+    sparse_df = _run_dense_fallback(synthetic_adata, n_genes=50)
+
+    overlap = len(_top50_names(dense_df, "A") & _top50_names(sparse_df, "A"))
+    assert overlap >= 48, f"E2E sparse vs dense top-50 overlap = {overlap}/50 (need >= 48)"

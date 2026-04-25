@@ -124,7 +124,7 @@ def test_sparse_welch_t_parity_vs_scipy(seed):
 
     X_sparse = sp.csr_matrix(X_dense)
 
-    t_sp, p_sp = sparse_welch_t(X_sparse, in_mask, out_mask)
+    t_sp, p_sp, _, _ = sparse_welch_t(X_sparse, in_mask, out_mask)
     t_ref, p_ref = _welch_t_reference(X_dense, in_mask, out_mask)
 
     np.testing.assert_allclose(t_sp, t_ref, atol=1e-9,
@@ -144,7 +144,7 @@ def test_sparse_welch_t_float64_internal():
     in_mask = np.array([True] * 20 + [False] * 20)
     out_mask = ~in_mask
 
-    t_sp, _ = sparse_welch_t(X_sparse, in_mask, out_mask)
+    t_sp, _, _, _ = sparse_welch_t(X_sparse, in_mask, out_mask)
     t_ref, _ = _welch_t_reference(X_dense, in_mask, out_mask)
 
     np.testing.assert_allclose(t_sp, t_ref, atol=1e-9,
@@ -157,7 +157,7 @@ def test_sparse_welch_t_dense_input():
     X_dense = rng.random((n_cells, n_genes))
     in_mask = np.array([True] * 15 + [False] * 15)
     out_mask = ~in_mask
-    t_sp, p_sp = sparse_welch_t(X_dense, in_mask, out_mask)
+    t_sp, p_sp, _, _ = sparse_welch_t(X_dense, in_mask, out_mask)
     t_ref, p_ref = _welch_t_reference(X_dense, in_mask, out_mask)
     np.testing.assert_allclose(t_sp, t_ref, atol=1e-9)
     np.testing.assert_allclose(p_sp, p_ref, atol=1e-9)

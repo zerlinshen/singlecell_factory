@@ -157,7 +157,15 @@ class DifferentialExpressionModule:
             adata.uns["rank_genes_groups"] = {"fallback": True, "groupby": groupby}
             return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
 
-        X = adata.X
+        import os
+        engine = os.environ.get("SC_DE_ENGINE", "dense").lower()
+        X_raw = adata.X
+        if engine == "sparse" and sparse.issparse(X_raw):
+            return DifferentialExpressionModule._fallback_sparse_welch_df(
+                adata=adata, groupby=groupby, n_genes=n_genes,
+            )
+
+        X = X_raw
         if sparse.issparse(X):
             X = X.toarray()
         X = np.asarray(X, dtype=float)
@@ -209,6 +217,59 @@ class DifferentialExpressionModule:
         adata.uns["rank_genes_groups"] = {
             "fallback": True,
             "groupby": groupby,
+            "names": per_group_names,
+        }
+        if not rows:
+            return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    def _fallback_sparse_welch_df(adata, groupby: str, n_genes: int) -> pd.DataFrame:
+        from .._sparse_utils import sparse_welch_t
+
+        X = adata.X
+        if X.ndim != 2 or X.shape[1] == 0:
+            adata.uns["rank_genes_groups"] = {"fallback": True, "groupby": groupby}
+            return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
+
+        genes = np.asarray(adata.var_names.astype(str))
+        groups = pd.Categorical(adata.obs[groupby].astype(str))
+        rows: list[dict[str, object]] = []
+        per_group_names: dict[str, list[str]] = {}
+
+        for group in groups.categories:
+            in_mask = np.asarray(groups == group)
+            out_mask = ~in_mask
+            if in_mask.sum() == 0 or out_mask.sum() == 0:
+                continue
+            try:
+                _, pvals_raw, mean_in, mean_out = sparse_welch_t(X, in_mask, out_mask)
+            except Exception as exc:
+                logger.warning("sparse_welch_t failed for group %s: %s — skipping", group, exc)
+                continue
+            mean_in = np.asarray(mean_in, dtype=float) + 1e-9
+            mean_out = np.asarray(mean_out, dtype=float) + 1e-9
+            logfc = np.log2(mean_in / mean_out)
+            pvals = np.nan_to_num(np.asarray(pvals_raw, dtype=float), nan=1.0, posinf=1.0, neginf=1.0)
+            pvals_adj = DifferentialExpressionModule._benjamini_hochberg(pvals)
+            order = np.lexsort((-np.abs(logfc), pvals_adj))
+            keep = order[: max(1, min(n_genes, len(order)))]
+            per_group_names[str(group)] = genes[keep].tolist()
+            for idx in keep:
+                rows.append(
+                    {
+                        "group": str(group),
+                        "names": genes[idx],
+                        "scores": float(logfc[idx]),
+                        "pvals_adj": float(pvals_adj[idx]),
+                        "logfoldchanges": float(logfc[idx]),
+                    }
+                )
+
+        adata.uns["rank_genes_groups"] = {
+            "fallback": True,
+            "groupby": groupby,
+            "engine": "sparse_welch",
             "names": per_group_names,
         }
         if not rows:

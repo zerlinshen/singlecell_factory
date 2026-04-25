@@ -59,7 +59,7 @@ def sparse_groupby_mean(X, group_labels):
 def sparse_welch_t(X, in_mask, out_mask):
     """Closed-form Welch t-statistic computed in float64.
 
-    Returns (t_stats, p_values) arrays of shape (n_genes,).
+    Returns (t_stats, p_values, mean_in, mean_out) arrays of shape (n_genes,).
     All intermediate accumulators are float64 to ensure numerical stability.
     """
     in_mask = np.asarray(in_mask, dtype=bool)
@@ -119,4 +119,4 @@ def sparse_welch_t(X, in_mask, out_mask):
     df = np.where(den_df > 0, num_df / den_df, 1.0)
 
     p_values = 2.0 * stats.t.sf(np.abs(t_stats), df=df)
-    return t_stats, p_values
+    return t_stats, p_values, mean1, mean2
