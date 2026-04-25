@@ -433,6 +433,22 @@ def _safe_parallel_worker_count(
     )
 
 
+def _ledger_record_module(ctx: PipelineContext, name: str, status: str, message: str, elapsed: float) -> None:
+    """Call ledger.record_module if a ledger is attached to ctx. Never raises."""
+    ledger = getattr(ctx, "_ledger", None)
+    if ledger is None:
+        return
+    try:
+        import psutil  # type: ignore
+        rss = psutil.Process().memory_info().rss
+    except Exception:
+        rss = 0
+    try:
+        ledger.record_module(name, status, message, elapsed, rss)
+    except Exception as exc:
+        logger.warning("ledger.record_module failed: %s", exc)
+
+
 def _run_sequential(
     modules: list[str],
     registry: dict,
@@ -444,10 +460,12 @@ def _run_sequential(
         mod = registry.get(stage)
         if mod is None:
             ctx.status(stage, False, "unknown module")
+            _ledger_record_module(ctx, stage, "failed", "unknown module", 0.0)
             continue
         ctx.set_module_dir(stage)
         pre_status_len = len(ctx.module_status)
         t0 = perf_counter()
+        status, message = "failed", ""
         try:
             _run_module(mod, ctx, mandatory=stage in mandatory)
             status, message = _finalize_stage_success(ctx, stage, pre_status_len)
@@ -455,14 +473,18 @@ def _run_sequential(
                 raise RuntimeError(f"Mandatory module {stage} reported {status}: {message}")
             ctx.save_checkpoint(stage)
         except _SkipModule as exc:
+            status, message = "skipped", str(exc)
             ctx.status(stage, "skipped", str(exc))
             ctx.save_checkpoint(stage)
         except Exception as exc:
+            status, message = "failed", str(exc)
             ctx.status(stage, False, str(exc))
             if stage in mandatory:
                 raise
         finally:
-            _record_module_runtime(ctx, stage, perf_counter() - t0)
+            elapsed = perf_counter() - t0
+            _record_module_runtime(ctx, stage, elapsed)
+            _ledger_record_module(ctx, stage, status, message, elapsed)
 
 
 def _execute_tier(
@@ -638,6 +660,7 @@ def _run_parallel_appending(
 
         ctx.status(mod_name, ok, msg)
         _record_module_runtime(ctx, mod_name, elapsed)
+        _ledger_record_module(ctx, mod_name, ok, msg, elapsed)
         ctx.save_checkpoint(mod_name)
 
         if ok != "ok" and mod_name in mandatory:
@@ -649,11 +672,13 @@ def _run_parallel_appending(
 # ---------------------------------------------------------------------------
 
 
-def run_pipeline(cfg: PipelineConfig) -> Path:
+def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
     """Run the modular workflow with mandatory and optional stages."""
 
     pipeline_t0 = perf_counter()
     ctx = _prepare_output(cfg)
+    if ledger is not None:
+        ctx._ledger = ledger
     registry = _build_registry()
     mutating_set = _discover_mutating(registry)
     try:
@@ -707,7 +732,16 @@ def run_pipeline(cfg: PipelineConfig) -> Path:
             _run_sequential(execution_order, registry, ctx, mandatory_set)
 
         ctx.metadata["pipeline_wall_seconds"] = round(perf_counter() - pipeline_t0, 3)
-        return _save_manifest(ctx)
+        manifest_path = _save_manifest(ctx)
+        try:
+            ledger = getattr(ctx, "_ledger", None)
+            if ledger is not None:
+                final_adata_path = ctx.run_dir / "final_adata.h5ad"
+                ledger.record_end(final_adata_path if final_adata_path.exists() else None)
+                ledger.write()
+        except Exception as _ledger_exc:
+            logger.warning("RunLedger finalization failed: %s", _ledger_exc)
+        return manifest_path
     finally:
         if ctx._figure_pool is not None:
             try:

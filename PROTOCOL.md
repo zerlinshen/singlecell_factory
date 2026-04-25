@@ -496,3 +496,48 @@ python -m workflow.modular.cli \
 - Treat `skipped` as informative, not automatically bad.
 - Use checkpoint/resume for long runs.
 - Prefer stable defaults unless you have a concrete biological reason to change parameters.
+
+---
+
+## Run Audit Ledger
+
+Every modular pipeline run automatically writes a JSON audit record to `ops/run_ledger/<project>_<timestamp>.json` (schema version `run_ledger_v1`). The ledger is **observational only** — a failure to write it never aborts the pipeline run.
+
+### What is captured
+
+| Field | Description |
+|---|---|
+| `schema_version` | Always `"run_ledger_v1"` |
+| `timestamp_utc` / `end_timestamp_utc` | ISO-8601 UTC start and end times |
+| `project` | Project name passed via `--project` |
+| `cli_args` | Full `sys.argv` at launch |
+| `env` | Filtered env vars: `SC_*`, `SCF_*`, `CUDA_*`, `CONDA_*` prefixes + small standard allowlist |
+| `git_sha` / `git_branch` / `git_dirty` | Repository state at launch |
+| `conda_env` | `$CONDA_DEFAULT_ENV` |
+| `python_version` | Full Python version string |
+| `hostname` | Machine hostname |
+| `sample_root` | Dataset root from config |
+| `optional_modules` | Modules requested for the run |
+| `module_results` | Per-module: name, status, message, wall_seconds, rss_peak_bytes |
+| `total_wall_seconds` | End-to-end pipeline wall time |
+| `peak_rss_bytes` | Process RSS peak sampled at 1-second intervals via psutil |
+| `final_adata_sha256` | SHA-256 of `final_adata.h5ad` (empty string if not produced) |
+
+### Implementation
+
+- `workflow/modular/_run_ledger.py` — `RunLedger` class with `record_start()`, `record_module()`, `record_end()`, `write()`.
+- Instantiated in `workflow/modular/cli.py` `main()` before `run_pipeline()`.
+- Per-module hooks fire in `workflow/modular/pipeline.py` via `_ledger_record_module()` after every module in both sequential and parallel execution paths.
+- All ledger calls are wrapped in `try/except`; warnings are logged but the run continues.
+
+### Ledger output location
+
+```
+ops/run_ledger/<project>_<YYYYMMDDTHHMMSS>.json
+```
+
+Ledger files are tracked by git (see `.gitignore` exception `!ops/run_ledger/*.json`).
+
+### Retention policy
+
+Keep all ledger files indefinitely. Records are append-only and are never auto-pruned. They serve as the primary audit trail for production runs including the NC2024 sparse-exact 900k cohort (Phase 6).

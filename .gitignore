@@ -43,3 +43,6 @@ coverage.xml
 
 # OMC session state (per-session, never commit)
 .omc/
+
+# ops/run_ledger JSON audit records are intentionally tracked by git
+!ops/run_ledger/*.json

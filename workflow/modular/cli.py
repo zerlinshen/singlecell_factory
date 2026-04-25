@@ -401,6 +401,9 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entrypoint."""
+    import logging
+    from ._run_ledger import RunLedger
+
     args = _apply_scale_mode(parse_args())
     _validate_args(args)
     sample_root = Path(args.sample_root)
@@ -509,7 +512,16 @@ def main() -> None:
         gpu_mode=args.gpu_mode,
         scale_mode=args.scale_mode,
     )
-    manifest = run_pipeline(cfg)
+    ledger = None
+    try:
+        _ledger_ctx = type("_LedgerCtx", (), {"cfg": cfg})()
+        ledger = RunLedger(_ledger_ctx, args.project, Path(args.output_dir))
+        ledger.record_start()
+    except Exception as _ledger_exc:
+        logging.getLogger(__name__).warning("RunLedger.record_start failed: %s", _ledger_exc)
+        ledger = None
+
+    manifest = run_pipeline(cfg, ledger=ledger)
     print(manifest)
 
 
