@@ -14,6 +14,7 @@ sc = import_scanpy_or_stub()
 from scipy.ndimage import uniform_filter1d
 
 from ..context import PipelineContext
+from .._densify_policy import plan_densify, DensifyDecision
 
 import logging
 logger = logging.getLogger(__name__)
@@ -121,15 +122,35 @@ class CNVInferenceModule:
         import os
         engine = os.environ.get("SC_CNV_ENGINE", "dense").lower()
 
+        _force_chunked = False
         if engine == "chunked" and hasattr(expr_raw, "tocsr"):
+            _force_chunked = True
+        elif hasattr(expr_raw, "toarray"):
+            decision = plan_densify(
+                expr_raw.shape, np.float32,
+                reason="default CNV dense path: full matrix required for sliding-window smoothing",
+            )
+            if decision == DensifyDecision.ABORT:
+                logger.warning(
+                    "cnv_inference: matrix too large to densify (%d × %d); "
+                    "falling back to chunked path automatically",
+                    expr_raw.shape[0], expr_raw.shape[1],
+                )
+                _force_chunked = True
+            elif decision == DensifyDecision.CHUNK:
+                logger.warning(
+                    "cnv_inference: CNV densify in CHUNK range (%d × %d); proceeding",
+                    expr_raw.shape[0], expr_raw.shape[1],
+                )
+
+        if _force_chunked and hasattr(expr_raw, "tocsr"):
             smoothed = self._compute_smoothed_chunked(
                 expr_raw, adata, reference_group, chromosomes, window,
                 int(os.environ.get("SC_CNV_CHUNK_ROWS", 4096)),
             )
         else:
             if hasattr(expr_raw, "toarray"):
-                # densify-allowed: default (non-chunked) CNV path; reached only when SC_CNV_ENGINE != 'chunked'; full matrix required for sliding-window smoothing
-                expr = expr_raw.toarray()
+                expr = expr_raw.toarray()  # densify-allowed: guarded by plan_densify above
             else:
                 expr = expr_raw
             expr = np.array(expr, dtype=np.float32)
