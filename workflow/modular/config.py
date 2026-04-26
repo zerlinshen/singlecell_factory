@@ -203,6 +203,7 @@ class PipelineConfig:
     checkpoint_policy: str = "full"  # full, mandatory_only, metadata_only
     # Cohort subset: obs_col=val1,val2 filter applied after loading (supports list for AND-chaining)
     cohort_subset: Optional[list[str]] = None
+    annotation_strategy: str = "cluster_voting"  # cluster_voting, cell_argmax
 
 
 # Maps scale_mode preset names to their capability flag bundles.

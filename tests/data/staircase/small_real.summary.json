@@ -1,0 +1,22 @@
+{
+  "tier": "small_real",
+  "n_cells": 100000,
+  "n_genes": 33538,
+  "source": "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr",
+  "obs_columns": [
+    "sample",
+    "patient",
+    "batch",
+    "disease",
+    "condition",
+    "sorting",
+    "sampling_site",
+    "sex",
+    "original_source_name",
+    "tumor_type",
+    "donor",
+    "sample_id",
+    "source_file",
+    "batch_join"
+  ]
+}

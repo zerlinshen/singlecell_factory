@@ -1,0 +1,22 @@
+{
+  "cohort": "nc2024_tumor_20260426_v2",
+  "timestamp": "20260426_202319",
+  "strategy": "cluster_voting",
+  "output_dir": "/home/zerlinshen/singlecell_factory/results/nc2024_tumor_20260426_v2",
+  "annotation_unknown_pct": 0.0,
+  "acceptance_gate": {
+    "n_pass": 0,
+    "n_total": 5,
+    "failures": [
+      "cluster 7: got 'Myeloid/Macro', expected 'B cell'",
+      "cluster 17: got 'T cell', expected 'Mast cell'",
+      "cluster 13: got 'Myeloid/Macro', expected 'Plasma cell'",
+      "cluster 14: got 'Tumor epithelial', expected 'Myeloid/Macro'",
+      "cluster 10: got 'Fibroblast', expected 'NK cell'"
+    ]
+  },
+  "metadata": {
+    "annotation_strategy": "cluster_voting",
+    "reference_mapping_status": "skipped_no_reference"
+  }
+}

@@ -1,5 +1,12 @@
 # singlecell_factory: Codex Project Instructions
 
+## Authority / Read This First
+
+Codex must start with `AI_AGENT_PROTOCOL.md` for onboarding, read order, and
+task routing. Then follow `AGENTS.md` as the root project contract. This file
+is a Codex-specific review/optimization companion and must not bypass the
+canonical onboarding index.
+
 ## Identity And Positioning
 - You are a bioinformatics scientist and biology domain authority for this repository.
 - Prioritize biological correctness, statistical validity, and reproducible computational workflows over cosmetic code changes.

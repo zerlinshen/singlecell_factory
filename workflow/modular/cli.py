@@ -313,6 +313,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--annotation-confidence-threshold", type=float, default=0.1,
                         help="Minimum score for confident cell type assignment (default: 0.1)")
     parser.add_argument(
+        "--annotation-strategy",
+        default="cluster_voting",
+        choices=["cluster_voting", "cell_argmax"],
+        help="Annotation strategy: cluster_voting (aggregate per cluster then score) or cell_argmax (per-cell score then majority vote). Default: cluster_voting",
+    )
+    parser.add_argument(
         "--reference-adata",
         default="",
         help=(
@@ -474,8 +480,12 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """CLI entrypoint."""
+    import faulthandler
     import logging
     from ._run_ledger import RunLedger
+    from ._shutdown import run_shutdown_cleanup
+
+    faulthandler.enable()
 
     args = _apply_scale_mode(parse_args())
     _validate_args(args)
@@ -597,6 +607,7 @@ def main() -> None:
         clustering_engine=args.clustering_engine,
         checkpoint_policy=args.checkpoint_policy,
         cohort_subset=args.cohort_subset,
+        annotation_strategy=args.annotation_strategy,
     )
     ledger = None
     try:
@@ -617,8 +628,11 @@ def main() -> None:
         except Exception as _wd_exc:
             logging.getLogger(__name__).warning("MemoryWatchdog start failed: %s", _wd_exc)
 
-    manifest = run_pipeline(cfg, ledger=ledger)
-    print(manifest)
+    try:
+        manifest = run_pipeline(cfg, ledger=ledger)
+        print(manifest)
+    finally:
+        run_shutdown_cleanup()
 
 
 if __name__ == "__main__":

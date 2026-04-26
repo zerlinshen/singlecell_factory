@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture Governance Sync"
+  short_description: "Refresh architecture governance docs and structure diagrams."
+  default_prompt: "Run architecture governance sync for this workspace: update the nearest README architecture section, refresh the structure diagram PNG, and report verification evidence."

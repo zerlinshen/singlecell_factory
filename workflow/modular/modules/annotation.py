@@ -56,6 +56,11 @@ class AnnotationModule:
         if not available:
             raise ValueError("No valid marker genes found in dataset.")
 
+        strategy = getattr(ctx.cfg, "annotation_strategy", "cluster_voting")
+        ctx.metadata["annotation_strategy"] = strategy
+
+        # Score genes on full adata (per cell) — populates score_* obs columns and
+        # provides per-cell confidence used by reference mapping conservative gate.
         for cell_type, genes in available.items():
             sc.tl.score_genes(adata, genes, score_name=f"score_{cell_type}", use_raw=False)
 
@@ -63,30 +68,65 @@ class AnnotationModule:
         score_mat = adata.obs[score_cols].copy()
         score_mat.columns = list(available.keys())
 
-        # Assign cell type with confidence scoring
-        max_scores = score_mat.max(axis=1)
-        vals = score_mat.values
-        if vals.shape[1] >= 2:
-            second_scores = pd.Series(
-                np.partition(vals, -2, axis=1)[:, -2], index=score_mat.index,
+        if strategy == "cluster_voting":
+            # Cluster-level assignment uses raw mean expression per marker gene set,
+            # not aggregated score_genes values. score_genes background subtraction is
+            # unreliable when absolute marker expression is low (background genes in the
+            # same expression bin dominate the signal). Raw mean expression correctly
+            # captures relative marker enrichment per cluster.
+            cluster_score_matrix = self._cluster_mean_expression(adata, available)
+            cluster_label_map = cluster_score_matrix.idxmax(axis=1).to_dict()
+            adata.obs["cell_type"] = adata.obs["leiden"].astype(str).map(cluster_label_map).astype(str)
+            # Confidence: per-cell score_genes margin (max - second), for reference mapping gate
+            max_scores = score_mat.max(axis=1)
+            vals = score_mat.values
+            if vals.shape[1] >= 2:
+                second_scores = pd.Series(
+                    np.partition(vals, -2, axis=1)[:, -2], index=score_mat.index,
+                )
+            else:
+                second_scores = pd.Series(np.zeros(vals.shape[0], dtype=float), index=score_mat.index)
+            adata.obs["annotation_confidence"] = (max_scores - second_scores).values
+            # Unknown gate: cluster-level raw mean max score
+            cluster_max_score = cluster_score_matrix.max(axis=1)
+            low_conf_clusters = set(
+                cluster_max_score[cluster_max_score < ctx.cfg.annotation_confidence_threshold].index.astype(str)
             )
+            low_conf = adata.obs["leiden"].astype(str).isin(low_conf_clusters)
+            adata.obs.loc[low_conf, "cell_type"] = "Unknown"
+            # Write audit trail
+            cluster_score_matrix.to_csv(ctx.table_dir / "cluster_score_matrix.csv")
         else:
-            second_scores = pd.Series(np.zeros(vals.shape[0], dtype=float), index=score_mat.index)
-        confidence = max_scores - second_scores
+            # cell_argmax: original per-cell path
+            max_scores = score_mat.max(axis=1)
+            vals = score_mat.values
+            if vals.shape[1] >= 2:
+                second_scores = pd.Series(
+                    np.partition(vals, -2, axis=1)[:, -2], index=score_mat.index,
+                )
+            else:
+                second_scores = pd.Series(np.zeros(vals.shape[0], dtype=float), index=score_mat.index)
+            adata.obs["cell_type"] = score_mat.idxmax(axis=1).values
+            adata.obs["annotation_confidence"] = (max_scores - second_scores).values
+            low_conf = max_scores < ctx.cfg.annotation_confidence_threshold
+            adata.obs.loc[low_conf, "cell_type"] = "Unknown"
+            # Write cluster_score_matrix.csv for consistency
+            cluster_score_matrix = score_mat.groupby(
+                adata.obs["leiden"].astype(str), observed=True
+            ).mean()
+            cluster_score_matrix.index.name = "leiden"
+            cluster_score_matrix.to_csv(ctx.table_dir / "cluster_score_matrix.csv")
 
-        adata.obs["cell_type"] = score_mat.idxmax(axis=1).values
-        adata.obs["annotation_confidence"] = confidence.values
-        # Mark low-confidence assignments as Unknown
-        low_conf = max_scores < ctx.cfg.annotation_confidence_threshold
-        adata.obs.loc[low_conf, "cell_type"] = "Unknown"
         adata.obs["cell_type_marker"] = adata.obs["cell_type"].astype(str)
 
         self._try_reference_mapping(adata, ctx)
 
+        low_conf_mask = adata.obs["cell_type"] == "Unknown"
         ctx.metadata["annotation_unknown_pct"] = round(
-            float(low_conf.sum()) / len(low_conf) * 100, 2
+            float(low_conf_mask.sum()) / max(len(low_conf_mask), 1) * 100, 2
         )
 
+        score_cols = [f"score_{ct}" for ct in available]
         base_cols = ["leiden", "cell_type", "annotation_confidence", "cell_type_marker"] + score_cols
         extra_cols = [c for c in ["reference_cell_type", "reference_confidence"] if c in adata.obs.columns]
         adata.obs[base_cols + extra_cols].to_csv(ctx.table_dir / "cell_type_annotation.csv")
@@ -118,6 +158,36 @@ class AnnotationModule:
 
         # Stacked bar: cell type composition per cluster
         self._plot_composition(adata, ctx)
+
+    @staticmethod
+    def _cluster_mean_expression(adata, available: dict[str, list[str]]) -> pd.DataFrame:
+        """Compute mean expression of each marker gene set per leiden cluster.
+
+        Returns DataFrame with rows=cluster, cols=cell_type, values=mean log-expr of gene set.
+        Uses raw matrix slicing to avoid score_genes background subtraction artefacts.
+        """
+        X = adata.X
+        leiden_vals = adata.obs["leiden"].astype(str).values
+        clusters = sorted(set(leiden_vals), key=lambda c: (not c.isdigit(), int(c) if c.isdigit() else c))
+        gene_index = {g: i for i, g in enumerate(adata.var_names)}
+
+        rows: dict[str, dict[str, float]] = {}
+        for cluster in clusters:
+            mask = leiden_vals == cluster
+            x_clust = X[mask]
+            if sparse.issparse(x_clust):
+                mean_expr = np.asarray(x_clust.mean(axis=0)).flatten()
+            else:
+                mean_expr = np.asarray(x_clust, dtype=np.float64).mean(axis=0)
+            row: dict[str, float] = {}
+            for cell_type, genes in available.items():
+                idxs = [gene_index[g] for g in genes if g in gene_index]
+                row[cell_type] = float(mean_expr[idxs].mean()) if idxs else 0.0
+            rows[cluster] = row
+
+        df = pd.DataFrame(rows).T
+        df.index.name = "leiden"
+        return df
 
     @staticmethod
     def _try_reference_mapping(adata, ctx: PipelineContext) -> None:

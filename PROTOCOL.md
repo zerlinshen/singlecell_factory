@@ -1,5 +1,11 @@
 # singlecell_factory Beginner Protocol (Complete, Practical)
 
+## Authority / Read This First
+
+AI agents should start with `AI_AGENT_PROTOCOL.md` before using this file. This
+file remains the deep operational guide for running and recovering the modular
+pipeline; it is not deprecated.
+
 This protocol is a beginner-friendly, end-to-end guide for running the current modular scRNA-seq pipeline.
 
 It is aligned with the current codebase (`workflow/modular/*`) and CLI (`python -m workflow.modular.cli`).

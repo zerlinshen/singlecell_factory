@@ -17,6 +17,27 @@
 - Current agent-facing run ledger:
   `/Users/zerlinshen/Downloads/1. Codex/2.Reproduction Trail/2026-04-23 - Nature Communications 2024 NSCLC single-cell reproduction/agent_runs/README.md`
 
+## Current Methodology / Governance State
+
+- As of the `2026-04-25` methodology audit, the next paper-aligned optimization
+  lane is sparse-exact rather than CSS approximation:
+  `/home/zerlinshen/singlecell_factory/ops/nc2024_methodology_audit/AUDIT_2026-04-25.md`
+- That audit records paper-faithful Scrublet, Harmony 15-PC clustering, Leiden
+  resolution `1.0`, paper-aligned DE parameters, and tumor-vs-background /
+  healthy cohort splitting through `--cohort-subset`.
+- Paper-aligned launcher:
+  `/home/zerlinshen/singlecell_factory/scripts/run_nc2024_paper_aligned_20260425.sh`
+- Sparse-exact exploratory launcher:
+  `/home/zerlinshen/singlecell_factory/scripts/run_nc2024_full_cohort_sparse_exact_20260425.sh`
+- Observed `2026-04-25` `NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO_*`
+  result directories are not canonical successful runs unless a later audit
+  finds `final_adata.h5ad`, `run_manifest.json`, and `module_status.csv`.
+  Current read-only inspection saw only early mandatory outputs/checkpoints and
+  a zero-byte sparse-exact launch log.
+- Both Mac-led SSH orchestration and direct remote operation are valid. The Mac
+  remains the review/organization/report-packaging surface; the remote repo
+  remains the compute, remote-R, and run-truth surface.
+
 ## Latest Run Verdict
 
 - Date: `2026-04-24`
@@ -87,6 +108,11 @@
   cite recovery outputs separately.
 - Use the local `reproduce-run-retention` skill when deciding whether a prior
   reproduce/test run can be deleted after evidence capture.
+- Remote Codex / Claude Code agents should have the same Shenxin workflow skill
+  coverage. Codex project skills live in `.codex/skills/` using standard Codex
+  project skill management; Claude project skills live in `.claude/skills/`.
+  `codex_skills/` remains only as a legacy compatibility mirror for historical
+  project-local skills.
 
 ## Current Scientific/Reporting State
 

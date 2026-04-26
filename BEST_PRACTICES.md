@@ -5,6 +5,15 @@
 - Claude 项目规则：`CLAUDE.md`（本项目根目录）
 - 全局规则仍生效，但项目文件优先级更高。
 
+## 1.5) 两种操作方式都可行
+- 直接在远端 `/home/zerlinshen/singlecell_factory` 操作：适合重计算、
+  pipeline execution、run triage、remote R/reporting。
+- 在 Mac 上通过 SSH 编排远端：适合协调、审阅、handoff、report packaging。
+
+无论哪种方式，远端 artifact 仍是 run truth：优先看
+`run_manifest.json`、`module_status.csv`、`ops/before_every_run/LATEST.md`、
+`ops/run_ledger/`。Mac 侧 summary 负责组织和交付，不替代远端证据。
+
 ## 2) 推荐任务起手式
 把下面模板发给代理（Codex/Claude 都可）：
 
@@ -22,10 +31,26 @@ $ralplan
 - 性能优化：`$optimize-and-guard-performance`
 - 大任务编排：`$orchestrate-large-task`
 - 最终质量门：`$review-and-validate-quality`
+- 远端执行前记忆：`$before-every-run`
+- Mac/remote 桥接与 handoff：`$singlecell-remote-workflow`
+- 报告包整理：`$remote-run-report-bridge`
+- 文档/治理漂移：`$reproduction-workspace-governance` + `$readme-sync-enforcer`
+- 失败/过期结果治理：`$post-run-failure-cleanup`、`$reproduce-run-retention`
 
 建议固定链路：
 - 开发类：`$ralplan -> $develop-and-integrate-module -> $review-and-validate-quality`
 - 运行类：`$execute-and-recover-pipeline -> $review-and-validate-quality`
+- 远端运行类：`$before-every-run -> $singlecell-remote-workflow -> $execute-and-recover-pipeline -> $review-and-validate-quality`
+- handoff/report 类：`$remote-run-report-bridge -> $reproduction-workspace-governance -> $review-and-validate-quality`
+
+Skill 目录：
+- Codex global: `~/.codex/skills/`
+- Codex project: `.codex/skills/`
+- Claude global: `~/.claude/skills/`
+- Claude project: `.claude/skills/`
+
+`codex_skills/` 只作为历史 project-local skills 的兼容镜像；新的或刷新后的
+Codex project skills 放在 `.codex/skills/`。
 
 ## 4) Agents 使用建议
 - `explore`：快速定位模块/符号
@@ -49,6 +74,8 @@ $ralplan
 - 不要破坏 mandatory chain：`cellranger -> qc -> doublet_detection`
 - 不要跳过文档同步（`README.md` / `PROTOCOL.md`）
 - 不要在无验证证据下宣称“完成”
+- 不要把 `2026-04-25` 的 sparse-exact probe 目录当成 canonical success，
+  除非看到 `final_adata.h5ad`、`run_manifest.json`、`module_status.csv`
 
 ## 8) Densify Policy（Phase 7A.2+，强制）
 

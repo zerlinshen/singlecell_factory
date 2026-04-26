@@ -1,0 +1,7 @@
+interface:
+  display_name: "Reproduction Workspace Governance"
+  short_description: "Split evidence from run memory."
+  default_prompt: "Use $reproduction-workspace-governance to organize this reproduction workspace into human-facing deliverables and agent-facing run records."
+
+policy:
+  allow_implicit_invocation: true

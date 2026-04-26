@@ -2,6 +2,10 @@
 
 This folder stores the shared run-memory for remote execution on `ubuntu-tail`.
 
+Both direct remote operation and Mac-led SSH orchestration are valid. This
+remote folder remains the canonical run-memory surface either way; the Mac
+mirror is for coordination and handoff.
+
 ## Rule
 
 Before launching a new remote run, read:

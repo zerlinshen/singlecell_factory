@@ -1,0 +1,4 @@
+interface:
+  display_name: "Module Delivery"
+  short_description: "Add or evolve remote pipeline modules safely."
+  default_prompt: "Use $singlecell-factory-module-delivery to add or evolve a module in the remote singlecell_factory pipeline with safe wiring, validation, and docs updates."

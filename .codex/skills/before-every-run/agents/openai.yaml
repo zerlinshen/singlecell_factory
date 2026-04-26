@@ -1,0 +1,7 @@
+interface:
+  display_name: "BeforeEveryRun"
+  short_description: "Read prior run lessons before remote runs."
+  default_prompt: "Use $before-every-run to review the latest remote-run lessons before execution and update the shared journal after the run."
+
+policy:
+  allow_implicit_invocation: true

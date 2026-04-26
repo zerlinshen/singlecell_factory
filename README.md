@@ -1,15 +1,69 @@
 # singlecell_factory v5.0 — Modular scRNA-seq Pipeline
 
+## Authority / Read This First
+
+AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That
+file is the onboarding index; `AGENTS.md` / `CLAUDE.md` remain runtime-specific
+authorities, and `PROTOCOL.md` remains the deep operational guide.
+
 A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 22 optional analysis modules + automatic dependency resolution + GPU acceleration + categorized output**.
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells.
 
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
+## Publication & Reproducibility Documentation (NC2024)
+
+| Document | Purpose |
+|---|---|
+| [ops/nc2024_methodology_audit/AUDIT_2026-04-26_v2.md](ops/nc2024_methodology_audit/AUDIT_2026-04-26_v2.md) | Parameter table, paper alignment, deliberate differences, reproducibility manifest |
+| [ops/nc2024_methodology_audit/ALIGNMENT_REPORT_v2_2026-04-26.md](ops/nc2024_methodology_audit/ALIGNMENT_REPORT_v2_2026-04-26.md) | Cell type proportions vs Sanchez-Mejias 2024; v1 (broken) → v2 (fixed) cluster annotations |
+| [ops/nc2024_methodology_audit/SMALL_REAL_VALIDATION_2026-04-26.md](ops/nc2024_methodology_audit/SMALL_REAL_VALIDATION_2026-04-26.md) | 100k staircase validation gate for the cluster_voting annotation fix |
+| [ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md](ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md) | Root-cause + fix for the post-completion C-extension teardown segfault |
+| [ops/MAC_PULL_RECIPE_2026-04-26.md](ops/MAC_PULL_RECIPE_2026-04-26.md) | Tailscale scp command + R load command for downstream plotting on Mac |
+| [docs/PUBLICATION_READY.md](docs/PUBLICATION_READY.md) | Methods section template and citation patterns for manuscript drafting |
+
+Canonical NC2024 outputs are the **v2** runs at `results/nc2024_tumor_20260426_v2/` and `results/nc2024_bh_20260426_v2/`. The matching v1 directories (without `_v2`) shipped with a known annotation labeling bug and must not be cited.
+
+### Engineering Disciplines (Phase 7+)
+
+**Capability flags** replace the multivalent `--scale-mode` (the old preset is still accepted as a backward-compat bundle):
+
+- `--lazy-read {auto,true,false}` (auto = file > 5GB)
+- `--doublet-strategy {auto,grouped,whole,skip}` (auto = grouped when n_obs ≥ 100k and a `sample` column is present)
+- `--clustering-engine {auto,sparse_exact,css,gpu}`
+- `--checkpoint-policy {full,mandatory_only,metadata_only}`
+- `--annotation-strategy {cluster_voting,cell_argmax}` (default `cluster_voting`; `cell_argmax` retained as a fallback only — it drifts on >100k cohorts)
+
+**Staircase test discipline** — all pipeline changes must be validated at increasing scale before being considered production-ready:
+
+| Tier | Dataset | Cells (approx) | Marker |
+|---|---|---|---|
+| nano | synthetic CSR (conftest fixture) | ~5k | `pytest -m nano` |
+| small_real | NC2024 subset (10 samples) | ~100k | `pytest -m small_real` |
+| medium_real | NC2024 subset (50 samples) | ~500k | `pytest -m medium_real` |
+| full_real | NC2024 full cohort | ~884k | `pytest -m full_real` |
+
+A change that passes only nano/small_real is not cleared for full_real runs. Build fixtures with `scripts/build_staircase_fixtures.py`.
+
+**Densify policy** — the pipeline enforces a grep-ban on unmarked `toarray()` / `todense()` calls in CI (`tests/test_densify_audit.py`). Any deliberate densification must carry a `# densify-allowed: <reason>` annotation on the same line, or route through `workflow/modular/_densify_policy.py:plan_densify()` which returns a `{GO, CHUNK, ABORT}` decision based on free memory and configured caps. This prevents silent memory explosions at 884k-cell scale.
+
+**MemoryEnforcer cooperative abort** — `workflow/modular/_mem_guard.py` replaces the earlier observational MemoryGuard. A pre-flight RSS budget check + watchdog Event signals modules to abort at the next chunk boundary (raising `SkipModule`), rather than letting the kernel SIGKILL Python at the OOM threshold. Enable with `SC_MEM_GUARD=on SC_MEM_WATCHDOG=on`. Modules must not catch this exception.
+
+**Shutdown cleanup** — `workflow/modular/_shutdown.py` runs explicit cupy / torch / zarr cleanup at interpreter exit, eliminating the post-completion C-extension teardown segfault that previously affected exit codes (run outputs were intact but `set -e` propagated exit 139 and skipped downstream stages). See `ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md`.
+
 ## Current Operational Defaults For NC2024-Style Full-Cohort Runs
 
 - Read run memory first:
   - `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+- Both operating modes are valid:
+  - operate directly in this remote repo for compute, pipeline execution,
+    run triage, and remote R/reporting work
+  - orchestrate from the Mac over SSH when the task is coordination, review,
+    handoff, or report-packaging oriented
+- In both modes, this remote repo remains the run-truth surface. Prefer
+  `run_manifest.json`, `module_status.csv`, `ops/before_every_run/LATEST.md`,
+  and `ops/run_ledger/` over local summaries when deciding canonical state.
 - For the NC2024 full cohort, treat `large` as a capacity probe rather than the main completion lane.
 - Use direct `massive` for debug and recovery work.
 - Use controller `large -> massive` only for orchestration validation.
@@ -25,7 +79,18 @@ Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step 
     `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552`
 - The retained fresh stage-1 evidence run is:
   - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329`
-- The current extended full-cohort real-run source of truth is:
+- The current clean full-cohort rerun source of truth is:
+  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652`
+  - launch log:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO.launch.log`
+  - result summary: `810218 x 30374`, `33G` final H5AD, all requested
+    modules `ok`, and pipeline-native `pseudobulk_de = ok/completed`
+  - row-level reconciliation:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652/module_reconciliation.tsv`
+  - remote R report bundle:
+    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652/r_plots/phase5_readable_20260424`
+- The earlier extended full-cohort real-run is retained as predecessor
+  evidence, not the current source of truth:
   - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003`
   - launch log:
     `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.launch.log`
@@ -38,6 +103,22 @@ Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step 
     `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/pseudobulk_de_recovery`
   - remote R report bundle:
     `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/r_plots/extended_real_run_main_20260424`
+- `2026-04-25` methodology / optimization status:
+  - authoritative audit:
+    `/home/zerlinshen/singlecell_factory/ops/nc2024_methodology_audit/AUDIT_2026-04-25.md`
+  - paper-aligned launcher:
+    `/home/zerlinshen/singlecell_factory/scripts/run_nc2024_paper_aligned_20260425.sh`
+  - sparse-exact exploratory launcher:
+    `/home/zerlinshen/singlecell_factory/scripts/run_nc2024_full_cohort_sparse_exact_20260425.sh`
+  - important changes: `sparse_exact` clustering path, densify guards,
+    paper-aligned Scrublet/Harmony/Leiden/DE defaults, tumor-vs-background /
+    healthy `--cohort-subset`, R bundle v2 subprocess contract tests, and
+    staircase real-data fixtures
+  - observed `NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO_*` result
+    directories from `2026-04-25` are not canonical successful runs unless a
+    later audit finds `final_adata.h5ad`, `run_manifest.json`, and
+    `module_status.csv`; the current inspection saw only early mandatory
+    outputs/checkpoints and a zero-byte sparse-exact launch log
 - The local machine is now treated as an organization/review surface for processed outputs, not as a maintained local R pipeline.
 - For reproduce-stage NC2024 full-cohort work, interpret "all modules" as
   "all eligible modules", not "every imaginable module regardless of modality
@@ -590,6 +671,15 @@ Before launching a run, verify:
 4. In restricted-network environments, remove `validate_cbioportal` from `--optional-modules`.
 5. Export `MPLCONFIGDIR` and `NUMBA_CACHE_DIR` to avoid startup/cache issues.
 
+For Codex / Claude Code agents:
+- project Codex skills live in `.codex/skills/` using standard Codex project
+  skill management
+- project Claude skills live in `.claude/skills/`
+- reusable global skills live under `~/.codex/skills/` and
+  `~/.claude/skills/`
+- `codex_skills/` remains only as a legacy compatibility mirror for historical
+  project-local skills
+
 ### Paper-Driven Continuous Optimization
 
 To continuously improve the pipeline by learning from external papers/repos, enable `paper_repro` and provide a spec file:
@@ -1046,12 +1136,14 @@ Module coverage check: **25 / 25 modules documented and citation-aligned**.
 
 | Item | Detail |
 |---|---|
-| **Method** | Gene set scoring with maximum-score assignment |
-| **Implementation** | `scanpy.tl.score_genes()` per cell type marker panel |
+| **Method** | Marker gene set scoring with strategy-aware label assignment |
+| **Strategy (default)** | `cluster_voting` — aggregate raw mean expression per leiden cluster, score the cluster-aggregated expression with each cell-type marker panel, broadcast the argmax cell type label to every cell in that cluster. Robust at >100k cohorts. |
+| **Strategy (fallback)** | `cell_argmax` — per-cell `sc.tl.score_genes` then per-cell argmax then per-cluster majority vote. Drifts on >100k cohorts (used in the v1 NC2024 run, replaced by `cluster_voting` in v2); retained for backward-compat only. Selected via `--annotation-strategy cell_argmax`. |
+| **Implementation** | `workflow/modular/modules/annotation.py`; `score_genes` still runs per cell to produce confidence scores and to gate the optional reference-mapping override. |
 | **Confidence metric** | max_score - second_max_score (vectorized via `np.partition`) |
 | **Marker panels** | 10 cell types: Tumor epithelial, T cell, NK cell, B cell, Myeloid/Macro, Fibroblast, Endothelial, Plasma cell, Mast cell, Dendritic cell |
 | **Unknown threshold** | Cells with confidence < 0.1 labeled "Unknown" |
-| **Reference** | **Tirosh et al., *Science*, 2016.** DOI: [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) |
+| **References** | **Tirosh et al., *Science*, 2016.** DOI: [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) (gene set scoring); **Sanchez-Mejias et al., *Nature Communications*, 2024.** DOI: [10.1038/s41467-024-48700-8](https://doi.org/10.1038/s41467-024-48700-8) (NC2024 NSCLC atlas — paper-aligned annotation reference for the v2 cohort) |
 
 ---
 
@@ -1438,6 +1530,7 @@ Use [`docs/MODULE_TECH_DOC_TEMPLATE.md`](docs/MODULE_TECH_DOC_TEMPLATE.md) for e
 | 39 | Persad et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (SEACells backend) |
 | 40 | Sculley, *KDD*, 2010 | [10.1145/1772690.1772862](https://doi.org/10.1145/1772690.1772862) | `metacell` (MiniBatchKMeans fallback) |
 | 41 | Sandve et al., *PLOS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` |
+| 42 | Sanchez-Mejias et al., *Nature Communications*, 2024 | [10.1038/s41467-024-48700-8](https://doi.org/10.1038/s41467-024-48700-8) | `annotation` (NC2024 NSCLC atlas — paper-aligned reference for v2 cohort, ~900k cells, 25 patients + 2 healthy donors, Harmony+Leiden+Wilcoxon+Bonferroni baseline) |
 ---
 
 ## Results

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Failure Cleanup"
+  short_description: "Clean failed round leftovers after remote runs."
+  default_prompt: "Use $post-run-failure-cleanup to classify and remove useless failed-round artifacts after a remote pipeline failure while preserving canonical evidence."

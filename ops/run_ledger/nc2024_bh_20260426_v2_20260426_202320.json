@@ -1,0 +1,18 @@
+{
+  "cohort": "nc2024_bh_20260426_v2",
+  "timestamp": "20260426_202320",
+  "strategy": "cluster_voting",
+  "output_dir": "/home/zerlinshen/singlecell_factory/results/nc2024_bh_20260426_v2",
+  "annotation_unknown_pct": 0.0,
+  "acceptance_gate": {
+    "n_pass": 0,
+    "n_total": 5,
+    "failures": [
+      "BH cohort: no acceptance gate defined"
+    ]
+  },
+  "metadata": {
+    "annotation_strategy": "cluster_voting",
+    "reference_mapping_status": "skipped_no_reference"
+  }
+}
