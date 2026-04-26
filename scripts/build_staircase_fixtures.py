@@ -75,124 +75,96 @@ def _select_cells(
     n_samples: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Return sorted cell indices covering exactly n_samples, total ~n_cells."""
+    """Return sorted cell indices covering >= n_samples samples, total >= n_cells.
+
+    Uses the largest samples first so that the total cell budget is reliably
+    met even when individual samples are small. Always includes >= n_samples
+    distinct samples; expands beyond when needed to reach the cell budget.
+    """
     codes = _get_sample_codes(z)
     cats = _get_sample_categories(z)
-    all_samples = np.arange(len(cats))
-    chosen_samples = rng.choice(all_samples, size=min(n_samples, len(cats)), replace=False)
-    chosen_samples.sort()
+    sample_sizes = np.array([int((codes == s).sum()) for s in range(len(cats))])
 
-    per_sample = max(1, n_cells // len(chosen_samples))
-    chosen_cells: list[np.ndarray] = []
-    for s in chosen_samples:
-        mask = np.where(codes == s)[0]
-        take = min(per_sample, len(mask))
-        chosen_cells.append(rng.choice(mask, size=take, replace=False))
+    # Rank samples by size descending so we always have enough cells available.
+    order_desc = np.argsort(sample_sizes)[::-1]
+    chosen_samples: list[int] = []
+    cumulative = 0
+    for s in order_desc:
+        size = int(sample_sizes[s])
+        if size == 0:
+            continue
+        chosen_samples.append(int(s))
+        cumulative += size
+        if len(chosen_samples) >= n_samples and cumulative >= n_cells:
+            break
 
-    idx = np.concatenate(chosen_cells)
-    # trim to exactly n_cells if we overshot
-    if len(idx) > n_cells:
-        idx = rng.choice(idx, size=n_cells, replace=False)
+    if cumulative < n_cells:
+        print(
+            f"  warning: requested {n_cells:,} cells but only {cumulative:,} "
+            f"available across {len(chosen_samples)} samples; using all of them.",
+            flush=True,
+        )
+
+    # Pool all candidate cells from chosen samples
+    pool_masks = [np.where(codes == s)[0] for s in chosen_samples]
+    pool = np.concatenate(pool_masks) if pool_masks else np.array([], dtype=np.int64)
+    if len(pool) <= n_cells:
+        idx = pool
+    else:
+        idx = rng.choice(pool, size=n_cells, replace=False)
     return np.sort(idx)
 
 
-def _write_zarr_subset(
-    z: zarr.Group,
+def _write_anndata_subset(
+    src_zarr: Path,
     cell_idx: np.ndarray,
     dest: Path,
-    compressor: zarr.codecs.Blosc | None = None,
+    tier_name: str,
 ) -> None:
-    dest.mkdir(parents=True, exist_ok=True)
-    out = zarr.open_group(str(dest), mode="w")
+    """Read source via anndata.read_zarr, slice, write canonical h5ad.
 
-    # --- X (CSR subset) ---
-    indptr_full = z["X"]["indptr"][:]
-    starts = indptr_full[cell_idx]
-    ends = indptr_full[cell_idx + 1]
-    slices = np.concatenate([np.arange(s, e) for s, e in zip(starts, ends)])
-    new_data = z["X"]["data"][slices]
-    new_indices = z["X"]["indices"][slices]
-    new_indptr = np.zeros(len(cell_idx) + 1, dtype=np.int64)
-    counts = ends - starts
-    np.cumsum(counts, out=new_indptr[1:])
+    Using anndata's writer ensures encoding metadata that newer versions of
+    anndata require for read-back. The subset is written as ``<tier>.h5ad``
+    next to a ``<tier>.summary.json`` provenance sidecar.
+    """
+    import anndata as ad  # local import keeps script importable on lean envs
 
-    out.require_group("X")
-    out["X"].create_array("data", data=new_data, overwrite=True)
-    out["X"].create_array("indices", data=new_indices, overwrite=True)
-    out["X"].create_array("indptr", data=new_indptr, overwrite=True)
-
-    # --- obs ---
-    out.require_group("obs")
-    for key in z["obs"].keys():
-        src_item = z["obs"][key]
-        if isinstance(src_item, zarr.Group):
-            # categorical
-            codes_full = src_item["codes"][:]
-            cats_full = src_item["categories"][:]
-            new_codes = codes_full[cell_idx]
-            used = np.unique(new_codes)
-            code_remap = np.full(len(cats_full), -1, dtype=np.int8)
-            for new_code, old_code in enumerate(used):
-                code_remap[old_code] = new_code
-            remapped = code_remap[new_codes]
-            new_cats = cats_full[used]
-            out["obs"].require_group(key)
-            out["obs"][key].create_array("codes", data=remapped, overwrite=True)
-            out["obs"][key].create_array("categories", data=new_cats, overwrite=True)
-        else:
-            # plain array
-            out["obs"].create_array(key, data=src_item[cell_idx], overwrite=True)
-
-    # --- var (unchanged) ---
-    out.require_group("var")
-    for key in z["var"].keys():
-        src_item = z["var"][key]
-        if isinstance(src_item, zarr.Group):
-            out["var"].require_group(key)
-            for sub in src_item.keys():
-                out["var"][key].create_array(sub, data=src_item[sub][:], overwrite=True)
-        else:
-            out["var"].create_array(key, data=src_item[:], overwrite=True)
-
-    # metadata — read n_genes from var group rather than max(indices); zarr Array has no len()
-    n_genes = 0
-    try:
-        var_group = z["var"]
-        # var group has any array; pick first non-group child
-        for k in var_group.keys():
-            child = var_group[k]
-            if isinstance(child, zarr.Array):
-                n_genes = int(child.shape[0])
-                break
-            elif isinstance(child, zarr.Group):
-                # categorical or nested — take codes shape
-                if "codes" in child:
-                    n_genes = int(child["codes"].shape[0])
-                    break
-    except Exception:
-        # fallback: derive from indices array if structurally needed
-        indices_arr = z["X"]["indices"]
-        if indices_arr.shape[0] > 0:
-            n_genes = int(indices_arr[:].max()) + 1
-    meta = {
-        "n_cells": int(len(cell_idx)),
-        "n_genes": n_genes,
-        "source": str(SRC_ZARR),
+    print(f"  reading source zarr (full cohort) ...", flush=True)
+    full = ad.read_zarr(src_zarr)
+    print(f"  source: {full.n_obs:,} cells x {full.n_vars:,} genes", flush=True)
+    sub = full[cell_idx, :].copy()
+    del full
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    h5ad_path = dest.with_suffix(".h5ad")
+    print(f"  writing {sub.n_obs:,} cells -> {h5ad_path}", flush=True)
+    sub.write_h5ad(h5ad_path)
+    summary = {
+        "tier": tier_name,
+        "n_cells": int(sub.n_obs),
+        "n_genes": int(sub.n_vars),
+        "source": str(src_zarr),
+        "obs_columns": list(sub.obs.columns),
     }
-    (dest / "staircase_meta.json").write_text(json.dumps(meta, indent=2))
-    print(f"  wrote {len(cell_idx):>7,} cells -> {dest}")
+    (dest.parent / f"{tier_name}.summary.json").write_text(
+        json.dumps(summary, indent=2)
+    )
+    print(f"  wrote {sub.n_obs:>7,} cells -> {h5ad_path}")
 
 
-def build_small_real(z: zarr.Group, dest_base: Path, rng: np.random.Generator) -> None:
+def build_small_real(
+    z: zarr.Group, dest_base: Path, rng: np.random.Generator, src_zarr: Path = SRC_ZARR
+) -> None:
     spec = TIER_SPECS["small_real"]
     idx = _select_cells(z, spec["n_cells"], spec["n_samples"], rng)
-    _write_zarr_subset(z, idx, dest_base / "small_real")
+    _write_anndata_subset(src_zarr, idx, dest_base / "small_real", "small_real")
 
 
-def build_medium_real(z: zarr.Group, dest_base: Path, rng: np.random.Generator) -> None:
+def build_medium_real(
+    z: zarr.Group, dest_base: Path, rng: np.random.Generator, src_zarr: Path = SRC_ZARR
+) -> None:
     spec = TIER_SPECS["medium_real"]
     idx = _select_cells(z, spec["n_cells"], spec["n_samples"], rng)
-    _write_zarr_subset(z, idx, dest_base / "medium_real")
+    _write_anndata_subset(src_zarr, idx, dest_base / "medium_real", "medium_real")
 
 
 def build_full_real(dest_base: Path, src_zarr: Path = SRC_ZARR) -> None:

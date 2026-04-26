@@ -24,14 +24,18 @@ STAIRCASE_DIR = ROOT / "tests" / "data" / "staircase"
 
 
 def _load_tier(tier: str):
-    h5ad_path = STAIRCASE_DIR / f"{tier}_anndata.h5ad"
-    zarr_path = STAIRCASE_DIR / f"{tier}.zarr"
-    if h5ad_path.exists():
-        return ad.read_h5ad(h5ad_path)
-    if zarr_path.exists():
-        return ad.read_zarr(zarr_path)
+    # build_staircase_fixtures.py writes <tier>.h5ad with anndata-native encoding.
+    h5ad_canonical = STAIRCASE_DIR / f"{tier}.h5ad"
+    h5ad_legacy = STAIRCASE_DIR / f"{tier}_anndata.h5ad"
+    zarr_named = STAIRCASE_DIR / f"{tier}.zarr"
+    if h5ad_canonical.exists():
+        return ad.read_h5ad(h5ad_canonical)
+    if h5ad_legacy.exists():
+        return ad.read_h5ad(h5ad_legacy)
+    if zarr_named.exists():
+        return ad.read_zarr(zarr_named)
     pytest.skip(
-        f"{tier} fixture not found at {h5ad_path} or {zarr_path}. "
+        f"{tier} fixture not found (looked for {h5ad_canonical}, {h5ad_legacy}, {zarr_named}). "
         f"Run: python scripts/build_staircase_fixtures.py --tiers {tier}"
     )
 
