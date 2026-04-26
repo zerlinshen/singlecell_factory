@@ -3,9 +3,11 @@
 
 Tiers
 -----
-nano        : 200 cells, 2 samples  — pure-synthetic, no disk dependency
-small_real  : 2 000 cells, 4 samples  — from prepared_input.zarr
-medium_real : 20 000 cells, 16 samples — from prepared_input.zarr
+nano        : 5k cells, 2 samples  — pure-synthetic, no disk dependency
+small_real  : ~100k cells, 10 samples  — from prepared_input.zarr; exercises
+              auto-grouped-Scrublet trigger threshold (n_obs >= 100k)
+medium_real : ~500k cells, 50 samples — from prepared_input.zarr; exercises
+              memory + integration behavior at near-production scale
 full_real   : all 884 050 cells, 81 samples — symlink / copy of prepared_input.zarr
 
 Only small_real and medium_real are written to tests/data/staircase/ as zarr
@@ -33,8 +35,12 @@ SRC_ZARR = ROOT / "data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.z
 DEST_DIR = ROOT / "tests/data/staircase"
 
 TIER_SPECS: dict[str, dict] = {
-    "small_real": {"n_cells": 2_000, "n_samples": 4},
-    "medium_real": {"n_cells": 20_000, "n_samples": 16},
+    # small_real must exceed the 100k auto-grouped-Scrublet threshold; this is
+    # the smallest tier that exercises real-data routing decisions.
+    "small_real": {"n_cells": 100_000, "n_samples": 10},
+    # medium_real: ~half of full cohort, exercises memory + integration
+    # behavior that 100k cannot reach (HVG sparsity / Harmony scaling).
+    "medium_real": {"n_cells": 500_000, "n_samples": 50},
     "full_real": {"n_cells": None, "n_samples": None},  # handled specially
 }
 
@@ -148,10 +154,29 @@ def _write_zarr_subset(
         else:
             out["var"].create_array(key, data=src_item[:], overwrite=True)
 
-    # metadata
+    # metadata — read n_genes from var group rather than max(indices); zarr Array has no len()
+    n_genes = 0
+    try:
+        var_group = z["var"]
+        # var group has any array; pick first non-group child
+        for k in var_group.keys():
+            child = var_group[k]
+            if isinstance(child, zarr.Array):
+                n_genes = int(child.shape[0])
+                break
+            elif isinstance(child, zarr.Group):
+                # categorical or nested — take codes shape
+                if "codes" in child:
+                    n_genes = int(child["codes"].shape[0])
+                    break
+    except Exception:
+        # fallback: derive from indices array if structurally needed
+        indices_arr = z["X"]["indices"]
+        if indices_arr.shape[0] > 0:
+            n_genes = int(indices_arr[:].max()) + 1
     meta = {
         "n_cells": int(len(cell_idx)),
-        "n_genes": int(z["X"]["indices"][:].max()) + 1 if len(z["X"]["indices"]) > 0 else 0,
+        "n_genes": n_genes,
         "source": str(SRC_ZARR),
     }
     (dest / "staircase_meta.json").write_text(json.dumps(meta, indent=2))
