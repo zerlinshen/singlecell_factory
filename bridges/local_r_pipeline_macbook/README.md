@@ -10,26 +10,33 @@ This folder name is historical. Despite `local_r_pipeline_macbook` in the path,
 the current maintained plotting/reporting workflow runs on the remote server.
 
 - Remote root: `/home/zerlinshen/singlecell_factory`
-- Remote R runtime: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
+- Remote R runtime: `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`
+- Legacy rollback runtime: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
 - Remote Python runtime for bundle export: `/home/zerlinshen/conda/bin/conda run -n sc_gpu`
 - Local Mac role: review/organization only, not the maintained R plotting runtime
 
 ## Remote R Environment
 
-The maintained remote R environment is:
+The maintained remote R environment for v2 parquet bundle plotting is:
+
+- `/home/zerlinshen/conda/envs/r_multiomics_arrow`
+
+The previous environment remains available for rollback:
 
 - `/home/zerlinshen/conda/envs/r_multiomics`
 
-As of `2026-04-24`, the environment has been hardened for NC2024-scale
-reporting and small/medium R-side follow-up work. Installed and verified
-packages include:
+As of `2026-04-30`, `r_multiomics_arrow` is the default wrapper runtime. It is a
+clone of `r_multiomics` with conda-forge `r-arrow 24.0.0` / `libarrow 24.0.0`
+added and was validated through `read_bundle()` plus
+`scripts/plot_remote_bundle_large.R` on both NC2024 v2 bundles. Installed and
+verified packages include:
 
 - core object/plotting: `Seurat 5.4.0`, `SeuratObject 5.4.0`, `ggplot2`,
   `data.table`, `readr`, `patchwork`, `cowplot`, `ggrepel`, `viridis`
 - large plotting: `ggrastr`, `scattermore`
 - heatmaps/reporting: `pheatmap`, `ComplexHeatmap`, `circlize`
 - bridge/integration helpers: `hdf5r`, `zellkonverter`, `harmony`,
-  `BiocManager`, `R.utils`, `remotes`
+  `BiocManager`, `R.utils`, `remotes`, `arrow`
 
 Validation artifact:
 
@@ -68,6 +75,9 @@ Key controls:
 - `R_BUNDLE_OBSM`: comma-separated `.obsm` embeddings to add to the plotting
   bundle. The wrapper always keeps `X_umap` and `X_pca` so plotting and reuse
   validation keep their required stems.
+- `PLOT_SCRIPT`: R plotting script used after bundle validation. Default:
+  `/home/zerlinshen/multiomics_r_factory/scripts/plot_remote_bundle_large.R`,
+  which is the v1/v2-aware upstream plotting entry point.
 - `FORCE_R_BUNDLE_EXPORT=1`: force bundle regeneration even if the reuse guard
   passes.
 
@@ -233,19 +243,21 @@ If you run in demo mode (no `--input` argument), it will load `pbmc_small` and g
 4. Recommended large-cohort handoff from `singlecell_factory`:
 ```bash
  cd /home/zerlinshen/singlecell_factory
- /home/zerlinshen/conda/bin/conda run -n sc_gpu python scripts/export_singlecell_r_bundle.py \
-   --input /home/zerlinshen/singlecell_factory/results/<run>/final_adata.h5ad \
-   --source-run-dir /home/zerlinshen/singlecell_factory/results/<run> \
-   --output /home/zerlinshen/singlecell_factory/results/<run>/r_bundle
-
- cd /home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook
- /home/zerlinshen/conda/envs/r_multiomics/bin/Rscript \
-   scripts/plot_remote_bundle_large.R \
-   /home/zerlinshen/singlecell_factory/results/<run>/r_bundle \
+ bash bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh \
+   /home/zerlinshen/singlecell_factory/results/<run> \
    /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
    cell_type leiden
 ```
-The compact bundle contains `obs.csv.gz`, `X_umap.csv.gz`, `X_pca.csv.gz`, `marker_expr.csv.gz`, `bundle_manifest.json`, and `bundle_manifest.tsv`. It copies metadata, embeddings, and selected marker genes only; it does not convert the full expression matrix to dense data. The R validator checks required file contracts, byte sizes, SHA256 hashes, schema, and expression semantics before plotting. Marker values are exported from AnnData `X` as stored (`source_X_as_stored`) and are intended for plotting/visual summaries only, not new DE or quantitative expression claims without full-object validation.
+The wrapper exports or reuses a compact bundle, validates either v1 CSV/TSV or
+v2 parquet/JSON manifests, and then delegates plotting to the upstream
+`multiomics_r_factory/scripts/plot_remote_bundle_large.R` entry point. Bundle
+payloads copy metadata, embeddings, and selected marker genes only; they do not
+convert the full expression matrix to dense data. The R validator checks
+required file contracts, byte sizes, SHA256 hashes, schema, and expression
+semantics before plotting. Marker values are exported from AnnData `X` as
+stored (`source_X_as_stored`) and are intended for plotting/visual summaries
+only, not new DE or quantitative expression claims without full-object
+validation.
 
 5. One-command remote plotting wrapper:
 ```bash

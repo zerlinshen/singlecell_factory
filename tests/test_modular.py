@@ -66,18 +66,30 @@ def test_modular_cli_parse(monkeypatch):
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
-    # Verify all modules are registered (3 mandatory + 22 optional = 25)
-    assert len(MODULE_DEPENDENCIES) == 25
+    # Verify all modules are registered (3 mandatory + 26 optional = 29).
+    # Phase B (v2.1) added the protein_adt ingest module as the first consumer
+    # of the bundle extension API; the spatial lane (spatial_ingest +
+    # spatial_neighborhoods) is the second; the multimodal_integration lane
+    # (EXPERIMENTAL, off by default) is the third.
+    assert len(MODULE_DEPENDENCIES) == 29
 
     # Verify new modules exist with correct dependencies
     assert "immune_phenotyping" in MODULE_DEPENDENCIES
     assert "tumor_microenvironment" in MODULE_DEPENDENCIES
     assert "gene_signature_scoring" in MODULE_DEPENDENCIES
     assert "paper_repro" in MODULE_DEPENDENCIES
+    assert "protein_adt" in MODULE_DEPENDENCIES
+    assert "spatial_ingest" in MODULE_DEPENDENCIES
+    assert "spatial_neighborhoods" in MODULE_DEPENDENCIES
+    assert "multimodal_integration" in MODULE_DEPENDENCIES
     assert "annotation" in MODULE_DEPENDENCIES["immune_phenotyping"]
     assert "annotation" in MODULE_DEPENDENCIES["tumor_microenvironment"]
     assert "clustering" in MODULE_DEPENDENCIES["gene_signature_scoring"]
     assert "clustering" in MODULE_DEPENDENCIES["paper_repro"]
+    assert "qc" in MODULE_DEPENDENCIES["protein_adt"]
+    assert "qc" in MODULE_DEPENDENCIES["spatial_ingest"]
+    assert "spatial_ingest" in MODULE_DEPENDENCIES["spatial_neighborhoods"]
+    assert "clustering" in MODULE_DEPENDENCIES["multimodal_integration"]
 
 
 def test_rna_velocity_not_in_mutating_modules():

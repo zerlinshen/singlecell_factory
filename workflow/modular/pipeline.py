@@ -15,6 +15,7 @@ from scipy import sparse
 
 from .config import PipelineConfig
 from .context import PipelineContext
+from .module_catalog import MANDATORY_MODULES, module_dependencies
 
 logger = logging.getLogger(__name__)
 
@@ -24,34 +25,10 @@ logger = logging.getLogger(__name__)
 PARALLEL_COPY_BUDGET_BYTES = 24 * 1024 * 1024 * 1024
 MEMORY_RESERVE_BYTES = 8 * 1024 * 1024 * 1024
 
-# Module dependency DAG: module_name -> set of modules it requires
-MODULE_DEPENDENCIES: dict[str, set[str]] = {
-    "cellranger": set(),
-    "qc": {"cellranger"},
-    "doublet_detection": {"qc"},
-    "clustering": {"doublet_detection"},
-    "cell_cycle": {"clustering"},
-    "batch_correction": {"clustering"},
-    "differential_expression": {"clustering"},
-    "annotation": {"clustering"},
-    "trajectory": {"clustering"},
-    "pseudo_velocity": {"trajectory"},
-    "rna_velocity": {"clustering"},
-    "cnv_inference": {"clustering"},
-    "pathway_analysis": {"differential_expression"},
-    "cell_communication": {"annotation"},
-    "gene_regulatory_network": {"clustering"},
-    "validate_cbioportal": {"differential_expression"},
-    "immune_phenotyping": {"annotation"},
-    "tumor_microenvironment": {"annotation"},
-    "gene_signature_scoring": {"clustering"},
-    "evolution": {"cnv_inference", "trajectory"},
-    "pseudobulk_de": {"differential_expression"},
-    "cell_fate": {"trajectory"},
-    "composition": {"annotation"},
-    "metacell": {"clustering"},
-    "paper_repro": {"clustering"},
-}
+# Module dependency DAG in the legacy shape expected by older tests/importers.
+# The canonical module hierarchy lives in module_catalog.py so CLI help, docs,
+# validation scripts, and orchestration all share the same layer contract.
+MODULE_DEPENDENCIES: dict[str, set[str]] = module_dependencies()
 
 # Static fallback for modules that mutate adata structurally.
 # Prefer the class-level `mutates_structure = True` attribute on modules;
@@ -217,6 +194,10 @@ def _build_registry() -> dict[str, object]:
     from .modules.composition import CompositionModule
     from .modules.metacell import MetacellModule
     from .modules.paper_repro import PaperReproModule
+    from .modules.protein_adt import ProteinADTModule
+    from .modules.spatial_ingest import SpatialIngestModule
+    from .modules.spatial_neighborhoods import SpatialNeighborhoodsModule
+    from .modules.multimodal_integration import MultimodalIntegrationModule
 
     return {
         "cellranger": CellRangerModule(),
@@ -244,6 +225,10 @@ def _build_registry() -> dict[str, object]:
         "composition": CompositionModule(),
         "metacell": MetacellModule(),
         "paper_repro": PaperReproModule(),
+        "protein_adt": ProteinADTModule(),
+        "spatial_ingest": SpatialIngestModule(),
+        "spatial_neighborhoods": SpatialNeighborhoodsModule(),
+        "multimodal_integration": MultimodalIntegrationModule(),
     }
 
 
@@ -712,7 +697,7 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
             MemoryGuard.clear_abort()
             _watchdog_thread = _mem_watchdog.start(ctx)
 
-        mandatory = ["cellranger", "qc", "doublet_detection"]
+        mandatory = list(MANDATORY_MODULES)
         mandatory_set = set(mandatory)
         execution_order = _resolve_execution_order(mandatory, cfg.optional_modules)
 

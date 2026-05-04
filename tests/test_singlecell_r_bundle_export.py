@@ -57,6 +57,9 @@ def test_export_bundle_writes_sparse_safe_compact_contract(tmp_path: Path) -> No
     out_dir = tmp_path / "bundle"
     make_tiny_h5ad(input_path)
 
+    # Pin to v1 explicitly: this test exercises v1-specific schema invariants
+    # (CSV files, bundle_manifest.tsv, schema_version == "singlecell_r_bundle_v1").
+    # The default writer now emits v2.1; pinning preserves v1 code-path coverage.
     manifest = export_bundle(
         ExportConfig(
             input_h5ad=input_path,
@@ -66,6 +69,7 @@ def test_export_bundle_writes_sparse_safe_compact_contract(tmp_path: Path) -> No
             markers=("ELF3", "CD3E", "MISSING"),
             obsm_keys=("X_umap", "X_pca"),
             marker_chunk_size=2,
+            schema_version="v1",
         )
     )
 
@@ -120,10 +124,13 @@ def test_export_bundle_can_deterministically_subset_cells(tmp_path: Path) -> Non
         )
     )
 
-    obs = read_bundle_csv(out_dir / "obs.csv.gz")
-    marker = read_bundle_csv(out_dir / "marker_expr.csv.gz")
+    # Default schema is v2.1: outputs are parquet, not CSV.
+    # v2.1 marker_expr.parquet has a "cell" column + one column per marker gene.
+    obs = pd.read_parquet(out_dir / "obs.parquet")
+    marker = pd.read_parquet(out_dir / "marker_expr.parquet")
     assert obs.shape[0] == 2
-    assert marker.shape == (2, 1)
+    assert marker.shape[0] == 2
+    assert "CD3E" in marker.columns
 
 
 def test_export_bundle_fails_when_required_embedding_missing(tmp_path: Path) -> None:
@@ -142,3 +149,31 @@ def test_export_bundle_rejects_invalid_marker_chunk_size(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="marker-chunk-size"):
         export_bundle(ExportConfig(input_h5ad=input_path, output_dir=out_dir, marker_chunk_size=0))
+
+
+def test_export_bundle_v2_mtx_records_sidecar_integrity(tmp_path: Path) -> None:
+    input_path = tmp_path / "tiny.h5ad"
+    out_dir = tmp_path / "bundle_v2_mtx"
+    make_tiny_h5ad(input_path)
+
+    manifest = export_bundle(
+        ExportConfig(
+            input_h5ad=input_path,
+            output_dir=out_dir,
+            schema_version="v2",
+            format="mtx",
+            markers=("CD3E", "LYZ", "ELF3"),
+        )
+    )
+
+    assert manifest["bundle"]["marker_format"] == "mtx_gz"
+    assert set(manifest["files"]).issuperset(
+        {"marker_expr", "marker_expr_barcodes", "marker_expr_genes"}
+    )
+    assert set(manifest["bundle"]["required_files"]).issuperset(
+        {"marker_expr", "marker_expr_barcodes", "marker_expr_genes"}
+    )
+    assert manifest["files"]["marker_expr_barcodes"]["sha256"]
+    assert manifest["files"]["marker_expr_genes"]["n_rows"] == 3
+    assert (out_dir / "marker_expr.barcodes.tsv.gz").exists()
+    assert (out_dir / "marker_expr.genes.tsv.gz").exists()

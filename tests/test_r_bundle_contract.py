@@ -14,8 +14,11 @@ when Rscript is not available.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -218,3 +221,1166 @@ def test_r_reads_v2_marker_expr_dims(rscript_path, tmp_path):
     assert int(kv["EXPR_NCOL"]) == n_markers_present, (
         f"Expected {n_markers_present} marker cols, got {kv['EXPR_NCOL']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# C2 / H2 / M1 / M2 companion tests
+# ---------------------------------------------------------------------------
+
+def test_export_is_atomic_no_partial_manifest_visible(tmp_path, monkeypatch):
+    """C2: while a bundle is being exported, the final output_dir must NEVER
+    contain bundle_manifest.json until the temp-dir rename completes.
+
+    We instrument _export_bundle_v2 with a sleep+sentinel: a poller thread
+    samples final_output_dir during the export and asserts it is either
+    absent or fully populated (manifest present implies all sibling files).
+    """
+    import scripts.export_singlecell_r_bundle as exp_mod
+
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_v2"
+    n_cells = 6
+    _make_tiny_h5ad(h5ad, n_cells=n_cells)
+
+    real_export_v2 = exp_mod._export_bundle_v2
+
+    def slow_export_v2(adata, cell_idx, config):
+        result = real_export_v2(adata, cell_idx, config)
+        # Hold the temp dir populated for a beat so the poller can observe.
+        time.sleep(0.4)
+        return result
+
+    monkeypatch.setattr(exp_mod, "_export_bundle_v2", slow_export_v2)
+
+    observations: list[tuple[bool, bool]] = []
+    stop_flag = threading.Event()
+
+    def poll():
+        while not stop_flag.is_set():
+            final_present = bundle_dir.exists()
+            manifest_present = (bundle_dir / "bundle_manifest.json").exists()
+            observations.append((final_present, manifest_present))
+            time.sleep(0.02)
+
+    poller = threading.Thread(target=poll, daemon=True)
+    poller.start()
+    try:
+        exp_mod.export_bundle(
+            exp_mod.ExportConfig(
+                input_h5ad=h5ad,
+                output_dir=bundle_dir,
+                obs_columns=("cell_type", "leiden"),
+                markers=("CD3E", "LYZ", "MS4A1"),
+                obsm_keys=("X_umap", "X_pca"),
+                schema_version="v2",
+                format="parquet",
+            )
+        )
+    finally:
+        stop_flag.set()
+        poller.join(timeout=2.0)
+
+    # Final dir must exist and be fully populated post-export.
+    assert (bundle_dir / "bundle_manifest.json").exists()
+
+    # No observation may show final_dir-present-but-manifest-missing while
+    # we were sampling; that would indicate a non-atomic publish.
+    bad = [(fp, mp) for (fp, mp) in observations if fp and not mp]
+    assert not bad, (
+        f"Non-atomic publish detected: {len(bad)} samples saw the final "
+        f"output_dir before the manifest landed. Total samples={len(observations)}"
+    )
+
+
+@pytest.mark.r_contract
+def test_claim_guard_surfaces_in_r(rscript_path, tmp_path):
+    """H2: read_bundle_v2 must surface claim_guard= via message() so callers
+    that wrap the reader in a logging shell see the use-restriction string.
+    """
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_v2"
+    _make_tiny_h5ad(h5ad, n_cells=6)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2",
+            format="parquet",
+        )
+    )
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"cat('done\\n')"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "claim_guard_surface")
+    combined = proc.stdout + proc.stderr
+    assert "claim_guard=" in combined, (
+        f"Expected 'claim_guard=' in R output, got:\n"
+        f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
+    )
+
+
+def test_categorical_round_trip_preserves_ordered_levels(tmp_path):
+    """M2: an ordered Categorical with explicit levels must survive the parquet
+    round-trip with both ordered=True and the original level order intact."""
+    import anndata as ad_local
+
+    h5ad = tmp_path / "ord.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_ord"
+    n_cells = 4
+    rng = np.random.default_rng(0)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 3)).astype(np.float32))
+    stage_levels = ["I", "II", "III", "IV"]
+    obs = pd.DataFrame(
+        {
+            "stage": pd.Categorical(
+                ["II", "I", "IV", "III"], categories=stage_levels, ordered=True
+            ),
+        },
+        index=[f"cell_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=["CD3E", "LYZ", "MS4A1"])
+    adata = ad_local.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.obsm["X_pca"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.write_h5ad(h5ad)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("stage",),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2",
+            format="parquet",
+        )
+    )
+
+    df = pd.read_parquet(bundle_dir / "obs.parquet")
+    assert "stage" in df.columns
+    stage_back = df["stage"]
+    assert isinstance(stage_back.dtype, pd.CategoricalDtype), (
+        f"Expected categorical dtype after round-trip, got {stage_back.dtype}"
+    )
+    assert stage_back.cat.ordered is True, "ordered flag was lost in round-trip"
+    assert list(stage_back.cat.categories) == stage_levels, (
+        f"Expected levels {stage_levels}, got {list(stage_back.cat.categories)}"
+    )
+
+
+def test_cell_column_present_in_all_parquets(tmp_path):
+    """M1: every parquet written by the v2 exporter must expose a `cell`
+    column literally (not just an unnamed index, and not __index_level_0__)."""
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_cellcol"
+    _make_tiny_h5ad(h5ad, n_cells=6, n_genes=5)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ", "MS4A1"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2",
+            format="parquet",
+        )
+    )
+
+    targets = [
+        bundle_dir / "obs.parquet",
+        bundle_dir / "obsm" / "X_umap.parquet",
+        bundle_dir / "obsm" / "X_pca.parquet",
+        bundle_dir / "marker_expr.parquet",
+    ]
+    for path in targets:
+        assert path.exists(), f"Expected parquet at {path}"
+        df = pd.read_parquet(path)
+        assert "cell" in df.columns, (
+            f"{path.name} is missing literal 'cell' column; got {list(df.columns)}"
+        )
+        assert "__index_level_0__" not in df.columns, (
+            f"{path.name} still has legacy __index_level_0__ column"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase B: bundle v2.1 schema tests (additive, backwards-compatible)
+# ---------------------------------------------------------------------------
+
+def test_v2_1_schema_default(tmp_path):
+    """Default writer emits singlecell_r_bundle_v2.1 with empty extensions={}."""
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_default"
+    _make_tiny_h5ad(h5ad, n_cells=6)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            format="parquet",
+        )
+    )
+
+    manifest_path = bundle_dir / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.1", (
+        f"Default writer should emit v2.1, got: {manifest['schema_version']!r}"
+    )
+    assert manifest.get("extensions") == {}, (
+        f"v2.1 default should have empty extensions={{}}, got: {manifest.get('extensions')!r}"
+    )
+
+
+def test_v2_schema_explicit_legacy(tmp_path):
+    """--schema-version v2 emits the legacy schema string and OMITS extensions field entirely."""
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_legacy"
+    _make_tiny_h5ad(h5ad, n_cells=6)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2",
+            format="parquet",
+        )
+    )
+
+    manifest_path = bundle_dir / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2", (
+        f"v2 emitter should produce singlecell_r_bundle_v2, got: {manifest['schema_version']!r}"
+    )
+    assert "extensions" not in manifest, (
+        "v2 manifest must NOT carry an extensions field (omitted, not silently empty)"
+    )
+
+
+@pytest.mark.r_contract
+def test_v2_1_reader_accepts_v2_bundle(rscript_path, tmp_path):
+    """R reader (post-v2.1) still reads legacy v2 bundles cleanly."""
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_back_compat"
+    n_cells = 6
+    _make_tiny_h5ad(h5ad, n_cells=n_cells)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type",),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2",
+            format="parquet",
+        )
+    )
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"cat(sprintf('SCHEMA=%s\\n', b$manifest$schema_version)); "
+        f"cat(sprintf('OBS_NROW=%d\\n', nrow(b$obs))); "
+        f"cat(sprintf('HAS_EXT=%s\\n', as.character(!is.null(b$extensions))))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "v2.1_reader_accepts_v2")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["SCHEMA"] == "singlecell_r_bundle_v2"
+    assert int(kv["OBS_NROW"]) == n_cells
+    # extensions key always exists in the result list, but is empty for v2 input
+    assert kv["HAS_EXT"] == "TRUE"
+
+
+@pytest.mark.r_contract
+def test_v2_1_unknown_extension_skipped(rscript_path, tmp_path):
+    """R reader emits 'skipping unknown extension' message and does not error."""
+    h5ad = tmp_path / "tiny.h5ad"
+    bundle_dir = tmp_path / "bundle_unknown_ext"
+    _make_tiny_h5ad(h5ad, n_cells=6)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type",),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            format="parquet",
+        )
+    )
+
+    # Hand-craft a manifest with a fake extension key that the R reader doesn't know.
+    manifest_path = bundle_dir / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.1"
+    manifest["extensions"]["future_modality_xyz"] = {
+        "version": "1.0",
+        "files": [],
+        "claim_guard": "not_for_de_or_new_quantitative_claims_without_full_object_validation",
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"cat('READ_OK\\n')"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "v2.1_unknown_extension_skipped")
+    assert "READ_OK" in proc.stdout
+    assert "skipping unknown extension 'future_modality_xyz'" in proc.stderr, (
+        f"Expected skip message in stderr, got:\n{proc.stderr}"
+    )
+
+
+def test_add_extension_helper():
+    """Python add_extension API: idempotent, validates inputs, populates fields."""
+    from scripts.export_singlecell_r_bundle import add_extension, CLAIM_GUARD
+
+    manifest: dict = {}
+
+    # First registration creates manifest['extensions'] and stores the entry.
+    entry = add_extension(
+        manifest,
+        "protein",
+        version="1.0",
+        files=["protein_expr"],
+        normalization="CLR",
+    )
+    assert manifest["extensions"]["protein"]["version"] == "1.0"
+    assert manifest["extensions"]["protein"]["files"] == ["protein_expr"]
+    assert manifest["extensions"]["protein"]["claim_guard"] == CLAIM_GUARD
+    assert manifest["extensions"]["protein"]["normalization"] == "CLR"
+    assert entry is manifest["extensions"]["protein"]
+
+    # Idempotent for same name: a second call replaces the prior entry.
+    add_extension(
+        manifest,
+        "protein",
+        version="1.1",
+        files=["protein_expr", "isotype_ctrl"],
+        normalization="DSB",
+    )
+    assert manifest["extensions"]["protein"]["version"] == "1.1"
+    assert manifest["extensions"]["protein"]["files"] == ["protein_expr", "isotype_ctrl"]
+    assert manifest["extensions"]["protein"]["normalization"] == "DSB"
+    # Only one extension key remains after idempotent replace.
+    assert list(manifest["extensions"].keys()) == ["protein"]
+
+    # Input validation: rejects non-dict manifest, empty name, empty version, non-list files,
+    # empty claim_guard.
+    with pytest.raises(TypeError, match="manifest to be a dict"):
+        add_extension([], "protein", version="1.0", files=["x"])
+    with pytest.raises(TypeError, match="non-empty string `name`"):
+        add_extension({}, "", version="1.0", files=["x"])
+    with pytest.raises(TypeError, match="non-empty string `version`"):
+        add_extension({}, "protein", version="", files=["x"])
+    with pytest.raises(TypeError, match="`files` to be a list/tuple"):
+        add_extension({}, "protein", version="1.0", files="x")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="non-empty string `claim_guard`"):
+        add_extension({}, "protein", version="1.0", files=["x"], claim_guard="")
+
+
+# ---------------------------------------------------------------------------
+# Phase B (v2.1) protein / ADT extension tests
+# ---------------------------------------------------------------------------
+
+def _make_tiny_protein_h5ad(
+    path: Path,
+    *,
+    n_cells: int = 8,
+    n_genes: int = 5,
+    n_proteins: int = 10,
+    isotypes: tuple[str, ...] = ("ISO_IgG1", "ISO_IgG2"),
+) -> tuple[list[str], np.ndarray]:
+    """Synthesize a tiny AnnData with both an RNA matrix and an ADT modality.
+
+    Returns (protein_names, clr_matrix) so tests can assert round-trip values.
+    """
+    rng = np.random.default_rng(7)
+    x = sparse.csr_matrix(
+        rng.integers(0, 10, size=(n_cells, n_genes)).astype(np.float32)
+    )
+    obs = pd.DataFrame(
+        {
+            "cell_type": [["T", "B", "Myeloid"][i % 3] for i in range(n_cells)],
+            "leiden": [str(i % 3) for i in range(n_cells)],
+        },
+        index=[f"cell_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=["CD3E", "LYZ", "MS4A1", "NKG7", "ELF3"][:n_genes])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+
+    # Build a protein panel with two isotype controls at the front.
+    base = [f"ADT_{i + 1}" for i in range(n_proteins - len(isotypes))]
+    protein_names = list(isotypes) + base
+    clr = rng.random((n_cells, n_proteins)).astype(np.float32)
+    adata.obsm["protein_clr"] = clr
+    adata.uns["protein_names"] = protein_names
+
+    adata.write_h5ad(path)
+    return protein_names, clr
+
+
+@pytest.mark.r_contract
+def test_protein_extension_round_trip(rscript_path, tmp_path):
+    """Python writes protein.parquet; R reads it back with matching shape and rownames."""
+    h5ad = tmp_path / "tiny_protein.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_protein"
+    n_cells = 8
+    n_proteins = 10
+    isotypes = ("ISO_IgG1", "ISO_IgG2")
+    protein_names, _ = _make_tiny_protein_h5ad(
+        h5ad, n_cells=n_cells, n_proteins=n_proteins, isotypes=isotypes,
+    )
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.1",
+            format="parquet",
+            include_protein=True,
+            protein_obsm_key="protein_clr",
+            protein_isotype_controls=isotypes,
+        )
+    )
+
+    # Manifest assertions on the Python side.
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    assert manifest["extensions"]["protein"]["normalization"] == "CLR"
+    assert manifest["extensions"]["protein"]["files"] == ["protein"]
+    assert manifest["extensions"]["protein"]["isotype_controls"] == list(isotypes)
+    assert manifest["extensions"]["protein"]["claim_guard"] == (
+        "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    )
+    assert (bundle_dir / "protein.parquet").exists()
+    assert "protein" in manifest["files"]
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"m <- b$extensions$protein$metadata; "
+        f"d <- b$extensions$protein$data; "
+        f"cat(sprintf('NORM=%s\\n', m$normalization)); "
+        f"cat(sprintf('GUARD=%s\\n', m$claim_guard)); "
+        f"cat(sprintf('NROW=%d\\n', nrow(d))); "
+        f"cat(sprintf('NCOL=%d\\n', ncol(d))); "
+        f"cat(sprintf('ROWS_MATCH=%s\\n', as.character(identical(rownames(d), rownames(b$obs))))); "
+        f"cat(sprintf('FIRST_COL=%s\\n', colnames(d)[1]))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "protein_round_trip")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["NORM"] == "CLR"
+    assert kv["GUARD"] == (
+        "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    )
+    assert int(kv["NROW"]) == n_cells
+    assert int(kv["NCOL"]) == n_proteins
+    assert kv["ROWS_MATCH"] == "TRUE"
+    assert kv["FIRST_COL"] == protein_names[0]
+
+
+def test_protein_module_python_unit(tmp_path):
+    """ProteinADTModule.run wires obsm/obs/uns correctly and respects the DSB stub."""
+    from workflow.modular.modules.protein_adt import (
+        ProteinADTConfig,
+        ProteinADTModule,
+    )
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+
+    n_cells = 8
+    n_proteins = 10
+    isotypes = ("ISO_IgG1", "ISO_IgG2")
+
+    rng = np.random.default_rng(11)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 4)).astype(np.float32))
+    obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_cells)])
+    var = pd.DataFrame(index=["A", "B", "C", "D"])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    counts = sparse.csr_matrix(
+        rng.integers(0, 50, size=(n_cells, n_proteins)).astype(np.int32)
+    )
+    adata.obsm["protein_counts"] = counts
+    protein_names = list(isotypes) + [f"ADT_{i + 1}" for i in range(n_proteins - len(isotypes))]
+    adata.uns["protein_names"] = protein_names
+
+    cfg = PipelineConfig(
+        project="protein_unit",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path / "outs"),
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx.adata = adata
+    ctx.set_module_dir("protein_adt")
+
+    mod = ProteinADTModule(ProteinADTConfig(isotype_controls=isotypes, normalization="CLR"))
+    mod.run(ctx)
+
+    # obsm key created with the right shape and dtype.
+    assert "protein_clr" in adata.obsm
+    clr = adata.obsm["protein_clr"]
+    assert clr.shape == (n_cells, n_proteins)
+    assert clr.dtype == np.float32
+    # CLR rows sum to ~0 by construction (mean-centered in log space).
+    np.testing.assert_allclose(clr.sum(axis=1), np.zeros(n_cells), atol=1e-4)
+
+    # Per-cell QC + multimodal flag.
+    assert "protein_total_counts" in adata.obs.columns
+    assert "protein_n_detected" in adata.obs.columns
+    assert "X_wnn_prep" in adata.obs.columns
+    assert adata.obs["X_wnn_prep"].dtype == bool
+
+    # Isotype flags present and aligned with the input names.
+    qc = adata.uns["protein_qc"]
+    assert qc["normalization"] == "CLR"
+    assert qc["panel_size"] == n_proteins
+    assert qc["isotype_flags"][:2] == [True, True]
+    assert sum(qc["isotype_flags"]) == len(isotypes)
+
+    # QC plot was written.
+    assert (run_dir / "protein_adt" / "protein_detection_rate_violin.png").exists()
+
+    # DSB request must raise NotImplementedError -- never silently degrade.
+    adata2 = ad.AnnData(
+        X=sparse.csr_matrix(np.zeros((4, 2), dtype=np.float32)),
+        obs=pd.DataFrame(index=[f"c{i}" for i in range(4)]),
+        var=pd.DataFrame(index=["A", "B"]),
+    )
+    adata2.obsm["protein_counts"] = sparse.csr_matrix(
+        np.array([[1, 2], [3, 4], [5, 6], [7, 8]], dtype=np.int32)
+    )
+    ctx2 = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx2.adata = adata2
+    ctx2.set_module_dir("protein_adt_dsb")
+    mod_dsb = ProteinADTModule(ProteinADTConfig(normalization="DSB"))
+    with pytest.raises(NotImplementedError, match="DSB normalization"):
+        mod_dsb.run(ctx2)
+
+
+def test_protein_extension_omitted_when_flag_off(tmp_path):
+    """Default export path produces no protein extension or parquet, even when adata has the modality."""
+    h5ad = tmp_path / "tiny_protein.h5ad"
+    bundle_dir = tmp_path / "bundle_no_protein"
+    _make_tiny_protein_h5ad(h5ad, n_cells=8, n_proteins=10)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            format="parquet",
+            # include_protein defaults to False -- explicit assertion.
+        )
+    )
+
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    # v2.1 default still emits an empty extensions field.
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.1"
+    assert manifest.get("extensions") == {}
+    assert "protein" not in manifest["files"]
+    assert not (bundle_dir / "protein.parquet").exists()
+
+
+# ---------------------------------------------------------------------------
+# Phase B (v2.1) spatial transcriptomics extension tests
+# ---------------------------------------------------------------------------
+
+def _make_tiny_spatial_h5ad(
+    path: Path,
+    *,
+    n_cells: int = 200,
+    n_genes: int = 10,
+    libraries: tuple[str, ...] = ("sample_A", "sample_B"),
+    image_paths: dict[str, str] | None = None,
+) -> tuple[np.ndarray, list[str]]:
+    """Synthesize an AnnData with a populated spatial obsm + RNA matrix.
+
+    Returns (coords, library_assignment) so tests can assert round-trip values.
+    """
+    rng = np.random.default_rng(13)
+    x = sparse.csr_matrix(
+        rng.integers(0, 10, size=(n_cells, n_genes)).astype(np.float32)
+    )
+    gene_names = [f"GENE_{i + 1}" for i in range(n_genes)]
+    # Make sure CD3E / LYZ exist for the v2 marker_expr requirement.
+    gene_names[0] = "CD3E"
+    gene_names[1] = "LYZ"
+    obs = pd.DataFrame(
+        {
+            "cell_type": [["T", "B", "Myeloid"][i % 3] for i in range(n_cells)],
+            "leiden": [str(i % 3) for i in range(n_cells)],
+        },
+        index=[f"spot_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=gene_names)
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+
+    coords = rng.uniform(0, 1000, size=(n_cells, 2)).astype(np.float32)
+    adata.obsm["spatial"] = coords
+
+    library_assignment = [libraries[i % len(libraries)] for i in range(n_cells)]
+    adata.obs["spatial_sample"] = pd.Categorical(library_assignment)
+    adata.obs["spatial_library_id"] = pd.Categorical(library_assignment)
+
+    adata.uns["spatial_coord_system"] = {
+        "platform": "visium",
+        "units": "pixel",
+        "in_tissue_only": True,
+    }
+    if image_paths is not None:
+        adata.uns["spatial"] = {"library_id": dict(image_paths)}
+
+    adata.write_h5ad(path)
+    return coords, library_assignment
+
+
+@pytest.mark.r_contract
+def test_spatial_extension_round_trip(rscript_path, tmp_path):
+    """Python writes spatial.parquet; R reads it back with matching shape and rownames."""
+    h5ad = tmp_path / "tiny_spatial.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_spatial"
+    n_cells = 200
+    image_paths = {
+        "sample_A": "/data/visium/sampleA/tissue_hires_image.png",
+        "sample_B": "/data/visium/sampleB/tissue_hires_image.png",
+    }
+    _make_tiny_spatial_h5ad(h5ad, n_cells=n_cells, image_paths=image_paths)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.1",
+            format="parquet",
+            include_spatial=True,
+            spatial_obsm_key="spatial",
+        )
+    )
+
+    # Python-side manifest assertions.
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    spatial_ext = manifest["extensions"]["spatial"]
+    assert spatial_ext["files"] == ["spatial"]
+    assert spatial_ext["claim_guard"] == (
+        "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    )
+    assert spatial_ext["coord_system"]["platform"] == "visium"
+    assert spatial_ext["coord_system"]["units"] == "pixel"
+    assert spatial_ext["library_image_paths"] == image_paths
+    assert (bundle_dir / "spatial.parquet").exists()
+    assert "spatial" in manifest["files"]
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"m <- b$extensions$spatial$metadata; "
+        f"d <- b$extensions$spatial$data; "
+        f"cat(sprintf('PLATFORM=%s\\n', m$coord_system$platform)); "
+        f"cat(sprintf('UNITS=%s\\n', m$coord_system$units)); "
+        f"cat(sprintf('GUARD=%s\\n', m$claim_guard)); "
+        f"cat(sprintf('NROW=%d\\n', nrow(d$coords))); "
+        f"cat(sprintf('NCOL=%d\\n', ncol(d$coords))); "
+        f"cat(sprintf('ROWS_MATCH=%s\\n', as.character(identical(rownames(d$coords), rownames(b$obs))))); "
+        f"cat(sprintf('HAS_LIB_PATHS=%s\\n', as.character(!is.null(d$library_image_paths)))); "
+        f"cat(sprintf('LIB_A=%s\\n', d$library_image_paths$sample_A))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "spatial_round_trip")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["PLATFORM"] == "visium"
+    assert kv["UNITS"] == "pixel"
+    assert kv["GUARD"] == (
+        "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    )
+    assert int(kv["NROW"]) == n_cells
+    assert int(kv["NCOL"]) == 2
+    assert kv["ROWS_MATCH"] == "TRUE"
+    assert kv["HAS_LIB_PATHS"] == "TRUE"
+    assert kv["LIB_A"] == image_paths["sample_A"]
+
+
+def test_spatial_module_python_unit(tmp_path):
+    """SpatialIngestModule preserves obsm and writes coord-system metadata."""
+    from workflow.modular.modules.spatial_ingest import (
+        SpatialIngestConfig,
+        SpatialIngestModule,
+    )
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+
+    n_cells = 12
+    rng = np.random.default_rng(3)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 4)).astype(np.float32))
+    obs = pd.DataFrame(index=[f"spot_{i}" for i in range(n_cells)])
+    var = pd.DataFrame(index=["A", "B", "C", "D"])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    coords = rng.uniform(0, 100, size=(n_cells, 2)).astype(np.float32)
+    adata.obsm["spatial"] = coords
+
+    cfg = PipelineConfig(
+        project="spatial_unit",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path / "outs"),
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx.adata = adata
+    ctx.set_module_dir("spatial_ingest")
+
+    image_paths = {"libA": "/data/libA/image.png"}
+    mod = SpatialIngestModule(SpatialIngestConfig(
+        platform="visium", library_image_paths=image_paths,
+    ))
+    mod.run(ctx)
+
+    # obsm preserved.
+    assert "spatial" in adata.obsm
+    np.testing.assert_array_equal(np.asarray(adata.obsm["spatial"]), coords)
+    # uns metadata correct.
+    assert adata.uns["spatial_coord_system"]["platform"] == "visium"
+    assert adata.uns["spatial_coord_system"]["units"] == "pixel"
+    assert adata.uns["spatial_coord_system"]["in_tissue_only"] is True
+    assert adata.uns["spatial"]["library_id"] == {"libA": "/data/libA/image.png"}
+    assert ctx.metadata["spatial_status"] == "ok"
+    assert ctx.metadata["spatial_n_spots"] == n_cells
+    assert ctx.metadata["spatial_platform"] == "visium"
+
+
+def test_spatial_squidpy_skip_clean(tmp_path, monkeypatch):
+    """SpatialNeighborhoodsModule exits cleanly when squidpy is not importable."""
+    import builtins
+
+    from workflow.modular.modules.spatial_neighborhoods import (
+        SpatialNeighborhoodsConfig,
+        SpatialNeighborhoodsModule,
+    )
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+
+    n_cells = 8
+    rng = np.random.default_rng(5)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 4)).astype(np.float32))
+    obs = pd.DataFrame(
+        {"leiden": [str(i % 2) for i in range(n_cells)]},
+        index=[f"spot_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=["A", "B", "C", "D"])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["spatial"] = rng.uniform(0, 100, size=(n_cells, 2)).astype(np.float32)
+
+    cfg = PipelineConfig(
+        project="spatial_skip",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path / "outs"),
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx.adata = adata
+    ctx.set_module_dir("spatial_neighborhoods")
+
+    # Force ImportError for squidpy regardless of whether it's actually installed.
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "squidpy" or name.startswith("squidpy."):
+            raise ImportError("simulated: squidpy not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    mod = SpatialNeighborhoodsModule(SpatialNeighborhoodsConfig(group_by="leiden"))
+    # Must not raise.
+    mod.run(ctx)
+
+    assert ctx.metadata["spatial_neighborhoods_status"] == "skipped_no_squidpy"
+    # Status entry recorded as skipped.
+    statuses = [s for s in ctx.module_status if s.get("module") == "spatial_neighborhoods"]
+    assert statuses, "expected a module_status entry for spatial_neighborhoods"
+    assert statuses[-1]["status"] == "skipped"
+
+
+def test_spatial_extension_image_paths_string_only(tmp_path):
+    """Tissue images must NEVER be serialized into the bundle; only string paths."""
+    h5ad = tmp_path / "tiny_spatial_imgs.h5ad"
+    bundle_dir = tmp_path / "bundle_spatial_imgs"
+    image_paths = {
+        "sample_A": "/data/visium/sampleA/tissue_hires_image.png",
+        "sample_B": "/data/visium/sampleB/tissue_hires_image.tiff",
+    }
+    _make_tiny_spatial_h5ad(h5ad, n_cells=64, image_paths=image_paths)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.1",
+            format="parquet",
+            include_spatial=True,
+        )
+    )
+
+    # Walk the bundle dir and assert no image files were materialized.
+    image_suffixes = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".bmp"}
+    for path in bundle_dir.rglob("*"):
+        if path.is_file():
+            assert path.suffix.lower() not in image_suffixes, (
+                f"Bundle must not contain image files; found: {path}"
+            )
+
+    # Manifest must have STRING paths only (not bytes/None).
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    lib_paths = manifest["extensions"]["spatial"]["library_image_paths"]
+    assert lib_paths == image_paths
+    for value in lib_paths.values():
+        assert isinstance(value, str), f"library_image_paths must be strings; got {type(value)}"
+
+
+def test_spatial_extension_omitted_when_flag_off(tmp_path):
+    """Default export path produces no spatial extension or parquet."""
+    h5ad = tmp_path / "tiny_spatial_off.h5ad"
+    bundle_dir = tmp_path / "bundle_no_spatial"
+    _make_tiny_spatial_h5ad(h5ad, n_cells=32)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            format="parquet",
+            # include_spatial defaults to False -- explicit assertion.
+        )
+    )
+
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.1"
+    assert manifest.get("extensions") == {}
+    assert "spatial" not in manifest["files"]
+    assert not (bundle_dir / "spatial.parquet").exists()
+
+
+# ---------------------------------------------------------------------------
+# Phase B (v2.1) multimodal_obsm extension tests (EXPERIMENTAL)
+# ---------------------------------------------------------------------------
+
+def _make_tiny_multimodal_h5ad(
+    path: Path,
+    *,
+    n_cells: int = 8,
+    n_genes: int = 5,
+    wnn_dims: int = 2,
+) -> np.ndarray:
+    """Synthesize an AnnData with a populated X_wnn obsm + RNA matrix.
+
+    The WNN matrix is generated directly (no Seurat call); this is a unit
+    fixture for the round-trip wiring, not an integration test.
+    """
+    rng = np.random.default_rng(17)
+    x = sparse.csr_matrix(
+        rng.integers(0, 10, size=(n_cells, n_genes)).astype(np.float32)
+    )
+    obs = pd.DataFrame(
+        {
+            "cell_type": [["T", "B", "Myeloid"][i % 3] for i in range(n_cells)],
+            "leiden": [str(i % 3) for i in range(n_cells)],
+        },
+        index=[f"cell_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=["CD3E", "LYZ", "MS4A1", "NKG7", "ELF3"][:n_genes])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+    wnn = rng.random((n_cells, wnn_dims)).astype(np.float32)
+    adata.obsm["X_wnn"] = wnn
+    adata.uns["multimodal_status"] = {"engine": "wnn", "status": "ok"}
+    adata.write_h5ad(path)
+    return wnn
+
+
+@pytest.mark.r_contract
+def test_multimodal_extension_round_trip(rscript_path, tmp_path):
+    """Python writes multimodal_obsm_X_wnn.parquet; R reads it back with matching shape."""
+    h5ad = tmp_path / "tiny_mm.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_mm"
+    n_cells = 8
+    _make_tiny_multimodal_h5ad(h5ad, n_cells=n_cells)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.1",
+            format="parquet",
+            include_multimodal_obsm=True,
+            multimodal_obsm_keys=("X_wnn", "X_mofa"),
+        )
+    )
+
+    # Python-side manifest assertions.
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    mm_ext = manifest["extensions"]["multimodal_obsm"]
+    assert mm_ext["files"] == ["multimodal_obsm_X_wnn"]
+    assert mm_ext["engine_used"] == "wnn"
+    assert mm_ext["experimental"] is True
+    assert mm_ext["claim_guard"] == (
+        "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    )
+    assert (bundle_dir / "multimodal_obsm_X_wnn.parquet").exists()
+    assert "multimodal_obsm_X_wnn" in manifest["files"]
+    # Mofa absent on the adata -> no parquet, no extra entry
+    assert not (bundle_dir / "multimodal_obsm_X_mofa.parquet").exists()
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"m <- b$extensions$multimodal_obsm$metadata; "
+        f"d <- b$extensions$multimodal_obsm$data; "
+        f"cat(sprintf('ENGINE=%s\\n', m$engine_used)); "
+        f"cat(sprintf('GUARD=%s\\n', m$claim_guard)); "
+        f"cat(sprintf('NROW=%d\\n', nrow(d$X_wnn))); "
+        f"cat(sprintf('NCOL=%d\\n', ncol(d$X_wnn))); "
+        f"cat(sprintf('ROWS_MATCH=%s\\n', as.character(identical(rownames(d$X_wnn), rownames(b$obs)))))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "multimodal_round_trip")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["ENGINE"] == "wnn"
+    assert kv["GUARD"] == (
+        "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    )
+    assert int(kv["NROW"]) == n_cells
+    assert int(kv["NCOL"]) == 2
+    assert kv["ROWS_MATCH"] == "TRUE"
+
+
+def test_multimodal_module_off_by_default(tmp_path):
+    """Default config (engine='off') is a no-op: no obsm keys added, status='off'."""
+    from workflow.modular.modules.multimodal_integration import (
+        MultimodalIntegrationConfig,
+        MultimodalIntegrationModule,
+    )
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+
+    n_cells = 6
+    rng = np.random.default_rng(19)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 4)).astype(np.float32))
+    obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_cells)])
+    var = pd.DataFrame(index=["A", "B", "C", "D"])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    # Even with both latents present, engine='off' must not act.
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+    adata.obsm["protein_clr"] = rng.random((n_cells, 4)).astype(np.float32)
+
+    cfg = PipelineConfig(
+        project="mm_off",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path / "outs"),
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx.adata = adata
+    ctx.set_module_dir("multimodal_integration")
+
+    mod = MultimodalIntegrationModule(MultimodalIntegrationConfig())
+    # Make sure env override does not flip the default during this test.
+    import os as _os
+    prior_env = _os.environ.pop("SC_MULTIMODAL_ENGINE", None)
+    try:
+        mod.run(ctx)
+    finally:
+        if prior_env is not None:
+            _os.environ["SC_MULTIMODAL_ENGINE"] = prior_env
+
+    assert "X_wnn" not in adata.obsm
+    assert "X_mofa" not in adata.obsm
+    status = adata.uns["multimodal_status"]
+    assert status["engine"] == "off"
+    assert status["status"] == "skipped"
+    assert ctx.metadata["multimodal_status"] == "off"
+
+
+def test_multimodal_wnn_skips_when_r_missing(tmp_path, monkeypatch):
+    """WNN engine skips cleanly when the R subprocess fails (return code != 0)."""
+    import subprocess as _subprocess
+    from workflow.modular.modules.multimodal_integration import (
+        MultimodalIntegrationConfig,
+        MultimodalIntegrationModule,
+    )
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+
+    n_cells = 6
+    rng = np.random.default_rng(21)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 4)).astype(np.float32))
+    obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_cells)])
+    var = pd.DataFrame(index=["A", "B", "C", "D"])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+    adata.obsm["protein_clr"] = rng.random((n_cells, 4)).astype(np.float32)
+
+    cfg = PipelineConfig(
+        project="mm_wnn_skip",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path / "outs"),
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx.adata = adata
+    ctx.set_module_dir("multimodal_integration")
+
+    # Force the module to think Rscript exists, but make subprocess.run return code 127.
+    import workflow.modular.modules.multimodal_integration as mm_mod
+
+    monkeypatch.setattr(mm_mod.MultimodalIntegrationModule, "_resolve_rscript",
+                        staticmethod(lambda cfg: "/usr/bin/Rscript"))
+    # Also make sure the run_wnn.R driver "exists" so we go down the subprocess path.
+    monkeypatch.setattr(mm_mod.Path, "exists", lambda self: True)
+
+    class _Result:
+        returncode = 127
+        stderr = "Rscript: command not found"
+        stdout = ""
+
+    def fake_run(*args, **kwargs):
+        return _Result()
+
+    monkeypatch.setattr(mm_mod.subprocess, "run", fake_run)
+
+    mod = MultimodalIntegrationModule(MultimodalIntegrationConfig(engine="wnn"))
+    mod.run(ctx)
+
+    assert "X_wnn" not in adata.obsm
+    status = adata.uns["multimodal_status"]
+    assert status["engine"] == "wnn"
+    assert status["status"] == "skipped"
+    assert "127" in status["reason"]
+    assert ctx.metadata["multimodal_status"] == "skipped_driver_failed"
+
+
+def test_multimodal_mofa_skips_when_muon_missing(tmp_path, monkeypatch):
+    """MOFA engine skips cleanly when neither mofapy2 nor muon are importable."""
+    import builtins as _builtins
+    from workflow.modular.modules.multimodal_integration import (
+        MultimodalIntegrationConfig,
+        MultimodalIntegrationModule,
+    )
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+
+    n_cells = 6
+    rng = np.random.default_rng(23)
+    x = sparse.csr_matrix(rng.integers(0, 5, size=(n_cells, 4)).astype(np.float32))
+    obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_cells)])
+    var = pd.DataFrame(index=["A", "B", "C", "D"])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+    adata.obsm["protein_clr"] = rng.random((n_cells, 4)).astype(np.float32)
+
+    cfg = PipelineConfig(
+        project="mm_mofa_skip",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path / "outs"),
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
+    ctx.adata = adata
+    ctx.set_module_dir("multimodal_integration")
+
+    real_import = _builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "mofapy2" or name.startswith("mofapy2."):
+            raise ImportError("simulated: mofapy2 not installed")
+        if name == "muon" or name.startswith("muon."):
+            raise ImportError("simulated: muon not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(_builtins, "__import__", fake_import)
+
+    mod = MultimodalIntegrationModule(MultimodalIntegrationConfig(engine="mofa"))
+    mod.run(ctx)
+
+    assert "X_mofa" not in adata.obsm
+    status = adata.uns["multimodal_status"]
+    assert status["engine"] == "mofa"
+    assert status["status"] == "skipped"
+    assert "mofapy2" in status["reason"] or "muon" in status["reason"]
+    assert ctx.metadata["multimodal_status"] == "skipped_no_mofa"
+
+
+def test_multimodal_extension_omitted_when_flag_off(tmp_path):
+    """Default export path produces no multimodal_obsm extension or parquets."""
+    h5ad = tmp_path / "tiny_mm_off.h5ad"
+    bundle_dir = tmp_path / "bundle_no_mm"
+    _make_tiny_multimodal_h5ad(h5ad, n_cells=6)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            format="parquet",
+            # include_multimodal_obsm defaults to False -- explicit assertion.
+        )
+    )
+
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.1"
+    assert manifest.get("extensions") == {}
+    assert "multimodal_obsm" not in manifest.get("extensions", {})
+    assert not (bundle_dir / "multimodal_obsm_X_wnn.parquet").exists()
+    assert not (bundle_dir / "multimodal_obsm_X_mofa.parquet").exists()

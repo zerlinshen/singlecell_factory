@@ -1,0 +1,17 @@
+name: quick_explore
+description: "Fast first-look exploration: clustering + DE only, bundle on"
+modality_hint: rna_only
+optional_modules:
+  - clustering
+  - differential_expression
+scale_preset: standard
+bundle:
+  enabled: true
+  include_protein: false
+  include_spatial: false
+  include_multimodal_obsm: false
+  schema_version: v2.1
+notes: |
+  Most common use case for new users on a single sample.
+  Skips trajectory/annotation to keep wall-time low; rerun with another
+  recipe (e.g. nc2024_paper) once you've inspected the bundle.

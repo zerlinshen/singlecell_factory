@@ -16,7 +16,9 @@ import csv
 import gzip
 import hashlib
 import json
-from dataclasses import dataclass, field
+import os
+import shutil
+from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -47,12 +49,29 @@ except ImportError:  # pragma: no cover
 
 
 SCHEMA_VERSION_V1 = "singlecell_r_bundle_v1"
-SCHEMA_VERSION_V2 = "singlecell_r_bundle_v2"
+BUNDLE_SCHEMA_V2 = "singlecell_r_bundle_v2"
+BUNDLE_SCHEMA_V2_1 = "singlecell_r_bundle_v2.1"
+# Backwards-compat alias (older callers / tests reference SCHEMA_VERSION_V2).
+SCHEMA_VERSION_V2 = BUNDLE_SCHEMA_V2
 SCHEMA_COMPATIBLE_WITH_V2 = ["singlecell_r_bundle_v1"]
+SCHEMA_COMPATIBLE_WITH_V2_1 = ["singlecell_r_bundle_v1", "singlecell_r_bundle_v2"]
 EXPRESSION_SOURCE_SLOT = "X"
 EXPRESSION_VALUE_SCALE = "source_X_as_stored"
 EXPRESSION_EXPORT_DTYPE = "float32"
 INTENDED_USE = "plotting_and_visual_summary_only"
+# H2 / Phase B: This claim_guard string MUST be surfaced by the R reader
+# (see multiomics_r_factory/R_bundle/io_bundle.R::read_bundle_v2, which both
+# emits a message() and attaches it as attr(expr_sparse, "claim_guard")).
+# Do not change the literal value without updating the R-side validator and
+# the cross-language parity tests.
+#
+# Phase B (v2.1) note: by default the SAME guard string is reused at the
+# modality level for every optional bundle extension (protein, spatial,
+# multimodal_obsm). Each extension is plotting-only until per-modality
+# validation logic exists. Extension authors may override `claim_guard` when
+# calling `add_extension(...)`, but they MUST NOT silently widen the
+# semantics of the guard -- update both the R-side validator and the parity
+# tests if the literal value or its meaning ever changes.
 CLAIM_GUARD = "not_for_de_or_new_quantitative_claims_without_full_object_validation"
 
 MTX_AUTO_THRESHOLD = 100  # switch to mtx when marker count >= this
@@ -101,8 +120,385 @@ class ExportConfig:
     max_cells: int | None = None
     seed: int = 1
     marker_chunk_size: int = 50000
-    schema_version: str = "v1"
+    schema_version: str = "v2.1"
     format: str = "auto"
+    # Phase B (v2.1) extensions: opt-in modality exporters. Default off so existing
+    # callers get bit-for-bit identical bundles. The protein exporter is the first
+    # consumer of `add_extension(...)`.
+    include_protein: bool = False
+    protein_obsm_key: str = "protein_clr"
+    protein_isotype_controls: tuple[str, ...] = ()
+    # Phase B (v2.1) spatial extension: opt-in. Default off so existing
+    # bundles are byte-for-byte unchanged.
+    include_spatial: bool = False
+    spatial_obsm_key: str = "spatial"
+    spatial_include_image_paths: bool = True
+    # Phase B (v2.1) multimodal_obsm extension (EXPERIMENTAL): opt-in.
+    # Publishes whichever of ``multimodal_obsm_keys`` are actually present on
+    # the AnnData; each one round-trips as a separate parquet file.
+    include_multimodal_obsm: bool = False
+    multimodal_obsm_keys: tuple[str, ...] = ("X_wnn", "X_mofa")
+
+
+# ---------------------------------------------------------------------------
+# Phase B: bundle extension API (additive, opt-in)
+# ---------------------------------------------------------------------------
+
+# Known extension keys. Readers ignore unknown keys with a "skipping unknown
+# extension" message; producers may freely register additional keys. Keep this
+# list in sync with the R reader's known-extensions handling.
+KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm")
+
+
+def add_extension(manifest, name, *, version, files, claim_guard=CLAIM_GUARD, **fields):
+    """Register an optional bundle extension on a manifest dict.
+
+    This is the supported API for future module authors (proteomics / spatial
+    / multimodal). It mutates ``manifest["extensions"]`` in place and is
+    idempotent for the same ``name`` (a second call replaces the prior entry).
+
+    Parameters
+    ----------
+    manifest : dict
+        The bundle manifest (must already be a dict; raises TypeError otherwise).
+        ``manifest["extensions"]`` is created on first use.
+    name : str
+        Extension key (e.g. ``"protein"``, ``"spatial"``, ``"multimodal_obsm"``).
+        Unknown keys are accepted -- readers skip them gracefully -- but a
+        debug-level message is implied for forward-compat.
+    version : str
+        Extension-internal schema version (e.g. ``"1.0"``).
+    files : list[str]
+        File stems within the bundle that belong to this extension. Their full
+        records still live in ``manifest["files"]``; this list is just an
+        index for readers.
+    claim_guard : str
+        By default the same module-level ``CLAIM_GUARD`` (plotting-only).
+        Extensions MUST NOT silently weaken this guard.
+    **fields
+        Modality-specific small fields (e.g.
+        ``protein.normalization``, ``spatial.coord_system``,
+        ``multimodal_obsm.embeddings``).
+
+    Returns
+    -------
+    dict
+        The extension entry that was stored in ``manifest["extensions"][name]``.
+
+    Examples
+    --------
+    Illustrative only -- no proteomics logic is wired up in this phase::
+
+        # add_extension(
+        #     manifest,
+        #     "protein",
+        #     version="1.0",
+        #     files=["protein_expr"],
+        #     normalization="CLR",
+        # )
+    """
+    if not isinstance(manifest, dict):
+        raise TypeError(
+            f"add_extension expects manifest to be a dict, got {type(manifest).__name__}"
+        )
+    if not isinstance(name, str) or not name:
+        raise TypeError("add_extension requires a non-empty string `name`")
+    if not isinstance(version, str) or not version:
+        raise TypeError("add_extension requires a non-empty string `version`")
+    if not isinstance(files, (list, tuple)):
+        raise TypeError(
+            f"add_extension expects `files` to be a list/tuple, got {type(files).__name__}"
+        )
+    files_list = [str(f) for f in files]
+    if not isinstance(claim_guard, str) or not claim_guard:
+        raise TypeError("add_extension requires a non-empty string `claim_guard`")
+
+    extensions = manifest.setdefault("extensions", {})
+    if not isinstance(extensions, dict):
+        raise TypeError(
+            "manifest['extensions'] must be a dict; refusing to overwrite a "
+            f"{type(extensions).__name__}"
+        )
+
+    entry: dict[str, object] = {
+        "version": version,
+        "files": files_list,
+        "claim_guard": claim_guard,
+    }
+    # Modality-specific fields are flattened into the entry. We deliberately
+    # let callers pass arbitrary keys here; the R reader does not validate
+    # the inner shape (forward-compat).
+    for key, value in fields.items():
+        entry[key] = value
+
+    extensions[name] = entry
+    return entry
+
+
+def maybe_export_protein(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+    *,
+    obsm_key: str = "protein_clr",
+    isotype_controls: Sequence[str] = (),
+) -> dict | None:
+    """Write protein.parquet if adata has the modality; register via add_extension.
+
+    Parameters
+    ----------
+    manifest : dict
+        Bundle manifest (will be mutated: ``manifest["files"]["protein"]`` and
+        ``manifest["extensions"]["protein"]`` are populated on success).
+    output_dir : Path
+        Bundle directory (typically the temp dir during a publish).
+    adata : anndata.AnnData
+        Source AnnData. Must expose ``adata.obsm[obsm_key]`` to be exported.
+    obsm_key : str
+        Key on ``adata.obsm`` holding the (cells x proteins) CLR matrix.
+    isotype_controls : Sequence[str]
+        Optional list of protein names that are isotype controls; surfaced
+        in the extension entry for downstream R-side QC.
+
+    Returns
+    -------
+    dict | None
+        The extension entry that was registered, or ``None`` when the
+        modality was not present (no-op, no file written).
+    """
+    if obsm_key not in getattr(adata, "obsm", {}):
+        return None
+    arr = np.asarray(adata.obsm[obsm_key])
+    if arr.ndim != 2:
+        raise ValueError(
+            f"adata.obsm['{obsm_key}'] must be 2D (cells x proteins); got shape {arr.shape}"
+        )
+    n_cells, n_proteins = arr.shape
+
+    cells = adata.obs_names[:n_cells].astype(str)
+    protein_names = adata.uns.get("protein_names")
+    if protein_names is None or len(protein_names) != n_proteins:
+        protein_names = [f"ADT_{i + 1}" for i in range(n_proteins)]
+    protein_names = [str(name) for name in protein_names]
+
+    df = pd.DataFrame(arr.astype(np.float32, copy=False), index=cells, columns=protein_names)
+    df.index.name = "cell"
+    path = output_dir / "protein.parquet"
+    _write_parquet(df, path)
+
+    manifest_files = manifest.setdefault("files", {})
+    manifest_files["protein"] = file_record(
+        path, output_dir, n_cells, n_proteins, {"format": "parquet"}
+    )
+
+    return add_extension(
+        manifest,
+        "protein",
+        version="1.0",
+        files=["protein"],
+        normalization="CLR",
+        isotype_controls=list(isotype_controls),
+        n_proteins=int(n_proteins),
+    )
+
+
+def maybe_export_spatial(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+    *,
+    obsm_key: str = "spatial",
+    include_image_paths: bool = True,
+) -> dict | None:
+    """Write spatial.parquet if adata has the modality; register via add_extension.
+
+    Parameters
+    ----------
+    manifest : dict
+        Bundle manifest (mutated: ``manifest["files"]["spatial"]`` and
+        ``manifest["extensions"]["spatial"]`` are populated on success).
+    output_dir : Path
+        Bundle directory.
+    adata : anndata.AnnData
+        Source AnnData; must expose ``adata.obsm[obsm_key]`` (cells x 2 coords).
+    obsm_key : str
+        Key on ``adata.obsm`` holding the (cells x 2) coordinate matrix.
+    include_image_paths : bool
+        When True (default), copy ``adata.uns['spatial']['library_id']`` path
+        strings into the extension entry. We NEVER serialize image bytes; only
+        path strings round-trip into the manifest.
+
+    Returns
+    -------
+    dict | None
+        The extension entry that was registered, or ``None`` if the modality
+        was not present (no-op, no file written).
+    """
+    obsm = getattr(adata, "obsm", {})
+    if obsm_key not in obsm:
+        return None
+    arr = np.asarray(obsm[obsm_key])
+    if arr.ndim != 2 or arr.shape[1] < 2:
+        raise ValueError(
+            f"adata.obsm['{obsm_key}'] must be (cells x >=2); got shape {arr.shape}"
+        )
+    coords = arr[:, :2].astype(np.float32, copy=False)
+    n_cells = coords.shape[0]
+    cells = adata.obs_names[:n_cells].astype(str)
+
+    df = pd.DataFrame({"x": coords[:, 0], "y": coords[:, 1]}, index=cells)
+    # Carry over optional sample / library_id obs columns when present so the
+    # R loader can reconstruct per-library structure without separate files.
+    if "spatial_sample" in adata.obs.columns:
+        df["sample"] = adata.obs["spatial_sample"].astype(str).values[:n_cells]
+    if "spatial_library_id" in adata.obs.columns:
+        df["library_id"] = adata.obs["spatial_library_id"].astype(str).values[:n_cells]
+    df.index.name = "cell"
+
+    path = output_dir / "spatial.parquet"
+    _write_parquet(df, path)
+
+    manifest_files = manifest.setdefault("files", {})
+    manifest_files["spatial"] = file_record(
+        path, output_dir, n_cells, df.shape[1], {"format": "parquet"}
+    )
+
+    coord_system = {}
+    spatial_uns = adata.uns.get("spatial_coord_system")
+    if isinstance(spatial_uns, dict):
+        coord_system = {str(k): _coerce_jsonable(v) for k, v in spatial_uns.items()}
+
+    library_image_paths: dict[str, str] = {}
+    if include_image_paths:
+        spatial_pointer = adata.uns.get("spatial")
+        if isinstance(spatial_pointer, dict):
+            lib = spatial_pointer.get("library_id")
+            if isinstance(lib, dict):
+                # Force every value to a string. Bytes/Path/None are explicitly
+                # rejected so an image blob can never sneak into the manifest.
+                for key, value in lib.items():
+                    if isinstance(value, (bytes, bytearray)):
+                        raise ValueError(
+                            "spatial library_image_paths must be string paths, "
+                            f"not bytes (key={key!r})"
+                        )
+                    library_image_paths[str(key)] = str(value)
+
+    return add_extension(
+        manifest,
+        "spatial",
+        version="1.0",
+        files=["spatial"],
+        coord_system=coord_system,
+        library_image_paths=library_image_paths,
+        n_spots=int(n_cells),
+    )
+
+
+def maybe_export_multimodal_obsm(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+    *,
+    obsm_keys: Sequence[str] = ("X_wnn", "X_mofa"),
+) -> dict | None:
+    """Write multimodal_obsm parquets and register the ``multimodal_obsm`` extension.
+
+    EXPERIMENTAL: this extension carries the same plotting-only ``CLAIM_GUARD``
+    as the rest of the bundle. Embeddings are visualization aids; the
+    cross-modality validation logic that would let a user make new
+    quantitative claims is not yet wired up.
+
+    Parameters
+    ----------
+    manifest : dict
+        Bundle manifest (mutated: per-key entries land in
+        ``manifest["files"]["multimodal_obsm_<key>"]`` and the extension
+        record lands in ``manifest["extensions"]["multimodal_obsm"]``).
+    output_dir : Path
+        Bundle directory.
+    adata : anndata.AnnData
+        Source AnnData. For each key in ``obsm_keys`` that is actually
+        present on ``adata.obsm``, a ``multimodal_obsm_<key>.parquet`` is
+        written.
+    obsm_keys : Sequence[str]
+        Candidate obsm keys to publish. Keys not present on the AnnData are
+        silently skipped (so the same call works on a partial run).
+
+    Returns
+    -------
+    dict | None
+        The extension entry that was registered, or ``None`` if none of the
+        candidate keys were present (no-op, no files written).
+    """
+    obsm = getattr(adata, "obsm", {})
+    present: list[tuple[str, np.ndarray]] = []
+    for key in obsm_keys:
+        if key not in obsm:
+            continue
+        arr = np.asarray(obsm[key])
+        if arr.ndim != 2:
+            raise ValueError(
+                f"adata.obsm['{key}'] must be 2D (cells x dims); got shape {arr.shape}"
+            )
+        present.append((str(key), arr))
+
+    if not present:
+        return None
+
+    file_stems: list[str] = []
+    embeddings_meta: list[dict[str, object]] = []
+    manifest_files = manifest.setdefault("files", {})
+
+    for key, arr in present:
+        n_cells, n_dims = arr.shape
+        cells = adata.obs_names[:n_cells].astype(str)
+        cols = [f"{key}_{i + 1}" for i in range(n_dims)]
+        df = pd.DataFrame(arr.astype(np.float32, copy=False), index=cells, columns=cols)
+        df.index.name = "cell"
+
+        stem = f"multimodal_obsm_{key}"
+        path = output_dir / f"{stem}.parquet"
+        _write_parquet(df, path)
+
+        manifest_files[stem] = file_record(
+            path, output_dir, n_cells, n_dims, {"format": "parquet"}
+        )
+        file_stems.append(stem)
+        embeddings_meta.append({
+            "key": key,
+            "n_dims": int(n_dims),
+            "stem": stem,
+        })
+
+    engine_used = "unknown"
+    multimodal_status = adata.uns.get("multimodal_status")
+    if isinstance(multimodal_status, dict):
+        engine_used = str(multimodal_status.get("engine", "unknown"))
+
+    return add_extension(
+        manifest,
+        "multimodal_obsm",
+        version="1.0",
+        files=file_stems,
+        embeddings=embeddings_meta,
+        engine_used=engine_used,
+        experimental=True,
+    )
+
+
+def _coerce_jsonable(value):
+    """Best-effort coercion of small uns metadata values into JSON-friendly types."""
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        # Reject silently dropping binary metadata into the manifest.
+        raise ValueError("spatial coord_system metadata must not contain bytes.")
+    if isinstance(value, dict):
+        return {str(k): _coerce_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_coerce_jsonable(v) for v in value]
+    return str(value)
 
 
 def parse_csv_list(value: str | None, default: Sequence[str]) -> tuple[str, ...]:
@@ -266,20 +662,27 @@ def write_manifest_tsv(manifest: dict[str, object], path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    # M1: ensure the row-index column is literally named `cell` in the written
+    # parquet, regardless of pyarrow vs fastparquet (pyarrow's preserve_index
+    # path historically emits `__index_level_0__` when the index is unnamed).
+    # Reset_index after naming so `cell` becomes a real column the R reader
+    # can match by name without relying on engine-specific index conventions.
+    df = df.copy()
+    df.index.name = "cell"
+    df = df.reset_index()
     if not _HAVE_PYARROW:
-        df.to_parquet(path, engine="fastparquet", index=True)
+        df.to_parquet(path, engine="fastparquet", index=False)
         return
-    table = pa.Table.from_pandas(df, preserve_index=True)
+    table = pa.Table.from_pandas(df, preserve_index=False)
     pq.write_table(table, path, compression="snappy")
 
 
 def write_obs_parquet(adata, cell_idx: np.ndarray, config: ExportConfig) -> tuple[Path, list[str]]:
     present = [col for col in config.obs_columns if col in adata.obs.columns]
     obs = adata.obs.iloc[cell_idx][present].copy()
-    # Reset string/object columns to preserve categorical info
-    for col in obs.columns:
-        if hasattr(obs[col], "cat"):
-            obs[col] = obs[col].astype(str).astype("category")
+    # M2: do NOT round-trip categoricals through astype(str).astype("category").
+    # That destroys ordered/categories metadata. Pass categoricals through as-is;
+    # parquet preserves dtype, ordered flag, and category levels natively.
     path = config.output_dir / "obs.parquet"
     _write_parquet(obs, path)
     return path, present
@@ -306,16 +709,28 @@ def write_obsm_parquet(adata, cell_idx: np.ndarray, config: ExportConfig) -> dic
 
 
 def _use_mtx_format(markers_present: list[str], fmt: str) -> bool:
+    # M5: scipy.io.mmwrite is the only writer for mtx_gz. If scipy.io is not
+    # importable, refuse to silently fall through to a non-mtx format -- callers
+    # explicitly asking for "mtx" deserve a hard error pointing at the fix.
     if fmt == "mtx":
+        if not _HAVE_SCIPY_IO:
+            raise ImportError(
+                "scipy.io is required for --format mtx (mtx_gz output). "
+                "Install scipy >= 1.10 in the export environment, or rerun "
+                "with --format parquet / --format csv."
+            )
         return True
     if fmt == "csv" or fmt == "parquet":
         return False
-    # auto: use mtx when marker count >= threshold
+    # auto: use mtx when marker count >= threshold AND scipy.io is available;
+    # otherwise stay on parquet so we never produce a half-baked mtx bundle.
+    if not _HAVE_SCIPY_IO:
+        return False
     return len(markers_present) >= MTX_AUTO_THRESHOLD
 
 
 def write_marker_expr_mtx(adata, cell_idx: np.ndarray, markers_present: list[str],
-                          config: ExportConfig) -> tuple[Path, dict[str, object]]:
+                          config: ExportConfig) -> dict[str, dict[str, object]]:
     """Write marker expression as mtx.gz + barcodes + genes sidecar files."""
     cells = adata.obs_names[cell_idx].astype(str)
     X_sub = adata[cell_idx, markers_present].X
@@ -341,9 +756,29 @@ def write_marker_expr_mtx(adata, cell_idx: np.ndarray, markers_present: list[str
 
     n_rows, n_cols = X_sub.shape
     nnz = X_sub.nnz
-    rec = file_record(mtx_path, config.output_dir, n_rows, n_cols,
-                      {"format": "mtx_gz", "sparse": True, "nnz": nnz})
-    return mtx_path, rec
+    return {
+        "marker_expr": file_record(
+            mtx_path,
+            config.output_dir,
+            n_rows,
+            n_cols,
+            {"format": "mtx_gz", "sparse": True, "nnz": nnz},
+        ),
+        "marker_expr_barcodes": file_record(
+            barcodes_path,
+            config.output_dir,
+            n_rows,
+            1,
+            {"format": "tsv_gz", "role": "marker_expr_row_index"},
+        ),
+        "marker_expr_genes": file_record(
+            genes_path,
+            config.output_dir,
+            n_cols,
+            1,
+            {"format": "tsv_gz", "role": "marker_expr_col_index"},
+        ),
+    }
 
 
 def write_marker_expr_parquet(adata, cell_idx: np.ndarray, markers_present: list[str],
@@ -433,10 +868,10 @@ def write_v2_files(adata, cell_idx: np.ndarray, config: ExportConfig) -> tuple[d
 
     use_mtx = _use_mtx_format(markers_present, config.format)
     if use_mtx:
-        _, marker_rec = write_marker_expr_mtx(adata, cell_idx, markers_present, config)
+        files.update(write_marker_expr_mtx(adata, cell_idx, markers_present, config))
     else:
         _, marker_rec = write_marker_expr_parquet(adata, cell_idx, markers_present, config)
-    files["marker_expr"] = marker_rec
+        files["marker_expr"] = marker_rec
 
     # rank_genes.parquet (optional)
     rg_df = _extract_rank_genes_df(adata)
@@ -468,22 +903,65 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
         raise ValueError("--marker-chunk-size must be positive.")
     if not config.input_h5ad.exists():
         raise FileNotFoundError(f"Input .h5ad not found: {config.input_h5ad}")
-    if config.schema_version not in ("v1", "v2"):
-        raise ValueError("--schema-version must be 'v1' or 'v2'.")
+    if config.schema_version not in ("v1", "v2", "v2.1"):
+        raise ValueError("--schema-version must be 'v1', 'v2', or 'v2.1'.")
     if config.format not in ("auto", "csv", "parquet", "mtx"):
         raise ValueError("--format must be 'auto', 'csv', 'parquet', or 'mtx'.")
 
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-    adata = ad.read_h5ad(config.input_h5ad, backed="r")
-    try:
-        cell_idx = choose_cells(adata.n_obs, config.max_cells, config.seed)
+    final_output_dir = config.output_dir
+    parent_dir = final_output_dir.parent
+    parent_dir.mkdir(parents=True, exist_ok=True)
 
-        if config.schema_version == "v2":
-            return _export_bundle_v2(adata, cell_idx, config)
-        else:
-            return _export_bundle_v1(adata, cell_idx, config)
-    finally:
-        adata.file.close()
+    # C2: materialize the entire bundle into a sibling temp directory and only
+    # publish it via os.replace at the very end (after the manifest is written).
+    # This means readers either see no bundle dir at all, or a fully-populated
+    # one with a final manifest -- never a partially written intermediate.
+    temp_dir = parent_dir / f"{final_output_dir.name}.tmp.{os.getpid()}"
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=False)
+
+    temp_config = dataclass_replace(config, output_dir=temp_dir)
+
+    backup_dir: Path | None = None
+    try:
+        adata = ad.read_h5ad(config.input_h5ad, backed="r")
+        try:
+            cell_idx = choose_cells(adata.n_obs, config.max_cells, config.seed)
+
+            if temp_config.schema_version in ("v2", "v2.1"):
+                manifest = _export_bundle_v2(adata, cell_idx, temp_config)
+            else:
+                manifest = _export_bundle_v1(adata, cell_idx, temp_config)
+        finally:
+            adata.file.close()
+
+        # Atomic publish step. If the final dir already exists, move it aside
+        # first so we can either restore it on a failed rename or remove it on
+        # success -- this gives readers a single rename event to observe.
+        if final_output_dir.exists():
+            backup_dir = parent_dir / f"{final_output_dir.name}.bak.{os.getpid()}"
+            if backup_dir.exists():
+                shutil.rmtree(backup_dir)
+            os.replace(final_output_dir, backup_dir)
+
+        os.replace(temp_dir, final_output_dir)
+
+        if backup_dir is not None and backup_dir.exists():
+            shutil.rmtree(backup_dir, ignore_errors=True)
+
+        return manifest
+    except Exception:
+        # Best-effort cleanup of the temp dir; restore the previous output_dir
+        # from backup if we managed to move it aside but failed before rename.
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        if backup_dir is not None and backup_dir.exists() and not final_output_dir.exists():
+            try:
+                os.replace(backup_dir, final_output_dir)
+            except OSError:
+                pass
+        raise
 
 
 def _export_bundle_v1(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict[str, object]:
@@ -560,10 +1038,20 @@ def _export_bundle_v1(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
 def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict[str, object]:
     files, markers_present, used_mtx = write_v2_files(adata, cell_idx, config)
 
+    # Phase B: schema-version negotiation. The default emitter writes v2.1
+    # (additive, backwards-compatible). Callers passing --schema-version v2
+    # get the legacy literal so older readers do not see an unfamiliar
+    # schema string. The on-disk file layout is identical between v2 and
+    # v2.1; only the manifest schema string and the optional `extensions`
+    # field differ.
+    is_v2_1 = config.schema_version == "v2.1"
+    schema_literal = BUNDLE_SCHEMA_V2_1 if is_v2_1 else BUNDLE_SCHEMA_V2
+    compatible_with = SCHEMA_COMPATIBLE_WITH_V2_1 if is_v2_1 else SCHEMA_COMPATIBLE_WITH_V2
+
     source_stat = config.input_h5ad.stat()
     manifest = {
-        "schema_version": SCHEMA_VERSION_V2,
-        "compatible_with": SCHEMA_COMPATIBLE_WITH_V2,
+        "schema_version": schema_literal,
+        "compatible_with": compatible_with,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "source": {
             "input_h5ad": str(config.input_h5ad),
@@ -610,6 +1098,69 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
             "or new quantitative biological claims without full-object validation."
         ),
     }
+    # Phase B: only the v2.1 emitter advertises an `extensions` field. v2
+    # bundles must remain bit-for-bit identical in shape to pre-Phase-B
+    # output, so we deliberately omit the key when emitting v2.
+    if is_v2_1:
+        manifest["extensions"] = {}
+        # Optional protein/ADT extension. No-op unless ``include_protein`` was
+        # set on the config AND the modality is actually present on the adata.
+        if getattr(config, "include_protein", False):
+            # Subset the (possibly backed) adata by cell_idx so the parquet
+            # rows align with obs.parquet. ad.read_h5ad(..., backed='r') supports
+            # boolean/integer fancy indexing returning a view, but materializing
+            # via `to_memory()` is safer for the small obsm slice we need.
+            sub = adata[cell_idx]
+            try:
+                if hasattr(sub, "to_memory"):
+                    sub = sub.to_memory()
+            except Exception:
+                # Fall back to the view; obsm access still works.
+                pass
+            maybe_export_protein(
+                manifest,
+                config.output_dir,
+                sub,
+                obsm_key=config.protein_obsm_key,
+                isotype_controls=config.protein_isotype_controls,
+            )
+            # Refresh the required_files / cell_alignment slots so manifest stays
+            # internally consistent if a downstream consumer iterates files.
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
+        # Optional spatial extension. No-op unless ``include_spatial`` was set
+        # AND the modality is actually present on the adata.
+        if getattr(config, "include_spatial", False):
+            sub = adata[cell_idx]
+            try:
+                if hasattr(sub, "to_memory"):
+                    sub = sub.to_memory()
+            except Exception:
+                pass
+            maybe_export_spatial(
+                manifest,
+                config.output_dir,
+                sub,
+                obsm_key=config.spatial_obsm_key,
+                include_image_paths=config.spatial_include_image_paths,
+            )
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
+        # Optional multimodal_obsm extension (EXPERIMENTAL). No-op unless
+        # ``include_multimodal_obsm`` was set AND at least one of the named
+        # obsm keys is actually present on the adata.
+        if getattr(config, "include_multimodal_obsm", False):
+            sub = adata[cell_idx]
+            try:
+                if hasattr(sub, "to_memory"):
+                    sub = sub.to_memory()
+            except Exception:
+                pass
+            maybe_export_multimodal_obsm(
+                manifest,
+                config.output_dir,
+                sub,
+                obsm_keys=config.multimodal_obsm_keys,
+            )
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
     manifest_json = config.output_dir / "bundle_manifest.json"
     manifest_json.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     write_manifest_tsv(manifest, config.output_dir / "bundle_manifest.tsv")
@@ -617,8 +1168,8 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
         "# singlecell_factory R bundle v2\n\n"
         "This compact bundle uses parquet + optional mtx.gz for efficient R-side "
         "plotting/reporting without densifying the full AnnData expression matrix.\n\n"
-        f"- Schema: `{SCHEMA_VERSION_V2}`\n"
-        f"- Compatible with: `{', '.join(SCHEMA_COMPATIBLE_WITH_V2)}`\n"
+        f"- Schema: `{schema_literal}`\n"
+        f"- Compatible with: `{', '.join(compatible_with)}`\n"
         f"- Source: `{config.input_h5ad}`\n"
         f"- Cells exported: `{len(cell_idx)}`\n"
         f"- Marker genes present: `{', '.join(markers_present)}`\n"
@@ -646,10 +1197,38 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cells", type=int, default=None, help="Optional deterministic subset size")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--marker-chunk-size", type=int, default=50000)
-    parser.add_argument("--schema-version", choices=("v1", "v2"), default="v1",
-                        help="Bundle schema version (default: v1 for backward compat)")
+    parser.add_argument("--schema-version", choices=("v1", "v2", "v2.1"), default="v2.1",
+                        help=("Bundle schema version. Default: v2.1 (additive "
+                              "Phase B schema with an `extensions` field). "
+                              "Pass 'v2' for the legacy non-extension v2 "
+                              "layout, or 'v1' for the original CSV bundle."))
     parser.add_argument("--format", choices=("auto", "csv", "parquet", "mtx"), default="auto",
                         help="Output format for v2 (default: auto)")
+    parser.add_argument("--include-protein", action="store_true",
+                        help=("v2.1 only: also write protein.parquet and register a "
+                              "`protein` extension in the manifest. No-op when the "
+                              "source AnnData lacks the protein modality."))
+    parser.add_argument("--protein-obsm-key", default="protein_clr",
+                        help="adata.obsm key holding the (cells x proteins) CLR matrix.")
+    parser.add_argument("--protein-isotype-controls", default=None,
+                        help="Comma-separated isotype-control protein names (forwarded to extension entry).")
+    parser.add_argument("--include-spatial", action="store_true",
+                        help=("v2.1 only: also write spatial.parquet and register a "
+                              "`spatial` extension in the manifest. No-op when the "
+                              "source AnnData lacks adata.obsm['spatial']."))
+    parser.add_argument("--spatial-obsm-key", default="spatial",
+                        help="adata.obsm key holding the (cells x 2) spatial coords.")
+    parser.add_argument("--no-spatial-image-paths", action="store_true",
+                        help="Do not copy adata.uns['spatial']['library_id'] image-path strings into the manifest.")
+    parser.add_argument("--include-multimodal-obsm", action="store_true",
+                        help=("v2.1 only [EXPERIMENTAL]: also write "
+                              "multimodal_obsm_<key>.parquet for each present "
+                              "obsm key in --multimodal-obsm-keys and register "
+                              "the `multimodal_obsm` extension."))
+    parser.add_argument("--multimodal-obsm-keys", nargs="+", default=["X_wnn", "X_mofa"],
+                        help=("List of adata.obsm keys to publish under the "
+                              "multimodal_obsm extension. Keys not present on "
+                              "the adata are silently skipped."))
     return parser
 
 
@@ -668,6 +1247,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         marker_chunk_size=args.marker_chunk_size,
         schema_version=args.schema_version,
         format=args.format,
+        include_protein=bool(args.include_protein),
+        protein_obsm_key=args.protein_obsm_key,
+        protein_isotype_controls=parse_csv_list(args.protein_isotype_controls, ()),
+        include_spatial=bool(args.include_spatial),
+        spatial_obsm_key=args.spatial_obsm_key,
+        spatial_include_image_paths=not bool(args.no_spatial_image_paths),
+        include_multimodal_obsm=bool(args.include_multimodal_obsm),
+        multimodal_obsm_keys=tuple(args.multimodal_obsm_keys),
     )
     manifest = export_bundle(config)
     print(json.dumps({"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}))

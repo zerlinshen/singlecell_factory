@@ -1,0 +1,23 @@
+name: visium_neighborhoods
+description: "Visium spatial transcriptomics: ingest + neighborhood analytics + spatial bundle"
+modality_hint: spatial
+optional_modules:
+  - clustering
+  - differential_expression
+  - annotation
+  - spatial_ingest
+  - spatial_neighborhoods
+scale_preset: standard
+bundle:
+  enabled: true
+  include_protein: false
+  include_spatial: true
+  include_multimodal_obsm: false
+  schema_version: v2.1
+notes: |
+  Visium / generic spatial workflow. spatial_ingest attaches (x,y) coords +
+  library metadata; spatial_neighborhoods computes Moran's I, neighborhood
+  enrichment, and co-occurrence.
+  Requires squidpy in the active environment for full neighborhood
+  analytics; without it, spatial_neighborhoods will degrade to a no-op
+  with a warning. The v2.1 bundle's spatial extension is enabled.

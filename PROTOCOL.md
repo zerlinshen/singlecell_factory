@@ -29,6 +29,38 @@ Verify with: `bash scripts/ci/check_bridge_symlink.sh`
 Do NOT place real R files under `bridges/local_r_pipeline_macbook/R/` or `bridges/local_r_pipeline_macbook/R_bundle/`.
 Edit R sources in `multiomics_r_factory/` only.
 
+### Bundle export CLI (v2.1 + multi-modal flags)
+
+Default schema is `singlecell_r_bundle_v2.1`. Force legacy with
+`--schema-version v2`. Modality emission is opt-in:
+
+```
+python scripts/export_singlecell_r_bundle.py \
+  --adata <run_dir>/final_adata.h5ad \
+  --output <run_dir>/r_bundle \
+  --schema-version v2.1 \
+  --include-protein --protein-obsm-key protein_clr \
+  --include-spatial --spatial-obsm-key spatial \
+  --include-multimodal-obsm --multimodal-obsm-keys X_wnn X_mofa
+```
+
+Spatial library image paths are STRING-only (`--no-spatial-image-paths`
+suppresses them); image bytes are never serialized into the bundle. The R
+reader skips unknown extension keys with a `[singlecell_r_bundle_v2.1] skipping
+unknown extension '<name>'` message for forward-compat.
+
+### RSCRIPT_BIN env override
+
+`tests/conftest.py` honors the `RSCRIPT_BIN` environment variable for
+Python-to-R subprocess parity tests (`tests/test_python_r_parity.py`,
+`tests/test_r_bundle_contract.py`). Default resolution is the conda env
+`r_multiomics_arrow` for production parity. Override when running tests
+against a non-default Rscript:
+
+```
+RSCRIPT_BIN=/path/to/Rscript pytest -q tests/test_python_r_parity.py
+```
+
 ---
 
 ## 0. Before Every Meaningful Remote Run
@@ -171,6 +203,19 @@ Notes:
 ---
 
 ## 6. Module Catalog (Current Pipeline)
+
+The machine-readable hierarchy lives in
+`workflow/modular/module_catalog.py`. It defines:
+
+- module dependencies
+- architectural layer
+- modality/owner tags
+- whether outputs are intended for R/report bundle consumption
+
+`workflow/modular/pipeline.py` derives `MODULE_DEPENDENCIES` from that catalog
+for backward compatibility. CLI help derives its optional-module list from the
+same source. When adding or moving a module, update the catalog first, then the
+implementation/registry/tests.
 
 Mandatory:
 - `cellranger`

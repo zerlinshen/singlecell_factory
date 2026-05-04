@@ -1,0 +1,21 @@
+name: cite_seq_full
+description: "CITE-seq full analysis: RNA + ADT (CLR) + bundle with protein extension"
+modality_hint: cite_seq
+optional_modules:
+  - clustering
+  - differential_expression
+  - annotation
+  - trajectory
+  - protein_adt
+scale_preset: standard
+bundle:
+  enabled: true
+  include_protein: true
+  include_spatial: false
+  include_multimodal_obsm: false
+  schema_version: v2.1
+notes: |
+  Pairs CITE-seq RNA + protein (ADT) with CLR-normalized protein outputs
+  in the v2.1 bundle (protein extension on).
+  Inputs may be a CITE-seq .h5ad with obsm['protein_counts'] or a
+  cellranger sample-root with an Antibody Capture modality in the H5.

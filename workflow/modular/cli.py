@@ -21,10 +21,12 @@ from .config import (
     VelocityConfig,
     scale_mode_to_capabilities,
 )
+from .module_catalog import DEFAULT_OPTIONAL_MODULES as DEFAULT_OPTIONAL_MODULE_NAMES
+from .module_catalog import module_help_list
 from .pipeline import MODULE_DEPENDENCIES, run_pipeline
 
 
-DEFAULT_OPTIONAL_MODULES = "clustering,differential_expression,annotation,trajectory,pseudo_velocity"
+DEFAULT_OPTIONAL_MODULES = ",".join(DEFAULT_OPTIONAL_MODULE_NAMES)
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,14 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--optional-modules",
         default=DEFAULT_OPTIONAL_MODULES,
-        help=(
-            "Comma-separated optional modules. Available: clustering, cell_cycle, "
-            "batch_correction, differential_expression, annotation, trajectory, "
-            "pseudo_velocity, rna_velocity, cnv_inference, pathway_analysis, "
-            "cell_communication, gene_regulatory_network, validate_cbioportal, "
-            "immune_phenotyping, tumor_microenvironment, gene_signature_scoring, "
-            "pseudobulk_de, cell_fate, composition, metacell, paper_repro"
-        ),
+        help=f"Comma-separated optional modules. Available: {module_help_list()}",
     )
     parser.add_argument("--markers-json", default="", help="Optional custom marker dictionary JSON file")
 

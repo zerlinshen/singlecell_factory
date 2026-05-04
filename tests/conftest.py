@@ -14,12 +14,37 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="session")
 def rscript_path():
-    """Return the absolute path to Rscript, or skip if not found or missing R deps."""
-    candidate = "/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript"
-    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-        rscript = candidate
+    """Return the absolute path to Rscript, or skip if not found or missing R deps.
+
+    Resolution order:
+      1. ``RSCRIPT_BIN`` environment variable (honored verbatim if executable)
+      2. ``r_multiomics_arrow`` conda env (production default; matches
+         bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh)
+      3. ``r_multiomics`` conda env (legacy fallback)
+      4. ``Rscript`` on PATH (last resort)
+
+    Tests are skipped when no candidate is executable, or when the chosen
+    Rscript is missing required packages (arrow, jsonlite, Matrix).
+    """
+    rscript: str | None = None
+
+    env_override = os.environ.get("RSCRIPT_BIN")
+    if env_override and os.path.isfile(env_override) and os.access(env_override, os.X_OK):
+        rscript = env_override
     else:
-        rscript = shutil.which("Rscript")
+        # H3: pin r_multiomics_arrow first so the test suite tracks the
+        # production runner (run_remote_bundle_plot.sh) by default.
+        candidates = [
+            "/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript",
+            "/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript",
+        ]
+        for candidate in candidates:
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                rscript = candidate
+                break
+        if rscript is None:
+            rscript = shutil.which("Rscript")
+
     if rscript is None:
         pytest.skip("Rscript not found; skipping r_contract tests")
 

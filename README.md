@@ -12,6 +12,13 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
+## Generated overview
+
+Self-contained technical PDF + Markdown source covering both `singlecell_factory`
+and `multiomics_r_factory`: see [docs/FACTORIES_OVERVIEW.pdf](docs/FACTORIES_OVERVIEW.pdf)
+(rendered) and [docs/FACTORIES_OVERVIEW.md](docs/FACTORIES_OVERVIEW.md) (diff-friendly source).
+Regenerate with `python scripts/generate_factories_report.py`.
+
 ## Publication & Reproducibility Documentation (NC2024)
 
 | Document | Purpose |
@@ -20,6 +27,7 @@ Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step 
 | [ops/nc2024_methodology_audit/ALIGNMENT_REPORT_v2_2026-04-26.md](ops/nc2024_methodology_audit/ALIGNMENT_REPORT_v2_2026-04-26.md) | Cell type proportions vs Sanchez-Mejias 2024; v1 (broken) → v2 (fixed) cluster annotations |
 | [ops/nc2024_methodology_audit/SMALL_REAL_VALIDATION_2026-04-26.md](ops/nc2024_methodology_audit/SMALL_REAL_VALIDATION_2026-04-26.md) | 100k staircase validation gate for the cluster_voting annotation fix |
 | [ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md](ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md) | Root-cause + fix for the post-completion C-extension teardown segfault |
+| [ops/nc2024_methodology_audit/PAPER_REPRO_REPORT_2026-04-27.md](ops/nc2024_methodology_audit/PAPER_REPRO_REPORT_2026-04-27.md) | Biology-level reproduction of the four core Sanchez-Mejias 2024 findings on the v2 cohort (verdict: 3 PASS / 1 PARTIAL) |
 | [ops/MAC_PULL_RECIPE_2026-04-26.md](ops/MAC_PULL_RECIPE_2026-04-26.md) | Tailscale scp command + R load command for downstream plotting on Mac |
 | [docs/PUBLICATION_READY.md](docs/PUBLICATION_READY.md) | Methods section template and citation patterns for manuscript drafting |
 
@@ -46,11 +54,35 @@ Canonical NC2024 outputs are the **v2** runs at `results/nc2024_tumor_20260426_v
 
 A change that passes only nano/small_real is not cleared for full_real runs. Build fixtures with `scripts/build_staircase_fixtures.py`.
 
-**Densify policy** — the pipeline enforces a grep-ban on unmarked `toarray()` / `todense()` calls in CI (`tests/test_densify_audit.py`). Any deliberate densification must carry a `# densify-allowed: <reason>` annotation on the same line, or route through `workflow/modular/_densify_policy.py:plan_densify()` which returns a `{GO, CHUNK, ABORT}` decision based on free memory and configured caps. This prevents silent memory explosions at 884k-cell scale.
+**Densify policy** — the pipeline enforces a grep-ban on unmarked `toarray()` / `todense()` calls in CI (`tests/test_densify_audit.py`). Any deliberate densification must carry a `# densify-allowed: <reason>` annotation on the same line, or route through `workflow/modular/_densify_policy.py:plan_densify()` which returns a `{GO, CHUNK, ABORT}` decision based on free memory and configured caps. This prevents silent memory explosions at 884k-cell scale. The Phase C modality modules (`protein_adt`, `spatial_neighborhoods`, `multimodal_integration`) carry `# densify-allowed: <reason>` annotations at every dense intermediate (protein panels are O(100) features, WNN UMAP is O(n_cells x 2), spatial neighborhood means are O(n_genes)).
 
 **MemoryEnforcer cooperative abort** — `workflow/modular/_mem_guard.py` replaces the earlier observational MemoryGuard. A pre-flight RSS budget check + watchdog Event signals modules to abort at the next chunk boundary (raising `SkipModule`), rather than letting the kernel SIGKILL Python at the OOM threshold. Enable with `SC_MEM_GUARD=on SC_MEM_WATCHDOG=on`. Modules must not catch this exception.
 
 **Shutdown cleanup** — `workflow/modular/_shutdown.py` runs explicit cupy / torch / zarr cleanup at interpreter exit, eliminating the post-completion C-extension teardown segfault that previously affected exit codes (run outputs were intact but `set -e` propagated exit 139 and skipped downstream stages). See `ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md`.
+
+**Pre-commit doc-sync gate** — `.githooks/pre-commit` (activated via `git config core.hooksPath .githooks`) runs two stages before every commit: (1) the existing reference manager that keeps the README citation list in sync with module-level `__references__` blocks, then (2) the global `repo-doc-sync` drift detector that validates README + `AGENTS.md` + `AI_AGENT_PROTOCOL.md` against the current canonical state (latest run dir, latest ledger, latest audit doc, missing DOIs, stale `Current State (YYYY-MM-DD)` blocks, missing v1 do-not-cite when v2 exists). The hook blocks commits when drift is found. The detector is installed globally at `~/.claude/skills/repo-doc-sync/` (also symlinked into `~/.codex/skills/` and `~/.kimi/skills/`). Bypass with `git commit --no-verify` only when drift is intentional and documented.
+
+**Module catalog contract** — `workflow/modular/module_catalog.py` is the
+single source for module dependency, architectural layer, modality, owner, and
+R-bridge readiness metadata. `workflow/modular/pipeline.py` still exposes the
+legacy `MODULE_DEPENDENCIES` shape for compatibility, but it is derived from the
+catalog. CLI help also reads the catalog, so adding a module now requires one
+catalog edit plus the normal implementation/registry/tests instead of scattered
+README/CLI/DAG string updates.
+
+**Singlecell → multiomics bridge contract** — compact bundle exports keep
+`singlecell_factory` as the upstream truth and `multiomics_r_factory/R_bundle/`
+as the downstream reader. v2 bundles now require manifest-backed file records
+for parquet payloads and, when marker expression is exported as `mtx.gz`, the
+barcode/gene sidecars are recorded with byte sizes and SHA256 values. This keeps
+large R plotting/reporting handoff separate from full-object computation and
+prevents sidecar drift.
+
+**NC2024 architecture validation** — run
+`python3 scripts/validate_nc2024_architecture_contract.py` for a no-rerun
+controller-validation smoke. It checks current v2 run directories, r_bundle
+manifests, run-ledger entries, and bridge symlinks without opening the 33G H5ADs.
+Use `--verify-sha` when you specifically want bundle file hashing.
 
 ## Current Operational Defaults For NC2024-Style Full-Cohort Runs
 
@@ -135,7 +167,8 @@ A change that passes only nano/small_real is not cleared for full_real runs. Bui
     better: rasterized UMAPs, dot plots, heatmaps, composition panels, and
     presentation-ready figure boards.
 - R plotting/reporting for large NC2024 outputs is remote-side:
-  - R runtime: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
+  - R runtime: `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`
+  - legacy R runtime retained for rollback: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
   - bridge scripts: `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/scripts/`
   - historical note: the bridge folder name still says `local_r_pipeline_macbook`, but current operation is remote-first.
   - preferred command:
@@ -159,19 +192,30 @@ A change that passes only nano/small_real is not cleared for full_real runs. Bui
     `R_BUNDLE_MARKERS` / effective `R_BUNDLE_OBS_COLS` / effective
     `R_BUNDLE_OBSM` requests match, and the R validator passes file SHA256
     checks.
+  - plotting entry point: `PLOT_SCRIPT` defaults to
+    `/home/zerlinshen/multiomics_r_factory/scripts/plot_remote_bundle_large.R`,
+    the upstream v1/v2-aware plotting script.
   - parameter contract: `R_BUNDLE_OBS_COLS` and `R_BUNDLE_OBSM` are additive,
     not replacement controls. The wrapper always keeps selected `group_by`,
     selected `cluster_by`, `X_umap`, and `X_pca`; ROI marker-dot plots use every
-    numeric marker column exported in `marker_expr.csv.gz`.
+    numeric marker column exported in the marker-expression payload.
   - plotting guard: R UMAPs use rasterized points through `ggrastr` when
     available, so R can draw publication-style large-cohort figures without
     repeatedly loading the full expression matrix.
-- Remote R environment hardening from `2026-04-24`:
-  - environment: `/home/zerlinshen/conda/envs/r_multiomics`
+- Remote R environment hardening:
+  - default v2 parquet plotting environment:
+    `/home/zerlinshen/conda/envs/r_multiomics_arrow`
+  - legacy rollback environment:
+    `/home/zerlinshen/conda/envs/r_multiomics`
+  - `r_multiomics_arrow` is a clone of `r_multiomics` with conda-forge
+    `r-arrow 24.0.0` / `libarrow 24.0.0`; it was validated on `2026-04-30`
+    against both NC2024 v2 bundles through `read_bundle()` and
+    `scripts/plot_remote_bundle_large.R`.
   - installed and validated for NC2024 reporting:
     `Seurat 5.4.0`, `SeuratObject 5.4.0`, `readr`, `ggrastr`,
     `scattermore`, `pheatmap`, `ComplexHeatmap`, `circlize`, `hdf5r`,
-    `harmony`, `BiocManager`, `R.utils`, `zellkonverter`, and `remotes`
+    `harmony`, `BiocManager`, `R.utils`, `zellkonverter`, `remotes`, and
+    `arrow`
   - validation artifact:
     `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/r_env_dependency_smoke_20260424`
   - validation used the existing manifest-backed `r_bundle`, sampled `100000`
@@ -336,6 +380,9 @@ cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression
                                                       +-> gene_signature_scoring
                                                       +-> metacell
                                                       +-> paper_repro
+                                                      +-> protein_adt
+                                                      +-> spatial_ingest --+--> spatial_neighborhoods
+                                                      +-> multimodal_integration   [EXPERIMENTAL]
 ```
 
 Standalone flowchart artifact (generated from `workflow/modular/pipeline.py`):
@@ -419,6 +466,49 @@ data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix/
 ```
 
 ## Quick Start
+
+### User-friendly entrypoint: `scfactory`
+
+`scripts/scfactory.py` is a thin UX wrapper around the canonical
+`python -m workflow.modular.cli` invocation. It auto-detects modality
+(RNA-only / CITE-seq / spatial / multimodal) from an `.h5ad` file or a
+sample-root directory, picks sensible optional modules, and can also
+dispatch the v2.1 R bundle export. It does **not** change pipeline
+behavior — pass `--optional-modules` to override the auto plan, or
+`--dry-run` to preview the underlying CLI invocation.
+
+```bash
+# preview the planned modular invocation for an .h5ad input
+python scripts/scfactory.py run path/to/sample.h5ad --dry-run
+
+# run + export an R bundle with modality-aware defaults
+python scripts/scfactory.py run data/raw/lung_carcinoma_3k_count \
+    --project demo_run --bundle
+
+# read-only environment health check (Rscript, bridges, deps, last run)
+python scripts/scfactory.py doctor          # human-readable
+python scripts/scfactory.py doctor --json   # machine-readable, exits non-zero on FAIL
+```
+
+#### Recipes (presets)
+
+Recipes pre-package optional modules + capability-flag env vars + bundle
+config for common workflows. Pass `--recipe NAME` to `scfactory run`; precedence is
+`--optional-modules` > `--recipe` > auto-detect. Recipe `env` is applied
+to the subprocess only (parent env untouched). Requires `pyyaml`
+(only when `--recipe` / `--list-recipes` is used).
+
+```bash
+python scripts/scfactory.py run --list-recipes        # list all
+python scripts/scfactory.py run sample.h5ad --recipe quick_explore --dry-run
+```
+
+Starter recipes in `recipes/`:
+
+- `quick_explore` — RNA-only first look: clustering + DE, bundle on (most users start here).
+- `nc2024_paper` — NSCLC paper-faithful repro: clustering + DE + annotation + trajectory + paper_repro, `scale-mode=massive`, `SC_CLUSTERING_ENGINE=sparse_exact`, bundle off by default.
+- `cite_seq_full` — CITE-seq RNA + ADT (CLR) with bundle protein extension.
+- `visium_neighborhoods` — Visium spatial: ingest + neighborhoods (squidpy) + bundle spatial extension.
 
 ### Execution Profiles (Human + AI)
 
@@ -633,6 +723,10 @@ It is responsible for:
 
 `multiomics_r_factory` is the downstream R/report workspace that depends on outputs generated here.
 
+Repository links:
+- `singlecell_factory`: <https://github.com/zerlinshen/singlecell_factory>
+- `multiomics_r_factory`: <https://github.com/zerlinshen/multiomics_r_factory>
+
 Practical dependency direction:
 - `singlecell_factory` -> `multiomics_r_factory`
 
@@ -660,6 +754,79 @@ Intended use:
 - Use `/home/zerlinshen/multiomics_r_factory/` as the preferred long-term home for broader R analysis and figure workflows.
 - Use compact manifest-backed bundles rather than forcing direct `.h5ad` conversion in R for NC2024-scale cohorts.
 - Keep Mac-side work focused on reviewing and organizing the remote-generated figures/reports.
+
+#### Bundle schema v2.1 (additive over v2)
+
+The default emitter in `scripts/export_singlecell_r_bundle.py` writes
+`schema_version = "singlecell_r_bundle_v2.1"`. v2.1 is fully backwards-compatible
+with v2: the only addition is an `extensions: dict[str, dict]` manifest field.
+Force legacy emission with `--schema-version v2`.
+
+Known extension keys:
+
+| Extension key | Modality | Producer (Python) | Reader (R) |
+|---|---|---|---|
+| `protein` | CITE-seq / ADT | `maybe_export_protein(...)` | `multiomics_r_factory/R/protein_module.R::load_protein_extension(bundle)` |
+| `spatial` | spatial transcriptomics | `maybe_export_spatial(...)` | `multiomics_r_factory/R/spatial_module.R::load_spatial_extension(bundle)` |
+| `multimodal_obsm` | WNN / MOFA embeddings (EXPERIMENTAL) | `maybe_export_multimodal_obsm(...)` | `multiomics_r_factory/R/integration_module.R::load_multimodal_extension(bundle)` |
+
+Public Python API for registering an extension:
+
+```python
+from scripts.export_singlecell_r_bundle import add_extension
+add_extension(manifest, "protein", version="1.0", files=[...], **fields)
+```
+
+`add_extension(...)` is idempotent for the same `name`. The R reader accepts
+both `singlecell_r_bundle_v2` and `singlecell_r_bundle_v2.1`
+(`ACCEPTED_V2_SCHEMAS`); unknown extension keys are skipped with
+`[singlecell_r_bundle_v2.1] skipping unknown extension '<name>'` for
+forward-compat. Per-modality loaders are fail-soft (`data=NULL` on load
+failure, no exception). The bundle-level `claim_guard` string also applies at
+the modality level until per-modality validation exists.
+
+#### Bridge contract (Phase A hardening)
+
+- **Atomic bundle export**: writer emits `<output>.tmp.<pid>` then `os.replace`,
+  manifest written last; partial bundles are rolled back on failure.
+- **Manifest sweep on the R side**: `validate_bundle_v2_manifest` checks
+  manifest presence and per-file size; partial bundles are refused.
+- **claim_guard surfacing**: the R reader emits the guard via `message()` to
+  stderr and attaches it as `attr(expr_sparse, "claim_guard")` on the returned
+  matrix.
+- **h5ad backend order**: `zellkonverter` -> `SeuratDisk` ->
+  `Seurat::ReadH5AD` (last; opt-in via `options(h5ad.allow_seurat_legacy = TRUE)`).
+- **Test override**: `RSCRIPT_BIN` env var overrides the default Rscript binary
+  in `tests/conftest.py` (default `r_multiomics_arrow` for production parity).
+
+#### Bundle export CLI flags (new)
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--schema-version {v1,v2,v2.1}` | `v2.1` | Force a specific bundle schema |
+| `--include-protein` | off | Emit `protein` extension when present on AnnData |
+| `--protein-obsm-key` | `protein_clr` | obsm key holding the protein matrix |
+| `--protein-isotype-controls` | empty | Comma-separated isotype-control proteins |
+| `--include-spatial` | off | Emit `spatial` extension when coords are present |
+| `--spatial-obsm-key` | `spatial` | obsm key holding (x,y) coordinates |
+| `--no-spatial-image-paths` | off | Suppress library image-path strings (paths only, never image bytes) |
+| `--include-multimodal-obsm` | off | Emit `multimodal_obsm` (EXPERIMENTAL) |
+| `--multimodal-obsm-keys` | `X_wnn X_mofa` | obsm keys to register as multimodal embeddings |
+
+#### Cross-language parity sentinels
+
+Two hard gates live in `tests/test_python_r_parity.py`: top-marker Jaccard
+overlap >= 0.6 and PCA cosine similarity >= 0.95 between the Python AnnData
+output and the R-side bundle reconstruction. The DAG-count assertion in
+`tests/test_modular.py` is set to 29 modules (3 new bridge_ready modules
+registered alongside the existing 25 + 1 paper_repro variants).
+
+#### Known issues
+
+- `tests/test_singlecell_r_bundle_export.py` carries 2 pre-existing v1-schema
+  failures (asserts `schema_version == "singlecell_r_bundle_v1"` and reads
+  `obs.csv.gz`). The default emitter is now v2.1/parquet; these are tracked
+  separately and are not part of the v2.1 schema work.
 
 ### AI / Automation Checklist
 
@@ -1077,7 +1244,7 @@ RNA velocity extraction parallel scaling on the same dataset (strict mode, cold 
 
 Every analysis module uses publicly recognized, peer-reviewed methods. Below is the complete methodology audit with citations.
 
-Module coverage check: **25 / 25 modules documented and citation-aligned**.
+Module coverage check: **25 / 25 core modules documented and citation-aligned**. Phase C adds 3 bridge-ready modality modules — `protein_adt`, `spatial_ingest` + `spatial_neighborhoods`, `multimodal_integration` (EXPERIMENTAL) — registered in `workflow/modular/pipeline.py` and the catalog (DAG-count assertion = 29).
 
 ---
 
@@ -1489,48 +1656,27 @@ Use [`docs/MODULE_TECH_DOC_TEMPLATE.md`](docs/MODULE_TECH_DOC_TEMPLATE.md) for e
 
 | # | Reference | DOI | Used by |
 |---|---|---|---|
-| 1 | Zheng et al., *Nature Communications*, 2017 | [10.1038/ncomms14049](https://doi.org/10.1038/ncomms14049) | `cellranger` |
-| 2 | Luecken & Theis, *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | `qc` |
-| 3 | Wolock et al., *Cell Systems*, 2019 | [10.1016/j.cels.2018.11.005](https://doi.org/10.1016/j.cels.2018.11.005) | `doublet_detection` |
-| 4 | Stuart et al., *Cell*, 2019 | [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031) | `clustering` (Seurat HVG) |
-| 5 | McInnes et al., *JOSS*, 2018 | [10.21105/joss.00861](https://doi.org/10.21105/joss.00861) | `clustering` (UMAP) |
-| 6 | Traag et al., *Scientific Reports*, 2019 | [10.1038/s41598-019-41695-z](https://doi.org/10.1038/s41598-019-41695-z) | `clustering` (Leiden) |
-| 7 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `cell_cycle`, `annotation`, `immune_phenotyping`, `cnv_inference` |
-| 8 | Korsunsky et al., *Nature Methods*, 2019 | [10.1038/s41592-019-0619-0](https://doi.org/10.1038/s41592-019-0619-0) | `batch_correction` (Harmony) |
-| 9 | Polanski et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btz625](https://doi.org/10.1093/bioinformatics/btz625) | `batch_correction` (BBKNN) |
-| 10 | Johnson et al., *Biostatistics*, 2007 | [10.1093/biostatistics/kxj037](https://doi.org/10.1093/biostatistics/kxj037) | `batch_correction` (ComBat) |
-| 11 | Hie et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0113-3](https://doi.org/10.1038/s41587-019-0113-3) | `batch_correction` (Scanorama) |
-| 12 | Wilcoxon, *Biometrics Bulletin*, 1945 | [10.2307/3001968](https://doi.org/10.2307/3001968) | `differential_expression` |
-| 13 | Benjamini & Hochberg, *JRSS-B*, 1995 | [10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x) | `differential_expression` (FDR) |
-| 14 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (DPT) |
-| 15 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (PAGA) |
-| 16 | La Manno et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `pseudo_velocity` |
-| 17 | Bergen et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (scVelo) |
-| 18 | Patel et al., *Science*, 2014 | [10.1126/science.1254257](https://doi.org/10.1126/science.1254257) | `cnv_inference`, `evolution` |
-| 19 | Subramanian et al., *PNAS*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | `pathway_analysis` (GSEA) |
-| 20 | Liberzon et al., *Cell Systems*, 2015 | [10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004) | `pathway_analysis` (MSigDB) |
-| 21 | Schubert et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | `pathway_analysis` (PROGENy) |
-| 22 | Dimitrov et al., *Nature Communications*, 2022 | [10.1038/s41467-022-30755-0](https://doi.org/10.1038/s41467-022-30755-0) | `cell_communication` (LIANA) |
-| 23 | Garcia-Alonso et al., *Genome Research*, 2019 | [10.1101/gr.240663.118](https://doi.org/10.1101/gr.240663.118) | `gene_regulatory_network` (DoRothEA) |
-| 24 | Badia-i-Mompel et al., *Bioinformatics Advances*, 2022 | [10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016) | `gene_regulatory_network` (decoupler) |
-| 25 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` |
-| 26 | Gao et al., *Science Signaling*, 2013 | [10.1126/scisignal.2004088](https://doi.org/10.1126/scisignal.2004088) | `validate_cbioportal` |
-| 27 | Zheng et al., *Cell*, 2017 | [10.1016/j.cell.2017.05.035](https://doi.org/10.1016/j.cell.2017.05.035) | `immune_phenotyping` |
-| 28 | Zhang et al., *Nature*, 2018 | [10.1038/s41586-018-0694-x](https://doi.org/10.1038/s41586-018-0694-x) | `immune_phenotyping` |
-| 29 | Rooney et al., *Cell*, 2015 | [10.1016/j.cell.2014.12.033](https://doi.org/10.1016/j.cell.2014.12.033) | `tumor_microenvironment` (CYT) |
-| 30 | Ayers et al., *JCI*, 2017 | [10.1172/JCI91190](https://doi.org/10.1172/JCI91190) | `tumor_microenvironment` (TIS, IFN-gamma) |
-| 31 | Yoshihara et al., *Nature Communications*, 2013 | [10.1038/ncomms3612](https://doi.org/10.1038/ncomms3612) | `tumor_microenvironment` (ESTIMATE) |
-| 32 | Malta et al., *Cell*, 2018 | [10.1016/j.cell.2018.03.034](https://doi.org/10.1016/j.cell.2018.03.034) | `gene_signature_scoring` (stemness) |
-| 33 | Tan et al., *EMBO Mol Med*, 2014 | [10.15252/emmm.201404208](https://doi.org/10.15252/emmm.201404208) | `gene_signature_scoring` (EMT) |
-| 34 | Buffa et al., *Br J Cancer*, 2010 | [10.1038/sj.bjc.6605450](https://doi.org/10.1038/sj.bjc.6605450) | `gene_signature_scoring` (hypoxia) |
-| 35 | Gao et al., *Nature Biotechnology*, 2021 | [10.1038/s41587-020-00795-2](https://doi.org/10.1038/s41587-020-00795-2) | `evolution` (CopyKAT clonal analysis) |
-| 36 | Love et al., *Genome Biology*, 2014 | [10.1186/s13059-014-0550-8](https://doi.org/10.1186/s13059-014-0550-8) | `pseudobulk_de` (DESeq2 backend) |
-| 37 | Lange et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01346-6](https://doi.org/10.1038/s41592-021-01346-6) | `cell_fate` (CellRank) |
-| 38 | Büttner et al., *Nature Communications*, 2021 | [10.1038/s41467-021-27150-6](https://doi.org/10.1038/s41467-021-27150-6) | `composition` (scCODA backend) |
-| 39 | Persad et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (SEACells backend) |
-| 40 | Sculley, *KDD*, 2010 | [10.1145/1772690.1772862](https://doi.org/10.1145/1772690.1772862) | `metacell` (MiniBatchKMeans fallback) |
-| 41 | Sandve et al., *PLOS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` |
-| 42 | Sanchez-Mejias et al., *Nature Communications*, 2024 | [10.1038/s41467-024-48700-8](https://doi.org/10.1038/s41467-024-48700-8) | `annotation` (NC2024 NSCLC atlas — paper-aligned reference for v2 cohort, ~900k cells, 25 patients + 2 healthy donors, Harmony+Leiden+Wilcoxon+Bonferroni baseline) |
+| 1 | Patel et al., *Science*, 2014 | [10.1126/science.1254257](https://doi.org/10.1126/science.1254257) | `evolution` (auto-detected from module source) |
+| 2 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `evolution` (auto-detected from module source) |
+| 3 | Gao et al., *Nature Biotechnology*, 2021 | [10.1038/s41587-020-00795-2](https://doi.org/10.1038/s41587-020-00795-2) | `evolution` (auto-detected from module source) |
+| 4 | Argelaguet et al. et al., *Genome Biology*, 2020 | [10.1186/s13059-020-02015-1](https://doi.org/10.1186/s13059-020-02015-1) | `multimodal_integration` (MOFA factor model for multi-omics integration.) |
+| 5 | Argelaguet et al., *Genome Biology*, 2020 | [10.1186/s13059-020-02015-1](https://doi.org/10.1186/s13059-020-02015-1) | `multimodal_integration` (auto-detected from module source) |
+| 6 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `multimodal_integration` (Seurat WNN: weighted nearest neighbours for multimodal joint embeddings.) |
+| 7 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `multimodal_integration` (auto-detected from module source) |
+| 8 | Sandve et al. et al., *PLOS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` (Guides provenance capture and reproducibility reporting.) |
+| 9 | Sandve et al., *PLoS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` (auto-detected from module source) |
+| 10 | Stoeckius et al. et al., *Nature Methods*, 2017 | [10.1038/nmeth.4380](https://doi.org/10.1038/nmeth.4380) | `protein_adt` (CITE-seq protocol; CLR normalization for ADT counts.) |
+| 11 | Stoeckius et al., *Nature Methods*, 2017 | [10.1038/nmeth.4380](https://doi.org/10.1038/nmeth.4380) | `protein_adt` (auto-detected from module source) |
+| 12 | Mulè et al. et al., *Nature Communications*, 2022 | [10.1038/s41467-022-29356-8](https://doi.org/10.1038/s41467-022-29356-8) | `protein_adt` (DSB normalization (stretch-goal stub).) |
+| 13 | Mulè et al., *Nature Communications*, 2022 | [10.1038/s41467-022-29356-8](https://doi.org/10.1038/s41467-022-29356-8) | `protein_adt` (auto-detected from module source) |
+| 14 | Chen et al. et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` |
+| 15 | Chen et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` (auto-detected from module source) |
+| 16 | 10x Genomics et al., *Unknown*, 2020 | N/A | `spatial_ingest` (Spatial barcoded array; tissue_positions_list.csv schema.) |
+| 17 | 10x Genomics et al., *Unknown*, 2023 | N/A | `spatial_ingest` (Subcellular in-situ assay; same (x,y) per-cell schema.) |
+| 18 | Palla et al. et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` |
+| 19 | Palla et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` (auto-detected from module source) |
+| 20 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (auto-detected from module source) |
+| 21 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (auto-detected from module source) |
 ---
 
 ## Results

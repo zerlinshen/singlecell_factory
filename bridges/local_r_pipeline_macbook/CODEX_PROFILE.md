@@ -44,6 +44,9 @@ Remote pipeline:
 - `/home/zerlinshen/singlecell_factory`
 
 Remote R runtime:
+- `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`
+
+Legacy rollback R runtime:
 - `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
 
 Remote host alias:

@@ -31,6 +31,36 @@ plotting/reporting helpers:
 - `multiomics_r_factory/R_bundle/` owns bundle-path helpers.
 - `bridges/local_r_pipeline_macbook/` in this repo must remain symlinks into
   `multiomics_r_factory`; do not place real R files under the bridge.
+- `workflow/modular/module_catalog.py` owns the single-cell module hierarchy:
+  dependencies, architectural layers, modality tags, ownership, and bridge-ready
+  flags. Pipeline compatibility constants are derived from this catalog.
+- `scripts/validate_nc2024_architecture_contract.py` is the no-rerun
+  controller-validation smoke for current NC2024 v2 artifacts and the
+  singlecell-to-multiomics bridge contract.
+
+## Cross-Repo Bridge (Bundle v2.1)
+
+The `singlecell_factory -> multiomics_r_factory` bundle bridge is now at schema
+`singlecell_r_bundle_v2.1` (additive, fully back-compatible with v2). The
+default emitter writes v2.1; force legacy with
+`scripts/export_singlecell_r_bundle.py --schema-version v2`. The R reader
+accepts both via `ACCEPTED_V2_SCHEMAS`.
+
+| Extension | Producer (Python) | Reader (R) | Contract test |
+|---|---|---|---|
+| `protein` | `scripts/export_singlecell_r_bundle.py::maybe_export_protein` | `multiomics_r_factory/R/protein_module.R::load_protein_extension` | `tests/test_r_bundle_contract.py` |
+| `spatial` | `scripts/export_singlecell_r_bundle.py::maybe_export_spatial` | `multiomics_r_factory/R/spatial_module.R::load_spatial_extension` | `tests/test_r_bundle_contract.py` |
+| `multimodal_obsm` (EXPERIMENTAL) | `scripts/export_singlecell_r_bundle.py::maybe_export_multimodal_obsm` | `multiomics_r_factory/R/integration_module.R::load_multimodal_extension` | `tests/test_r_bundle_contract.py` |
+
+WARNING: The `multimodal_obsm` extension is EXPERIMENTAL — the R loader emits
+`[multimodal_obsm extension] EXPERIMENTAL ...` at load. Embeddings published
+under this extension are visualization aids only and must not be cited as
+quantitative evidence for new claims.
+
+Cross-language parity sentinels live in `tests/test_python_r_parity.py`
+(top-marker Jaccard >= 0.6, PCA cosine >= 0.95). Python-to-R execution is
+controlled by the `RSCRIPT_BIN` env var (default conda env
+`r_multiomics_arrow`).
 
 Both operation modes are valid:
 
@@ -121,6 +151,9 @@ Before claiming completion, collect evidence appropriate to the task:
   artifact paths
 - bridge/R source change: verify bridge symlinks with
   `bash scripts/ci/check_bridge_symlink.sh`
+- module hierarchy or bridge contract change: run
+  `python3 scripts/validate_nc2024_architecture_contract.py` and focused catalog
+  / bundle tests before considering the change stable
 
 For pipeline changes, a statement without artifact paths is not evidence.
 
