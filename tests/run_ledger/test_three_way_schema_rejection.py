@@ -84,6 +84,21 @@ def test_v51_record_validates_against_v51_schema(v51_schema, v51_record):
     jsonschema.Draft202012Validator(v51_schema).validate(v51_record)
 
 
+def test_v51_schema_requires_module_status_path(v51_schema, v51_record):
+    """Stage 0.R: v5.1 ledgers must bind the module source-of-truth CSV."""
+    record = dict(v51_record)
+    record.pop("module_status_path")
+
+    validator = jsonschema.Draft202012Validator(v51_schema)
+    errors = list(validator.iter_errors(record))
+
+    required_errors = [
+        e for e in errors
+        if e.validator == "required" and "module_status_path" in e.message
+    ]
+    assert required_errors, f"expected required:module_status_path error; got: {[(e.validator, e.message) for e in errors]}"
+
+
 # ── v4.2 record rejected by v5.0 and v5.1 schemas ─────────────────────────
 
 def test_v42_record_REJECTED_by_v50_schema(v50_schema, v42_record):

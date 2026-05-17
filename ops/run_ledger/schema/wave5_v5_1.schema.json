@@ -9,6 +9,7 @@
     "run_id",
     "project_root",
     "run_manifest_path",
+    "module_status_path",
     "conda_env_hash",
     "created_at",
     "plan_revision",

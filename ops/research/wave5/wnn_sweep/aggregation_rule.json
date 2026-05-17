@@ -1,0 +1,33 @@
+{
+  "schema_version": "v5.1-hv2-aggregation-rule",
+  "plan_revision": "v5.1",
+  "plan_section": "§3.5 safeguard #7 + §3.5.1 guard derivation + §5 Stage HV2-0",
+  "purpose": "Pre-registered selection function over HV2 sweep results (HARKing-resistant per §3.5 safeguard #7). SHA of THIS file is pinned alongside search_space.json SHA in every sweep results row and in selected_config.json.",
+  "selection_rule": "argmax(ari_vs_seurat_clusters) subject to ALL OF { silhouette_wnn >= 0.10, n_clusters >= 10, n_clusters <= 30, max_cluster_fraction <= 0.4 }",
+  "selection_rule_machine_readable": {
+    "objective": {"maximize": "ari_vs_seurat_clusters"},
+    "constraints": [
+      {"field": "silhouette_wnn",       "op": ">=", "value": 0.10},
+      {"field": "n_clusters",            "op": ">=", "value": 10},
+      {"field": "n_clusters",            "op": "<=", "value": 30},
+      {"field": "max_cluster_fraction",  "op": "<=", "value": 0.4}
+    ]
+  },
+  "tie_breaker": "If multiple configurations tie on ARI (within 1e-6), prefer LOWER resolution (parsimony); then LOWER n_neighbors; then alphabetical wnn_weight_strategy; then alphabetical knn_pruning.",
+  "incomplete_clause": "If ZERO configurations satisfy ALL constraints, set wnn_fix_status = 'INCOMPLETE-NO-VIABLE-FIX' in v5.1 ledger; do NOT silently relax thresholds (§4.3 Must NOT).",
+  "guard_threshold_derivation": {
+    "n_clusters_range": "Derived from Trevino reference clustering: v4.2 ledger records obs.seurat_clusters cardinality = 14 on the canonical AnnData. Range = 14 ± 50% rounded outward to [10, 30] to admit biologically plausible over-/under-segmentation while rejecting trivial (n<10) or over-fragmented (n>30) solutions. Citation: v4.2 ledger field metrics.obs_category_counts.seurat_clusters = 14. (Plan §3.5.1 (a).)",
+    "silhouette_floor": "Weak-but-positive cluster separation threshold. Citations: (i) scanpy convention for scanpy.tl.leiden cluster-quality reporting; (ii) Rousseeuw P.J. (1987) 'Silhouettes: a graphical aid to the interpretation and validation of cluster analysis', J. Comput. Appl. Math. 20:53-65, interpretation guideline where s > 0 indicates correct cluster assignment dominates and s ∈ [0.10, 0.25] is 'weak structure but acceptable for high-dimensional sparse single-cell data'. Threshold chosen a-priori as the floor of the 'weak structure' band. (Plan §3.5.1 (b).)",
+    "max_cluster_fraction": "Sanity heuristic preventing trivial 1-cluster-vs-noise solutions. Derivation: in v4.2 Trevino reference, the largest seurat_cluster category contains ~22% of cells (per v4.2 ledger obs_category_counts.seurat_clusters distribution); 0.4 = ~2× that fraction, allowing biological dominance but rejecting degenerate collapse. (Plan §3.5.1 (c).)"
+  },
+  "post_selection_reporting_required": [
+    "selected_config.json with: resolution, n_neighbors, wnn_weight_strategy, knn_pruning, ari, nmi, silhouette, n_clusters, max_cluster_fraction, search_space_sha, aggregation_rule_sha",
+    "wnn_fix_status ∈ {APPROVED, INCOMPLETE-NO-VIABLE-FIX, DEFERRED} in v5.1 ledger",
+    "wnn_post_fix_ari (float or null) in v5.1 ledger"
+  ],
+  "harking_safeguards": [
+    "This file MUST be SHA-pinned and git-committed on branch wave6-trevino-v5.1 BEFORE the first sweep configuration timestamp.",
+    "Post-hoc edits invalidate the sweep — verifier re-checks SHA at Stage H2-end review.",
+    "HV2-4 fresh-subagent reviewer evaluates rule application; reviewer NOT permitted to cite the resulting ARI score (§5 Stage HV2-4)."
+  ]
+}

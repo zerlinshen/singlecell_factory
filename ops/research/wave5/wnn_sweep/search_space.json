@@ -1,0 +1,39 @@
+{
+  "schema_version": "v5.1-hv2-search-space",
+  "plan_revision": "v5.1",
+  "plan_section": "§5 Stage HV2-0",
+  "purpose": "Pre-registered Cartesian grid for HV2 WNN sweep (HARKing-resistant per §3.5 safeguard #7). SHA of THIS file is pinned in aggregation_rule.json and recorded in every sweep results row.",
+  "input_adata_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/final_adata.h5ad",
+  "input_adata_notes": "READ-ONLY canonical v4.2 AnnData (8981 cells). Sweep computes fresh WNN graphs from X_pca + X_lsi; obs.seurat_clusters (n=14) is the reference labeling used in ARI evaluation; obs.leiden (n=53) is informational only.",
+  "reference_labels_obs_key": "seurat_clusters",
+  "grid": {
+    "resolution":          [0.3, 0.5, 0.8, 1.0, 1.5, 2.0],
+    "n_neighbors":         [10, 20, 30, 50],
+    "wnn_weight_strategy": ["default", "rna_weighted_2x", "atac_weighted_2x", "modality_kernel_balanced"],
+    "knn_pruning":         ["none", "mutual", "epsilon_0.5"]
+  },
+  "total_configurations": 288,
+  "configuration_id_scheme": "resolution_{r}__nn_{k}__strategy_{s}__prune_{p}",
+  "weight_strategy_definitions": {
+    "default":                  "Seurat-style WNN per-cell modality weights derived from cross-modality kernel agreement (Hao et al. 2021 Cell 184).",
+    "rna_weighted_2x":          "RNA modality contribution multiplied by 2 before per-cell normalization.",
+    "atac_weighted_2x":         "ATAC (LSI) modality contribution multiplied by 2 before per-cell normalization.",
+    "modality_kernel_balanced": "Modality kernels rescaled so each contributes equal mean affinity prior to per-cell weight estimation."
+  },
+  "knn_pruning_definitions": {
+    "none":         "Standard kNN graph retained as-is.",
+    "mutual":       "Edge (i,j) retained only if j ∈ kNN(i) AND i ∈ kNN(j).",
+    "epsilon_0.5":  "Edge weights below 0.5 of cell-wise max affinity dropped."
+  },
+  "metric_columns_per_run": [
+    "config_id", "resolution", "n_neighbors", "wnn_weight_strategy", "knn_pruning",
+    "ari_vs_seurat_clusters", "nmi_vs_seurat_clusters", "silhouette_wnn", "n_clusters",
+    "max_cluster_fraction", "n_cells", "wall_seconds",
+    "search_space_sha", "aggregation_rule_sha", "run_iso_timestamp"
+  ],
+  "harking_safeguards": [
+    "This file MUST be SHA-pinned and git-committed on branch wave6-trevino-v5.1 BEFORE the first sweep configuration timestamp.",
+    "Post-hoc edits invalidate the sweep — verifier re-checks SHA at Stage H2-end review.",
+    "Any override (e.g., finer grid) requires NEW file + NEW SHA + NEW aggregation_rule justification — never silent extension."
+  ]
+}
