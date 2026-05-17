@@ -1,0 +1,294 @@
+{
+  "wave": "5",
+  "run_id": "20260516T0931Z-d192836f1bb0",
+  "project_root": "/home/zerlinshen/projects/wave5-trevino",
+  "run_dir": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python",
+  "run_manifest_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/run_manifest.json",
+  "module_status_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/module_status.csv",
+  "conda_env_hash": "288712b5192eaad5294a0508f085710b5cd88e146e0bbb10a46987fbafa661a3",
+  "geo_sha256s": {
+    "GSE162170_multiome_atac_consensus_peaks.txt.gz": "9504dd1759d0dc6d834d73438d3354ca391d7769bdc1ae04ee5e04b5ada0db37",
+    "GSE162170_multiome_atac_counts.tsv.gz": "1c61e5c0b5103bdd4e452a14682ef6165bfce5d77820c8394e710da8b9743ea2",
+    "GSE162170_multiome_cell_metadata.txt.gz": "0520b5f37f3d03bbdcaa929314365b1951735f6247c5b4f48f3b51c8d87a774a",
+    "GSE162170_multiome_cluster_names.txt.gz": "25c2fee9cfc80b70ca6d541a2dabfad44ca0f4a247902ed167193559cf2a05de",
+    "GSE162170_multiome_rna_counts.tsv.gz": "6a7f112b7bc4546162d791765db20bfcd24d14d171aae1b20acf149fea87a2a7",
+    "trevino_2021_supp/mmc1.xlsx": "ea92f5c2c43e9f9da9381f1356c393843dc05929da17aff27100085b34672b02",
+    "trevino_2021_supp/mmc2.xlsx": "4ab896bbb9a0d0aba8255e5aaacebaabcd8d71d65135bdb29a93a2d562b34c18",
+    "trevino_2021_supp/mmc3.xlsx": "5f46091ff661a0335d73e0ab9abcbaebef1575d1b74923a74ac92634320129ef",
+    "trevino_2021_supp/mmc4.xlsx": "61b42361a3e74a64d4e96cae3e67fbf9073218675f2870287d746e2aeaaccf78",
+    "trevino_2021_supp/mmc5.xlsx": "452332d0c297a697a4783d365513adf2b84d892f2eca3f9f55ecbf986da4058b",
+    "trevino_2021_supp/mmc6.xlsx": "2629a88b30f005134db219520cc218d590ff4e381f66804302cd00dc94809a64"
+  },
+  "metrics": {
+    "cell_type_ari": {
+      "value": 0.1683,
+      "threshold": 0.7,
+      "status": "CLOSED-PARTIAL"
+    },
+    "peak_gene_overlap_top1000": {
+      "value": 0.08,
+      "threshold": 0.7,
+      "status": "CLOSED-PARTIAL"
+    },
+    "pseudotime_spearman": {
+      "value": null,
+      "threshold": 0.7,
+      "status": "CLOSED-PARTIAL"
+    },
+    "pseudotime_status": "NOT-RUN",
+    "cell_type_ari_rna_only_res0_3": {
+      "value": 0.6736,
+      "threshold": 0.6,
+      "status": "CLOSED",
+      "ac_id": "AC-CI-1",
+      "note": "Threshold relaxed from 0.70 to 0.60 per Plan v4.2 \u00a73.1 AC-CI-1; rationale in .omc/research/wave5/ari_methodology_note.md (Hao 2021 WNN, DOI 10.1016/j.cell.2021.04.048, RNA-vs-WNN ARI floor ~0.55)."
+    },
+    "panel_recall": {
+      "value": 0.6111111111111112,
+      "threshold": 0.6,
+      "status": "CLOSED",
+      "ac_id": "AC-VAL-3a",
+      "n_hits": 11,
+      "n_total": 18
+    },
+    "top50_hit_rate": {
+      "value": 0.08,
+      "threshold": 0.3,
+      "status": "CLOSED-PARTIAL",
+      "ac_id": "AC-VAL-3b",
+      "note": "Value 0.08 below PARTIAL floor 0.15. Per Plan v4.2 \u00a73.4 AC-VAL-3b FAIL response: mark CLOSED-PARTIAL with diagnostic; do NOT auto-broaden panel; do NOT relax threshold. Top-50 dominated by chemokines (CCL3/CCL3L3/CCL4/CCL4L2) and glial/lipid genes (APOD/GPR17/HS3ST4) outside the curated panel; NKX2-2, OLIG2, SOX10 are panel hits in top-10 \u2014 biology recovery is real, panel coverage of top-50 is narrower than the 0.30 threshold expects."
+    }
+  },
+  "regression_gate_exit_code": 2,
+  "dois_by_module": {
+    "workflow/modular/modules/annotation.py": [
+      "10.1016/j.cell.2019.05.031",
+      "10.1126/science.aad0501"
+    ],
+    "workflow/modular/modules/atac_ingest.py": [
+      "10.1016/j.cell.2018.06.052",
+      "10.1038/s41592-021-01282-5",
+      "10.1038/s41592-023-02139-9"
+    ],
+    "workflow/modular/modules/atac_lsi.py": [
+      "10.1016/j.cell.2018.06.052",
+      "10.1038/s41588-021-00790-6",
+      "10.1038/s41592-021-01282-5"
+    ],
+    "workflow/modular/modules/atac_qc.py": [
+      "10.1038/nmeth.2688",
+      "10.1038/s41592-021-01282-5",
+      "https://www.encodeproject.org/atac-seq/"
+    ],
+    "workflow/modular/modules/batch_correction.py": [
+      "10.1038/nbt.4091",
+      "10.1038/s41587-019-0113-3",
+      "10.1038/s41592-018-0229-2",
+      "10.1038/s41592-019-0619-0",
+      "10.1093/bioinformatics/btz625",
+      "10.1093/biostatistics/kxj037"
+    ],
+    "workflow/modular/modules/cell_communication.py": [
+      "10.1038/s41467-022-30755-0",
+      "10.1038/s41596-020-0292-x"
+    ],
+    "workflow/modular/modules/cell_cycle.py": [
+      "10.1038/nature20123"
+    ],
+    "workflow/modular/modules/cell_fate.py": [
+      "10.1038/s41592-021-01346-6"
+    ],
+    "workflow/modular/modules/cellranger.py": [
+      "10.1038/ncomms14049",
+      "https://support.10xgenomics.com/single-cell-gene-expression/software"
+    ],
+    "workflow/modular/modules/clustering.py": [
+      "10.1038/s41598-019-41695-z",
+      "10.1137/090771806",
+      "10.1186/s13059-017-1382-0",
+      "arXiv:1802.03426",
+      "https://github.com/scverse/rapids_singlecell"
+    ],
+    "workflow/modular/modules/cnv_inference.py": [
+      "10.1126/science.1254257",
+      "https://github.com/broadinstitute/inferCNV"
+    ],
+    "workflow/modular/modules/composition.py": [
+      "10.1038/s41467-021-27150-6"
+    ],
+    "workflow/modular/modules/context_aware_annotation.py": [
+      "10.1038/s41467-022-28803-w",
+      "10.1093/nar/gkac947"
+    ],
+    "workflow/modular/modules/cross_modality_qc.py": [
+      "PMID: 0"
+    ],
+    "workflow/modular/modules/differential_expression.py": [
+      "10.1038/nmeth.4612",
+      "10.1111/j.2517-6161.1995.tb02031.x",
+      "10.1186/s13059-017-1382-0"
+    ],
+    "workflow/modular/modules/doublet_detection.py": [
+      "10.1016/j.cels.2018.11.005"
+    ],
+    "workflow/modular/modules/evolution.py": [
+      "10.1038/nm.3984"
+    ],
+    "workflow/modular/modules/gene_regulatory_network.py": [
+      "10.1093/bioadv/vbac016",
+      "10.1101/gr.240663.118"
+    ],
+    "workflow/modular/modules/gene_signature_scoring.py": [
+      "10.1126/science.aad0501"
+    ],
+    "workflow/modular/modules/hic_ingest.py": [
+      "10.1093/bioinformatics/btz540",
+      "10.1126/science.1181369"
+    ],
+    "workflow/modular/modules/hic_tad.py": [
+      "10.1038/nature11049",
+      "10.1038/nature14450",
+      "10.1126/science.1181369"
+    ],
+    "workflow/modular/modules/immune_phenotyping.py": [
+      "10.1016/j.immuni.2019.03.009",
+      "10.1126/science.aad0501"
+    ],
+    "workflow/modular/modules/marker_db_loader.py": [
+      "10.1038/s41467-022-28803-w",
+      "10.1093/database/baz046",
+      "10.1093/nar/gkac947",
+      "10.1126/science.abq1006"
+    ],
+    "workflow/modular/modules/metacell.py": [
+      "10.1038/s41587-023-01716-9"
+    ],
+    "workflow/modular/modules/modality_registry.py": [
+      "PMID: 0"
+    ],
+    "workflow/modular/modules/module_template.py": [
+      "10.1038/s41592-024-0000-0"
+    ],
+    "workflow/modular/modules/multimodal_integration.py": [
+      "10.1016/j.cell.2021.04.048",
+      "10.1186/s13059-020-02015-1"
+    ],
+    "workflow/modular/modules/paper_repro.py": [
+      "10.1371/journal.pcbi.1003285"
+    ],
+    "workflow/modular/modules/pathway_analysis.py": [
+      "10.1038/s41467-017-02391-6",
+      "10.1073/pnas.0506580102"
+    ],
+    "workflow/modular/modules/peak_to_gene.py": [
+      "10.1016/j.cell.2020.09.056",
+      "10.1016/j.cell.2021.07.039",
+      "10.1016/j.molcel.2018.06.044",
+      "https://www.gencodegenes.org/"
+    ],
+    "workflow/modular/modules/protein_adt.py": [
+      "10.1038/nmeth.4380",
+      "10.1038/s41467-022-29356-8"
+    ],
+    "workflow/modular/modules/pseudo_velocity.py": [
+      "PMID: 33288903"
+    ],
+    "workflow/modular/modules/pseudobulk_de.py": [
+      "10.1038/s41467-021-25960-2"
+    ],
+    "workflow/modular/modules/qc.py": [
+      "10.1186/s13059-017-1382-0",
+      "10.15252/msb.20188746"
+    ],
+    "workflow/modular/modules/ribo_ingest.py": [
+      "10.1038/nrm3950",
+      "10.1126/science.1168978"
+    ],
+    "workflow/modular/modules/rna_velocity.py": [
+      "10.1038/s41586-018-0414-6",
+      "10.1038/s41587-020-0591-3"
+    ],
+    "workflow/modular/modules/spatial_ingest.py": [
+      "10.1126/science.aaa6090",
+      "https://www.10xgenomics.com/products/spatial-gene-expression",
+      "https://www.10xgenomics.com/products/xenium-in-situ"
+    ],
+    "workflow/modular/modules/spatial_neighborhoods.py": [
+      "10.1038/s41592-021-01358-2"
+    ],
+    "workflow/modular/modules/trajectory.py": [
+      "10.1016/j.cell.2021.04.048",
+      "10.1038/nmeth.3971",
+      "10.1038/s41587-019-0068-4",
+      "10.1186/s13059-019-1663-x"
+    ],
+    "workflow/modular/modules/tumor_microenvironment.py": [
+      "10.1038/s41590-018-0276-y",
+      "10.1126/science.aad0501"
+    ],
+    "workflow/modular/modules/validate_cbioportal.py": [
+      "10.1158/2159-8290.CD-12-0095"
+    ],
+    "workflow/modular/modules/vdj_ingest.py": [
+      "10.1093/bioinformatics/btaa611",
+      "10.1371/journal.pcbi.1004503",
+      "https://support.10xgenomics.com/single-cell-vdj/software"
+    ],
+    "workflow/modular/modules/vdj_metrics.py": [
+      "10.1002/j.1538-7305.1948.tb01338.x",
+      "10.1371/journal.pcbi.1004503",
+      "https://en.wikipedia.org/wiki/Gini_coefficient"
+    ]
+  },
+  "acquisition_status": {
+    "trevino_S2F": "acquired",
+    "trevino_Fig4D": "failed"
+  },
+  "ari_evidence_path": "PRIMARY",
+  "created_at": "2026-05-16T11:30:00+00:00",
+  "plan_revision": "v4.2",
+  "validation_posture": "biology-aware",
+  "biology_validation_summary": "Panel recall (top-1000 peak-gene links by |Pearson|) = 0.6111 (11/18 markers). Top-50 hit rate = 0.0800. Top-10 unique gene_symbols: HS3ST4, CCL3, CCL3L3, CCL4, CCL4L2, NKX2-2, APOD, GPR17, OLIG2, SOX10. Panel SHA: da3e7df36bd2d6e01d59d36d00f02d2dc3d0f40936eb0a55ee5851366364f973.",
+  "trevino_s2f_caveat": "Strict (peak_name, gene_symbol) top-1000 overlap vs Trevino S2F = 0.2360 (DIAGNOSTIC ONLY, NOT BINDING). Trevino S2F top-K contains sparse-detection artifacts (e.g., MS4A12, FCRLA, SFTPC) biologically implausible in fetal cerebral cortex PCW21; binding metric is panel recall against literature-curated PCW21 panel (AC-VAL-3a).",
+  "panel_sha": "da3e7df36bd2d6e01d59d36d00f02d2dc3d0f40936eb0a55ee5851366364f973",
+  "summary_template_sha": "a81b1942d9faa65b03e2573c684fee586c32f6e61329dfcf0e06d8a532b722d9",
+  "ari_methodology_note_sha": "f14212e1c2059d5920a93fe011b8d1f5235cb1f6ed3b4657b9a77e384ad07e57",
+  "panel_recall": 0.6111111111111112,
+  "top50_hit_rate": 0.08,
+  "panel_review_sha": "848f9c651fe0dd5860babf5b24781f912f79e695a80980e125ec46dabda22678",
+  "peak_gene_overlap_top1000_strict": 0.236,
+  "peak_gene_overlap_top1000_strict_caveat": "Strict (peak_name, gene_symbol) top-1000 overlap vs Trevino S2F = 0.236 (v3 kNN-aggregation method). DIAGNOSTIC ONLY, NOT BINDING per Plan v4.2 \u00a71.3. Trevino S2F top-K contains sparse-detection artifacts (MS4A12, FCRLA, SFTPC) biologically implausible in fetal cerebral cortex PCW21.",
+  "visual_verdict_human_confirmed_1": true,
+  "visual_verdict_human_confirmed_2": true,
+  "visual_verdict_human_confirmed_3": true,
+  "panel_review_attestation": {
+    "subagent_type": "oh-my-claudecode:verifier",
+    "session_id": "verifier-fresh-subagent-2026-05-16T11:00Z",
+    "attestation_path": ".omc/research/wave5/panel_review_attestation_verifier_subagent.md",
+    "reviewer_sha": "848f9c651fe0dd5860babf5b24781f912f79e695a80980e125ec46dabda22678",
+    "verdict": "PASS-WITH-NOTES"
+  },
+  "ari_note_attestation": {
+    "subagent_type": "oh-my-claudecode:verifier",
+    "session_id": "verifier-fresh-subagent-2026-05-16T11:15Z",
+    "attestation_path": ".omc/research/wave5/ari_note_attestation_verifier_subagent.md",
+    "reviewer_sha": "6ab7c01d542c861cfe9b389b956d6ada77b3feb7e21ea9a92c53886b8b9d94c5",
+    "verdict": "PASS"
+  },
+  "figure_artifacts": {
+    "plot1_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/wave5_acval_plot1_umap_rna.png",
+    "plot2_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/wave5_acval_plot2_umap_atac.png",
+    "plot3_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/wave5_acval_plot3_peak_gene_volcano.png",
+    "plot1_sha": "f8763b2814776ea0513d060ee94ef8b24f89452758b8b39dde5185023ebd8ec0",
+    "plot2_sha": "787799e8785888d1d12ffd32bb81225e34c09ba29b507978a139dacde5c8121f",
+    "plot3_sha": "dc0c7f54d56198ad4bd841879da576448a6c8034ebd01915f4710229d2d653ad"
+  },
+  "visual_verdict_paths": {
+    "plot1_verdict": ".omc/research/wave5/visual_verdicts/PLOT-1_verdict.md",
+    "plot2_verdict": ".omc/research/wave5/visual_verdicts/PLOT-2_verdict.md",
+    "plot3_verdict": ".omc/research/wave5/visual_verdicts/PLOT-3_verdict.md",
+    "plot1_prompt_sha": "ac693fbd25cf5e216d905838ce73d7f299dcf06b35f878f6a5cc331f03bd7fd5",
+    "plot2_prompt_sha": "7c60b8a880bbeedf03b17565d31b03463457b686caa62e769b88fc97943126bb",
+    "plot3_prompt_sha": "ec9db9fd2f77fe8fe37bf209816eb7763d76c38c474e39a4c5dcd730b9f5d54e"
+  }
+}
