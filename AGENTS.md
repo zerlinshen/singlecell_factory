@@ -14,9 +14,99 @@ deep operational steps.
 - Prefer small, reversible edits with verifiable evidence.
 - Preserve pipeline contracts and output compatibility unless a breaking change is explicitly requested.
 
-## Current State (2026-04-26)
+## Architecture (2026-05+): Factory-Project Separation
 
-NC2024 NSCLC full-cohort (~884k cells) has completed both stages with paper-aligned parameters:
+As of 2026-05, the working tree follows a three-way split. See full plan at
+`/home/zerlinshen/.omc/plans/factory-project-separation.md`.
+
+**Factories are tools, projects are data.** This repo (`singlecell_factory`) is
+an immutable compute tool. All scientific artifacts must land under a project
+directory resolved from `--project-root`, never inside this repo's tree.
+
+- **Factory tools**: `/home/zerlinshen/singlecell_factory/` (this repo) and
+  `/home/zerlinshen/multiomics_r_factory/` — hold only code, fixtures, and contracts.
+- **Projects directory**: `/home/zerlinshen/projects/<project-id>/` (default
+  `PROJECTS_ROOT`). Each project is a self-contained directory with `project.yaml`,
+  `inputs/`, `runs/`, `configs/`, and `notebooks/`.
+- **Bootstrap tool**: `/home/zerlinshen/projects-bootstrap/omc-new-project` —
+  creates new projects outside both factories.
+
+### --project-root contract
+
+All pipeline entry points accept `--project-root <path>` and `--run-id <id>`.
+Outputs write to `<project-root>/runs/<run-id>/python/{,bundle/}`. R outputs
+write to `<project-root>/runs/<run-id>/r/`. Manifests land at
+`<project-root>/runs/<run-id>/manifest.json`.
+
+Run-id format: `<UTC-timestamp>-<short-py-sha>`, regex
+`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z-[0-9a-f]{7}$`. Auto-generated if absent.
+
+Legacy invocations without `--project-root` still work but emit a
+`DeprecationWarning` to stderr. Deprecation window: **30 days** active shim +
+**14-day silent retirement** (shim removed only after zero accesses in that window).
+
+Dirty-tree gate: the pipeline refuses to start when the factory git tree is dirty
+unless `--allow-dirty` is passed. With `--allow-dirty`, `diff_sha256` is recorded
+in `manifest.json` for forensics.
+
+### Contracts vendoring
+
+The Python-R bundle schema lives canonically at `contracts/bundle_schema.yaml`
+in this repo. The vendored copy in `multiomics_r_factory/contracts/` must be
+byte-identical. To update: edit the canonical file here, then run
+`tools/sync-contracts.sh` — **never edit the vendored copy directly**.
+
+### Project conventions (user-decided)
+
+- Project ID format: lowercase-with-dashes, regex `^[a-z0-9][a-z0-9-]*$`
+- Raw inputs: symlinks to `/data/raw/` — do not duplicate large files
+- Migration trigger: STAGED — CLI plumbing landed (2026-05), actual data move
+  deferred to a future explicit user-approved step after dry-run review
+
+### Environment Switches (Round-1a)
+
+Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
+
+| Variable | Unset (default) | `=1` |
+|---|---|---|
+| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning` on stderr; falls back to legacy `output/` | Hard error `sys.exit(2)`. Pass `--project-root` or unset. |
+
+Warning and hard-error are mutually exclusive. Round-2 ADR flips the default to required. Gate is mirrored in `scripts/export_singlecell_r_bundle.py` and `scripts/pack_run_for_mac.sh`.
+
+### R-factory SHA fields (Round-1a)
+
+Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
+
+Two provenance fields track `multiomics_r_factory` git SHA at two points:
+
+- `r_factory_sha_at_manifest_write` — written to `run_manifest.json` at pipeline manifest-write time.
+- `r_factory_sha_at_export` — written to `<run-id>/python/bundle/provenance.json` at bundle export time.
+
+The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
+
+### Agent rule (MANDATORY)
+
+**Never write outputs inside the factory tree. Always resolve outputs from
+`--project-root`.** Any module that constructs a path under `singlecell_factory/`
+for scientific artifacts is a bug.
+
+**SC_REQUIRE_PROJECT_ROOT=1 fail-fast**: When invoking the pipeline, prefer
+setting `SC_REQUIRE_PROJECT_ROOT=1` to fail-fast on a missing `--project-root`.
+Never rely on the legacy `output/` fallback — it emits a `DeprecationWarning`
+and will be removed in Round-2.
+
+## Current State (2026-05-16)
+
+**Wave-5 Trevino PCW21 (biology-aware validation pivot, plan v4.2)** is the most recent canonical work:
+
+- Canonical run: `/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/`
+- Ledger: `ops/run_ledger/wave5_trevino_20260516T0931Z-d192836f1bb0.v4.2.json` (plan_revision=v4.2, validation_posture=biology-aware)
+- Schema: `ops/run_ledger/schema/wave5_v4_2.schema.json` (Draft 2020-12, allOf+if-then on plan_revision)
+- Plan v4.2 (gitignored, agent-state): `.omc/plans/wave5-completion-consensus-2026-05-16-v4.2.md`
+- Outcomes: AC-VAL-3a panel_recall=0.611 CLOSED, AC-VAL-3b top50_hit_rate=0.08 CLOSED-PARTIAL per §3.4, AC-CI-1 ARI(RNA-only res=0.3)=0.674 CLOSED, AC-VAL-PLOT-1/2/3 + AC-LEDGER-1 + AC-VAL-3c CLOSED. CI gate exit 1 (CLOSED-PARTIAL overall).
+- Biology recovery confirmed (OLIG2, SOX10, NKX2-2, PAX6, EOMES, VIM, HES1, GAD2, DLX1, DLX2, OLIG1 in top-1000); Trevino S2F top-K contamination diagnosed (MS4A12/FCRLA/SFTPC).
+
+**NC2024 NSCLC full-cohort (~884k cells)** carry-over from 2026-04-26 is also canonical and completed both stages with paper-aligned parameters:
 
 - **v1 outputs (annotation bug, do not cite)**: `results/nc2024_tumor_20260426/`, `results/nc2024_bh_20260426/`
 - **v2 outputs (canonical)**: `results/nc2024_tumor_20260426_v2/`, `results/nc2024_bh_20260426_v2/`
@@ -33,7 +123,7 @@ Cell-type composition aligns with Sanchez-Mejias *Nat Commun* 2024 (doi:10.1038/
   - `--lazy-read {auto,true,false}` (file >5GB → auto on)
   - `--doublet-strategy {auto,grouped,whole,skip}` (auto = grouped when n_obs ≥ 100k and `sample` column present)
   - `--clustering-engine {auto,sparse_exact,css,gpu}`
-  - `--checkpoint-policy {full,mandatory_only,metadata_only}`
+  - `--checkpoint-policy {full}`
 - **Annotation strategy**: `--annotation-strategy {cluster_voting,cell_argmax}` (default `cluster_voting`; `cell_argmax` retained as fallback). The cell_argmax path drifts on >100k cohorts — do NOT use as default.
 - **Memory enforcement**: `workflow/modular/_mem_guard.py` provides `MemoryEnforcer` (pre-flight budget + watchdog Event + cooperative abort via `SkipModule`). `SC_MEM_GUARD=on SC_MEM_WATCHDOG=on` enables runtime enforcement.
 - **Sparse engines** (env flags): `SC_DE_ENGINE=sparse SC_CNV_ENGINE=chunked SC_CELLCOMM_ENGINE=sparse`.

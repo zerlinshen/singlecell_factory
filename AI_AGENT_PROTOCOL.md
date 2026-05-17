@@ -17,6 +17,59 @@ Canonical onboarding index for AI agents entering
 This file is an onboarding index. It does not override `AGENTS.md`,
 `CLAUDE.md`, or the deep runbook in `PROTOCOL.md`.
 
+## Architecture (2026-05+): Factory-Project Separation
+
+As of 2026-05, the working tree follows a three-way split. Full plan:
+`/home/zerlinshen/.omc/plans/factory-project-separation.md`.
+
+**Factories are tools, projects are data.**
+
+- **`singlecell_factory`** (this repo): pure compute tool. No scientific outputs
+  land inside this tree. All artifacts write to `<project-root>/runs/<run-id>/python/`.
+- **`multiomics_r_factory`** (`/home/zerlinshen/multiomics_r_factory/`): R-side
+  compute tool. Writes to `<project-root>/runs/<run-id>/r/`.
+- **`projects/`** (`/home/zerlinshen/projects/<project-id>/`): self-contained
+  project directories. Create with `omc-new-project` from
+  `/home/zerlinshen/projects-bootstrap/`.
+
+**--project-root contract**: pass `--project-root <path>` and optional
+`--run-id <id>` to any pipeline entry point. Run-id format:
+`<UTC-timestamp>-<short-py-sha>`, regex
+`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z-[0-9a-f]{7}$`.
+
+**Dirty-tree gate**: pipeline refuses if factory tree is dirty unless
+`--allow-dirty` is passed; in that case `diff_sha256` is recorded in
+`manifest.json`.
+
+**Contracts**: canonical bundle schema at `contracts/bundle_schema.yaml` here;
+vendored byte-identically into `multiomics_r_factory/contracts/`. Update via
+`tools/sync-contracts.sh` only — never edit the vendored copy directly.
+
+**Agent rule (MANDATORY)**: Never write outputs inside the factory tree. Always
+resolve outputs from `--project-root`.
+
+**SC_REQUIRE_PROJECT_ROOT=1 fail-fast**: Prefer setting this env var when
+invoking the pipeline. Unset → `DeprecationWarning` + legacy fallback. `=1` →
+hard error `sys.exit(2)`. Round-2 ADR will flip the default to required. Gate
+mirrored in `scripts/export_singlecell_r_bundle.py` and
+`scripts/pack_run_for_mac.sh`. Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`.
+
+### Environment Switches (Round-1a)
+
+Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
+
+| Variable | Unset | `=1` |
+|---|---|---|
+| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning`; legacy `output/` fallback | Hard error exit 2 |
+
+### R-factory SHA fields (Round-1a)
+
+Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
+
+- `r_factory_sha_at_manifest_write` in `run_manifest.json` — resolved at pipeline end.
+- `r_factory_sha_at_export` in `bundle/provenance.json` — resolved at bundle export.
+- R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) warns (not errors) on mismatch.
+
 ## Architecture In 60 Seconds
 
 `singlecell_factory` is the upstream execution and run-truth surface for the
@@ -71,9 +124,11 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
-## Current State (2026-04-26)
+## Current State (2026-05-16)
 
-The canonical NC2024 NSCLC outputs are the **v2** runs at
+**Wave-5 Trevino PCW21 biology-aware validation pivot (plan v4.2)** is the most recent canonical work. Run dir: `/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/`. Binding ledger: `ops/run_ledger/wave5_trevino_20260516T0931Z-d192836f1bb0.v4.2.json` (plan_revision=v4.2, validation_posture=biology-aware; schema `ops/run_ledger/schema/wave5_v4_2.schema.json`). Plan + spec live under `.omc/plans/wave5-completion-consensus-2026-05-16-v4.2.md` and `.omc/specs/deep-interview-wave5-completion.md` (both gitignored agent state). CI gate `scripts/ci/wave5_v4_2_gate.sh` exits 1 (CLOSED-PARTIAL overall: AC-VAL-3a CLOSED, AC-VAL-3b PARTIAL per §3.4, AC-CI-1 CLOSED, AC-VAL-PLOT-1/2/3 + AC-LEDGER-1 + AC-VAL-3c CLOSED). Methodology: same v3 peak-gene linkage data, comparison reference shifted from Trevino S2F string tuples (contaminated by sparse-detection artifacts MS4A12/FCRLA/SFTPC) to a SHA-pinned literature-curated PCW21 cortical marker panel at `ops/run_ledger/panels/wave5_cortical_panel_v1.json`. The session journal at `ops/before_every_run/journal/2026-05-16_wave5_trevino_pcw21_completion.md` documents the full execution arc (v3 → v4.2).
+
+The carry-over canonical NC2024 NSCLC outputs from 2026-04-26 remain valid. The **v2** runs are at
 `results/nc2024_tumor_20260426_v2/` and `results/nc2024_bh_20260426_v2/`.
 Latest ledger entries live in `ops/run_ledger/nc2024_*_v2_*.json`. The matching
 v1 directories (without the `_v2` suffix) shipped with a known annotation
