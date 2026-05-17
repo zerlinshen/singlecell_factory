@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://singlecell_factory.local/schemas/wave5_v4_2",
+  "title": "Wave-5 v4.2 ledger schema",
+  "description": "Schema for Wave-5 reproduction ledgers under plan v4.2. Unconditional `required` block matches the legacy v3 wave5.schema.json baseline. `plan_revision: v4.2` triggers the additional biology-aware + attestation + visual-verdict requirements via allOf/if-then. Pre-v4 ledgers omit `plan_revision` and are not constrained by the conditional branch.",
+  "type": "object",
+  "required": [
+    "wave",
+    "run_id",
+    "project_root",
+    "run_manifest_path",
+    "module_status_path",
+    "conda_env_hash",
+    "geo_sha256s",
+    "metrics",
+    "regression_gate_exit_code",
+    "dois_by_module",
+    "created_at"
+  ],
+  "properties": {
+    "wave": {
+      "type": "string",
+      "const": "5"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Timestamp + short SHA. Example: 20260516T0628Z-d192836f1bb0",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$"
+    },
+    "project_root": {
+      "type": "string",
+      "description": "Absolute path to the project root containing runs/<run_id>/."
+    },
+    "run_manifest_path": {
+      "type": "string",
+      "description": "Path to the run_manifest.json that the driver produced."
+    },
+    "module_status_path": {
+      "type": "string",
+      "description": "Path to the module_status.csv that the driver produced."
+    },
+    "conda_env_hash": {
+      "type": "string",
+      "description": "sha256 of environments/sc_gpu_stable.lock.txt at run time (proxy for env identity)."
+    },
+    "geo_sha256s": {
+      "type": "object",
+      "description": "filename -> sha256 hex digest for every GEO file used as input.",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Per-metric result objects. cell_type_ari, peak_gene_overlap_top1000, pseudotime_spearman expected per legacy v3 contract.",
+      "additionalProperties": true
+    },
+    "regression_gate_exit_code": {
+      "type": "integer",
+      "description": "Exit code of scripts/ci/wave5_trevino_regression_gate.sh against the metrics file. 0=pass; 1=threshold breach; 2=missing field."
+    },
+    "dois_by_module": {
+      "type": "object",
+      "description": "module path -> list of DOI strings gathered from each module's __references__ dict.",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plan_revision": {
+      "type": "string",
+      "enum": ["v3", "v4", "v4.1", "v4.2"]
+    },
+    "validation_posture": {
+      "type": "string",
+      "enum": ["strict-string-overlap", "biology-aware"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "plan_revision": { "const": "v4.2" } },
+        "required": ["plan_revision"]
+      },
+      "then": {
+        "required": [
+          "biology_validation_summary",
+          "trevino_s2f_caveat",
+          "panel_review_sha",
+          "summary_template_sha",
+          "visual_verdict_human_confirmed_1",
+          "visual_verdict_human_confirmed_2",
+          "visual_verdict_human_confirmed_3",
+          "ari_methodology_note_sha",
+          "panel_sha",
+          "panel_recall",
+          "top50_hit_rate"
+        ],
+        "properties": {
+          "biology_validation_summary": {
+            "type": "string",
+            "minLength": 50,
+            "description": "Plan v4.2 biology-aware validation narrative summarizing panel recall, top50 hit rate, and ARI methodology."
+          },
+          "trevino_s2f_caveat": {
+            "type": "string",
+            "minLength": 50,
+            "description": "Documented caveat about Trevino S2F string-overlap comparisons vs. biology-aware reinterpretation."
+          },
+          "panel_review_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 of the panel review document attesting the biology-aware panel evaluation."
+          },
+          "summary_template_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 of the biology validation summary template used to author biology_validation_summary."
+          },
+          "ari_methodology_note_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 of the ARI methodology note documenting cell_type_ari interpretation under biology-aware posture."
+          },
+          "panel_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 of the canonical panel artifact used for AC-VAL-3a recall computation."
+          },
+          "visual_verdict_human_confirmed_1": {
+            "type": "boolean",
+            "description": "AC-VAL-PLOT-1 binding human visual verdict confirmation."
+          },
+          "visual_verdict_human_confirmed_2": {
+            "type": "boolean",
+            "description": "AC-VAL-PLOT-2 binding human visual verdict confirmation."
+          },
+          "visual_verdict_human_confirmed_3": {
+            "type": "boolean",
+            "description": "AC-VAL-PLOT-3 binding human visual verdict confirmation."
+          },
+          "panel_recall": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "AC-VAL-3a panel recall (fraction of canonical panel genes recovered)."
+          },
+          "top50_hit_rate": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "AC-VAL-3b top-50 hit rate."
+          },
+          "peak_gene_overlap_top1000_strict": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Optional diagnostic strict string-overlap value at top-1000. If present, peak_gene_overlap_top1000_strict_caveat must be non-empty (enforced by CI gate, not schema)."
+          },
+          "peak_gene_overlap_top1000_strict_caveat": {
+            "type": "string",
+            "minLength": 20,
+            "description": "Mandatory caveat text accompanying peak_gene_overlap_top1000_strict if reported. Schema-optional; CI gate enforces presence when strict value is reported."
+          },
+          "panel_review_attestation": {
+            "type": "object",
+            "required": ["subagent_type", "session_id", "attestation_path", "reviewer_sha"],
+            "properties": {
+              "subagent_type": {
+                "type": "string",
+                "description": "Architect FIX-1: schema-required subagent_type for panel review attestation."
+              },
+              "session_id": {
+                "type": "string",
+                "description": "Architect FIX-1: schema-required session_id for panel review attestation."
+              },
+              "attestation_path": {
+                "type": "string",
+                "description": "Path to the panel review attestation artifact on disk."
+              },
+              "reviewer_sha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "SHA-256 of the reviewer identity / attestation signature."
+              }
+            }
+          },
+          "ari_note_attestation": {
+            "type": "object",
+            "required": ["subagent_type", "session_id", "attestation_path", "reviewer_sha"],
+            "properties": {
+              "subagent_type": { "type": "string" },
+              "session_id": { "type": "string" },
+              "attestation_path": { "type": "string" },
+              "reviewer_sha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "description": "Stage 7.2 ARI methodology note attestation. Same structure as panel_review_attestation."
+          },
+          "figure_artifacts": {
+            "type": "object",
+            "description": "Paths and SHA-256 digests for the three Wave-5 v4.2 figure artifacts (plot1/plot2/plot3).",
+            "properties": {
+              "plot1_path": { "type": "string" },
+              "plot2_path": { "type": "string" },
+              "plot3_path": { "type": "string" },
+              "plot1_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "plot2_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "plot3_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          },
+          "visual_verdict_paths": {
+            "type": "object",
+            "description": "Paths and prompt SHA-256 digests for the three visual verdict artifacts.",
+            "properties": {
+              "plot1_verdict": { "type": "string" },
+              "plot2_verdict": { "type": "string" },
+              "plot3_verdict": { "type": "string" },
+              "plot1_prompt_sha": { "type": "string" },
+              "plot2_prompt_sha": { "type": "string" },
+              "plot3_prompt_sha": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

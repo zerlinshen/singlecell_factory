@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://singlecell_factory/ops/run_ledger/schema/wave5.schema.json",
+  "title": "Wave-5 Trevino multi-omics run ledger",
+  "description": "Schema for ops/run_ledger/wave5_trevino_<runid>.json. Captures inputs, env, metrics, gate result, and DOI manifest for one Wave-5 reproduction run. Intentionally distinct from the NC2024 cohort-style ledger shape — sibling document types under the same directory.",
+  "type": "object",
+  "required": [
+    "wave",
+    "run_id",
+    "project_root",
+    "run_dir",
+    "run_manifest_path",
+    "module_status_path",
+    "conda_env_hash",
+    "geo_sha256s",
+    "metrics",
+    "regression_gate_exit_code",
+    "dois_by_module",
+    "created_at"
+  ],
+  "properties": {
+    "wave": {
+      "type": "string",
+      "const": "5"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Timestamp + short SHA. Example: 20260516T0628Z-d192836f1bb0",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$"
+    },
+    "project_root": {
+      "type": "string",
+      "description": "Absolute path to the project root containing runs/<run_id>/."
+    },
+    "run_dir": {
+      "type": "string",
+      "description": "Absolute path to the python/ subdir of this run."
+    },
+    "run_manifest_path": {
+      "type": "string",
+      "description": "Path to the run_manifest.json that the driver produced."
+    },
+    "module_status_path": {
+      "type": "string",
+      "description": "Path to the module_status.csv that the driver produced."
+    },
+    "conda_env_hash": {
+      "type": "string",
+      "description": "sha256 of environments/sc_gpu_stable.lock.txt at run time (proxy for env identity)."
+    },
+    "geo_sha256s": {
+      "type": "object",
+      "description": "filename -> sha256 hex digest for every GEO file used as input.",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "cell_type_ari",
+        "peak_gene_overlap_top1000",
+        "pseudotime_spearman"
+      ],
+      "properties": {
+        "cell_type_ari": { "$ref": "#/$defs/MetricResult" },
+        "peak_gene_overlap_top1000": { "$ref": "#/$defs/MetricResult" },
+        "pseudotime_spearman": { "$ref": "#/$defs/MetricResult" },
+        "pseudotime_n_joined": { "type": "integer", "minimum": 0 },
+        "pseudotime_status": {
+          "type": "string",
+          "enum": ["CLOSED", "CLOSED-PARTIAL", "NOT-RUN"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "regression_gate_exit_code": {
+      "type": "integer",
+      "description": "Exit code of scripts/ci/wave5_trevino_regression_gate.sh against the metrics file. 0=pass; 1=threshold breach; 2=missing field."
+    },
+    "dois_by_module": {
+      "type": "object",
+      "description": "module path -> list of DOI strings gathered from each module's __references__ dict.",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "acquisition_status": {
+      "type": "object",
+      "description": "External-supplement acquisition outcomes per artifact.",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["acquired", "failed", "manual_user_supplied"]
+      }
+    },
+    "harmony_fallback_used": {
+      "type": "boolean",
+      "description": "True if batch_correction was disabled due to the 800k CUDA harmony bug (plan v3 Stage 1 step 8 authority)."
+    },
+    "ari_evidence_path": {
+      "type": "string",
+      "enum": ["PRIMARY", "SECONDARY"],
+      "description": "PRIMARY = Trevino cluster_names join; SECONDARY = AC-1b marker-panel backstop (PAX6/EOMES/NEUROD2/GAD2/SOX10)."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "MetricResult": {
+      "type": "object",
+      "required": ["value", "threshold", "status"],
+      "properties": {
+        "value": { "type": ["number", "null"] },
+        "threshold": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["CLOSED", "CLOSED-PARTIAL", "NOT-RUN"]
+        }
+      }
+    }
+  }
+}
