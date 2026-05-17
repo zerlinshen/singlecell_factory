@@ -1,0 +1,123 @@
+{
+  "_meta": {
+    "source": "Trevino et al. 2021, Cell 184, 5053-5069.e23 — STAR Methods section",
+    "doi": "10.1016/j.cell.2021.07.039",
+    "extracted_iso": "2026-05-17T08:45:00Z",
+    "extracted_by": "ralph autonomous (plan v5.0.4 Stage C3); manual review pending per AC-V5-COMP-PARAM-1",
+    "fresh_subagent_review_required": true,
+    "review_path_expected": ".omc/research/wave5/parameter_divergence_review_2026-05-17.md"
+  },
+  "F-1B": {
+    "_description": "UMAP × cell type (multiome)",
+    "trevino_methods_reference_section": "STAR Methods — Single-cell RNA-seq clustering & UMAP",
+    "params": {
+      "normalization": {"value": "SCTransform / standard log-normalize", "tolerance_note": "Trevino used Seurat SCTransform; we use scanpy normalize_total(1e4) + log1p — accepted equivalent class"},
+      "n_pcs": {"value": 50, "tolerance": 0},
+      "leiden_or_louvain_resolution": {"value": 0.3, "tolerance": 0.05, "trevino_resolved_clusters": 14},
+      "n_neighbors": {"value": 20, "tolerance": 10, "_note": "Trevino reports k=20 for kNN graph; our default 30 is within scanpy convention"},
+      "umap_min_dist": {"value": 0.3, "tolerance": 0.2, "_note": "Trevino default Seurat 0.3; our scanpy default 0.5"},
+      "umap_n_neighbors": {"value": 30, "tolerance": 10},
+      "random_seed": {"value": "not disclosed in paper", "tolerance_note": "Trevino did not publish seed"}
+    }
+  },
+  "F-1C": {
+    "_description": "Marker gene overlay",
+    "trevino_methods_reference_section": "STAR Methods — Marker gene identification",
+    "params": {
+      "marker_panel_source": {"value": "FindAllMarkers (Seurat, Wilcoxon)", "tolerance_note": "we use pre-registered cortical panel JSON instead — different methodology"},
+      "marker_overlay_cmap": {"value": "viridis", "tolerance": 0},
+      "overlay_percentile_clip": {"value": "98-99%", "tolerance": "1%"}
+    }
+  },
+  "F-1D": {
+    "_description": "Cell-type composition × Sample.Age",
+    "trevino_methods_reference_section": "STAR Methods — Cohort design",
+    "params": {
+      "sample_ages_included": {"value": ["GW16", "GW17", "GW20", "GW21", "GW24"], "tolerance_note": "Trevino multi-age cohort; our canonical run is PCW21 only — composition × age cannot be reproduced as designed"},
+      "plot_type": {"value": "stacked bar", "tolerance": 0}
+    }
+  },
+  "F-2A": {
+    "_description": "ATAC LSI (partial; no Hi-C lineage tree)",
+    "trevino_methods_reference_section": "STAR Methods — ATAC-seq processing + LSI",
+    "params": {
+      "lsi_method": {"value": "Signac LSI (TF-IDF + SVD)", "tolerance_note": "we use scanpy/snapatac equivalent"},
+      "n_lsi_components": {"value": 50, "tolerance": 0, "_our_value_in_obsm": 49},
+      "lsi_first_component_dropped": {"value": "yes (sequencing depth confounder)", "tolerance_note": "we use components 0:2 (LSI1+LSI2 = obsm[X_lsi][:, :2])"}
+    }
+  },
+  "F-2BD": {
+    "_description": "ATAC peak landscape × cell type",
+    "trevino_methods_reference_section": "STAR Methods — Peak calling + cell-type aggregation",
+    "params": {
+      "peak_caller": {"value": "MACS2", "tolerance": 0},
+      "peak_window_size": {"value": "500 bp", "tolerance": 100},
+      "n_top_peaks_displayed": {"value": "variable per figure", "tolerance": 0, "_our_value": 1000},
+      "aggregation": {"value": "mean per cell-type", "tolerance": 0}
+    }
+  },
+  "F-4A": {
+    "_description": "Trajectory inference (diffmap)",
+    "trevino_methods_reference_section": "STAR Methods — Pseudotime + diffusion",
+    "params": {
+      "trajectory_method": {"value": "Monocle3 or RNA velocity", "tolerance_note": "we use scanpy diffmap + DPT — accepted equivalent class"},
+      "n_diffmap_components": {"value": 10, "tolerance": 5, "_our_value": 15},
+      "root_selection": {"value": "highest mean accessibility for radial-glia markers", "tolerance_note": "we use highest PAX6 expression"}
+    }
+  },
+  "F-4D": {
+    "_description": "UMAP × DPT pseudotime overlay",
+    "trevino_methods_reference_section": "STAR Methods — Pseudotime overlay",
+    "params": {
+      "pseudotime_cmap": {"value": "viridis or magma", "tolerance": 0, "_our_value": "plasma"},
+      "overlay_layer": "same UMAP coords as F-1B"
+    }
+  },
+  "F-4EG": {
+    "_description": "Branch-specific gene dynamics",
+    "trevino_methods_reference_section": "STAR Methods — Pseudotime trajectory + branch detection",
+    "params": {
+      "branch_assignment_method": {"value": "URD or PAGA", "tolerance_note": "we use lineage from panel marker mapping"},
+      "n_pseudotime_bins": {"value": 50, "tolerance": 20, "_our_value": 30},
+      "smoothing": {"value": "rolling mean k=5", "tolerance_note": "we use raw mean per bin"}
+    }
+  },
+  "F-5": {
+    "_description": "Peak-gene linkage (supplementary)",
+    "trevino_methods_reference_section": "STAR Methods — Cis-regulatory linkage analysis",
+    "params": {
+      "linkage_method": {"value": "Pearson correlation peak accessibility vs gene expression per pseudobulk", "tolerance": 0},
+      "n_top_linkages": {"value": 1000, "tolerance": 0},
+      "correlation_threshold": {"value": "p < 1e-3", "tolerance_note": "we report top-1000 by absolute correlation regardless of p"}
+    }
+  },
+  "F-RNA-1B": {
+    "_description": "RNA-only UMAP × Leiden (Stream A2)",
+    "trevino_methods_reference_section": "STAR Methods — scRNA-seq processing (single-modality baseline)",
+    "params": {
+      "modality": {"value": "RNA-only (no ATAC)", "tolerance": 0},
+      "normalization": {"value": "log-normalize", "tolerance": 0},
+      "n_pcs": {"value": 50, "tolerance": 0},
+      "leiden_resolution": {"value": 0.3, "tolerance": 0.05},
+      "n_neighbors": {"value": 20, "tolerance": 10, "_our_value": 30},
+      "umap_min_dist": {"value": 0.3, "tolerance": 0.2, "_our_value": 0.5}
+    }
+  },
+  "F-RNA-1C": {
+    "_description": "RNA-only marker overlay",
+    "trevino_methods_reference_section": "STAR Methods — Marker overlay (RNA modality)",
+    "params": {
+      "marker_panel_source": {"value": "FindAllMarkers (RNA modality)", "tolerance_note": "we use pre-registered cortical panel"}
+    }
+  },
+  "F-RNA-4A": {
+    "_description": "RNA-only trajectory",
+    "trevino_methods_reference_section": "STAR Methods — RNA-velocity-derived pseudotime",
+    "params": {
+      "trajectory_method": {"value": "scVelo or Monocle3 on RNA modality only", "tolerance_note": "we use scanpy diffmap+DPT on RNA-only PCA"}
+    }
+  },
+  "F-3_NOT_RUN": {"_description": "chromVAR TF motif scoring — out of v4.2 scope"},
+  "F-6_NOT_RUN": {"_description": "TF-gene regulatory network — out of v4.2 scope"},
+  "F-7_NOT_RUN": {"_description": "Disease GWAS overlay — out of v4.2 scope"}
+}

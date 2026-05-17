@@ -1,0 +1,134 @@
+{
+  "wave": "5",
+  "run_id": "20260516T0931Z-d192836f1bb0",
+  "project_root": "/home/zerlinshen/projects/wave5-trevino",
+  "run_manifest_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/run_manifest.json",
+  "module_status_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/module_status.csv",
+  "conda_env_hash": "288712b5192eaad5294a0508f085710b5cd88e146e0bbb10a46987fbafa661a3",
+  "created_at": "2026-05-17T08:56:31Z",
+  "plan_revision": "v5.0",
+  "parent_canonical_run_id": "20260516T0931Z-d192836f1bb0",
+  "parent_v42_ledger_sha": "16b3a778dad5dc5cd47303b539ca90fff8a79dbbd3b555f74ffca67fdf3fb4d0",
+  "figure_outputs": {
+    "F-1B": {
+      "png_sha": "0140afb747d3b73371b0e0de9433378c1701c5b72380cea8416f576df874302e",
+      "svg_sha": "9c40cd8c20ddcdc011cf357490514a0383cb2339852ece2d42e1259c839e7a8d",
+      "pdf_sha": "859080e9ec46d5f13c2382665094e41c8dc33cf2701ccdef1ec75982b7b75e11"
+    },
+    "F-1C": {
+      "png_sha": "d1bbf9b5500b07a4c0c30b5b33bb27f92f2a86d26854f654ab5140b72c18b948",
+      "svg_sha": "203d2d7787b4c3c677b11a40956e4478ec27c478cc50ccf750c3efff8dd71509",
+      "pdf_sha": "921d83358be1b13a09a41c0f8f12884cb2e82b76465e13b56a075fa5a0261730"
+    },
+    "F-1D": {
+      "png_sha": "ee0326a958201f4b2a56a8bf60c7140d8f865490cd465d7d9777d0c855ade5ef",
+      "svg_sha": "8ab3ba0ad10d6e0e088c59e72bf05032be39096a7eb3b4ad5adbafac63cc9162",
+      "pdf_sha": "85d048920025ffd523561868f05a2ac0455fa7755ea5b20b1708edf7ef3ad9a4"
+    },
+    "F-2A": {
+      "png_sha": "1adc86eea1a6967333cf0f398d146f85a10233264460fd78027226955f15692d",
+      "svg_sha": "4b2cff96e0df4dc79105a5d3bad8fd9bdf589e525b95d9037f50359603c012dd",
+      "pdf_sha": "938b5ba3623136a8fa7ba5638e3bce8592baf80a8beca40dd412a9e338329244"
+    },
+    "F-2BD": {
+      "png_sha": "b019fde214c7e017b6091af0bc812390890af0945b8a8ea34cb1f47ac1ee0b93",
+      "svg_sha": "062f5e8c99ff8161bde022f5669e1b4c0148b82d76189de3f3bd4610ab1f4227",
+      "pdf_sha": "55bfb0340394f64c5942edb37b246828c3d962069f9e3183f9a1e9fd55e0a608"
+    },
+    "F-4A": {
+      "png_sha": "2653b0bfb6b7390c1c019726507ddfae89ddfb70754436a2d92a1412ee29ed0a",
+      "svg_sha": "ca4b3487bdf8ddf5f0b50593aab9df42ec4f514f8cd6d6cdcfd5feef53eecbbe",
+      "pdf_sha": "c5e7be9c9cc6686add496c4660592dba6c51a6cf92179b078e65ae018c236c11"
+    },
+    "F-4D": {
+      "png_sha": "9868ee9da72468a9655c6e509a3d1563622ab7bcbd2f392473d3dfd2e4779135",
+      "svg_sha": "75fb7504a940b3b6dc60648f50fe89a3c453c0ec5d7f75ea75e88d8c3550d87b",
+      "pdf_sha": "766635ee13a4ab53dcb5cb4572ee3f40acd353346c079d0342ad8991d405e2f0"
+    },
+    "F-4EG": {
+      "png_sha": "dbc7abde7d6f0cb7c075ccf98979a57dbfc46bca118ef40477e9799935806051",
+      "svg_sha": "aed0ef11561c7b9f41c9705f708c372011f109251c3a6fc725c5a9ff740d1924",
+      "pdf_sha": "6c38482951ab9761cc5f8d41e1ada3da83a3f513c36319b80b2a012a9e780f32"
+    },
+    "F-5": {
+      "png_sha": "ca7ecf88e7a0c398fe0ba97377f0fb993561bf586d0f61c953c452ce3f395177",
+      "svg_sha": "2f900e8289b44ce1c6d4091cc16a1cda774f278d9a13285fa6de845f88b4e1c6",
+      "pdf_sha": "ed3450a8ef91cfc64e49f5208f07f1fdce3fa159105cd05684be6cacdc543d9d"
+    },
+    "F-3": {
+      "png_sha": "a73f1636ca213059155826c01ec272739f2c0595e18d29b4db20aa3baac0f67f",
+      "svg_sha": "34b16912db7d25b08b6dc196771d28ebf6b8de0ee4db5a2471a181de9a642495",
+      "pdf_sha": "af6bbf11ec5b88aa3926ea5781144e03d521bbf00275dc21aa99e8ed7e7df6f4"
+    },
+    "F-6": {
+      "png_sha": "3760c14f0504d99cfa756613f487c6fd49c06824b3a1144f6e3b5a1903bd76f0",
+      "svg_sha": "431a0d57bc1e3092859f5b2b4c083cce3f67445b201e665a25d2ed2f0cfaab8a",
+      "pdf_sha": "30d4832b71291ffc567d9e5476312f2ef7b4da060e958afca998b7a260fa81a1"
+    },
+    "F-7": {
+      "png_sha": "4fa2305d5b4b269e9de1a2b9f7447355d19379c025ba349e63d366af81a88e49",
+      "svg_sha": "23509c39e2797481dd13c767e50c34daa98e258e43c4050e7c00a4fd43db412c",
+      "pdf_sha": "6347dfbc63bf56006c8296acc9089ceca9843b673429309d56ee7e36731b1e17"
+    },
+    "F-RNA-1B": {
+      "png_sha": "9e4f20e616b6d3c4cfdf92ea9a9471351d13871509b170104c2cc9e50099abbd",
+      "svg_sha": "b2ae5fae15beebd1eda1e52b67736ec75ea7d9940c7ad49bfd9b1fa6675c2bc3",
+      "pdf_sha": "e11cf0854c12baf642ef7855177352e82e963f475d0681ba83fd3ae1154d4b15"
+    },
+    "F-RNA-1C": {
+      "png_sha": "4edfba927d297d6e2ee46876c0fc3404285ec3e07a0953d0bee16a16c8448b55",
+      "svg_sha": "17c3d6ba83a2a52ead2faab873d7f0ed407c3d8b4f2634291f5cc4c11986d20b",
+      "pdf_sha": "5a4a5f5f36ead1527f00eb72eaf803de9b40c6c3da7a0b4373de621599370367"
+    },
+    "F-RNA-4A": {
+      "png_sha": "1d74d44df56667ffe4ac216d7a2c4467b5b74971fcaf09d5790c820c9a1dabfe",
+      "svg_sha": "a7393c7337c9a7857ca5a6318a1f4b8048e7b223603347297b27c68f54db47ab",
+      "pdf_sha": "dcef601863d239742e39fc7604476b1ae07b1ca5f69c1c6882832c25669a7781"
+    }
+  },
+  "figure_spec_sha": "6d0b1881448bf8ca832e9dd7d0373c4f03d897ce3f027751eb48a20743f501af",
+  "safeguard_reports_dir": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/v5",
+  "parameter_divergence_table_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/v5/parameter_divergence",
+  "quantitative_similarity_metrics_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/v5/quantitative_metrics",
+  "reproduction_rate": {
+    "overall": 0.3376789993480057,
+    "not_run_count": 3,
+    "supplementary_score": 0.236,
+    "per_figure": {
+      "F-1B": 0.2411015909979004,
+      "F-5": 0.236,
+      "F-RNA-1B": 0.4342564076981111
+    }
+  },
+  "rna_only_figures_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/v5/rna_only",
+  "rna_only_reviewer_context_isolation": true,
+  "trevino_paper_pdf_sha": "19dda596ec1211bad41b964fdc5835dc9562739d42d62db1d734dd5a2bd456be",
+  "trevino_figure_mapping_path": "/home/zerlinshen/singlecell_factory/data/external/trevino_2021/figures_extracted/MAPPING.md",
+  "comparison_pdf_symlink_history": [
+    {
+      "old_target": null,
+      "new_target": "comparison_93752dabefe307ae.pdf",
+      "swap_iso": "2026-05-17T08:55:46Z",
+      "pdf_sha256": "93752dabefe307aef853a383fcc544618696d0799a6d4dc097f55ef6f8cd7817"
+    }
+  ],
+  "comparison_pdf_current_sha": "93752dabefe307aef853a383fcc544618696d0799a6d4dc097f55ef6f8cd7817",
+  "branch_base_sha": "991df2ad8a2aa05bef37095cdb8bff160db892d6",
+  "branch_base_sha_recorded_iso": "2026-05-17T08:31:42Z",
+  "cell_figure_use_acknowledgment_path": "/home/zerlinshen/singlecell_factory/.omc/research/wave5/CELL_FIGURE_USE_ACKNOWLEDGMENT_zerlinshen_2026-05-17.md",
+  "embed_cell_figures_opted_in": true,
+  "geo_sha256s": {},
+  "metrics": {
+    "v5_overall_reproduction_rate": 0.3376789993480057,
+    "v5_per_figure_scores": {
+      "F-1B": 0.2411015909979004,
+      "F-5": 0.236,
+      "F-RNA-1B": 0.4342564076981111
+    }
+  },
+  "dois_by_module": {
+    "trevino_2021": [
+      "10.1016/j.cell.2021.07.039"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "paper_pdf_sha256": "19dda596ec1211bad41b964fdc5835dc9562739d42d62db1d734dd5a2bd456be",
+  "paper_pdf_size_bytes": 50617461,
+  "paper_pdf_doi": "10.1016/j.cell.2021.07.039",
+  "paper_pdf_title": "Chromatin and gene-regulatory dynamics of the developing human cerebral cortex at single-cell resolution",
+  "paper_pdf_authors_first": "Trevino, Alexandro E.",
+  "paper_pdf_journal": "Cell",
+  "paper_pdf_year": "2021",
+  "paper_pdf_volume": "184",
+  "paper_pdf_pages": "5053-5069.e23",
+  "paper_pdf_pages_count": 41,
+  "extraction_tool": "poppler-utils pdfimages 24.02.0 + pdftoppm",
+  "extraction_iso": "2026-05-17T08:36:00Z",
+  "license_attribution_note": "see README.md (fair-use \u00a7107 internal-research-review only)"
+}

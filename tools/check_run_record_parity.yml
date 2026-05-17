@@ -1,0 +1,9 @@
+{
+  "factory_mode": "warn",
+  "projects_mode": "warn-only",
+  "ratchet_policy": "After 3 consecutive clean runs (n_ledgers_missing_records == 0), graduate factory_mode to 'fail'",
+  "asymmetric_rationale": "Factory has authoritative ledger; projects are downstream. Factory-side gaps are higher severity but still warn-mode until ratchet graduates.",
+  "monotonic_non_increasing_gate": "warning_trend_ok flag in walker output asserts current count <= max of prior 2 runs",
+  "expected_baseline_record_count": 6,
+  "AC_anchor": "AC-V5-PARITY-WALKER-1"
+}

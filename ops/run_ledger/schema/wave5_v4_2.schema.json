@@ -15,7 +15,8 @@
     "metrics",
     "regression_gate_exit_code",
     "dois_by_module",
-    "created_at"
+    "created_at",
+    "plan_revision"
   ],
   "properties": {
     "wave": {

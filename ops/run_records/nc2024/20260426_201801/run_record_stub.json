@@ -1,0 +1,12 @@
+{
+  "project": "nc2024",
+  "run_id": "20260426_201801",
+  "stub_iso": "2026-05-17T08:58:35Z",
+  "stub_purpose": "Stage B5 backfill \u2014 points back to factory-side ledger entry/entries for parity walker",
+  "ledger_paths": [
+    "/home/zerlinshen/singlecell_factory/ops/run_ledger/nc2024_bh_20260426_v2_20260426_201801.json"
+  ],
+  "canonical_project_run_path": "/home/zerlinshen/projects/nc2024/runs/20260426_201801/",
+  "plan_ref": ".omc/plans/wave5-completion-consensus-2026-05-17-v5.0.4.md",
+  "AC_anchor": "AC-V5-PARITY-2 (Stream B Stage B5)"
+}

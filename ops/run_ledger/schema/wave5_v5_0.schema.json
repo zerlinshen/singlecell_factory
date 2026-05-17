@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://singlecell_factory.local/schemas/wave5_v5_0",
+  "title": "Wave-5 v5.0 ledger schema (figure-parity + workspace-reorg + three-layer comparison)",
+  "description": "Schema for Wave-5.5 plan v5.0.4 ledger entries. plan_revision enum restricted to {v5.0, v5.1}; v4.x records cannot pass enum (mutual rejection impossible-by-construction). Required base block mirrors v4.2 minus biology-aware-only fields. New v5.0.4 fields: figure_outputs (triple-SHA per figure), parameter_divergence_table_path, quantitative_similarity_metrics_path, reproduction_rate, rna_only_figures_path, rna_only_reviewer_context_isolation, trevino_paper_pdf_sha, trevino_figure_mapping_path, comparison_pdf_symlink_history.",
+  "type": "object",
+  "required": [
+    "wave",
+    "run_id",
+    "project_root",
+    "run_manifest_path",
+    "conda_env_hash",
+    "created_at",
+    "plan_revision",
+    "parent_canonical_run_id",
+    "parent_v42_ledger_sha",
+    "figure_outputs"
+  ],
+  "properties": {
+    "wave": {
+      "type": "string",
+      "const": "5"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Run-id of the parent canonical v4.2 run that v5.0 figures are derived from.",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "run_manifest_path": {
+      "type": "string"
+    },
+    "module_status_path": {
+      "type": "string"
+    },
+    "conda_env_hash": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plan_revision": {
+      "type": "string",
+      "enum": ["v5.0", "v5.1"],
+      "description": "v5.0 enum strictly excludes v4.x to enforce mutual rejection impossible-by-construction with wave5_v4_2.schema.json."
+    },
+    "parent_canonical_run_id": {
+      "type": "string",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$",
+      "description": "Run-id of the parent v4.2 canonical run that v5.0 builds upon. Required per AC-V5-LEDGER-2. Expected value for current Wave-5.5: 20260516T0931Z-d192836f1bb0."
+    },
+    "parent_v42_ledger_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the parent v4.2 ledger file (binding provenance chain). Required per AC-V5-LEDGER-2."
+    },
+    "figure_outputs": {
+      "type": "object",
+      "description": "Per-figure triple-format SHA-256 digests per AC-V5-FIG-1.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["png_sha", "svg_sha", "pdf_sha"],
+        "properties": {
+          "png_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "svg_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "pdf_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "figure_spec_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of FIGURE_SPEC.md at render time. Must match Stage 0 sign-off SHA per spec-hash assertion."
+    },
+    "safeguard_reports_dir": {
+      "type": "string",
+      "description": "Directory containing per-figure <fig>_safeguard_report.json files (6 booleans each per AC-V5-FIG-3)."
+    },
+    "parameter_divergence_table_path": {
+      "type": "string",
+      "description": "Path to per-figure parameter divergence JSON dir per AC-V5-COMP-PARAM-1."
+    },
+    "quantitative_similarity_metrics_path": {
+      "type": "string",
+      "description": "Path to per-figure quantitative metrics JSON dir per AC-V5-COMP-QUANT-1."
+    },
+    "reproduction_rate": {
+      "type": "object",
+      "description": "Per-figure + overall reproduction-rate scores per AC-V5-REPRO-RATE-1.",
+      "required": ["overall", "not_run_count"],
+      "properties": {
+        "overall": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "not_run_count": { "type": "integer", "minimum": 0 },
+        "supplementary_score": { "type": ["number", "null"], "minimum": 0.0, "maximum": 1.0 },
+        "per_figure": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        }
+      }
+    },
+    "rna_only_figures_path": {
+      "type": "string",
+      "description": "Path to <canonical-run>/python/figures/v5/rna_only/ directory per AC-V5-RNA-ONLY-1."
+    },
+    "rna_only_reviewer_context_isolation": {
+      "type": "boolean",
+      "description": "Per HARKing safeguard #6: MUST be true for any v5.0 ledger entry that includes Stream A2 RNA-only figures."
+    },
+    "trevino_paper_pdf_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of data/external/trevino_2021/paper.pdf per AC-V5-TREVINO-PDF-1."
+    },
+    "trevino_figure_mapping_path": {
+      "type": "string",
+      "description": "Path to data/external/trevino_2021/figures_extracted/MAPPING.md per AC-V5-TREVINO-PDF-2."
+    },
+    "comparison_pdf_symlink_history": {
+      "type": "array",
+      "description": "Per Arch-2 Fix #3: history of comparison.pdf symlink targets (each entry is {old_target, new_target, swap_iso}).",
+      "items": {
+        "type": "object",
+        "required": ["old_target", "new_target", "swap_iso"],
+        "properties": {
+          "old_target": { "type": ["string", "null"] },
+          "new_target": { "type": "string" },
+          "swap_iso": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "comparison_pdf_current_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Current comparison_<sha>.pdf SHA-256 (matches symlink_history[-1].new_target without the comparison_ prefix)."
+    },
+    "branch_base_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]+$",
+      "description": "Base SHA of wave5-v5.0-figures branch (Arch-2 Fix #6 timing constraint enforced)."
+    },
+    "branch_base_sha_recorded_iso": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cell_figure_use_acknowledgment_path": {
+      "type": "string",
+      "description": "Path to signed acknowledgment file per AC-V5-LICENSE-1 (90-day expiry)."
+    },
+    "embed_cell_figures_opted_in": {
+      "type": "boolean",
+      "description": "True iff comparison.pdf was rendered with --embed-cell-figures opt-in flag."
+    },
+    "geo_sha256s": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "dois_by_module": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "rna_only_figures_path": { "type": "string" } },
+        "required": ["rna_only_figures_path"]
+      },
+      "then": {
+        "required": ["rna_only_reviewer_context_isolation"],
+        "properties": {
+          "rna_only_reviewer_context_isolation": { "const": true }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}
