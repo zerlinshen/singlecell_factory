@@ -1,0 +1,392 @@
+{
+  "10.1002/j.1538-7305.1948.tb01338.x": {
+    "authors": "Shannon",
+    "journal": "Bell System Technical Journal",
+    "title": "A Mathematical Theory of Communication",
+    "year": "1948"
+  },
+  "10.1016/j.cell.2018.06.052": {
+    "authors": "Cusanovich",
+    "journal": "Cell",
+    "title": "A Single-Cell Atlas of In\u00a0Vivo Mammalian Chromatin Accessibility",
+    "year": "2018"
+  },
+  "10.1016/j.cell.2019.05.031": {
+    "authors": "Stuart",
+    "journal": "Cell",
+    "title": "Comprehensive Integration of Single-Cell Data",
+    "year": "2019"
+  },
+  "10.1016/j.cell.2020.09.056": {
+    "authors": "Ma",
+    "journal": "Cell",
+    "title": "Chromatin Potential Identified by Shared Single-Cell Profiling of RNA and Chromatin",
+    "year": "2020"
+  },
+  "10.1016/j.cell.2021.04.048": {
+    "authors": "Hao",
+    "journal": "Cell",
+    "title": "Integrated analysis of multimodal single-cell data",
+    "year": "2021"
+  },
+  "10.1016/j.cell.2021.07.039": {
+    "authors": "Trevino",
+    "journal": "Cell",
+    "title": "Chromatin and gene-regulatory dynamics of the developing human cerebral cortex at single-cell resolution",
+    "year": "2021"
+  },
+  "10.1016/j.cels.2018.11.005": {
+    "authors": "Wolock",
+    "journal": "Cell Systems",
+    "title": "Scrublet: Computational Identification of Cell Doublets in Single-Cell Transcriptomic Data",
+    "year": "2019"
+  },
+  "10.1016/j.immuni.2019.03.009": {
+    "authors": "Zilionis",
+    "journal": "Immunity",
+    "title": "Single-Cell Transcriptomics of Human and Mouse Lung Cancers Reveals Conserved Myeloid Populations across Individuals and Species",
+    "year": "2019"
+  },
+  "10.1016/j.molcel.2018.06.044": {
+    "authors": "Pliner",
+    "journal": "Molecular Cell",
+    "title": "Cicero Predicts cis-Regulatory DNA Interactions from Single-Cell Chromatin Accessibility Data",
+    "year": "2018"
+  },
+  "10.1038/nature11049": {
+    "authors": "Nora",
+    "journal": "Nature",
+    "title": "Spatial partitioning of the regulatory landscape of the X-inactivation centre",
+    "year": "2012"
+  },
+  "10.1038/nature14450": {
+    "authors": "Crane",
+    "journal": "Nature",
+    "title": "Condensin-driven remodelling of X chromosome topology during dosage compensation",
+    "year": "2015"
+  },
+  "10.1038/nature20123": {
+    "authors": "Tirosh",
+    "journal": "Nature",
+    "title": "Single-cell RNA-seq supports a developmental hierarchy in human oligodendroglioma",
+    "year": "2016"
+  },
+  "10.1038/nbt.4091": {
+    "authors": "Haghverdi",
+    "journal": "Nature Biotechnology",
+    "title": "Batch effects in single-cell RNA-sequencing data are corrected by matching mutual nearest neighbors",
+    "year": "2018"
+  },
+  "10.1038/ncomms14049": {
+    "authors": "Zheng",
+    "journal": "Nature Communications",
+    "title": "Massively parallel digital transcriptional profiling of single cells",
+    "year": "2017"
+  },
+  "10.1038/nm.3984": {
+    "authors": "Andor",
+    "journal": "Nature Medicine",
+    "title": "Pan-cancer analysis of the extent and consequences of intratumor heterogeneity",
+    "year": "2015"
+  },
+  "10.1038/nmeth.2688": {
+    "authors": "Buenrostro",
+    "journal": "Nature Methods",
+    "title": "Transposition of native chromatin for fast and sensitive epigenomic profiling of open chromatin, DNA-binding proteins and nucleosome position",
+    "year": "2013"
+  },
+  "10.1038/nmeth.3971": {
+    "authors": "Haghverdi",
+    "journal": "Nature Methods",
+    "title": "Diffusion pseudotime robustly reconstructs lineage branching",
+    "year": "2016"
+  },
+  "10.1038/nmeth.4380": {
+    "authors": "Stoeckius",
+    "journal": "Nature Methods",
+    "title": "Simultaneous epitope and transcriptome measurement in single cells",
+    "year": "2017"
+  },
+  "10.1038/nmeth.4612": {
+    "authors": "Soneson",
+    "journal": "Nature Methods",
+    "title": "Bias, robustness and scalability in single-cell differential expression analysis",
+    "year": "2018"
+  },
+  "10.1038/nrm3950": {
+    "authors": "Grosse",
+    "journal": "Nature Reviews Molecular Cell Biology",
+    "title": "LOV is all we need",
+    "year": "2015"
+  },
+  "10.1038/s41467-017-02391-6": {
+    "authors": "Schubert",
+    "journal": "Nature Communications",
+    "title": "Perturbation-response genes reveal signaling footprints in cancer gene expression",
+    "year": "2018"
+  },
+  "10.1038/s41467-021-25960-2": {
+    "authors": "Squair",
+    "journal": "Nature Communications",
+    "title": "Confronting false discoveries in single-cell differential expression",
+    "year": "2021"
+  },
+  "10.1038/s41467-021-27150-6": {
+    "authors": "B\u00fcttner",
+    "journal": "Nature Communications",
+    "title": "scCODA is a Bayesian model for compositional single-cell data analysis",
+    "year": "2021"
+  },
+  "10.1038/s41467-022-28803-w": {
+    "authors": "Ianevski",
+    "journal": "Nature Communications",
+    "title": "Fully-automated and ultra-fast cell-type identification using specific marker combinations from single-cell transcriptomic data",
+    "year": "2022"
+  },
+  "10.1038/s41467-022-29356-8": {
+    "authors": "Mul\u00e8",
+    "journal": "Nature Communications",
+    "title": "Normalizing and denoising protein expression data from droplet-based single cell profiling",
+    "year": "2022"
+  },
+  "10.1038/s41467-022-30755-0": {
+    "authors": "Dimitrov",
+    "journal": "Nature Communications",
+    "title": "Comparison of methods and resources for cell-cell communication inference from single-cell RNA-Seq data",
+    "year": "2022"
+  },
+  "10.1038/s41586-018-0414-6": {
+    "authors": "La Manno",
+    "journal": "Nature",
+    "title": "RNA velocity of single cells",
+    "year": "2018"
+  },
+  "10.1038/s41587-019-0068-4": {
+    "authors": "Setty",
+    "journal": "Nature Biotechnology",
+    "title": "Characterization of cell fate probabilities in single-cell data with Palantir",
+    "year": "2019"
+  },
+  "10.1038/s41587-019-0113-3": {
+    "authors": "Hie",
+    "journal": "Nature Biotechnology",
+    "title": "Efficient integration of heterogeneous single-cell transcriptomes using Scanorama",
+    "year": "2019"
+  },
+  "10.1038/s41587-020-00795-2": {
+    "authors": "Gao",
+    "journal": "Nature Biotechnology",
+    "title": "Delineating copy number and clonal substructure in human tumors from single-cell transcriptomes",
+    "year": "2021"
+  },
+  "10.1038/s41587-020-0591-3": {
+    "authors": "Bergen",
+    "journal": "Nature Biotechnology",
+    "title": "Generalizing RNA velocity to transient cell states through dynamical modeling",
+    "year": "2020"
+  },
+  "10.1038/s41587-023-01716-9": {
+    "authors": "Persad",
+    "journal": "Nature Biotechnology",
+    "title": "SEACells infers transcriptional and epigenomic cellular states from single-cell genomics data",
+    "year": "2023"
+  },
+  "10.1038/s41588-021-00790-6": {
+    "authors": "Granja",
+    "journal": "Nature Genetics",
+    "title": "ArchR is a scalable software package for integrative single-cell chromatin accessibility analysis",
+    "year": "2021"
+  },
+  "10.1038/s41590-018-0276-y": {
+    "authors": "Aran",
+    "journal": "Nature Immunology",
+    "title": "Reference-based analysis of lung single-cell sequencing reveals a transitional profibrotic macrophage",
+    "year": "2019"
+  },
+  "10.1038/s41592-018-0229-2": {
+    "authors": "Lopez",
+    "journal": "Nature Methods",
+    "title": "Deep generative modeling for single-cell transcriptomics",
+    "year": "2018"
+  },
+  "10.1038/s41592-019-0619-0": {
+    "authors": "Korsunsky",
+    "journal": "Nature Methods",
+    "title": "Fast, sensitive and accurate integration of single-cell data with Harmony",
+    "year": "2019"
+  },
+  "10.1038/s41592-021-01282-5": {
+    "authors": "Stuart",
+    "journal": "Nature Methods",
+    "title": "Single-cell chromatin state analysis with Signac",
+    "year": "2021"
+  },
+  "10.1038/s41592-021-01346-6": {
+    "authors": "Lange",
+    "journal": "Nature Methods",
+    "title": "CellRank for directed single-cell fate mapping",
+    "year": "2022"
+  },
+  "10.1038/s41592-021-01358-2": {
+    "authors": "Palla",
+    "journal": "Nature Methods",
+    "title": "Squidpy: a scalable framework for spatial omics analysis",
+    "year": "2022"
+  },
+  "10.1038/s41592-023-02139-9": {
+    "authors": "Zhang",
+    "journal": "Nature Methods",
+    "title": "A fast, scalable and versatile tool for analysis of single-cell omics data",
+    "year": "2024"
+  },
+  "10.1038/s41596-020-0292-x": {
+    "authors": "Efremova",
+    "journal": "Nature Protocols",
+    "title": "CellPhoneDB: inferring cell\u2013cell communication from combined expression of multi-subunit ligand\u2013receptor complexes",
+    "year": "2020"
+  },
+  "10.1038/s41598-019-41695-z": {
+    "authors": "Traag",
+    "journal": "Scientific Reports",
+    "title": "From Louvain to Leiden: guaranteeing well-connected communities",
+    "year": "2019"
+  },
+  "10.1073/pnas.0506580102": {
+    "authors": "Subramanian",
+    "journal": "Proceedings of the National Academy of Sciences",
+    "title": "Gene set enrichment analysis: A knowledge-based approach for interpreting genome-wide expression profiles",
+    "year": "2005"
+  },
+  "10.1093/bioadv/vbac016": {
+    "authors": "Badia-i-Mompel",
+    "journal": "Bioinformatics Advances",
+    "title": "decoupleR: ensemble of computational methods to infer biological activities from omics data",
+    "year": "2022"
+  },
+  "10.1093/bioinformatics/btaa611": {
+    "authors": "Sturm",
+    "journal": "Bioinformatics",
+    "title": "Scirpy: a Scanpy extension for analyzing single-cell T-cell receptor-sequencing data",
+    "year": "2020"
+  },
+  "10.1093/bioinformatics/btz540": {
+    "authors": "Abdennur",
+    "journal": "Bioinformatics",
+    "title": "Cooler: scalable storage for Hi-C data and other genomically labeled arrays",
+    "year": "2019"
+  },
+  "10.1093/bioinformatics/btz625": {
+    "authors": "Pola\u0144ski",
+    "journal": "Bioinformatics",
+    "title": "BBKNN: fast batch alignment of single cell transcriptomes",
+    "year": "2019"
+  },
+  "10.1093/biostatistics/kxj037": {
+    "authors": "Johnson",
+    "journal": "Biostatistics",
+    "title": "Adjusting batch effects in microarray expression data using empirical Bayes methods",
+    "year": "2006"
+  },
+  "10.1093/database/baz046": {
+    "authors": "Franz\u00e9n",
+    "journal": "Database",
+    "title": "PanglaoDB: a web server for exploration of mouse and human single-cell RNA sequencing data",
+    "year": "2019"
+  },
+  "10.1093/nar/gkac947": {
+    "authors": "Hu",
+    "journal": "Nucleic Acids Research",
+    "title": "CellMarker 2.0: an updated database of manually curated cell markers in human/mouse and web tools based on scRNA-seq data",
+    "year": "2022"
+  },
+  "10.1101/gr.240663.118": {
+    "authors": "Garcia-Alonso",
+    "journal": "Genome Research",
+    "title": "Benchmark and integration of resources for the estimation of human transcription factor activities",
+    "year": "2019"
+  },
+  "10.1111/j.2517-6161.1995.tb02031.x": {
+    "authors": "Benjamini",
+    "journal": "Journal of the Royal Statistical Society Series B: Statistical Methodology",
+    "title": "Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing",
+    "year": "1995"
+  },
+  "10.1126/science.1168978": {
+    "authors": "Ingolia",
+    "journal": "Science",
+    "title": "Genome-Wide Analysis in Vivo of Translation with Nucleotide Resolution Using Ribosome Profiling",
+    "year": "2009"
+  },
+  "10.1126/science.1181369": {
+    "authors": "Lieberman-Aiden",
+    "journal": "Science",
+    "title": "Comprehensive Mapping of Long-Range Interactions Reveals Folding Principles of the Human Genome",
+    "year": "2009"
+  },
+  "10.1126/science.1254257": {
+    "authors": "Patel",
+    "journal": "Science",
+    "title": "Single-cell RNA-seq highlights intratumoral heterogeneity in primary glioblastoma",
+    "year": "2014"
+  },
+  "10.1126/science.aaa6090": {
+    "authors": "Chen",
+    "journal": "Science",
+    "title": "Spatially resolved, highly multiplexed RNA profiling in single cells",
+    "year": "2015"
+  },
+  "10.1126/science.aad0501": {
+    "authors": "Tirosh",
+    "journal": "Science",
+    "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
+    "year": "2016"
+  },
+  "10.1137/090771806": {
+    "authors": "Halko",
+    "journal": "SIAM Review",
+    "title": "Finding Structure with Randomness: Probabilistic Algorithms for Constructing Approximate Matrix Decompositions",
+    "year": "2011"
+  },
+  "10.1158/2159-8290.CD-12-0095": {
+    "authors": "Cerami",
+    "journal": "Cancer Discovery",
+    "title": "The cBio Cancer Genomics Portal: An Open Platform for Exploring Multidimensional Cancer Genomics Data",
+    "year": "2012"
+  },
+  "10.1186/s13059-017-1382-0": {
+    "authors": "Wolf",
+    "journal": "Genome Biology",
+    "title": "SCANPY: large-scale single-cell gene expression data analysis",
+    "year": "2018"
+  },
+  "10.1186/s13059-019-1663-x": {
+    "authors": "Wolf",
+    "journal": "Genome Biology",
+    "title": "PAGA: graph abstraction reconciles clustering with trajectory inference through a topology preserving map of single cells",
+    "year": "2019"
+  },
+  "10.1186/s13059-020-02015-1": {
+    "authors": "Argelaguet",
+    "journal": "Genome Biology",
+    "title": "MOFA+: a statistical framework for comprehensive integration of multi-modal single-cell data",
+    "year": "2020"
+  },
+  "10.1371/journal.pcbi.1003285": {
+    "authors": "Sandve",
+    "journal": "PLoS Computational Biology",
+    "title": "Ten Simple Rules for Reproducible Computational Research",
+    "year": "2013"
+  },
+  "10.1371/journal.pcbi.1004503": {
+    "authors": "Shugay",
+    "journal": "PLOS Computational Biology",
+    "title": "VDJtools: Unifying Post-analysis of T Cell Receptor Repertoires",
+    "year": "2015"
+  },
+  "10.15252/msb.20188746": {
+    "authors": "Luecken",
+    "journal": "Molecular Systems Biology",
+    "title": "Current best practices in single\u2010cell RNA\u2010seq analysis: a tutorial",
+    "year": "2019"
+  }
+}

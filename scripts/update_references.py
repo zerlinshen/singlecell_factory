@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -8,8 +9,46 @@ from pathlib import Path
 
 DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
 
+# Disk cache for Crossref responses. Without this, network jitter (intermittent
+# DOI timeouts) makes README citation rows non-deterministic across consecutive
+# runs, which breaks the pre-commit reference-manager gate.
+_CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "external" / "crossref_cache.json"
+_UNKNOWN_META = {"authors": "Unknown", "journal": "Unknown", "year": "Unknown", "title": "Unknown"}
+_cache_loaded: bool = False
+_cache: dict[str, dict] = {}
+_cache_dirty: bool = False
+
+
+def _load_cache() -> None:
+    global _cache, _cache_loaded
+    if _cache_loaded:
+        return
+    if _CACHE_PATH.exists():
+        try:
+            _cache = json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            _cache = {}
+    _cache_loaded = True
+
+
+def _save_cache() -> None:
+    if not _cache_dirty:
+        return
+    _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _CACHE_PATH.write_text(
+        json.dumps(_cache, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
 
 def _fetch_crossref_meta(doi: str) -> dict:
+    global _cache_dirty
+    _load_cache()
+    if doi in _cache:
+        return _cache[doi]
+    if os.environ.get("UPDATE_REFERENCES_OFFLINE") == "1":
+        # Offline mode: do not hit the network, return Unknown without caching.
+        # Failures are not cached so the next online run can fill them in.
+        return _UNKNOWN_META
     url = f"https://api.crossref.org/works/{urllib.parse.quote(doi)}"
     req = urllib.request.Request(url, headers={"User-Agent": "singlecell_factory-reference-bot/1.0"})
     try:
@@ -26,14 +65,18 @@ def _fetch_crossref_meta(doi: str) -> dict:
         date_parts = msg.get("issued", {}).get("date-parts", [])
         if date_parts and date_parts[0]:
             year = str(date_parts[0][0])
-        return {
+        meta = {
             "authors": first_author,
             "journal": journal,
             "year": year,
             "title": msg.get("title", ["Unknown"])[0],
         }
+        _cache[doi] = meta
+        _cache_dirty = True
+        return meta
     except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
-        return {"authors": "Unknown", "journal": "Unknown", "year": "Unknown", "title": "Unknown"}
+        # Don't cache transient failures — let the next online run retry.
+        return dict(_UNKNOWN_META)
 
 
 def _extract_references_from_file(py_file: Path) -> list[dict]:
@@ -143,7 +186,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--force", action="store_true", help="Force overwrite citation table even if detected refs are fewer.")
+    parser.add_argument("--refresh-cache", action="store_true", help="Discard the Crossref cache before running so every DOI is re-fetched.")
     args = parser.parse_args()
+
+    if args.refresh_cache and _CACHE_PATH.exists():
+        _CACHE_PATH.unlink()
+        print(f"Refreshed Crossref cache (removed {_CACHE_PATH}).")
 
     project_root = Path(__file__).resolve().parents[1]
     modules_dir = project_root / "workflow" / "modular" / "modules"
@@ -157,3 +205,4 @@ if __name__ == "__main__":
             print("README citation table kept unchanged.")
     else:
         print("No module-level references found; README was not modified.")
+    _save_cache()
