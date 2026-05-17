@@ -1,0 +1,16 @@
+{
+  "_template_id": "wave5_v4_summary_templates_v1",
+  "_authored": "2026-05-16",
+  "_token_list": [
+    "${panel_recall}",
+    "${panel_hits_count}",
+    "${panel_total}",
+    "${top50_hit_rate}",
+    "${top10_genes}",
+    "${panel_sha}",
+    "${strict_overlap}",
+    "${trevino_artifact_examples}"
+  ],
+  "biology_validation_summary": "Panel recall (top-1000 peak-gene links by |Pearson|) = ${panel_recall} (${panel_hits_count}/${panel_total} markers). Top-50 hit rate = ${top50_hit_rate}. Top-10 unique gene_symbols: ${top10_genes}. Panel SHA: ${panel_sha}.",
+  "trevino_s2f_caveat": "Strict (peak_name, gene_symbol) top-1000 overlap vs Trevino S2F = ${strict_overlap} (DIAGNOSTIC ONLY, NOT BINDING). Trevino S2F top-K contains sparse-detection artifacts (e.g., ${trevino_artifact_examples}) biologically implausible in fetal cerebral cortex PCW21; binding metric is panel recall against literature-curated PCW21 panel (AC-VAL-3a)."
+}

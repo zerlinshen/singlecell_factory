@@ -1,0 +1,25 @@
+{
+  "_allowlist_id": "wave5_test_deps_v1",
+  "_authored": "2026-05-16",
+  "_authored_for_plan": "v4.2",
+  "direct_deps": [
+    "pytest",
+    "pytest-cov",
+    "coverage",
+    "iniconfig",
+    "pluggy",
+    "openpyxl",
+    "et-xmlfile",
+    "jsonschema"
+  ],
+  "transitive_deps": [
+    "packaging",
+    "tomli",
+    "exceptiongroup",
+    "attrs",
+    "jsonschema-specifications",
+    "referencing",
+    "rpds-py"
+  ],
+  "policy": "Pip-freeze fallback path (--allow-fallback) accepts only deps in direct_deps ∪ transitive_deps. Any delta outside this set requires a follow-up ticket per Plan v4.2 §8 Scenario C."
+}

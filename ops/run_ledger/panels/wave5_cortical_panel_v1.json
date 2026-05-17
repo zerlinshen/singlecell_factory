@@ -1,0 +1,141 @@
+{
+  "panel_id": "wave5_cortical_panel_v1",
+  "description": "Curated PCW21 fetal cerebral cortex marker panel for Wave-5 validation (AC-VAL-3a). 18 markers across 6 lineages selected from PCW16-PCW24 cortical-development literature, pre-observation (authored before any Stage 6.2 canonical-run inspection).",
+  "n_markers": 18,
+  "lineage_counts": {
+    "radial_glia": 4,
+    "intermediate_progenitor": 2,
+    "excitatory_neuron": 4,
+    "inhibitory_neuron": 3,
+    "oligodendrocyte_lineage": 4,
+    "microglia": 1
+  },
+  "markers": [
+    {
+      "gene_symbol": "PAX6",
+      "lineage": "radial_glia",
+      "source_doi": "10.1016/j.cell.2021.07.039",
+      "source_year": 2021,
+      "notes": "Canonical radial-glia transcription factor; Bhaduri 2021 / Trevino 2021 fetal cortex reference."
+    },
+    {
+      "gene_symbol": "VIM",
+      "lineage": "radial_glia",
+      "source_doi": "10.1016/j.cell.2015.09.004",
+      "source_year": 2015,
+      "notes": "Radial-glia intermediate-filament marker; Pollen 2015 developing human cortex."
+    },
+    {
+      "gene_symbol": "HES1",
+      "lineage": "radial_glia",
+      "source_doi": "10.1016/j.neuron.2019.06.011",
+      "source_year": 2019,
+      "notes": "Notch effector maintaining radial-glia self-renewal; Polioudakis 2019 mid-gestation human cortex."
+    },
+    {
+      "gene_symbol": "SOX2",
+      "lineage": "radial_glia",
+      "source_doi": "10.1016/j.cell.2015.09.004",
+      "source_year": 2015,
+      "notes": "Neural-stem/radial-glia transcription factor; Pollen 2015."
+    },
+    {
+      "gene_symbol": "EOMES",
+      "lineage": "intermediate_progenitor",
+      "source_doi": "10.1523/JNEUROSCI.4499-04.2005",
+      "source_year": 2005,
+      "notes": "Tbr2; canonical intermediate-progenitor marker; Englund 2005."
+    },
+    {
+      "gene_symbol": "NEUROG2",
+      "lineage": "intermediate_progenitor",
+      "source_doi": "10.1242/dev.01173",
+      "source_year": 2004,
+      "notes": "Proneural bHLH driving RG -> IPC -> ExN transition; Miyata 2004."
+    },
+    {
+      "gene_symbol": "NEUROD2",
+      "lineage": "excitatory_neuron",
+      "source_doi": "10.1128/MCB.21.1.299-308.2001",
+      "source_year": 2001,
+      "notes": "Cortical excitatory-neuron bHLH; Olson 2001."
+    },
+    {
+      "gene_symbol": "NEUROD6",
+      "lineage": "excitatory_neuron",
+      "source_doi": "10.1523/JNEUROSCI.0651-13.2013",
+      "source_year": 2013,
+      "notes": "Excitatory-neuron differentiation factor; Bormuth 2013."
+    },
+    {
+      "gene_symbol": "BCL11B",
+      "lineage": "excitatory_neuron",
+      "source_doi": "10.1016/j.neuron.2004.12.036",
+      "source_year": 2005,
+      "notes": "Ctip2; deep-layer (V/VI) cortical-projection-neuron marker; Arlotta 2005."
+    },
+    {
+      "gene_symbol": "TBR1",
+      "lineage": "excitatory_neuron",
+      "source_doi": "10.1016/S0896-6273(01)00211-2",
+      "source_year": 2001,
+      "notes": "Deep-layer (VI) cortical-projection-neuron transcription factor; Hevner 2001."
+    },
+    {
+      "gene_symbol": "GAD2",
+      "lineage": "inhibitory_neuron",
+      "source_doi": "10.1016/j.neuron.2018.09.030",
+      "source_year": 2018,
+      "notes": "GAD65; GABAergic interneuron marker; Lim 2018 human cortical interneurons."
+    },
+    {
+      "gene_symbol": "DLX1",
+      "lineage": "inhibitory_neuron",
+      "source_doi": "10.1126/science.278.5337.474",
+      "source_year": 1997,
+      "notes": "Subcortical-origin interneuron transcription factor; Anderson 1997."
+    },
+    {
+      "gene_symbol": "DLX2",
+      "lineage": "inhibitory_neuron",
+      "source_doi": "10.1126/science.278.5337.474",
+      "source_year": 1997,
+      "notes": "Subcortical-origin interneuron transcription factor; Anderson 1997."
+    },
+    {
+      "gene_symbol": "OLIG1",
+      "lineage": "oligodendrocyte_lineage",
+      "source_doi": "10.1016/S0092-8674(02)00677-3",
+      "source_year": 2002,
+      "notes": "Oligodendrocyte-lineage bHLH; Lu 2002."
+    },
+    {
+      "gene_symbol": "OLIG2",
+      "lineage": "oligodendrocyte_lineage",
+      "source_doi": "10.1016/S0092-8674(02)00677-3",
+      "source_year": 2002,
+      "notes": "OPC/oligodendrocyte-lineage master regulator; Lu 2002."
+    },
+    {
+      "gene_symbol": "SOX10",
+      "lineage": "oligodendrocyte_lineage",
+      "source_doi": "10.1101/gad.215802",
+      "source_year": 2002,
+      "notes": "Oligodendrocyte-lineage transcription factor; Stolt 2002."
+    },
+    {
+      "gene_symbol": "NKX2-2",
+      "lineage": "oligodendrocyte_lineage",
+      "source_doi": "10.1242/dev.128.14.2723",
+      "source_year": 2001,
+      "notes": "Ventral-origin oligodendrocyte-specification factor; Qi 2001."
+    },
+    {
+      "gene_symbol": "CX3CR1",
+      "lineage": "microglia",
+      "source_doi": "10.1038/nn1715",
+      "source_year": 2006,
+      "notes": "Fractalkine receptor; microglia-restricted in CNS; Cardona 2006. Note: 1 microglia marker meets >=5/6-lineage-coverage AC; AIF1 from prior brief intentionally excluded to stay at 18 markers."
+    }
+  ]
+}
