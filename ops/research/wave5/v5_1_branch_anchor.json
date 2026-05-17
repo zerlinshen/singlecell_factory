@@ -1,0 +1,8 @@
+{
+  "branch": "wave6-trevino-v5.1",
+  "base_branch": "wave5-v5.0-figures",
+  "branch_base_sha_v5_1": "91f60822896ad97c3eca738e1ab211c0afb28bfd",
+  "branch_base_sha_v5_1_recorded_iso": "2026-05-17T10:03:54Z",
+  "recorded_by": "worker-foundation",
+  "plan_ref": "wave5-completion-consensus-2026-05-17-v5.1.md Stage 0.2 Arch-1-#5"
+}

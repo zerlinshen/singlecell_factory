@@ -1,0 +1,47 @@
+{
+  "wave": "5",
+  "run_id": "20260517T1200Z-abcdef12",
+  "project_root": "/home/zerlinshen/projects/wave5-trevino",
+  "run_manifest_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1200Z-abcdef12/python/run_manifest.json",
+  "conda_env_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-05-17T12:00:00Z",
+  "plan_revision": "v5.1",
+  "parent_canonical_run_id": "20260516T0931Z-d192836f1bb0",
+  "parent_v42_ledger_sha": "16b3a778dad5dc5cd47303b539ca90fff8a79dbbd3b555f74ffca67fdf3fb4d0",
+  "parent_v50_ledger_sha": "e5841ef032dd9f63918c532353cec05d7733750cf59b221dfd4b308f69cb1d2b",
+  "figure_outputs": {
+    "F-1B": {
+      "png_sha": "1111111111111111111111111111111111111111111111111111111111111111",
+      "svg_sha": "2222222222222222222222222222222222222222222222222222222222222222",
+      "pdf_sha": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "historical_reproduction_rate": {
+    "v5_0_4": 0.338,
+    "v5_1": 0.0,
+    "delta": -0.338
+  },
+  "geo_manifest_path": "data/external/trevino_2021/geo/MANIFEST.json",
+  "wnn_sweep_search_space_sha": "aaaa000000000000000000000000000000000000000000000000000000000000",
+  "wnn_sweep_aggregation_rule_sha": "bbbb000000000000000000000000000000000000000000000000000000000000",
+  "wnn_sweep_results_path": "ops/research/wave5/wnn_sweep/results_20260517T1200Z-abcdef12.json",
+  "wnn_selected_config": {
+    "resolution": 0.8,
+    "n_neighbors": 20,
+    "weight_strategy": "default",
+    "knn_pruning": "none"
+  },
+  "wnn_fix_status": "DEFERRED",
+  "wnn_post_fix_ari": null,
+  "parity_vs_v4_2_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1200Z-abcdef12/python/parity/parity_vs_v4_2.json",
+  "mv1_input_mode": "processed_counts",
+  "parity_report_r_python_path": "/home/zerlinshen/multiomics_r_factory/R_bundle/parity/parity_20260517T1200Z-abcdef12.json",
+  "mv2_parity_status": "PASS",
+  "chromvar_lib_pinned": "pychromvar==0.1.0",
+  "gwas_catalog_manifest_path": "data/external/gwas_catalog/MANIFEST.json",
+  "gwas_catalog_version": "v1.0.2-2026-04",
+  "comparison_v5_1_pdf_sha": "cccc000000000000000000000000000000000000000000000000000000000000",
+  "comparison_v5_1_pdf_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1200Z-abcdef12/python/figures/v5/comparison_cccc000000000000000000000000000000000000000000000000000000000000_v5.1.pdf",
+  "branch_base_sha_v5_1": "91f6082",
+  "branch_base_sha_v5_1_recorded_iso": "2026-05-17T12:00:00Z"
+}

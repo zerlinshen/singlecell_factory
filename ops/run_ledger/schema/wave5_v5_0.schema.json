@@ -184,6 +184,12 @@
           "rna_only_reviewer_context_isolation": { "const": true }
         }
       }
+    },
+    {
+      "not": {
+        "properties": { "plan_revision": { "enum": ["v5.1"] } },
+        "required": ["plan_revision"]
+      }
     }
   ],
   "additionalProperties": true

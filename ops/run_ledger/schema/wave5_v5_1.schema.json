@@ -1,0 +1,344 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://singlecell_factory.local/schemas/wave5_v5_1",
+  "title": "Wave-5 v5.1 ledger schema (HV1 real Layer-3 + HV2 WNN sweep + MV1a determinism replay + MV2 R parity + MV3 chromVAR/TF/GWAS + POLISH PDF)",
+  "description": "Schema for Wave-5.6 plan v5.1 ledger entries. plan_revision enum restricted to {v5.1}; v4.x and v5.0 records cannot pass enum (three-way mutual rejection impossible-by-construction). Additive on top of v5.0 fields; new fields per plan §11. parent_v50_ledger_sha required for provenance chain (mirrors v5.0 parent_v42_ledger_sha pattern per Arch-1-#4).",
+  "type": "object",
+  "required": [
+    "wave",
+    "run_id",
+    "project_root",
+    "run_manifest_path",
+    "conda_env_hash",
+    "created_at",
+    "plan_revision",
+    "parent_canonical_run_id",
+    "parent_v42_ledger_sha",
+    "parent_v50_ledger_sha",
+    "figure_outputs",
+    "historical_reproduction_rate",
+    "geo_manifest_path",
+    "wnn_sweep_search_space_sha",
+    "wnn_sweep_aggregation_rule_sha",
+    "wnn_sweep_results_path",
+    "wnn_selected_config",
+    "wnn_fix_status",
+    "wnn_post_fix_ari",
+    "parity_vs_v4_2_path",
+    "mv1_input_mode",
+    "parity_report_r_python_path",
+    "mv2_parity_status",
+    "chromvar_lib_pinned",
+    "gwas_catalog_manifest_path",
+    "gwas_catalog_version",
+    "comparison_v5_1_pdf_sha",
+    "comparison_v5_1_pdf_path",
+    "branch_base_sha_v5_1",
+    "branch_base_sha_v5_1_recorded_iso"
+  ],
+  "properties": {
+    "wave": {
+      "type": "string",
+      "const": "5"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$",
+      "description": "Run-id of the new v5.1 canonical run (format: <ISO-stamp>-<short-sha>)."
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "run_manifest_path": {
+      "type": "string"
+    },
+    "module_status_path": {
+      "type": "string"
+    },
+    "conda_env_hash": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plan_revision": {
+      "type": "string",
+      "enum": ["v5.1"],
+      "description": "v5.1 enum strictly excludes v4.x and v5.0 to enforce three-way mutual rejection."
+    },
+    "parent_canonical_run_id": {
+      "type": "string",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$",
+      "description": "Run-id of the parent v4.2 canonical run. Expected: 20260516T0931Z-d192836f1bb0."
+    },
+    "parent_v42_ledger_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the v4.2 ledger file (binding provenance chain)."
+    },
+    "parent_v50_ledger_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the v5.0 ledger file (v5.0 -> v5.1 provenance chain per Arch-1-#4)."
+    },
+    "figure_outputs": {
+      "type": "object",
+      "description": "Per-figure triple-format SHA-256 digests.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["png_sha", "svg_sha", "pdf_sha"],
+        "properties": {
+          "png_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "svg_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "pdf_sha": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "historical_reproduction_rate": {
+      "type": "object",
+      "description": "Side-by-side v5.0.4 baseline and v5.1 measured reproduction rates per Principle #2.",
+      "required": ["v5_0_4", "v5_1", "delta"],
+      "properties": {
+        "v5_0_4": { "type": "number" },
+        "v5_1":   { "type": "number" },
+        "delta":  { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "geo_manifest_path": {
+      "type": "string",
+      "description": "Path to data/external/trevino_2021/geo/MANIFEST.json per AC-V51-HV1-1."
+    },
+    "wnn_sweep_search_space_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of committed search_space.json per HARKing safeguard #7."
+    },
+    "wnn_sweep_aggregation_rule_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of committed aggregation_rule.json per HARKing safeguard #7."
+    },
+    "wnn_sweep_results_path": {
+      "type": "string",
+      "description": "Path to ops/research/wave5/wnn_sweep/results_<run-id>.json."
+    },
+    "wnn_selected_config": {
+      "type": "object",
+      "description": "Selected configuration dict from WNN sweep (resolution, n_neighbors, weight_strategy, knn_pruning).",
+      "properties": {
+        "resolution":       { "type": "number" },
+        "n_neighbors":      { "type": "integer" },
+        "weight_strategy":  { "type": "string" },
+        "knn_pruning":      { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "wnn_fix_status": {
+      "type": "string",
+      "enum": ["APPROVED", "INCOMPLETE-NO-VIABLE-FIX", "DEFERRED"],
+      "description": "Outcome of WNN ARI fix attempt per AC-V51-HV2-3."
+    },
+    "wnn_post_fix_ari": {
+      "type": ["number", "null"],
+      "description": "Post-fix ARI vs Trevino seurat_clusters; null if INCOMPLETE."
+    },
+    "parity_vs_v4_2_path": {
+      "type": "string",
+      "description": "Path to <canonical-run-v5.1>/python/parity/parity_vs_v4_2.json per AC-V51-MV1a-2."
+    },
+    "mv1_input_mode": {
+      "type": "string",
+      "enum": ["fastq", "processed_counts"],
+      "description": "Whether MV1 used raw FASTQ (MV1b, Wave-6) or processed count matrices (MV1a, default)."
+    },
+    "parity_report_r_python_path": {
+      "type": "string",
+      "description": "Path to multiomics_r_factory/R_bundle/parity/parity_<run-id>.json per AC-V51-MV2-1."
+    },
+    "mv2_parity_status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL-CORRELATION", "FAIL-JACCARD", "FAIL-RMS"],
+      "description": "Overall MV2 R-Python parity result."
+    },
+    "chromvar_lib_pinned": {
+      "type": "string",
+      "description": "Pinned chromVAR Python library name + version (or 'rpy2_bridge') per pre-mortem Scenario 3."
+    },
+    "gwas_catalog_manifest_path": {
+      "type": "string",
+      "description": "Path to data/external/gwas_catalog/MANIFEST.json per AC-V51-MV3-4."
+    },
+    "gwas_catalog_version": {
+      "type": "string",
+      "description": "GWAS catalog version string e.g. 'v1.0.2-2026-04'."
+    },
+    "comparison_v5_1_pdf_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of comparison_<sha>_v5.1.pdf per AC-V51-POLISH-1."
+    },
+    "comparison_v5_1_pdf_path": {
+      "type": "string",
+      "description": "Path with SHA in filename per AC-V51-POLISH-1."
+    },
+    "branch_base_sha_v5_1": {
+      "type": "string",
+      "pattern": "^[a-f0-9]+$",
+      "description": "Branch base SHA of wave6-trevino-v5.1 on wave5-v5.0-figures HEAD (Arch-1-#5)."
+    },
+    "branch_base_sha_v5_1_recorded_iso": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp recorded within 60s of branch creation, before any commit (Arch-1-#5)."
+    },
+    "mv1a_new_canonical_run_id": {
+      "type": "string",
+      "pattern": "^[0-9TZ\\-]+-[a-f0-9]+$",
+      "description": "Run-id of the new MV1a canonical run directory."
+    },
+    "mv1a_parity_report_path": {
+      "type": "string",
+      "description": "Path to parity_vs_v4_2.json for MV1a (alias for parity_vs_v4_2_path)."
+    },
+    "mv2_r_parity_report_path": {
+      "type": "string",
+      "description": "Path to R-Python parity report (alias for parity_report_r_python_path)."
+    },
+    "mv3_chromvar_module_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of workflow/modular/modules/chromvar.py at ledger write time."
+    },
+    "mv3_tf_network_module_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of workflow/modular/modules/tf_network.py at ledger write time."
+    },
+    "mv3_gwas_module_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of workflow/modular/modules/gwas_overlay.py at ledger write time."
+    },
+    "polish_pdf_v5_1_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of comparison_v5.1.pdf (alias for comparison_v5_1_pdf_sha)."
+    },
+    "polish_pdf_v5_1_symlink_history": {
+      "type": "array",
+      "description": "Append-only history of comparison PDF symlink swaps (v5.1 entry appended; v5.0.4 entry preserved).",
+      "items": {
+        "type": "object",
+        "required": ["old_target", "new_target", "swap_iso"],
+        "properties": {
+          "old_target": { "type": ["string", "null"] },
+          "new_target": { "type": "string" },
+          "swap_iso":   { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "hv1_geo_dataset_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Aggregate SHA of all GEO supplementary files downloaded for HV1."
+    },
+    "hv1_layer3_metrics_path": {
+      "type": "string",
+      "description": "Path to quantitative_metrics/ directory containing per-figure metric JSONs."
+    },
+    "hv2_search_space_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Alias for wnn_sweep_search_space_sha."
+    },
+    "hv2_aggregation_rule_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Alias for wnn_sweep_aggregation_rule_sha."
+    },
+    "hv2_best_wnn_ari": {
+      "type": ["number", "null"],
+      "description": "Best WNN ARI found by sweep (alias for wnn_post_fix_ari)."
+    },
+    "hv2_selected_config": {
+      "type": "object",
+      "description": "Alias for wnn_selected_config.",
+      "additionalProperties": true
+    },
+    "acknowledgment_status": {
+      "type": "string",
+      "description": "Cell-figure-use acknowledgment status (e.g. 'VALID', 'REISSUE-FAILED-MANUAL-INTERVENTION-REQUIRED')."
+    },
+    "cell_figure_use_acknowledgment_path": {
+      "type": "string",
+      "description": "Path to signed acknowledgment file (90-day window expiring 2026-08-15)."
+    },
+    "figure_spec_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reproduction_rate": {
+      "type": "object",
+      "properties": {
+        "overall":       { "type": "number" },
+        "not_run_count": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "geo_sha256s": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+    },
+    "dois_by_module": {
+      "type": "object",
+      "additionalProperties": { "type": "array", "items": { "type": "string" } }
+    },
+    "comparison_pdf_symlink_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["old_target", "new_target", "swap_iso"],
+        "properties": {
+          "old_target": { "type": ["string", "null"] },
+          "new_target": { "type": "string" },
+          "swap_iso":   { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "r_factory_sha_at_manifest_write": {
+      "type": "string"
+    },
+    "trevino_paper_pdf_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "trevino_figure_mapping_path": {
+      "type": "string"
+    },
+    "parameter_divergence_table_path": {
+      "type": "string"
+    },
+    "quantitative_similarity_metrics_path": {
+      "type": "string"
+    },
+    "rna_only_figures_path": {
+      "type": "string"
+    },
+    "rna_only_reviewer_context_isolation": {
+      "type": "boolean"
+    },
+    "safeguard_reports_dir": {
+      "type": "string"
+    },
+    "embed_cell_figures_opted_in": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}

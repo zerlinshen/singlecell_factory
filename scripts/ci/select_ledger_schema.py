@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical ledger schema dispatcher (Arch-2 Fix #1, plan v5.0.4 §3.3).
+"""Canonical ledger schema dispatcher (Arch-2 Fix #1, plan v5.0.4 §3.3; v5.1 Stage 0.1 three-way dispatch).
 
 Selects the appropriate JSON schema for a Wave-5 ledger record based on its
 `plan_revision` field, and exposes a single entry-point for downstream gates +
@@ -7,9 +7,10 @@ tests so the choice of schema is not duplicated across call sites.
 
 Schema mapping:
   plan_revision in {v3, v4, v4.1, v4.2}  -> ops/run_ledger/schema/wave5_v4_2.schema.json
-  plan_revision in {v5.0, v5.1}          -> ops/run_ledger/schema/wave5_v5_0.schema.json
+  plan_revision in {v5.0}                 -> ops/run_ledger/schema/wave5_v5_0.schema.json
+  plan_revision in {v5.1}                 -> ops/run_ledger/schema/wave5_v5_1.schema.json
 
-Records missing `plan_revision` are NOT dispatched; both schemas now require
+Records missing `plan_revision` are NOT dispatched; all schemas now require
 `plan_revision` (B1 mutual-rejection patch). Caller receives ``ValueError``.
 """
 
@@ -25,9 +26,11 @@ SCHEMA_DIR = REPO_ROOT / "ops" / "run_ledger" / "schema"
 
 V42_SCHEMA = SCHEMA_DIR / "wave5_v4_2.schema.json"
 V50_SCHEMA = SCHEMA_DIR / "wave5_v5_0.schema.json"
+V51_SCHEMA = SCHEMA_DIR / "wave5_v5_1.schema.json"
 
 V42_REVISIONS = frozenset({"v3", "v4", "v4.1", "v4.2"})
-V50_REVISIONS = frozenset({"v5.0", "v5.1"})
+V50_REVISIONS = frozenset({"v5.0"})
+V51_REVISIONS = frozenset({"v5.1"})
 
 
 def select_schema_path(record: dict) -> Path:
@@ -39,12 +42,14 @@ def select_schema_path(record: dict) -> Path:
     if rev is None:
         raise ValueError(
             "ledger record missing required 'plan_revision' field; "
-            "cannot dispatch schema (both v4.2 and v5.0 schemas require it post-B1 patch)"
+            "cannot dispatch schema (all schemas require plan_revision post-B1 patch)"
         )
     if rev in V42_REVISIONS:
         return V42_SCHEMA
     if rev in V50_REVISIONS:
         return V50_SCHEMA
+    if rev in V51_REVISIONS:
+        return V51_SCHEMA
     raise ValueError(f"unknown plan_revision={rev!r}; no schema mapping")
 
 
