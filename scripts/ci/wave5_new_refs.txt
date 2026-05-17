@@ -1,0 +1,33 @@
+# Wave-5 R1 high-IF citation allowlist (US-W5-9 AC-CI-2)
+#
+# Each line: a paper-reference DOI introduced or retained during Wave-5 that
+# is intentionally exempt from the Round-1 high-IF "must be from top-tier
+# venue, last 5 yrs" grep check. The check enforces methodology citations
+# stay current; this allowlist documents the legitimate exceptions instead
+# of relying on a rebase-fragile git-blame heuristic.
+#
+# Format: <DOI>  <one-line rationale>
+# Comments (#) and blank lines ignored.
+#
+# Wave-5 plan: .omc/plans/wave5-completion-consensus-2026-05-16.md  (US-W5-9 AC-CI-2)
+
+# ---- ATAC + multiome canon ----
+doi:10.1016/j.cell.2021.07.039        Trevino 2021 Cell — anchor paper of the entire Wave-5 reproduction
+doi:10.1016/j.cell.2021.04.048        Hao 2021 Cell — Seurat WNN methodology (multimodal_integration.py)
+doi:10.1038/s41587-019-0068-4         Stuart 2019 Cell — Seurat v3 anchor integration (referenced via Hao 2021)
+doi:10.1038/nbt.4314                  Setty 2019 Nat Biotech — Palantir pseudotime (trajectory.py rationale)
+
+# ---- Peak-to-gene + Cicero legacy ----
+doi:10.1016/j.molcel.2018.06.044      Pliner Cicero 2018 Mol Cell — peak-to-gene legacy method, kept for
+                                       provenance only; new linkage runs use Trevino 2021 per-peak Pearson
+                                       + permutation null (Methods). Plan v3 AC-VAL-3 scoping.
+
+# ---- ATAC TF-IDF / LSI ----
+doi:10.1038/s41592-019-0509-5         Granja 2019 Nat Methods — ArchR TF-IDF/LSI for scATAC
+
+# ---- Modular pipeline / contracts ----
+# (no new DOIs introduced by US-W5-FOUNDATION; ModuleContractError + obsm_any_of
+# are internal contract primitives — no paper-level reference required.)
+
+# ---- 10x technical notes ----
+doi:10.17504/protocols.io.bfskjncw    10x Multiome ATAC + GEX protocol — barcode schema in load_trevino_2021
