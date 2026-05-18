@@ -2,6 +2,8 @@
 data/raw
 output
 results/
+# transient test-modular-pipeline-minimal output dirs (auto-generated, not for tracking)
+results/test_*
 reports/validation/
 rna_velocity_pseudotime_analysis/runtime
 cellranger_runs

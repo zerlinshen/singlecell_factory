@@ -61,10 +61,12 @@ project directory under `${PROJECTS_ROOT}` (default `/home/zerlinshen/projects/`
 ```
 /home/zerlinshen/
 ├── singlecell_factory/        # TOOL (Python). No output/ subtree after migration.
-│   └── contracts/             # CANONICAL: bundle_schema.yaml lives here
-├── r_multiomics_factory/      # TOOL (R). No output/ subtree after migration.
-│   └── contracts/             # VENDORED copy of bundle_schema.yaml (byte-identical)
-├── projects-bootstrap/        # Standalone bootstrap tool (outside both factories)
+│   └── contracts/             # CANONICAL: bundle_schema.yaml + figure_bundle_schema.yaml live here
+├── r_multiomics_factory/      # TOOL (R-native analysis). Trifurcation rename applied 2026-05-18 (see RENAME_NOTE.md).
+│   └── contracts/             # VENDORED copies of canonical schemas (byte-identical)
+├── plotting_factory/          # TOOL (dual-language plotting). python/ + r/ subtrees; theme/schema/contracts.
+│   └── contracts/             # VENDORED copy of figure_bundle_schema.yaml (byte-identical)
+├── projects-bootstrap/        # Standalone bootstrap tool (outside all factories)
 │   └── omc-new-project        # Creates new projects under PROJECTS_ROOT
 └── projects/                  # ${PROJECTS_ROOT} — all scientific artifacts live here
     └── <project-id>/

@@ -1,14 +1,18 @@
 # Factories Overview
 
-_singlecell_factory + r_multiomics_factory technical reference_
+_singlecell_factory + r_multiomics_factory + plotting_factory technical reference_
 
-generated_at: 2026-05-02T13:11:04+00:00
+generated_at: 2026-05-02T13:11:04+00:00 (Three-factory trifurcation: 2026-05-18; R repo renamed under previous_name policy; new `plotting_factory` introduced)
 
 ## 1. Executive summary
 
 `singlecell_factory` is a Python/AnnData heavy-compute pipeline organized as 33 concrete module files across the layers `ingest`, `quality_control`, `latent_structure`, `markers`, `annotation`, `state_dynamics`, `biology`, `aggregation`, `reproduction`, `spatial`, `multimodal`, `genomic_optional`, `external_validation`, `covariates`, and `reporting`. The catalog declares 29 active module specs (3 mandatory + 26 optional) with explicit dependencies, modality tags, and `bridge_ready` flags. The CLI entrypoint is `scfactory run`.
 
-`r_multiomics_factory` is the R-side downstream visualization workspace. It consumes the bundle v2.1 contract emitted by `scripts/export_singlecell_r_bundle.py`, reads it via `R_bundle/io_bundle.R`, and renders Seurat-based plots via the `R/*_module.R` files (QC, dim, expression, composition, marker, annotation, batch_integration, integration, preprocessing, protein, spatial, theme_config). Together: 97 collected tests on the named contract surface, 4 starter recipes, 3 modality extensions (protein/spatial/multimodal_obsm), and an NC2024 paper-faithful reproduction lane.
+`r_multiomics_factory` is the R-side analysis workspace (trifurcation rename applied 2026-05-18; see RENAME_NOTE.md for previous_name). It consumes the bundle v2.1 contract emitted by `scripts/export_singlecell_r_bundle.py`, reads it via `R_bundle/io_bundle.R`, and routes Seurat objects to per-modality analysis modules (`R/*_module.R`: annotation, batch_integration, integration, preprocessing, protein, spatial, atac, hic, ribo, vdj, etc.). As of Phase 2 (2026-05-19), all plot helpers have been migrated out of this repo into `plotting_factory`.
+
+`plotting_factory` (introduced 2026-05-18 / Phase 1-3) is the dual-language visualization library at `/home/zerlinshen/plotting_factory/`. It owns `python/` + `r/` subtrees, shared `theme/` tokens, per-plot YAML config schemas in `schema/`, and the canonical `figure_bundle_schema.yaml` contract (vendored byte-identically into the other two repos). It contains: 5 general R plot helpers (composition_plots, dim_plots, expression_plots, qc_plots, theme_config), 6 R modality plot modules (atac_plots, hic_plots, protein_plots, ribo_plots, spatial_plots, vdj_plots), 20 Python wave5 figure renderers, and 5 visual-regression smoke tests.
+
+Together: 97+ collected tests on the named contract surface, 4 starter recipes, 3 modality extensions (protein/spatial/multimodal_obsm), an NC2024 paper-faithful reproduction lane, plus the new C2 paper-reproduction-from-upstream pathway anchored by `docs/PAPER_REPRODUCTION_SOP.md`.
 
 Use `scfactory run` for routine pipeline runs, the documented bundle v2.1 contract for agent-mediated handoff to R, and `--recipe nc2024_paper` for paper-faithful reproduction.
 
@@ -36,7 +40,26 @@ Two side-by-side stacks bridged by the bundle v2.1 contract. Python writes a tem
 
 ### R (r_multiomics_factory) modules
 
-annotation_module, batch_integration_module, cli_utils, composition_plots, dim_plots, expression_plots, integration_module, io_bridge, marker_module, pipeline_steps, preprocessing_module, protein_module, qc_plots, spatial_module, theme_config
+annotation_module, atac_module, batch_integration_module, cli_utils, hic_module, integration_module, io_bridge, marker_module, marker_db_module, pipeline_steps, preprocessing_module, protein_module, ribo_module, spatial_module, vdj_module. As of Phase 2 (2026-05-19), the plot halves of all six modality modules and the five general plot helpers have moved to `plotting_factory/r/` (see below).
+
+### plotting_factory (dual-language plotting)
+
+`r/` subtree:
+- `r/core/`: theme_config (palettes, fonts, provenance footer)
+- `r/general/`: composition_plots, dim_plots, expression_plots, qc_plots (formerly in `r_multiomics_factory/R/`)
+- `r/modality/`: atac_plots, hic_plots, protein_plots, ribo_plots, spatial_plots, vdj_plots (extracted from the 6 modality modules in Phase 2.1)
+
+`python/` subtree:
+- `python/wave5/`: 20 figure renderers migrated from `singlecell_factory/scripts/dev/` (Phase 2.2). Standalone scripts only; nothing called from `workflow/modular/modules/`.
+
+`schema/` subtree (Phase 3.2):
+- `pca_scatter.yaml`, `umap_scatter.yaml`, `marker_dotplot.yaml`, `marker_heatmap.yaml`, `qc_violin.yaml` — each declares `required_input_columns`, `optional_grouping_keys`, `color_palette_tokens`, `figure_size_defaults`, `language_renderer_hints`.
+
+`contracts/` subtree:
+- `figure_bundle_schema.yaml` — canonical lives in `singlecell_factory/contracts/`, vendored here + into `r_multiomics_factory/contracts/`. Parity validated by `scripts/ci/cross_factory_contract_gate.sh` (blocking since Phase 3.4).
+
+`tests/`:
+- `test_visual_regression_smoke.py` — structural-hash comparison (image dimensions + non-zero-pixel ratio + dominant channel, 5% tolerance) against 5 reference PNGs in `tests/fixtures/`.
 
 ## 3. Capability matrix
 

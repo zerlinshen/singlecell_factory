@@ -141,7 +141,7 @@ else:
 - Tests auto-skip when Rscript is absent or required R packages (`arrow`, `jsonlite`, `Matrix`) are not installed — they never fail hard due to missing R environment.
 - R output is parsed by scanning stdout for `KEY=VALUE` lines emitted via `sprintf` + `cat`. Never mix informational R output with these sentinel lines.
 - The `rscript_path` session fixture in `conftest.py` handles both binary detection and R package probing.
-- R source under test lives in `r_multiomics_factory/R_bundle/io_bundle.R` — never edit it from this repo (bridge symlink rule applies).
+- R source under test lives in `r_multiomics_factory/R_bundle/io_bundle.R` — never edit it from this repo (bridge symlink rule applies). R plot helpers live in `plotting_factory/r/` (introduced 2026-05-18; bridged via `bridges/local_plot_pipeline/`); never edit them inside `r_multiomics_factory/R/` or `singlecell_factory/workflow/`.
 
 ## 11) Staircase Testing Discipline (Phase 7C)
 

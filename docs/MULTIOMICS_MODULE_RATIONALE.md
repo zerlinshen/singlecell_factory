@@ -1,9 +1,11 @@
 # Multi-Omics Module Rationale
 
 Scope: this note documents the current Phase 2 multi-omics contract between
-`singlecell_factory` and `r_multiomics_factory`. ATAC is the active v2.2
-vertical slice. VDJ, Ribo-seq, and Hi-C remain reserved bundle slots until their
-exporters have full Python-to-R round-trip tests.
+`singlecell_factory`, `r_multiomics_factory` (R-native analysis), and
+`plotting_factory` (introduced 2026-05-18; `r/modality/*_plots.R` owns the plot
+halves extracted from each R modality module in Phase 2.1). ATAC is the active
+v2.2 vertical slice. VDJ, Ribo-seq, and Hi-C remain reserved bundle slots until
+their exporters have full Python-to-R round-trip tests.
 
 ## ATAC ingest
 

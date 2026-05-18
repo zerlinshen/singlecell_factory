@@ -21,9 +21,13 @@ under "Architecture (2026-05+)": `### Environment Switches` (covering the
 `SC_REQUIRE_PROJECT_ROOT` fail-fast gate) and `### R-factory SHA fields`
 (covering dual-SHA provenance in `run_manifest.json` and `bundle/provenance.json`).
 See `/home/zerlinshen/.omc/plans/factories-optimization-round1.md` for the
-full Round-1a governance plan. The sibling repo `r_multiomics_factory` has
-matching documentation for the R-side contracts (renv bootstrap, schema
-hard-error, SHA mismatch warning).
+full Round-1a governance plan. The sibling repos `r_multiomics_factory` (R-native
+analysis; renamed from `multiomics_r_factory` 2026-05-18) and `plotting_factory`
+(dual-language plotting, introduced 2026-05-18; `python/` + `r/` subtrees +
+`schema/` + vendored `contracts/figure_bundle_schema.yaml`) carry matching
+documentation for the R-side contracts (renv bootstrap, schema hard-error,
+SHA mismatch warning). See `ops/governance_records/2026-05-18-three-factory-trifurcation/ADR.md`
+for the trifurcation decision record.
 
 ### Remote Factory/Project Governance
 
