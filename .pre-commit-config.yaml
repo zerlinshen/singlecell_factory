@@ -20,4 +20,4 @@ repos:
         entry: tools/check_contracts_cross_repo.sh
         language: system
         pass_filenames: false
-        files: ^(contracts/bundle_schema\.yaml|contracts/\.expected_sha256)$
+        files: ^(contracts/bundle_schema\.yaml|contracts/figure_bundle_schema\.yaml|contracts/\.expected_sha256)$
