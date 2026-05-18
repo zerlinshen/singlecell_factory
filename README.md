@@ -295,6 +295,7 @@ Regenerate with `python scripts/generate_factories_report.py`.
 | [ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md](ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md) | Root-cause + fix for the post-completion C-extension teardown segfault |
 | [ops/nc2024_methodology_audit/PAPER_REPRO_REPORT_2026-04-27.md](ops/nc2024_methodology_audit/PAPER_REPRO_REPORT_2026-04-27.md) | Biology-level reproduction of the four core Sanchez-Mejias 2024 findings on the v2 cohort (verdict: 3 PASS / 1 PARTIAL) |
 | [ops/MAC_PULL_RECIPE_2026-04-26.md](ops/MAC_PULL_RECIPE_2026-04-26.md) | Tailscale scp command + R load command for downstream plotting on Mac |
+| [docs/PAPER_REPRODUCTION_SOP.md](docs/PAPER_REPRODUCTION_SOP.md) | Standard operating procedure for paper reproduction: faithful-first ladder, gate criteria, and agent protocol |
 | [docs/PUBLICATION_READY.md](docs/PUBLICATION_READY.md) | Methods section template and citation patterns for manuscript drafting |
 
 Canonical NC2024 outputs are the **v2** runs at `results/nc2024_tumor_20260426_v2/` and `results/nc2024_bh_20260426_v2/`. The matching v1 directories (without `_v2`) shipped with a known annotation labeling bug and must not be cited.
