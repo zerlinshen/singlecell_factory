@@ -15,6 +15,19 @@ sc = import_scanpy_or_stub()
 from ..context import PipelineContext
 from . import score_gene_sets
 
+
+__references__ = {
+    "Tirosh_scoring_2016": {
+        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
+        "authors": "Tirosh et al.",
+        "journal": "Science",
+        "year": "2016",
+        "doi": "10.1126/science.aad0501",
+        "description": "Signature score methodology (mean expression minus matched control bin). sc.tl.score_genes implements this.",
+    },
+}
+
+
 # Built-in cancer-relevant gene signatures from high-impact publications.
 BUILTIN_SIGNATURES = {
     # Proliferation — MKI67/TOP2A panel (standard in oncology)

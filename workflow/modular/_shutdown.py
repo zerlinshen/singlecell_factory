@@ -29,7 +29,7 @@ def run_shutdown_cleanup(adata=None) -> None:
     gc.collect()
 
     # 3. Torch: free CPU tensors and any cached CUDA state.
-    #    harmonypy imports torch even on CPU-only runs.
+    #    Some optional backends (scVI, etc.) import torch.
     if "torch" in sys.modules:
         try:
             import torch
@@ -66,6 +66,13 @@ def run_shutdown_cleanup(adata=None) -> None:
         except Exception as exc:
             logger.debug("zarr shutdown cleanup skipped: %s", exc)
 
-    # 6. Second GC pass — collect anything freed by steps 3-5.
+    # 6. Neighbors cache: clear in-process LRU cache before GC teardown.
+    try:
+        from . import _neighbors_cache
+        _neighbors_cache.clear()
+    except Exception as exc:
+        logger.debug("neighbors_cache clear skipped: %s", exc)
+
+    # 7. Second GC pass — collect anything freed by steps 3-6.
     gc.collect()
     gc.collect()

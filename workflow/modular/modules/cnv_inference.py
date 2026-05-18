@@ -17,6 +17,27 @@ from ..context import PipelineContext
 from .._densify_policy import plan_densify, DensifyDecision
 
 import logging
+
+
+__references__ = {
+    "Patel_inferCNV_2014": {
+        "title": "Single-cell RNA-seq highlights intratumoral heterogeneity in primary glioblastoma",
+        "authors": "Patel et al.",
+        "journal": "Science",
+        "year": "2014",
+        "doi": "10.1126/science.1254257",
+        "description": "Chromosome-window CNV inference from scRNA expression \u2014 methodology this module re-implements via scipy.ndimage.uniform_filter1d.",
+    },
+    "inferCNV_Broad": {
+        "title": "inferCNV \u2014 open-source CNV inference from scRNA-seq",
+        "authors": "Tickle, T.L. et al. (Broad Institute)",
+        "journal": "Open-source software",
+        "year": "2019",
+        "doi": "https://github.com/broadinstitute/inferCNV",
+        "description": "R-side inferCNV is the canonical implementation; Python port here matches the windowed-mean methodology.",
+    },
+}
+
 logger = logging.getLogger(__name__)
 
 

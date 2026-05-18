@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
 from ..context import PipelineContext
 
 
+__references__ = {
+    "Zheng_10x_2017": {
+        "title": "Massively parallel digital transcriptional profiling of single cells",
+        "authors": "Zheng et al.",
+        "journal": "Nature Communications",
+        "year": "2017",
+        "doi": "10.1038/ncomms14049",
+        "description": "10x Chromium Single Cell 3' chemistry \u2014 describes the output format this module ingests.",
+    },
+    "CellRanger_software": {
+        "title": "Cell Ranger Single Cell Software (v7+)",
+        "authors": "10x Genomics",
+        "journal": "Software documentation",
+        "year": "2024",
+        "doi": "https://support.10xgenomics.com/single-cell-gene-expression/software",
+        "description": "Authoritative spec for the barcodes.tsv.gz / features.tsv.gz / matrix.mtx.gz layout consumed here.",
+    },
+}
+
+
+
 class CellRangerModule:
     """Mandatory module: validate/run Cell Ranger and load matrix."""
 
@@ -150,6 +171,19 @@ class CellRangerModule:
             adata.var_names_make_unique()
             self._annotate_flex_probe_groups(adata, sample_root, ctx)
             adata = self._apply_cohort_subset(adata, ctx)
+            if cfg.sample_id and cfg.sample_id != "lusc":
+                if "sample" not in adata.obs.columns:
+                    raise ValueError(
+                        f"--sample-id={cfg.sample_id!r} given but adata.obs has no 'sample' column; "
+                        f"use --cohort-subset instead"
+                    )
+                sample_ids = [s.strip() for s in cfg.sample_id.split(",")]
+                mask = adata.obs["sample"].astype(str).isin(sample_ids)
+                n_before = adata.n_obs
+                adata = adata[mask].copy()
+                ctx.metadata["sample_id_filter_applied"] = sample_ids
+                ctx.metadata["sample_id_filter_n_before"] = int(n_before)
+                ctx.metadata["sample_id_filter_n_after"] = int(adata.n_obs)
             if self._needs_counts_layer(ctx) and "counts" not in adata.layers:
                 # Keep the logical raw-count layer available for pseudobulk but
                 # defer any heavy lazy-backend materialization until the

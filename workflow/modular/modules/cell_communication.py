@@ -11,6 +11,27 @@ import pandas as pd
 from ..context import PipelineContext
 
 
+__references__ = {
+    "Dimitrov_LIANA_2022": {
+        "title": "Comparison of methods and resources for cell-cell communication inference from single-cell RNA-Seq data",
+        "authors": "Dimitrov et al.",
+        "journal": "Nature Communications",
+        "year": "2022",
+        "doi": "10.1038/s41467-022-30755-0",
+        "description": "LIANA benchmark + framework. Used here via liana-py.",
+    },
+    "Efremova_CellPhoneDB_2020": {
+        "title": "CellPhoneDB: inferring cell-cell communication from combined expression of multi-subunit ligand-receptor complexes",
+        "authors": "Efremova et al.",
+        "journal": "Nature Protocols",
+        "year": "2020",
+        "doi": "10.1038/s41596-020-0292-x",
+        "description": "Source ligand-receptor resource consumed by LIANA.",
+    },
+}
+
+
+
 class CellCommunicationModule:
     """Optional module: cell-cell communication analysis via ligand-receptor interactions.
 

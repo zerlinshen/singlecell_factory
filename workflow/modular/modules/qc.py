@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
 from ..context import PipelineContext
 
 
+__references__ = {
+    "scanpy": {
+        "title": "SCANPY: large-scale single-cell gene expression data analysis",
+        "authors": "Wolf, Angerer, Theis",
+        "journal": "Genome Biology",
+        "year": "2018",
+        "doi": "10.1186/s13059-017-1382-0",
+        "description": "scanpy.pp.calculate_qc_metrics / pp.filter_genes / pp.filter_cells semantics used here.",
+    },
+    "Luecken_Theis_2019": {
+        "title": "Current best practices in single-cell RNA-seq analysis: a tutorial",
+        "authors": "Luecken, Theis",
+        "journal": "Molecular Systems Biology",
+        "year": "2019",
+        "doi": "10.15252/msb.20188746",
+        "description": "Canonical QC threshold guidance (mito %, n_genes/cell, doublet detection).",
+    },
+}
+
+
+
 class QCModule:
     """Mandatory module: compute QC metrics, filter low-quality cells/genes, and generate QC plots."""
 

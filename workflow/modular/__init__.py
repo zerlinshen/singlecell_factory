@@ -2,6 +2,30 @@
 
 from typing import TYPE_CHECKING, Any
 
+
+def _install_series_nonzero_shim() -> None:
+    """Shim pd.Series.nonzero for pandas 2.0+.
+
+    pandas removed Series.nonzero in 2.0; upstream scanpy / rapids-singlecell
+    still call it on large-cohort DE paths (observed on 800k cells × 33
+    clusters during the Wave 3 NC2024 run). Restoring the method as a thin
+    wrapper around np.flatnonzero preserves the upstream call shape exactly.
+    Idempotent — only installs when missing.
+    """
+    try:
+        import pandas as pd
+        import numpy as np
+    except Exception:
+        return
+    if not hasattr(pd.Series, "nonzero"):
+        pd.Series.nonzero = lambda self: (np.flatnonzero(self.to_numpy()),)
+
+
+_install_series_nonzero_shim()
+
+
+
+
 if TYPE_CHECKING:
     from .config import PipelineConfig
 

@@ -9,6 +9,19 @@ import requests
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Cerami_cBioPortal_2012": {
+        "title": "The cBio Cancer Genomics Portal: An Open Platform for Exploring Multidimensional Cancer Genomics Data",
+        "authors": "Cerami et al.",
+        "journal": "Cancer Discovery",
+        "year": "2012",
+        "doi": "10.1158/2159-8290.CD-12-0095",
+        "description": "External cancer genomics validation portal queried by this module.",
+    },
+}
+
+
 BASE_URL = "https://www.cbioportal.org/api"
 
 

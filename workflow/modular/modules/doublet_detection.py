@@ -15,7 +15,29 @@ sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Wolock_Scrublet_2019": {
+        "title": "Scrublet: Computational Identification of Cell Doublets in Single-Cell Transcriptomic Data",
+        "authors": "Wolock, Lopez, Klein",
+        "journal": "Cell Systems",
+        "year": "2019",
+        "doi": "10.1016/j.cels.2018.11.005",
+        "description": "Reference implementation; supports whole-dataset and per-sample (grouped) doublet rate calibration.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# GPU availability probe (evaluated once at import time)
+# ---------------------------------------------------------------------------
+try:
+    import rapids_singlecell as _rsc  # noqa: F401
+    _RSC_AVAILABLE = True
+except ImportError:
+    _RSC_AVAILABLE = False
 
 
 class DoubletDetectionModule:
@@ -24,22 +46,22 @@ class DoubletDetectionModule:
     Should run after QC and before clustering. Doublets (two cells captured
     in one droplet) can create artificial intermediate clusters and corrupt
     downstream differential expression results.
+
+    GPU path (preferred): uses ``rsc.pp.scrublet`` when rapids-singlecell is
+    available.  Falls back to CPU ``scrublet.Scrublet`` only if rsc is not
+    importable.
     """
 
     name = "doublet_detection"
     required = True
 
     @staticmethod
-    def _scrublet_params(n_obs: int, n_vars: int) -> dict:
-        return {
-            "min_counts": 2,
-            "min_cells": 3,
-            "min_gene_variability_pctl": 85,
-            "n_prin_comps": max(2, min(30, n_obs - 1, n_vars - 1)),
-        }
+    def _n_prin_comps(n_obs: int, n_vars: int) -> int:
+        return max(2, min(30, n_obs - 1, n_vars - 1))
 
     @staticmethod
     def _materialize_counts_matrix(x):
+        """Return a CPU CSR matrix, materializing lazy/dask/GPU arrays."""
         if sparse.issparse(x):
             return x.tocsr()
         if hasattr(x, "to_memory"):
@@ -83,42 +105,121 @@ class DoubletDetectionModule:
             return "grouped"
         return "whole"
 
-    def _run_grouped_scrublet(self, adata, scrublet_cls, cfg, ctx):
-        sample_key = 'sample' if 'sample' in adata.obs.columns else None
+    # ------------------------------------------------------------------
+    # GPU (rsc) paths
+    # ------------------------------------------------------------------
+
+    def _run_rsc_scrublet_whole(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, float | None]:
+        """Run rsc.pp.scrublet on the full dataset."""
+        import rapids_singlecell as rsc
+
+        adata_gpu = adata.copy()
+        rsc.get.anndata_to_GPU(adata_gpu)
+        rsc.pp.scrublet(
+            adata_gpu,
+            expected_doublet_rate=cfg.expected_doublet_rate,
+            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
+            random_state=ctx.random_state,
+            verbose=False,
+        )
+        scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
+        predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
+        threshold = adata_gpu.uns.get("scrublet", {}).get("threshold", None)
+        ctx.metadata["doublet_method"] = "scrublet_gpu"
+        return scores, predicted, threshold
+
+    def _run_rsc_scrublet_grouped(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, None]:
+        """Run rsc.pp.scrublet with batch_key for per-sample doublet detection."""
+        import rapids_singlecell as rsc
+
+        sample_key = "sample" if "sample" in adata.obs.columns else None
         if sample_key is None:
-            raise ValueError('grouped scrublet requested without sample labels')
+            raise ValueError("grouped scrublet requested without sample labels")
+
+        adata_gpu = adata.copy()
+        rsc.get.anndata_to_GPU(adata_gpu)
+        rsc.pp.scrublet(
+            adata_gpu,
+            batch_key=sample_key,
+            expected_doublet_rate=cfg.expected_doublet_rate,
+            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
+            random_state=ctx.random_state,
+            verbose=False,
+        )
+        scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
+        predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
+        ctx.metadata["doublet_grouped_key"] = sample_key
+        ctx.metadata["doublet_method"] = "scrublet_gpu_grouped"
+        return scores, predicted, None
+
+    # ------------------------------------------------------------------
+    # CPU fallback paths (used only when rsc is unavailable)
+    # ------------------------------------------------------------------
+
+    def _run_cpu_scrublet_grouped(self, adata, scrublet_cls, cfg, ctx) -> tuple[np.ndarray, np.ndarray, None]:
+        sample_key = "sample" if "sample" in adata.obs.columns else None
+        if sample_key is None:
+            raise ValueError("grouped scrublet requested without sample labels")
+        random_state = ctx.random_state
         labels = pd.Series(adata.obs[sample_key].astype(str), index=adata.obs_names)
         scores = np.zeros(adata.n_obs, dtype=np.float32)
         predicted = np.zeros(adata.n_obs, dtype=bool)
         thresholds = {}
+        scrublet_params = {
+            "min_counts": 2,
+            "min_cells": 3,
+            "min_gene_variability_pctl": 85,
+            "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
+        }
         for group in labels.unique():
             idx = np.where(labels.values == group)[0]
             if len(idx) < 20:
                 continue
             subX = self._materialize_counts_matrix(adata.X[idx])
-            scrub = scrublet_cls(subX, expected_doublet_rate=cfg.expected_doublet_rate)
+            scrub = scrublet_cls(subX, expected_doublet_rate=cfg.expected_doublet_rate, random_state=random_state)
             try:
-                s, p = scrub.scrub_doublets(**self._scrublet_params(len(idx), adata.n_vars))
+                s, p = scrub.scrub_doublets(**{**scrublet_params, "n_prin_comps": self._n_prin_comps(len(idx), adata.n_vars)})
                 scores[idx] = s.astype(np.float32, copy=False)
                 predicted[idx] = p.astype(bool, copy=False)
-                thr = getattr(scrub, 'threshold_', None)
+                thr = getattr(scrub, "threshold_", None)
                 if thr is not None:
                     thresholds[str(group)] = float(thr)
             except Exception as exc:
-                logger.warning('Grouped Scrublet failed for %s, falling back to singlets: %s', group, exc)
-        ctx.metadata['doublet_grouped_key'] = sample_key
-        ctx.metadata['doublet_grouped_thresholds'] = thresholds
-        ctx.metadata['doublet_method'] = 'scrublet_grouped'
+                logger.warning("Grouped Scrublet failed for %s, falling back to singlets: %s", group, exc)
+        ctx.metadata["doublet_grouped_key"] = sample_key
+        ctx.metadata["doublet_grouped_thresholds"] = thresholds
+        ctx.metadata["doublet_method"] = "scrublet_grouped"
         return scores, predicted, None
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _col_to_numpy(col) -> np.ndarray:
+        """Convert pandas or cudf Series to a numpy array."""
+        if hasattr(col, "to_numpy"):
+            return col.to_numpy()
+        return np.asarray(col)
+
+    @staticmethod
+    def _fallback_all_singlets(n_obs: int, reason: str) -> tuple[np.ndarray, np.ndarray]:
+        scores = np.zeros(n_obs, dtype=np.float32)
+        predicted = np.zeros(n_obs, dtype=bool)
+        logger.info("Doublet detection fallback activated: %s", reason)
+        return scores, predicted
+
+    # ------------------------------------------------------------------
+    # Entry point
+    # ------------------------------------------------------------------
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata
         if adata is None:
             raise ValueError("Doublet detection requires loaded AnnData.")
 
-        import scrublet as scr
-
         cfg = ctx.cfg.doublet
+        random_state = ctx.random_state
         threshold = None
 
         # Scrublet can fail on tiny/degenerate datasets; keep pipeline usable by
@@ -132,23 +233,54 @@ class DoubletDetectionModule:
         else:
             strategy = self._resolve_doublet_strategy(ctx, adata)
             use_grouped = strategy == "grouped"
-            if use_grouped:
-                doublet_scores, predicted_doublets, threshold = self._run_grouped_scrublet(adata, scr.Scrublet, cfg, ctx)
-            else:
-                scrub = scr.Scrublet(self._materialize_counts_matrix(adata.X), expected_doublet_rate=cfg.expected_doublet_rate)
+
+            if _RSC_AVAILABLE:
+                # --- GPU path ---
                 try:
-                    doublet_scores, predicted_doublets = scrub.scrub_doublets(**self._scrublet_params(adata.n_obs, adata.n_vars))
-                    threshold = getattr(scrub, "threshold_", None)
+                    if use_grouped:
+                        doublet_scores, predicted_doublets, threshold = self._run_rsc_scrublet_grouped(adata, cfg, ctx)
+                    else:
+                        doublet_scores, predicted_doublets, threshold = self._run_rsc_scrublet_whole(adata, cfg, ctx)
                     if threshold is not None:
-                        logger.info("Scrublet auto-threshold: %.4f", threshold)
-                    ctx.metadata["doublet_method"] = "scrublet"
+                        logger.info("rsc.pp.scrublet auto-threshold: %.4f", threshold)
                 except Exception as exc:
-                    logger.warning("Scrublet failed, falling back to all singlets: %s", exc)
+                    logger.warning("rsc.pp.scrublet failed, falling back to all singlets: %s", exc)
                     doublet_scores, predicted_doublets = self._fallback_all_singlets(
-                        adata.n_obs,
-                        reason=str(exc),
+                        adata.n_obs, reason=str(exc)
                     )
                     ctx.metadata["doublet_method"] = "fallback_all_singlets"
+            else:
+                # --- CPU fallback path (rsc not installed) ---
+                import scrublet as scr
+
+                if use_grouped:
+                    doublet_scores, predicted_doublets, threshold = self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
+                else:
+                    scrub = scr.Scrublet(
+                        self._materialize_counts_matrix(adata.X),
+                        expected_doublet_rate=cfg.expected_doublet_rate,
+                        random_state=random_state,
+                    )
+                    scrublet_params = {
+                        "min_counts": 2,
+                        "min_cells": 3,
+                        "min_gene_variability_pctl": 85,
+                        "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
+                    }
+                    try:
+                        doublet_scores, predicted_doublets = scrub.scrub_doublets(**scrublet_params)
+                        threshold = getattr(scrub, "threshold_", None)
+                        if threshold is not None:
+                            logger.info("Scrublet auto-threshold: %.4f", threshold)
+                        ctx.metadata["doublet_method"] = "scrublet"
+                    except Exception as exc:
+                        logger.warning("Scrublet failed, falling back to all singlets: %s", exc)
+                        doublet_scores, predicted_doublets = self._fallback_all_singlets(
+                            adata.n_obs, reason=str(exc)
+                        )
+                        ctx.metadata["doublet_method"] = "fallback_all_singlets"
+
+        ctx.metadata["doublet_random_state"] = random_state
 
         adata.obs["doublet_score"] = doublet_scores
         adata.obs["predicted_doublet"] = predicted_doublets
@@ -180,10 +312,3 @@ class DoubletDetectionModule:
             ctx.adata = adata
             ctx.metadata["cells_after_doublet_removal"] = int(adata.n_obs)
             ctx.metadata["doublets_removed"] = int(before - adata.n_obs)
-
-    @staticmethod
-    def _fallback_all_singlets(n_obs: int, reason: str) -> tuple[np.ndarray, np.ndarray]:
-        scores = np.zeros(n_obs, dtype=np.float32)
-        predicted = np.zeros(n_obs, dtype=bool)
-        logger.info("Doublet detection fallback activated: %s", reason)
-        return scores, predicted

@@ -14,6 +14,19 @@ from scipy import sparse
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Squair_pseudobulk_2021": {
+        "title": "Confronting false discoveries in single-cell differential expression",
+        "authors": "Squair et al.",
+        "journal": "Nature Communications",
+        "year": "2021",
+        "doi": "10.1038/s41467-021-25960-2",
+        "description": "Benchmark demonstrating pseudobulk DE outperforms per-cell DE \u2014 methodology applied here.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 MIN_CELLS_PER_SAMPLE = 3
 MIN_SAMPLES_PER_CONDITION = 2

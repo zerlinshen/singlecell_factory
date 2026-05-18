@@ -11,6 +11,19 @@ import pandas as pd
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Persad_SEACells_2023": {
+        "title": "SEACells infers transcriptional and epigenomic cellular states from single-cell genomics data",
+        "authors": "Persad et al.",
+        "journal": "Nature Biotechnology",
+        "year": "2023",
+        "doi": "10.1038/s41587-023-01716-9",
+        "description": "SEACells metacell aggregation; primary backend.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 
 

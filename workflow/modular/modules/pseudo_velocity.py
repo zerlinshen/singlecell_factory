@@ -11,6 +11,19 @@ from sklearn.neighbors import NearestNeighbors
 from ..context import PipelineContext
 
 
+__references__ = {
+    "project_local_proxy": {
+        "title": "Project-local KNN-based pseudo-velocity proxy",
+        "authors": "singlecell_factory contributors",
+        "journal": "Internal documentation",
+        "year": "2025",
+        "doi": "PMID: 33288903",
+        "description": "Lightweight transitional-probability proxy via PCA-space KNN flow when spliced/unspliced counts are unavailable. NOT a canonical RNA velocity method \u2014 see rna_velocity.py for that. PMID points to a transcription-velocity review for context only.",
+    },
+}
+
+
+
 def _get_cell_group_col(adata) -> str:
     """Return 'cell_type' if available, otherwise 'leiden' fallback."""
     if "cell_type" in adata.obs.columns:

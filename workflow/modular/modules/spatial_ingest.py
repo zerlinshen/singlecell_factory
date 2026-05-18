@@ -52,6 +52,7 @@ __references__ = {
         "title": "Visium Spatial Gene Expression",
         "authors": "10x Genomics",
         "year": "2020",
+        "doi": "https://www.10xgenomics.com/products/spatial-gene-expression",
         "description": "Spatial barcoded array; tissue_positions_list.csv schema.",
     },
     "merfish_chen_2015": {
@@ -65,6 +66,7 @@ __references__ = {
         "title": "Xenium In Situ platform",
         "authors": "10x Genomics",
         "year": "2023",
+        "doi": "https://www.10xgenomics.com/products/xenium-in-situ",
         "description": "Subcellular in-situ assay; same (x,y) per-cell schema.",
     },
 }

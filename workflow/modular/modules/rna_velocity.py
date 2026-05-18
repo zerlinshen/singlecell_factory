@@ -22,6 +22,27 @@ from scipy import sparse
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Bergen_scVelo_2020": {
+        "title": "Generalizing RNA velocity to transient cell states through dynamical modeling",
+        "authors": "Bergen et al.",
+        "journal": "Nature Biotechnology",
+        "year": "2020",
+        "doi": "10.1038/s41587-020-0591-3",
+        "description": "scVelo stochastic + dynamical models. Library used here.",
+    },
+    "LaManno_velocity_2018": {
+        "title": "RNA velocity of single cells",
+        "authors": "La Manno et al.",
+        "journal": "Nature",
+        "year": "2018",
+        "doi": "10.1038/s41586-018-0414-6",
+        "description": "Original spliced/unspliced RNA velocity formulation.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 _SCVELO_NUMPY2_PATCH_DONE = False
 _WORKER_STATE: dict[str, Any] = {}
@@ -275,6 +296,9 @@ class RNAVelocityModule:
         _patch_scvelo_numpy2()
 
         cfg = ctx.cfg.velocity
+        # Seed numpy RNG for stochastic velocity (scVelo uses numpy internally)
+        import numpy as _np
+        _np.random.seed(ctx.random_state)
         n_vars_original = adata.n_vars
         step_times: dict[str, float] = {}
 
@@ -335,6 +359,7 @@ class RNAVelocityModule:
                 adata_v.obs["velocity_confidence"].mean()
             )
         ctx.metadata["velocity_mode"] = cfg.mode
+        ctx.metadata["velocity_random_state"] = ctx.random_state
         ctx.metadata["velocity_step_seconds"] = {
             k: round(v, 3) for k, v in step_times.items()
         }

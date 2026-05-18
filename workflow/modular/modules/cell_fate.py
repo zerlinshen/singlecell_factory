@@ -12,6 +12,19 @@ from scipy.sparse import diags, issparse
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Lange_CellRank_2022": {
+        "title": "CellRank for directed single-cell fate mapping",
+        "authors": "Lange et al.",
+        "journal": "Nature Methods",
+        "year": "2022",
+        "doi": "10.1038/s41592-021-01346-6",
+        "description": "Directed transition-probability based fate mapping \u2014 methodology this module's Pearson sampling approximates.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 
 

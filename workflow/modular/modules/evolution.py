@@ -18,6 +18,19 @@ from scipy.spatial.distance import pdist
 from ..context import PipelineContext
 from .._densify_policy import plan_densify, DensifyDecision
 
+
+__references__ = {
+    "Andor_clonal_evolution_2016": {
+        "title": "Pan-cancer analysis of the extent and consequences of intratumor heterogeneity",
+        "authors": "Andor et al.",
+        "journal": "Nature Medicine",
+        "year": "2016",
+        "doi": "10.1038/nm.3984",
+        "description": "Clonal evolution framework for tumor heterogeneity quantified here from CNV-derived signals.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 
 

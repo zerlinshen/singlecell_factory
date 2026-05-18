@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
 from ..context import PipelineContext
 from . import score_gene_sets
 
+
+__references__ = {
+    "Aran_TME_2019": {
+        "title": "Reference-based analysis of lung single-cell sequencing reveals a transitional profibrotic macrophage",
+        "authors": "Aran et al.",
+        "journal": "Nature Immunology",
+        "year": "2019",
+        "doi": "10.1038/s41590-018-0276-y",
+        "description": "Reference-based lung TME phenotype assignments.",
+    },
+    "Tirosh_scoring_2016": {
+        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
+        "authors": "Tirosh et al.",
+        "journal": "Science",
+        "year": "2016",
+        "doi": "10.1126/science.aad0501",
+        "description": "Score-gene-set framework used for TME marker scoring.",
+    },
+}
+
+
 # Literature-derived TME scoring signatures.
 TME_SIGNATURES = {
     # Cytolytic Activity Score — Rooney et al., Cell 2015

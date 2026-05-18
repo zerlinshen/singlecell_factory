@@ -101,7 +101,12 @@ def _finalize_stage_success(
 
 
 def _check_requires(mod, ctx: PipelineContext) -> list[str]:
-    """Return list of missing keys declared in mod.requires_keys."""
+    """Return list of missing keys declared in mod.requires_keys.
+
+    Supports two obsm primitives:
+    - ``obsm``: all listed keys must be present.
+    - ``obsm_any_of``: at least one listed key must be present.
+    """
     missing = []
     adata = ctx.adata
     if adata is None:
@@ -113,6 +118,9 @@ def _check_requires(mod, ctx: PipelineContext) -> list[str]:
     for key in reqs.get("obsm", []):
         if key not in adata.obsm:
             missing.append(f"obsm.{key}")
+    any_of_keys = reqs.get("obsm_any_of", [])
+    if any_of_keys and not any(key in adata.obsm for key in any_of_keys):
+        missing.append(f"obsm_any_of({','.join(any_of_keys)})")
     for key in reqs.get("uns", []):
         if key not in adata.uns:
             missing.append(f"uns.{key}")
@@ -198,6 +206,19 @@ def _build_registry() -> dict[str, object]:
     from .modules.spatial_ingest import SpatialIngestModule
     from .modules.spatial_neighborhoods import SpatialNeighborhoodsModule
     from .modules.multimodal_integration import MultimodalIntegrationModule
+    from .modules.marker_db_loader import MarkerDbLoaderModule
+    from .modules.context_aware_annotation import ContextAwareAnnotationModule
+    from .modules.modality_registry import ModalityRegistryModule
+    from .modules.cross_modality_qc import CrossModalityQCModule
+    from .modules.atac_ingest import ATACIngestModule
+    from .modules.vdj_ingest import VDJIngestModule
+    from .modules.vdj_metrics import VDJMetricsModule
+    from .modules.atac_qc import ATACQCModule
+    from .modules.atac_lsi import ATACLSIModule
+    from .modules.peak_to_gene import PeakToGeneModule
+    from .modules.hic_ingest import HiCIngestModule
+    from .modules.hic_tad import HiCTADModule
+    from .modules.ribo_ingest import RiboIngestModule
 
     return {
         "cellranger": CellRangerModule(),
@@ -228,7 +249,20 @@ def _build_registry() -> dict[str, object]:
         "protein_adt": ProteinADTModule(),
         "spatial_ingest": SpatialIngestModule(),
         "spatial_neighborhoods": SpatialNeighborhoodsModule(),
+        "atac_ingest": ATACIngestModule(),
+        "atac_qc": ATACQCModule(),
+        "atac_lsi": ATACLSIModule(),
         "multimodal_integration": MultimodalIntegrationModule(),
+        "marker_db_loader": MarkerDbLoaderModule(),
+        "context_aware_annotation": ContextAwareAnnotationModule(),
+        "modality_registry": ModalityRegistryModule(),
+        "cross_modality_qc": CrossModalityQCModule(),
+        "vdj_ingest": VDJIngestModule(),
+        "vdj_metrics": VDJMetricsModule(),
+        "peak_to_gene": PeakToGeneModule(),
+        "hic_ingest": HiCIngestModule(),
+        "hic_tad": HiCTADModule(),
+        "ribo_ingest": RiboIngestModule(),
     }
 
 
@@ -336,6 +370,12 @@ class _SkipModule(Exception):
 
 def _run_module(mod, ctx: PipelineContext, *, mandatory: bool = False) -> None:
     """Validate requires_keys then run a module. Raises _SkipModule for optional modules."""
+    # Wave 3 US-W3-2 — orchestrator-level poison guard. If a prior module
+    # raised ClusteringContractViolation and a caller accidentally swallowed
+    # it, the next module entry MUST abort here. See _contract_violation.py.
+    from ._contract_violation import assert_not_corrupted
+    name = getattr(mod, "name", type(mod).__name__)
+    assert_not_corrupted(ctx.adata, name)
     missing = _check_requires(mod, ctx)
     if missing:
         name = getattr(mod, "name", type(mod).__name__)

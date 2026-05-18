@@ -194,16 +194,29 @@ class PipelineConfig:
     reference_k: int = 15
     reference_min_confidence: float = 0.6
     reference_override_mode: str = "conservative"  # conservative, all
+    random_state: int = 42  # global seed propagated to all stochastic modules via ctx.random_state
     gpu_mode: str = "auto"  # auto, off, force
     scale_mode: str = "standard"  # standard, large, massive — kept as preset bundle for backwards compat
     # Capability flags — set explicitly or expanded from scale_mode via scale_mode_to_capabilities()
     lazy_read: str = "auto"          # auto, true, false
     doublet_strategy: str = "auto"   # auto, grouped, whole, skip
     clustering_engine: str = "auto"  # auto, sparse_exact, css, gpu
-    checkpoint_policy: str = "full"  # full, mandatory_only, metadata_only
+    checkpoint_policy: str = "full"  # full
+    # Wave 3 (US-W3-2). Policy for GPU clustering failure post-host-mutation.
+    # raise (default): poison adata + raise ClusteringContractViolation.
+    # restore-cpu: restore from adata.raw and route to CPU clustering (M2 only).
+    # reload-checkpoint: reload adata from on-disk h5ad checkpoint (requires --checkpoint).
+    # Overridable via SC_GPU_FAILURE_POLICY env var.
+    gpu_failure_policy: str = "raise"
     # Cohort subset: obs_col=val1,val2 filter applied after loading (supports list for AND-chaining)
     cohort_subset: Optional[list[str]] = None
     annotation_strategy: str = "cluster_voting"  # cluster_voting, cell_argmax
+    # Marker intelligence (P1A)
+    tissue: str = "lung"
+    condition: str = "NSCLC"
+    validate_context: bool = False
+    context_mismatch_threshold: float = 0.3
+    context_min_cells: int = 20
 
 
 # Maps scale_mode preset names to their capability flag bundles.
@@ -225,7 +238,7 @@ _SCALE_MODE_PRESETS: dict[str, dict[str, str]] = {
         "lazy_read": "true",
         "doublet_strategy": "grouped",
         "clustering_engine": "css",
-        "checkpoint_policy": "mandatory_only",
+        "checkpoint_policy": "full",
     },
 }
 

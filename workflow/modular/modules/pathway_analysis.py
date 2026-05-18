@@ -12,6 +12,27 @@ import pandas as pd
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Subramanian_GSEA_2005": {
+        "title": "Gene set enrichment analysis: A knowledge-based approach for interpreting genome-wide expression profiles",
+        "authors": "Subramanian et al.",
+        "journal": "PNAS",
+        "year": "2005",
+        "doi": "10.1073/pnas.0506580102",
+        "description": "GSEA methodology. gseapy is the Python port used here.",
+    },
+    "Schubert_PROGENy_2018": {
+        "title": "Perturbation-response genes reveal signaling footprints in cancer gene expression",
+        "authors": "Schubert et al.",
+        "journal": "Nature Communications",
+        "year": "2018",
+        "doi": "10.1038/s41467-017-02391-6",
+        "description": "PROGENy signaling-pathway responsive gene resource consumed via decoupler.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 
 

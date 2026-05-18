@@ -10,6 +10,19 @@ sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Tirosh_cellcycle_2016": {
+        "title": "Single-cell RNA-seq supports a developmental hierarchy in human oligodendroglioma",
+        "authors": "Tirosh et al.",
+        "journal": "Nature",
+        "year": "2016",
+        "doi": "10.1038/nature20123",
+        "description": "Source of canonical S and G2/M cell-cycle gene sets; sc.tl.score_genes_cell_cycle implements this.",
+    },
+}
+
+
 # Tirosh et al. 2016 cell cycle gene sets (commonly used in Scanpy/Seurat)
 S_GENES = [
     "MCM5", "PCNA", "TYMS", "FEN1", "MCM2", "MCM4", "RRM1", "UNG",

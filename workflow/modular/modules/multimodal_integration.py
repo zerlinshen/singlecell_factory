@@ -39,6 +39,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .._contract_violation import ModuleContractError
 from ..context import PipelineContext
 
 logger = logging.getLogger(__name__)
@@ -64,11 +65,9 @@ __references__ = {
 }
 
 
-# Default driver-script path on disk. Mirrors the protein/spatial
-# path-resolution chain: env override -> repo-relative canonical fallback.
-_DEFAULT_RUN_WNN_R = (
-    "/home/zerlinshen/multiomics_r_factory/scripts/run_wnn.R"
-)
+# Canonical driver-script path: in-repo vendored under _r_scripts/.
+from pathlib import Path as _Path
+_DEFAULT_RUN_WNN_R = str(_Path(__file__).parent / "_r_scripts" / "run_wnn.R")
 
 
 @dataclass(frozen=True)
@@ -77,6 +76,9 @@ class MultimodalIntegrationConfig:
 
     Off by default. To enable, set ``engine`` to ``"wnn"`` or ``"mofa"`` (or
     set the ``SC_MULTIMODAL_ENGINE`` env var to one of those literals).
+
+    ``_explicitly_set``: True when ``second_obsm_key`` was provided via CLI
+    flag, env var, or explicit config — not inferred from the dataclass default.
     """
 
     engine: str = "off"  # "off" | "wnn" | "mofa"
@@ -88,6 +90,7 @@ class MultimodalIntegrationConfig:
     rscript_bin: str | None = None  # falls back to PATH lookup / RSCRIPT_BIN
     run_wnn_r_path: str | None = None  # override path to scripts/run_wnn.R
     subprocess_timeout: int = 600  # seconds
+    _explicitly_set: bool = False  # sentinel: True iff second_obsm_key was explicitly provided
 
 
 class MultimodalIntegrationModule:
@@ -102,7 +105,7 @@ class MultimodalIntegrationModule:
     name = "multimodal_integration"
     required = False
     mutates_structure = False
-    requires_keys: dict[str, list[str]] = {}
+    requires_keys: dict[str, list[str]] = {"obsm": ["X_pca"]}
     provides_keys: dict[str, list[str]] = {
         "obsm": ["X_wnn", "X_mofa"],
         "uns": ["multimodal_status", "mofa_factors"],
@@ -134,13 +137,33 @@ class MultimodalIntegrationModule:
             ctx.status(self.name, "skipped", "engine=off (default)")
             return
 
-        # Pre-condition: both latent obsm keys must be present.
+        # Pre-condition: RNA latent must always be present.
         rna_key = cfg.rna_obsm_key
-        sec_key = cfg.second_obsm_key
-        if rna_key not in adata.obsm or sec_key not in adata.obsm:
+        sec_key, sec_explicitly_set = self._resolve_second_obsm_key(cfg)
+        if rna_key not in adata.obsm:
+            reason = f"missing latents (rna='{rna_key}' present=False)"
+            logger.info("%s: %s; skipping engine=%s.", self.name, reason, engine)
+            adata.uns["multimodal_status"] = {
+                "engine": engine,
+                "status": "skipped",
+                "reason": reason,
+            }
+            ctx.metadata["multimodal_status"] = "skipped_no_inputs"
+            ctx.status(self.name, "skipped", reason)
+            return
+
+        # Second-modality key check: scoped raise when explicitly configured and missing.
+        if sec_key not in adata.obsm:
+            if sec_explicitly_set and engine in {"wnn", "mofa"}:
+                raise ModuleContractError(
+                    f"{self.name}: explicitly-configured second obsm key '{sec_key}' "
+                    f"is absent from adata.obsm (engine={engine}). "
+                    f"Set SC_MULTIMODAL_SECOND_OBSM / --second-obsm-key only when the "
+                    f"key is guaranteed to exist, or unset to fall back to silent skip."
+                )
             reason = (
                 f"missing latents (rna='{rna_key}' present={rna_key in adata.obsm}, "
-                f"second='{sec_key}' present={sec_key in adata.obsm})"
+                f"second='{sec_key}' present=False)"
             )
             logger.info("%s: %s; skipping engine=%s.", self.name, reason, engine)
             adata.uns["multimodal_status"] = {
@@ -397,6 +420,9 @@ class MultimodalIntegrationModule:
             return runtime
         if isinstance(runtime, dict):
             base = self.config
+            explicitly_set = bool(runtime.get("_explicitly_set", base._explicitly_set))
+            if "second_obsm_key" in runtime:
+                explicitly_set = True
             return MultimodalIntegrationConfig(
                 engine=str(runtime.get("engine", base.engine)),
                 rna_obsm_key=str(runtime.get("rna_obsm_key", base.rna_obsm_key)),
@@ -407,6 +433,7 @@ class MultimodalIntegrationModule:
                 rscript_bin=runtime.get("rscript_bin", base.rscript_bin),
                 run_wnn_r_path=runtime.get("run_wnn_r_path", base.run_wnn_r_path),
                 subprocess_timeout=int(runtime.get("subprocess_timeout", base.subprocess_timeout)),
+                _explicitly_set=explicitly_set,
             )
         return self.config
 
@@ -416,6 +443,24 @@ class MultimodalIntegrationModule:
         if env:
             return env.strip().lower()
         return cfg.engine.strip().lower()
+
+    @staticmethod
+    def _resolve_second_obsm_key(cfg: MultimodalIntegrationConfig) -> tuple[str, bool]:
+        """Return (key, explicitly_set).
+
+        explicitly_set=True when the key was provided via env var, CLI flag, or
+        a non-default config value (even if the value equals the default string).
+        Value-comparison against the default is intentionally REJECTED: a user
+        who passes --second-obsm-key=protein_clr has made an explicit opt-in and
+        must be treated as such.
+        """
+        env = os.environ.get("SC_MULTIMODAL_SECOND_OBSM")
+        if env:
+            return env.strip(), True
+        # cfg._explicitly_set flag is set by CLI wiring when --second-obsm-key is passed.
+        if getattr(cfg, "_explicitly_set", False):
+            return cfg.second_obsm_key, True
+        return cfg.second_obsm_key, False
 
     @staticmethod
     def _resolve_rscript(cfg: MultimodalIntegrationConfig) -> str | None:

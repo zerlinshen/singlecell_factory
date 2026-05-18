@@ -123,8 +123,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint-policy",
         default="",
-        choices=["", "full", "mandatory_only", "metadata_only"],
-        help="Checkpoint policy: full (save all), mandatory_only (skip early modules), metadata_only. Overrides scale-mode preset.",
+        choices=["", "full"],
+        help="Checkpoint policy: full (save all checkpoints). Overrides scale-mode preset.",
     )
 
     # Cohort subset
@@ -138,6 +138,22 @@ def parse_args() -> argparse.Namespace:
             "Filter cells to a subset: <obs_col>=<value1>,<value2>. "
             "Multiple --cohort-subset flags are AND-combined. "
             "E.g. --cohort-subset disease=lung_adenocarcinoma,lung_squamous_cell_carcinoma"
+        ),
+    )
+
+    parser.add_argument(
+        "--multimodal-engine",
+        default=None,
+        choices=["off", "wnn", "mofa"],
+        help="Engine for multimodal_integration module (default off). Set SC_MULTIMODAL_ENGINE to override; module must also be in --optional-modules.",
+    )
+    parser.add_argument(
+        "--second-obsm-key",
+        default=None,
+        help=(
+            "Second-modality obsm key for multimodal_integration (default: protein_clr). "
+            "When set, passing the key is treated as an explicit opt-in: missing key raises "
+            "ModuleContractError for wnn/mofa engines. Set SC_MULTIMODAL_SECOND_OBSM to override."
         ),
     )
 
@@ -348,6 +364,43 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    # Marker intelligence (P1A)
+    parser.add_argument(
+        "--tissue",
+        default="lung",
+        help="Tissue type for marker DB routing (default: lung)",
+    )
+    parser.add_argument(
+        "--condition",
+        default="NSCLC",
+        help="Disease/condition for marker DB routing (default: NSCLC)",
+    )
+    parser.add_argument(
+        "--validate-context",
+        action="store_true",
+        help="Compute per-cluster context validation scores and write context_validation.json (AC-4)",
+    )
+    parser.add_argument(
+        "--context-mismatch-threshold",
+        type=float,
+        default=0.3,
+        help="Score threshold below which a cluster triggers a context mismatch warning (default: 0.3)",
+    )
+    parser.add_argument(
+        "--context-min-cells",
+        type=int,
+        default=20,
+        help="Minimum cells per cluster for context validation (default: 20)",
+    )
+
+    # Reproducibility
+    parser.add_argument(
+        "--random-state",
+        type=int,
+        default=42,
+        help="Global random seed propagated to all stochastic modules (default: 42)",
+    )
+
     # Checkpointing & resume
     parser.add_argument(
         "--checkpoint", action="store_true",
@@ -365,6 +418,35 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=1,
         help="Number of parallel workers for independent modules (default: 1 = sequential)",
+    )
+
+    # Project-root layout (additive; legacy --output-dir still works when absent)
+    parser.add_argument(
+        "--project-root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Project directory root. When set, all artifacts are written to "
+            "<project-root>/runs/<run-id>/python/. "
+            "Preferred over legacy --output-dir."
+        ),
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        metavar="STR",
+        help=(
+            "Run identifier (format: YYYY-MM-DDTHHMMZ-<7hex>). "
+            "Auto-generated from UTC timestamp + factory SHA when absent."
+        ),
+    )
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help=(
+            "Allow pipeline to run when factory git tree has uncommitted changes. "
+            "The diff SHA256 is recorded in manifest.json for forensics."
+        ),
     )
     return parser.parse_args()
 
@@ -477,13 +559,41 @@ def main() -> None:
     """CLI entrypoint."""
     import faulthandler
     import logging
+    import os
+    import socket
+    import sys
     from ._run_ledger import RunLedger
     from ._shutdown import run_shutdown_cleanup
+    from .project_paths import resolve_run_dir, python_dir
+    from .manifest_writer import factory_git_state, write_manifest
 
     faulthandler.enable()
 
     args = _apply_scale_mode(parse_args())
+
+    # Propagate --multimodal-engine to env var the module reads at runtime.
+    if args.multimodal_engine is not None and "SC_MULTIMODAL_ENGINE" not in os.environ:
+        os.environ["SC_MULTIMODAL_ENGINE"] = args.multimodal_engine
+    # Propagate --second-obsm-key: env var wins if already set; CLI flag is explicit opt-in.
+    if args.second_obsm_key is not None and "SC_MULTIMODAL_SECOND_OBSM" not in os.environ:
+        os.environ["SC_MULTIMODAL_SECOND_OBSM"] = args.second_obsm_key
     _validate_args(args)
+
+    # GOV-2 cutover semantics:
+    # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` emits
+    # `DeprecationWarning` and falls back to legacy `output/`. When
+    # `SC_REQUIRE_PROJECT_ROOT=1`: a missing `--project-root` is a hard error
+    # (exit code 2). Warning and hard-error are mutually exclusive (no
+    # double-fire). Round-2 ADR will flip the default to required.
+    if args.project_root is None:
+        if os.environ.get("SC_REQUIRE_PROJECT_ROOT") == "1":
+            print(
+                "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). "
+                "Pass --project-root or unset the env var.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
     sample_root = Path(args.sample_root)
     outs_dir = (
         Path(args.outs_dir)
@@ -491,9 +601,45 @@ def main() -> None:
         else sample_root / "outs" / "filtered_feature_bc_matrix"
     )
 
+    # Resolve effective output directory from --project-root or legacy --output-dir.
+    _FACTORY_ROOT = Path(__file__).resolve().parent.parent.parent
+    _run_dir = None
+    _run_id = None
+    if args.project_root is not None:
+        # Dirty-tree gate: abort unless --allow-dirty is set.
+        _py_state = factory_git_state(_FACTORY_ROOT)
+        if _py_state["dirty"] and not args.allow_dirty:
+            print(
+                "ERROR: singlecell_factory has uncommitted changes. "
+                "Commit or stash them, or pass --allow-dirty to record the diff.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        _run_dir = resolve_run_dir(
+            Path(args.project_root),
+            run_id=args.run_id,
+            factory_sha=_py_state["sha"] or None,
+        )
+        _run_id = _run_dir.name
+        effective_output_dir = python_dir(_run_dir)
+    else:
+        import warnings
+        warnings.warn(
+            "--project-root will be required in a future release; "
+            "legacy output/ layout will be removed",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        print(
+            "DeprecationWarning: --project-root will be required in a future release; "
+            "legacy output/ layout will be removed",
+            file=sys.stderr,
+        )
+        effective_output_dir = Path(args.output_dir)
+
     cfg = PipelineConfig(
         project=args.project,
-        output_dir=Path(args.output_dir),
+        output_dir=effective_output_dir,
         cellranger=CellRangerConfig(
             sample_root=sample_root,
             outs_dir=outs_dir,
@@ -603,11 +749,18 @@ def main() -> None:
         checkpoint_policy=args.checkpoint_policy,
         cohort_subset=args.cohort_subset,
         annotation_strategy=args.annotation_strategy,
+        random_state=args.random_state,
+        tissue=args.tissue,
+        condition=args.condition,
+        validate_context=args.validate_context,
+        context_mismatch_threshold=args.context_mismatch_threshold,
+        context_min_cells=args.context_min_cells,
     )
     ledger = None
     try:
         _ledger_ctx = type("_LedgerCtx", (), {"cfg": cfg})()
-        ledger = RunLedger(_ledger_ctx, args.project, Path(args.output_dir))
+        ledger_root = _run_dir if _run_dir is not None else Path(args.output_dir)
+        ledger = RunLedger(_ledger_ctx, args.project, ledger_root)
         ledger.record_start()
     except Exception as _ledger_exc:
         logging.getLogger(__name__).warning("RunLedger.record_start failed: %s", _ledger_exc)
@@ -626,6 +779,21 @@ def main() -> None:
     try:
         manifest = run_pipeline(cfg, ledger=ledger)
         print(manifest)
+        if _run_dir is not None:
+            try:
+                modules_run = list(manifest.get("modules_run", [])) if isinstance(manifest, dict) else []
+                bundle_sha256 = manifest.get("bundle_sha256", "") if isinstance(manifest, dict) else ""
+                write_manifest(
+                    _run_dir,
+                    project_id=args.project,
+                    run_id=_run_id,
+                    modules_run=modules_run,
+                    bundle_sha256=bundle_sha256 or None,
+                    produced_on=socket.gethostname(),
+                    factory_python_path=_FACTORY_ROOT,
+                )
+            except Exception as _mf_exc:
+                logging.getLogger(__name__).warning("manifest write failed: %s", _mf_exc)
     finally:
         run_shutdown_cleanup()
 

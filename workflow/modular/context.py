@@ -19,6 +19,12 @@ from .config import PipelineConfig
 
 logger = logging.getLogger(__name__)
 
+SC_CHECKPOINT_SCHEMA_VERSION = 2
+
+
+class CheckpointSchemaMismatch(Exception):
+    pass
+
 
 @dataclass
 class PipelineContext:
@@ -35,6 +41,11 @@ class PipelineContext:
     _figure_pool: ThreadPoolExecutor | None = field(default=None, repr=False)
     _figure_futures: list[Future] = field(default_factory=list, repr=False)
     _status_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    @property
+    def random_state(self) -> int:
+        """Global random seed for all stochastic modules. Source of truth for AC-10 reproducibility."""
+        return getattr(self.cfg, "random_state", 42)
 
     def status(self, module: str, ok: bool | str, message: str) -> None:
         """Record module execution status (thread-safe)."""
@@ -73,17 +84,9 @@ class PipelineContext:
             return False
 
     def _should_save_adata_checkpoint(self, module_name: str) -> bool:
-        # SC_CHECKPOINT_POLICY env var takes priority, then cfg.checkpoint_policy, then scale_mode fallback.
-        policy = (
-            os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
-            or os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", "").strip().lower()
-            or getattr(self.cfg, "checkpoint_policy", "full")
-        )
-        if policy in {"metadata_only", "json_only", "sidecar_only"}:
-            return False
-        if policy == "mandatory_only":
-            return module_name not in {"cellranger", "qc", "doublet_detection"}
-        # "full" or unknown — save everything
+        # After B.4b, only `full` policy remains, so adata is always saved when
+        # cfg.checkpoint is True. Method retained as a hook for future per-module
+        # opt-out, but currently constant.
         return True
 
     def _compact_adata_for_checkpoint(self) -> None:
@@ -139,6 +142,7 @@ class PipelineContext:
         elif self.adata is not None:
             logger.info("Skipping full AnnData checkpoint after %s in massive mode to reduce memory/IO pressure", module_name)
         sidecar = {
+            "schema_version": SC_CHECKPOINT_SCHEMA_VERSION,
             "module": module_name,
             "adata_checkpoint_policy": os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", ""),
             "metadata": self.metadata,
@@ -163,6 +167,13 @@ class PipelineContext:
             return False
         if cp_json.exists():
             sidecar = json.loads(cp_json.read_text(encoding="utf-8"))
+            schema_v = sidecar.get("schema_version", 1)
+            if schema_v < SC_CHECKPOINT_SCHEMA_VERSION:
+                raise CheckpointSchemaMismatch(
+                    f"checkpoint at {cp_json} is v{schema_v} but pipeline is v{SC_CHECKPOINT_SCHEMA_VERSION}; "
+                    f"regenerate prepared zarr OR rerun from cellranger. "
+                    f"Use scripts/dev/regenerate_prepared_zarr.py to migrate."
+                )
             self.metadata = sidecar.get("metadata", {})
             self.module_status = sidecar.get("module_status", [])
             raw_dirs = sidecar.get("module_dirs", {})

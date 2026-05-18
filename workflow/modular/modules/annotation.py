@@ -19,6 +19,27 @@ sc = import_scanpy_or_stub()
 from ..context import PipelineContext
 
 
+__references__ = {
+    "Tirosh_marker_scoring_2016": {
+        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
+        "authors": "Tirosh et al.",
+        "journal": "Science",
+        "year": "2016",
+        "doi": "10.1126/science.aad0501",
+        "description": "Cluster-vote marker-mean scoring approach for cell type assignment.",
+    },
+    "Stuart_label_transfer_2019": {
+        "title": "Comprehensive Integration of Single-Cell Data",
+        "authors": "Stuart et al.",
+        "journal": "Cell",
+        "year": "2019",
+        "doi": "10.1016/j.cell.2019.05.031",
+        "description": "Reference-based label transfer principles; this module uses a simpler sklearn.NearestNeighbors KNN majority vote on a labeled reference.",
+    },
+}
+
+
+
 DEFAULT_MARKERS = {
     "Tumor epithelial": ["EPCAM", "KRT7", "KRT8", "KRT18", "KRT19", "MUC1"],
     "T cell": ["CD3D", "CD3E", "TRAC", "CD4", "CD8A", "IL7R"],

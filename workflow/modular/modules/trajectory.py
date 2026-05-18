@@ -14,6 +14,43 @@ from scipy import sparse
 from ..context import PipelineContext
 
 
+__references__ = {
+    "Wolf_PAGA_2019": {
+        "title": "PAGA: graph abstraction reconciles clustering with trajectory inference through a topology preserving map of single cells",
+        "authors": "Wolf et al.",
+        "journal": "Genome Biology",
+        "year": "2019",
+        "doi": "10.1186/s13059-019-1663-x",
+        "description": "PAGA topology-preserving abstraction. sc.tl.paga used here.",
+    },
+    "Haghverdi_DPT_2016": {
+        "title": "Diffusion pseudotime robustly reconstructs lineage branching",
+        "authors": "Haghverdi, Buttner, Wolf et al.",
+        "journal": "Nature Methods",
+        "year": "2016",
+        "doi": "10.1038/nmeth.3971",
+        "description": "Diffusion pseudotime (sc.tl.dpt) used for ordering cells along trajectories.",
+    },
+    "Hao_WNN_2021": {
+        "title": "Integrated analysis of multimodal single-cell data",
+        "authors": "Hao et al.",
+        "journal": "Cell",
+        "year": "2021",
+        "doi": "10.1016/j.cell.2021.04.048",
+        "description": "WNN (Weighted Nearest Neighbor) joint embedding. X_wnn is preferred over X_pca for pseudotime when available, as it captures multi-modal cell state more faithfully.",
+    },
+    "Setty_Palantir_2019": {
+        "title": "Characterization of cell fate probabilities in single-cell data with Palantir",
+        "authors": "Setty et al.",
+        "journal": "Nature Biotechnology",
+        "year": "2019",
+        "doi": "10.1038/s41587-019-0068-4",
+        "description": "Pseudotime computed over a joint manifold embedding (X_wnn or X_pca). Supports the rationale for running DPT on the best available joint embedding rather than UMAP.",
+    },
+}
+
+
+
 class TrajectoryModule:
     """Optional module: comprehensive pseudotime trajectory inference.
 
@@ -29,13 +66,27 @@ class TrajectoryModule:
     """
 
     name = "trajectory"
-    requires_keys = {"obsm": ["X_umap"]}
+    requires_keys = {"obsm_any_of": ["X_wnn", "X_pca"]}
     provides_keys = {"obs": ["dpt_pseudotime"]}
 
     def run(self, ctx: PipelineContext) -> None:
+        from .._contract_violation import ModuleContractError
+
         adata = ctx.adata
-        if adata is None or "X_umap" not in adata.obsm:
-            raise ValueError("Trajectory requires UMAP embedding.")
+        if adata is None:
+            raise ValueError("Trajectory requires AnnData.")
+
+        if "X_wnn" in adata.obsm:
+            embedding_key = "X_wnn"
+        elif "X_pca" in adata.obsm:
+            embedding_key = "X_pca"
+        else:
+            raise ModuleContractError(
+                "trajectory: neither adata.obsm['X_wnn'] nor adata.obsm['X_pca'] is present. "
+                "Run multimodal_integration (for X_wnn) or clustering (for X_pca) first."
+            )
+
+        ctx.metadata["trajectory_embedding_key"] = embedding_key
 
         # --- PAGA trajectory graph ---
         if "leiden" in adata.obs:

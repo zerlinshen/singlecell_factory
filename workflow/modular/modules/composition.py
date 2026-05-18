@@ -11,6 +11,19 @@ import pandas as pd
 
 from ..context import PipelineContext
 
+
+__references__ = {
+    "Buttner_scCODA_2021": {
+        "title": "scCODA is a Bayesian model for compositional single-cell data analysis",
+        "authors": "Buttner, Ostner, et al.",
+        "journal": "Nature Communications",
+        "year": "2021",
+        "doi": "10.1038/s41467-021-27150-6",
+        "description": "Bayesian compositional analysis; preferred path via pertpy. Chi-square fallback used when scCODA unavailable.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 
 

@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
 from ..context import PipelineContext
 from . import score_gene_sets
 
+
+__references__ = {
+    "Tirosh_scoring_2016": {
+        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
+        "authors": "Tirosh et al.",
+        "journal": "Science",
+        "year": "2016",
+        "doi": "10.1126/science.aad0501",
+        "description": "Same scoring methodology scoped to immune cell-type marker sets.",
+    },
+    "Zilionis_immune_atlas_2019": {
+        "title": "Single-cell transcriptomics of human and mouse lung cancers reveals conserved myeloid populations",
+        "authors": "Zilionis et al.",
+        "journal": "Immunity",
+        "year": "2019",
+        "doi": "10.1016/j.immuni.2019.03.009",
+        "description": "Canonical lung-cancer immune sub-typing markers underlying many phenotype calls.",
+    },
+}
+
+
 # Immune subtype markers based on Zheng et al. (Science 2017),
 # Zhang et al. (Nature 2018), and Tirosh et al. (Science 2016).
 IMMUNE_SUBTYPES = {

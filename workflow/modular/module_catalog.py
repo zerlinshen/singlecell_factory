@@ -242,6 +242,159 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
             "bundle v2.1 multimodal_obsm extension."
         ),
     ),
+    "marker_db_loader": ModuleSpec(
+        name="marker_db_loader",
+        depends_on=(),
+        layer="annotation",
+        modality="singlecell_rna",
+        bridge_ready=False,
+        description=(
+            "Load offline-vendored marker DBs (CellMarker2, PanglaoDB, CellTypist, scTypeDB) "
+            "for (tissue, condition) routing. Writes adata.uns['marker_db_index']. "
+            "No clustering dependency — consumed by context_aware_annotation."
+        ),
+    ),
+    "context_aware_annotation": ModuleSpec(
+        name="context_aware_annotation",
+        depends_on=("clustering", "marker_db_loader"),
+        layer="annotation",
+        modality="singlecell_rna",
+        bridge_ready=True,
+        description=(
+            "Context-aware cell type annotation driven by (tissue, condition) marker DBs. "
+            "Writes adata.obs['context_aware_celltype'] and optionally "
+            "adata.obs['context_aware_substate']. Opt-in; leaves legacy annotation.py untouched (AC-10)."
+        ),
+    ),
+    "modality_registry": ModuleSpec(
+        name="modality_registry",
+        depends_on=(),
+        layer="ingest",
+        modality="agnostic",
+        bridge_ready=False,
+        description=(
+            "Detect present modalities (RNA/ATAC/VDJ/Ribo/Hi-C/protein/spatial) by scanning "
+            "obsm keys and obs columns. Writes adata.uns['modalities_present'] and "
+            "runs/<run-id>/manifest/modalities.json. Wave 2 / P1B.S8."
+        ),
+    ),
+    "cross_modality_qc": ModuleSpec(
+        name="cross_modality_qc",
+        depends_on=("modality_registry",),
+        layer="quality_control",
+        modality="agnostic",
+        bridge_ready=False,
+        description=(
+            "Barcode overlap QC across modalities. Tri-state status: "
+            "skipped_single_modality | ran | warn_divergence. Sparse-safe (no full-X densification). "
+            "Wave 2 / P1B.S9."
+        ),
+    ),
+    "atac_ingest": ModuleSpec(
+        name="atac_ingest",
+        depends_on=(),
+        layer="ingest",
+        modality="atac",
+        bridge_ready=True,
+        description=(
+            "ATAC-seq sparse peak matrix ingest with TF-IDF + LSI embedding "
+            "(Cusanovich 2018 methodology). Memory-safe: never densifies the peak matrix. "
+            "Writes sparse adata.obsm['atac_peaks'], compatibility adata.obsm['X_atac'], "
+            "and adata.uns['atac_peaks']. Wave 2 / P2.S11."
+        ),
+    ),
+    "vdj_ingest": ModuleSpec(
+        name="vdj_ingest",
+        depends_on=(),
+        layer="ingest",
+        modality="vdj",
+        bridge_ready=True,
+        description=(
+            "VDJ receptor ingest: parse cellranger-vdj filtered_contig_annotations.csv "
+            "into per-cell clonotype_id + chain_pairing. Memory-safe (pandas-only, no AnnData "
+            "duplication). Wave 2B / P2.S15."
+        ),
+    ),
+    "vdj_metrics": ModuleSpec(
+        name="vdj_metrics",
+        depends_on=("vdj_ingest",),
+        layer="metrics",
+        modality="vdj",
+        bridge_ready=True,
+        description=(
+            "Per-sample VDJ diversity (Shannon + Gini) and per-cell clonal_expansion class. "
+            "Wave 2B / P2.S16."
+        ),
+    ),
+    "atac_qc": ModuleSpec(
+        name="atac_qc",
+        depends_on=(),
+        layer="quality_control",
+        modality="atac",
+        bridge_ready=False,
+        description=(
+            "Per-cell ATAC QC: TSS enrichment + FRiP from fragments.tsv.gz, ENCODE-style "
+            "pass/warn/fail thresholds. Memory-safe (streams fragments). Wave 2B / P2.S12."
+        ),
+    ),
+    "atac_lsi": ModuleSpec(
+        name="atac_lsi",
+        depends_on=("atac_ingest",),
+        layer="embedding",
+        modality="atac",
+        bridge_ready=False,
+        description=(
+            "TF-IDF normalisation + truncated SVD (LSI) on adata.obsm['atac_peaks']. "
+            "Writes adata.obsm['X_lsi'] (49 components, first dropped) and "
+            "adata.uns['lsi_variance_explained']. Wave 5 / US-W5-1."
+        ),
+    ),
+    "peak_to_gene": ModuleSpec(
+        name="peak_to_gene",
+        depends_on=("atac_ingest", "atac_lsi"),
+        layer="annotation_prep",
+        modality="atac",
+        bridge_ready=False,
+        description=(
+            "Distance-based linkage of ATAC peaks to nearest gene TSS (Cicero-style). "
+            "Writes adata.uns['peak_to_gene'] for joint RNA+ATAC analysis. Wave 2B / P2.S13."
+        ),
+    ),
+    "hic_ingest": ModuleSpec(
+        name="hic_ingest",
+        depends_on=(),
+        layer="ingest",
+        modality="hic",
+        bridge_ready=True,
+        description=(
+            "Hi-C / scHi-C contact map ingest. Reads .cool/.mcool (via cooler) or "
+            "TSV contact-pair format. Stores contacts as scipy.sparse CSR. Wave 2B / P2.S18."
+        ),
+    ),
+    "hic_tad": ModuleSpec(
+        name="hic_tad",
+        depends_on=("hic_ingest",),
+        layer="annotation_prep",
+        modality="hic",
+        bridge_ready=True,
+        description=(
+            "TAD boundary detection via insulation score (Crane 2015) + A/B compartment "
+            "scoring via first eigenvector of correlation matrix (Lieberman-Aiden 2009). "
+            "Wave 2B / P2.S19."
+        ),
+    ),
+    "ribo_ingest": ModuleSpec(
+        name="ribo_ingest",
+        depends_on=(),
+        layer="ingest",
+        modality="ribo",
+        bridge_ready=True,
+        description=(
+            "Ribosome profiling (Ribo-seq) ingest. Computes per-gene per-sample "
+            "translation efficiency (footprint / RNA + pseudocount). Memory-safe "
+            "(sparse-aware RNA aggregation). Wave 2B / P2.S21."
+        ),
+    ),
 }
 
 

@@ -16,6 +16,35 @@ from ..context import PipelineContext
 from ._gpu_utils import gpu_available
 from .._densify_policy import plan_densify, DensifyDecision
 
+
+__references__ = {
+    "scanpy": {
+        "title": "SCANPY: large-scale single-cell gene expression data analysis",
+        "authors": "Wolf, Angerer, Theis",
+        "journal": "Genome Biology",
+        "year": "2018",
+        "doi": "10.1186/s13059-017-1382-0",
+        "description": "scanpy.tl.rank_genes_groups implementation (Wilcoxon/t-test/MAST/ROC).",
+    },
+    "Soneson_DE_benchmark_2018": {
+        "title": "Bias, robustness and scalability in single-cell differential expression analysis",
+        "authors": "Soneson, Robinson",
+        "journal": "Nature Methods",
+        "year": "2018",
+        "doi": "10.1038/nmeth.4612",
+        "description": "Benchmark showing Wilcoxon competitive with bespoke single-cell DE methods.",
+    },
+    "Benjamini_Hochberg_1995": {
+        "title": "Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing",
+        "authors": "Benjamini, Hochberg",
+        "journal": "Journal of the Royal Statistical Society B",
+        "year": "1995",
+        "doi": "10.1111/j.2517-6161.1995.tb02031.x",
+        "description": "BH FDR correction applied to per-gene p-values and per-substate marker scoring.",
+    },
+}
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -119,6 +148,12 @@ class DifferentialExpressionModule:
         ctx.metadata["de_method"] = method
         ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
         ctx.metadata["de_n_genes"] = int(n_genes)
+        ctx.metadata["de_random_state"] = ctx.random_state
+
+        # --- P1A.S3b: per-substate DE CSVs (AC-2 support) ---
+        # Gated on column presence; AC-10 zero-regression when column absent.
+        if "context_aware_substate" in adata.obs:
+            self._write_substate_de(adata, markers, ctx)
 
         # --- Visualizations ---
         # Dot plot of top markers per cluster
@@ -363,3 +398,119 @@ class DifferentialExpressionModule:
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "de_volcano.png", dpi=160, bbox_inches="tight")
         plt.close()
+
+    @staticmethod
+    def _write_substate_de(adata, markers: pd.DataFrame, ctx: PipelineContext) -> None:
+        """Write per-substate DE CSVs when context_aware_substate column is present (P1A.S3b).
+
+        Output: runs/<run-id>/differential_expression/substates/<substate_name>.csv
+        Columns: gene, log2fc, pvalue, fdr, pct_in_substate, pct_in_parent
+
+        Gated strictly on column presence. When column is absent, this method is never
+        called — preserving AC-10 zero-regression for default runs.
+        """
+        substate_col = adata.obs.get("context_aware_substate")
+        if substate_col is None:
+            return
+
+        # Only process rows where substate is non-null
+        valid_mask = substate_col.notna() & (substate_col.astype(str) != "None")
+        if not valid_mask.any():
+            return
+
+        from scipy import sparse, stats as _stats
+
+        substates = substate_col[valid_mask].unique()
+        substates_dir = ctx.table_dir.parent / "differential_expression" / "substates"
+        substates_dir.mkdir(parents=True, exist_ok=True)
+
+        written: list[str] = []
+        for substate in substates:
+            substate_str = str(substate)
+            # Find the parent cell type: everything before the last space-separated qualifier
+            # or the full string if no qualifier. Use leiden-mapped cell type if available.
+            substate_mask = (
+                substate_col.notna() &
+                (substate_col.astype(str) == substate_str)
+            )
+            # Parent = all cells that share the same leiden cluster (context_aware_celltype parent)
+            # Fallback: all non-substate cells as parent reference
+            parent_mask = ~substate_mask
+
+            n_in = int(substate_mask.sum())
+            n_parent = int(parent_mask.sum())
+            if n_in < 3 or n_parent < 3:
+                continue
+
+            import scipy.sparse as sp
+            X = adata.X
+            if sp.issparse(X):
+                sub_shape = (n_in, X.shape[1])
+                par_shape = (n_parent, X.shape[1])
+                sub_decision = plan_densify(
+                    sub_shape,
+                    np.float64,
+                    reason="context-aware substate DE input group for Mann-Whitney test",
+                )
+                par_decision = plan_densify(
+                    par_shape,
+                    np.float64,
+                    reason="context-aware substate DE parent group for Mann-Whitney test",
+                )
+                if DensifyDecision.ABORT in (sub_decision, par_decision):
+                    from .._mem_guard import MemoryGuardError
+                    raise MemoryGuardError(
+                        "differential_expression substate DE: sparse subset too large "
+                        f"to densify safely (substate={sub_shape}, parent={par_shape})"
+                    )
+                if DensifyDecision.CHUNK in (sub_decision, par_decision):
+                    logger.warning(
+                        "differential_expression substate DE densify in CHUNK range "
+                        "(substate=%s, parent=%s); proceeding",
+                        sub_shape,
+                        par_shape,
+                    )
+                # densify-allowed: guarded substate subset for scipy Mann-Whitney fallback
+                X_sub = np.asarray(X[substate_mask].todense(), dtype=np.float64)
+                # densify-allowed: guarded parent subset for scipy Mann-Whitney fallback
+                X_par = np.asarray(X[parent_mask].todense(), dtype=np.float64)
+            else:
+                X_sub = np.asarray(X[substate_mask], dtype=np.float64)
+                X_par = np.asarray(X[parent_mask], dtype=np.float64)
+
+            mean_sub = X_sub.mean(axis=0) + 1e-9
+            mean_par = X_par.mean(axis=0) + 1e-9
+            log2fc = np.log2(mean_sub / mean_par)
+            pct_in = (X_sub > 0).mean(axis=0)
+            pct_par = (X_par > 0).mean(axis=0)
+
+            try:
+                _, pvals = _stats.mannwhitneyu(X_sub, X_par, axis=0, alternative="two-sided")
+                pvals = np.nan_to_num(np.asarray(pvals, dtype=float), nan=1.0)
+            except Exception:
+                pvals = np.ones(X_sub.shape[1], dtype=float)
+
+            fdr = DifferentialExpressionModule._benjamini_hochberg(pvals)
+
+            genes = np.asarray(adata.var_names.astype(str))
+            result = pd.DataFrame({
+                "gene": genes,
+                "log2fc": log2fc.ravel(),
+                "pvalue": pvals.ravel(),
+                "fdr": fdr.ravel(),
+                "pct_in_substate": pct_in.ravel(),
+                "pct_in_parent": pct_par.ravel(),
+            })
+            result = result.sort_values("fdr").reset_index(drop=True)
+
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in substate_str)
+            out_path = substates_dir / f"{safe_name}.csv"
+            result.to_csv(out_path, index=False)
+            written.append(substate_str)
+            logger.info(
+                "DE substates: wrote %d genes for substate '%s' → %s",
+                len(result), substate_str, out_path,
+            )
+
+        ctx.metadata["de_substates_written"] = written
+        ctx.metadata["de_substates_count"] = len(written)

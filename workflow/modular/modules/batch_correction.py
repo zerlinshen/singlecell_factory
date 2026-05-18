@@ -13,6 +13,60 @@ sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 from ._gpu_utils import gpu_available
+from .._neighbors_cache import get_or_compute_neighbors
+
+
+__references__ = {
+    "Korsunsky_Harmony_2019": {
+        "title": "Fast, sensitive and accurate integration of single-cell data with Harmony",
+        "authors": "Korsunsky et al.",
+        "journal": "Nature Methods",
+        "year": "2019",
+        "doi": "10.1038/s41592-019-0619-0",
+        "description": "Default backend (rsc.pp.harmony_integrate GPU port, US-B3 parity ARI=1.000).",
+    },
+    "Polanski_BBKNN_2020": {
+        "title": "BBKNN: fast batch alignment of single cell transcriptomes",
+        "authors": "Polanski et al.",
+        "journal": "Bioinformatics",
+        "year": "2020",
+        "doi": "10.1093/bioinformatics/btz625",
+        "description": "BBKNN backend.",
+    },
+    "Johnson_ComBat_2007": {
+        "title": "Adjusting batch effects in microarray expression data using empirical Bayes methods",
+        "authors": "Johnson, Li, Rabinovic",
+        "journal": "Biostatistics",
+        "year": "2007",
+        "doi": "10.1093/biostatistics/kxj037",
+        "description": "ComBat backend (sc.pp.combat).",
+    },
+    "Hie_Scanorama_2019": {
+        "title": "Efficient integration of heterogeneous single-cell transcriptomes using Scanorama",
+        "authors": "Hie, Bryson, Berger",
+        "journal": "Nature Biotechnology",
+        "year": "2019",
+        "doi": "10.1038/s41587-019-0113-3",
+        "description": "Scanorama backend.",
+    },
+    "Lopez_scVI_2018": {
+        "title": "Deep generative modeling for single-cell transcriptomics",
+        "authors": "Lopez et al.",
+        "journal": "Nature Methods",
+        "year": "2018",
+        "doi": "10.1038/s41592-018-0229-2",
+        "description": "scVI backend via scvi-tools.",
+    },
+    "Haghverdi_MNN_2018": {
+        "title": "Batch effects in single-cell RNA-sequencing data are corrected by matching mutual nearest neighbors",
+        "authors": "Haghverdi et al.",
+        "journal": "Nature Biotechnology",
+        "year": "2018",
+        "doi": "10.1038/nbt.4091",
+        "description": "MNN / fastMNN backends.",
+    },
+}
+
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +116,8 @@ class BatchCorrectionModule:
             raise ValueError("Batch correction requires AnnData.")
 
         cfg = ctx.cfg.batch
+        # Sync canonical seed into clustering cfg so post-correction UMAP/Leiden are deterministic
+        ctx.cfg.clustering.random_state = ctx.random_state
         batch_key = cfg.batch_key
 
         if batch_key not in adata.obs.columns:
@@ -139,7 +195,19 @@ class BatchCorrectionModule:
                 import rapids_singlecell as rsc
                 logger.info("GPU batch post-processing: neighbors/UMAP/Leiden")
                 if cfg.method != "bbknn":
-                    rsc.pp.neighbors(adata, use_rep=use_rep)
+                    # bbknn bypasses cache: incompatible neighbors API signature
+                    get_or_compute_neighbors(
+                        adata,
+                        backend_id="rapids",
+                        method="umap",
+                        metric="euclidean",
+                        n_pcs=None,
+                        n_neighbors=ctx.cfg.clustering.n_neighbors,
+                        use_rep=use_rep,
+                        knn=True,
+                        random_state=ctx.cfg.clustering.random_state,
+                        compute_fn=lambda: rsc.pp.neighbors(adata, use_rep=use_rep),
+                    )
                 rsc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
                 rsc.tl.leiden(adata, resolution=ctx.cfg.clustering.leiden_resolution,
                               random_state=ctx.cfg.clustering.random_state)
@@ -153,7 +221,19 @@ class BatchCorrectionModule:
         if not use_gpu:
             try:
                 if cfg.method != "bbknn":
-                    sc.pp.neighbors(adata, use_rep=use_rep)
+                    # bbknn bypasses cache: incompatible neighbors API signature
+                    get_or_compute_neighbors(
+                        adata,
+                        backend_id="scanpy",
+                        method="umap",
+                        metric="euclidean",
+                        n_pcs=None,
+                        n_neighbors=ctx.cfg.clustering.n_neighbors,
+                        use_rep=use_rep,
+                        knn=True,
+                        random_state=ctx.cfg.clustering.random_state,
+                        compute_fn=lambda: sc.pp.neighbors(adata, use_rep=use_rep),
+                    )
                 sc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
                 sc.tl.leiden(
                     adata,
@@ -172,6 +252,7 @@ class BatchCorrectionModule:
         ctx.metadata["batch_post_backend"] = "gpu" if use_gpu else "cpu"
         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique()) if "leiden" in adata.obs else 0
         ctx.metadata["batch_correction_status"] = "completed"
+        ctx.metadata["batch_correction_random_state"] = ctx.random_state
 
         # Post-correction UMAP
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -188,37 +269,20 @@ class BatchCorrectionModule:
         if "X_pca" not in adata.obsm:
             raise ValueError("Harmony requires PCA (run clustering first).")
         try:
-            import harmonypy
+            import rapids_singlecell as rsc
         except ImportError:
             raise ImportError(
-                "harmonypy is required for Harmony batch correction. "
-                "Install with: pip install harmonypy"
+                "rapids_singlecell is required for Harmony batch correction. "
+                "Activate the sc_gpu_stable conda environment."
             )
-
-        def _apply(device: str):
-            x = np.asarray(adata.obsm["X_pca"], dtype=np.float64)
-            ho = harmonypy.run_harmony(x, adata.obs, batch_key, device=device)
-            z = np.asarray(ho.Z_corr)
-            if z.shape == x.shape:
-                corrected = z
-            elif z.T.shape == x.shape:
-                corrected = z.T
-            else:
-                raise ValueError(
-                    f"Harmony output shape mismatch: got {z.shape}, expected {x.shape} or {x.T.shape}"
-                )
-            adata.obsm["X_pca_harmony"] = corrected.astype(np.float32, copy=False)
-
-        try:
-            device = "cuda" if ctx.cfg.gpu_mode == "force" else "cpu"
-            ctx.metadata["harmony_device"] = device
-            _apply(device)
-        except Exception as exc:
-            if ctx.cfg.gpu_mode == "force":
-                raise
-            ctx.metadata["harmony_fallback_reason"] = str(exc)
-            ctx.metadata["harmony_device"] = "cpu"
-            _apply("cpu")
+        # rsc.pp.harmony_integrate writes corrected embeddings to
+        # adata.obsm["X_pca_harmony"] in place (US-B3, ARI=1.000 parity gate passed).
+        ctx.metadata["harmony_device"] = "gpu"
+        rsc.pp.harmony_integrate(adata, key=batch_key)
+        # Ensure float32 for downstream consistency
+        adata.obsm["X_pca_harmony"] = np.asarray(
+            adata.obsm["X_pca_harmony"], dtype=np.float32
+        )
 
     @staticmethod
     def _run_bbknn(adata, batch_key: str, ctx) -> None:

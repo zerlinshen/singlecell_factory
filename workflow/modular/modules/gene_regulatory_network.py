@@ -12,6 +12,27 @@ import pandas as pd
 from ..context import PipelineContext
 
 
+__references__ = {
+    "BadiaiMompel_decoupler_2022": {
+        "title": "decoupleR: ensemble of computational methods to infer biological activities from omics data",
+        "authors": "Badia-i-Mompel et al.",
+        "journal": "Bioinformatics Advances",
+        "year": "2022",
+        "doi": "10.1093/bioadv/vbac016",
+        "description": "decoupler ensemble framework used for TF activity scoring.",
+    },
+    "GarciaAlonso_DoRothEA_2019": {
+        "title": "Benchmark and integration of resources for the estimation of human transcription factor activities",
+        "authors": "Garcia-Alonso et al.",
+        "journal": "Genome Research",
+        "year": "2019",
+        "doi": "10.1101/gr.240663.118",
+        "description": "DoRothEA TF-target regulons consumed by decoupler.",
+    },
+}
+
+
+
 class GeneRegulatoryNetworkModule:
     """Optional module: transcription factor activity inference.
 
