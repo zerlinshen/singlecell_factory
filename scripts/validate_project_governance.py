@@ -14,7 +14,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+try:
+    import yaml as _yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
+
 _IMAGE_SUFFIXES = {".png", ".pdf", ".svg", ".tif", ".tiff"}
+
+C2_PARITY_TAXONOMY = ("exact", "approximate", "proxy", "unsupported", "resource_gap")
+C2_GAP_TARGETS = (
+    "singlecell_factory",
+    "r_multiomics_factory",
+    "plotting_factory",
+    "paper_specific_script",
+    "parameter_change_only",
+)
+_C2_TOP_LEVEL_FIELDS = (
+    "upstream_repository",
+    "raw_data_reproduction",
+    "data_object_reproduction",
+    "figure_reproduction",
+    "module_gap_decisions",
+    "context_optimization_decisions",
+)
 
 
 def _rel(path: Path, root: Path) -> str:
@@ -47,6 +70,85 @@ def _count_artifacts(run_dir: Path) -> dict:
         if path.suffix.lower() == ".json" and "evidence" in lower:
             evidence_json_count += 1
     return {"figures": figure_count, "evidence_json": evidence_json_count}
+
+
+def _validate_c2_reproduction_fields(project_yaml_data: dict, project_yaml_path: Path) -> list[dict]:
+    """Advisory warnings (never errors) for missing or malformed C2 reproduction fields."""
+    warnings: list[dict] = []
+
+    for field in _C2_TOP_LEVEL_FIELDS:
+        if field not in project_yaml_data:
+            warnings.append(_finding(
+                "warning",
+                f"c2_missing_{field}",
+                project_yaml_path,
+                f"C2 reproduction field '{field}' not present; advisory only — populate via PAPER_REPRODUCTION_SOP.md.",
+            ))
+
+    upstream = project_yaml_data.get("upstream_repository")
+    if isinstance(upstream, dict):
+        for subfield in ("url", "commit_or_tag", "doi", "license", "forked_at", "fork_path"):
+            if subfield not in upstream:
+                warnings.append(_finding(
+                    "warning",
+                    f"c2_upstream_repository_missing_{subfield}",
+                    project_yaml_path,
+                    f"upstream_repository.{subfield} not present; record before first reproduction run.",
+                ))
+
+    for map_field in ("data_object_reproduction", "figure_reproduction"):
+        field_data = project_yaml_data.get(map_field)
+        if isinstance(field_data, dict):
+            for key, value in field_data.items():
+                if value not in C2_PARITY_TAXONOMY:
+                    warnings.append(_finding(
+                        "warning",
+                        f"c2_{map_field}_invalid_parity_class",
+                        project_yaml_path,
+                        f"{map_field}['{key}'] = '{value}' is not a valid parity class; "
+                        f"must be one of: {', '.join(C2_PARITY_TAXONOMY)}.",
+                    ))
+
+    gap_decisions = project_yaml_data.get("module_gap_decisions")
+    if isinstance(gap_decisions, list):
+        for i, item in enumerate(gap_decisions):
+            if not isinstance(item, dict):
+                continue
+            target = item.get("target")
+            if target is not None and target not in C2_GAP_TARGETS:
+                warnings.append(_finding(
+                    "warning",
+                    "c2_module_gap_decisions_invalid_target",
+                    project_yaml_path,
+                    f"module_gap_decisions[{i}].target = '{target}' is not a valid routing target; "
+                    f"must be one of: {', '.join(C2_GAP_TARGETS)}.",
+                ))
+            gap_class = item.get("gap_class")
+            if gap_class is not None and gap_class not in C2_PARITY_TAXONOMY:
+                warnings.append(_finding(
+                    "warning",
+                    "c2_module_gap_decisions_invalid_gap_class",
+                    project_yaml_path,
+                    f"module_gap_decisions[{i}].gap_class = '{gap_class}' is not a valid parity class; "
+                    f"must be one of: {', '.join(C2_PARITY_TAXONOMY)}.",
+                ))
+
+    context_decisions = project_yaml_data.get("context_optimization_decisions")
+    if isinstance(context_decisions, list):
+        for i, item in enumerate(context_decisions):
+            if not isinstance(item, dict):
+                continue
+            parity_class = item.get("parity_class")
+            if parity_class is not None and parity_class not in C2_PARITY_TAXONOMY:
+                warnings.append(_finding(
+                    "warning",
+                    "c2_context_optimization_decisions_invalid_parity_class",
+                    project_yaml_path,
+                    f"context_optimization_decisions[{i}].parity_class = '{parity_class}' is not a valid parity class; "
+                    f"must be one of: {', '.join(C2_PARITY_TAXONOMY)}.",
+                ))
+
+    return warnings
 
 
 def _validate_run(project_root: Path, run_dir: Path) -> dict:
@@ -108,6 +210,17 @@ def _validate_run(project_root: Path, run_dir: Path) -> dict:
     }
 
 
+def _load_yaml_safe(path: Path) -> dict | None:
+    """Return parsed YAML dict or None if yaml unavailable or parse fails."""
+    if not _YAML_AVAILABLE:
+        return None
+    try:
+        data = _yaml.safe_load(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
 def validate_project(project_root: Path, run_id: str | None = None) -> dict:
     project_root = project_root.resolve()
     findings: list[dict] = []
@@ -125,6 +238,10 @@ def validate_project(project_root: Path, run_id: str | None = None) -> dict:
             project_yaml,
             "Missing project.yaml; warning for legacy projects, required for new-governance projects.",
         ))
+    else:
+        project_yaml_data = _load_yaml_safe(project_yaml)
+        if project_yaml_data is not None:
+            findings.extend(_validate_c2_reproduction_fields(project_yaml_data, project_yaml))
 
     runs_dir = project_root / "runs"
     if not runs_dir.is_dir():

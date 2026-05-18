@@ -65,5 +65,59 @@ class ProjectGovernanceValidatorTests(unittest.TestCase):
         self.assertEqual(report["severity_counts"]["error"], 1)
 
 
+class C2ReproductionFieldsValidatorTests(unittest.TestCase):
+    def test_missing_all_c2_fields_warns_but_does_not_error(self) -> None:
+        data: dict = {}
+        warnings = validator._validate_c2_reproduction_fields(data, Path("project.yaml"))
+        codes = {w["code"] for w in warnings}
+        for field in validator._C2_TOP_LEVEL_FIELDS:
+            self.assertIn(f"c2_missing_{field}", codes)
+        for w in warnings:
+            self.assertEqual(w["severity"], "warning")
+
+    def test_invalid_parity_class_warns(self) -> None:
+        data = {
+            "data_object_reproduction": {"obs": "exact", "obsm": "bogus_class"},
+        }
+        warnings = validator._validate_c2_reproduction_fields(data, Path("project.yaml"))
+        codes = {w["code"] for w in warnings}
+        self.assertIn("c2_data_object_reproduction_invalid_parity_class", codes)
+
+    def test_invalid_gap_target_warns(self) -> None:
+        data = {
+            "module_gap_decisions": [
+                {"module": "atac", "gap_class": "approximate", "target": "made_up_factory"},
+            ],
+        }
+        warnings = validator._validate_c2_reproduction_fields(data, Path("project.yaml"))
+        codes = {w["code"] for w in warnings}
+        self.assertIn("c2_module_gap_decisions_invalid_target", codes)
+
+    def test_fully_populated_c2_fields_silent(self) -> None:
+        data = {
+            "upstream_repository": {
+                "url": "https://example.com/repo.git",
+                "commit_or_tag": "abc1234",
+                "doi": "10.0/example",
+                "license": "MIT",
+                "forked_at": "2026-05-18",
+                "fork_path": "projects/<id>/upstream/repo/",
+            },
+            "raw_data_reproduction": {"attempted": True, "success": True},
+            "data_object_reproduction": {"obs": "exact", "obsm": "approximate"},
+            "figure_reproduction": {"figure1a": "proxy"},
+            "module_gap_decisions": [
+                {"module": "atac", "gap_class": "approximate", "target": "r_multiomics_factory", "rationale": "x"},
+            ],
+            "context_optimization_decisions": [
+                {"parameter": "n_pcs", "upstream_value": 30, "our_value": 50, "rationale": "y", "parity_class": "approximate"},
+            ],
+        }
+        warnings = validator._validate_c2_reproduction_fields(data, Path("project.yaml"))
+        # upstream_repository fully populated → no warnings; other fields valid → no warnings.
+        # Should produce empty warnings list.
+        self.assertEqual(warnings, [])
+
+
 if __name__ == "__main__":
     unittest.main()
