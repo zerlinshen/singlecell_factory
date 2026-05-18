@@ -98,6 +98,30 @@ need to infer provenance from prose.
 - Added a dated governance report under
   `ops/governance_records/2026-05-18-linux-file-governance-architecture/`.
 
+## Three-Factory Round 2026-05-18
+
+Completed Phase 0 through Phase 3 of the three-factory restructure.
+
+**Factories established:**
+- `singlecell_factory` — Python upstream analysis (this repo)
+- `r_multiomics_factory` — R-native analysis (renamed from `multiomics_r_factory`)
+- `plotting_factory` — dual-language visualization library (`python/` + `r/` subtrees)
+
+**Phase summary:**
+- Phase 0: repo bootstrap and skeleton for `plotting_factory`; `r_multiomics_factory` rename
+- Phase 1: R plotting modules migrated to `plotting_factory/r/`
+- Phase 2: Python plotting modules extracted to `plotting_factory/python/`; bridge symlinks wired
+- Phase 3: cross-language theme tokens, per-plot YAML config schemas, `figure_bundle_schema.yaml`
+  contracts, visual regression smoke tests, CI gate promotion to blocking, and governance finalization
+
+**CI gate**: `scripts/ci/cross_factory_contract_gate.sh` verifies `figure_bundle_schema.yaml`
+parity across all three factories; gate is blocking (non-advisory) as of Phase 3.
+
+**ADR**: `docs/adr/` records factory-trifurcation decisions.
+
+This round is documentation and governance only: it did not launch runs, migrate
+scientific artifacts, delete data, or change source-of-truth run IDs.
+
 ## Hard Boundary
 
 This round is documentation and governance only: do not modify pipeline. It did

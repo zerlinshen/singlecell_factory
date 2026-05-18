@@ -23,13 +23,14 @@ As of 2026-05, the working tree follows a three-way split. See full plan at
 an immutable compute tool. All scientific artifacts must land under a project
 directory resolved from `--project-root`, never inside this repo's tree.
 
-- **Factory tools**: `/home/zerlinshen/singlecell_factory/` (this repo) and
-  `/home/zerlinshen/r_multiomics_factory/` — hold only code, fixtures, and contracts.
+- **Factory tools**: `/home/zerlinshen/singlecell_factory/` (this repo),
+  `/home/zerlinshen/r_multiomics_factory/`, and
+  `/home/zerlinshen/plotting_factory/` — hold only code, fixtures, and contracts.
 - **Projects directory**: `/home/zerlinshen/projects/<project-id>/` (default
   `PROJECTS_ROOT`). Each project is a self-contained directory with `project.yaml`,
   `inputs/`, `runs/`, `configs/`, and `notebooks/`.
 - **Bootstrap tool**: `/home/zerlinshen/projects-bootstrap/omc-new-project` —
-  creates new projects outside both factories.
+  creates new projects outside all three factories.
 
 ### --project-root contract
 

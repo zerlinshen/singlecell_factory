@@ -24,10 +24,15 @@ As of 2026-05, the working tree follows a three-way split. Full plan:
 
 **Factories are tools, projects are data.**
 
-- **`singlecell_factory`** (this repo): pure compute tool. No scientific outputs
-  land inside this tree. All artifacts write to `<project-root>/runs/<run-id>/python/`.
+- **`singlecell_factory`** (this repo): pure Python compute tool. No scientific
+  outputs land inside this tree. All artifacts write to
+  `<project-root>/runs/<run-id>/python/`.
 - **`r_multiomics_factory`** (`/home/zerlinshen/r_multiomics_factory/`): R-side
   compute tool. Writes to `<project-root>/runs/<run-id>/r/`.
+- **`plotting_factory`** (`/home/zerlinshen/plotting_factory/`): dual-language
+  visualization library (`python/` + `r/` subtrees). Figures write to
+  `<project-root>/runs/<run-id>/figures/`. Theme tokens, per-plot schemas, and
+  `figure_bundle_schema.yaml` contracts live here (Phase 3+).
 - **`projects/`** (`/home/zerlinshen/projects/<project-id>/`): self-contained
   project directories. Create with `omc-new-project` from
   `/home/zerlinshen/projects-bootstrap/`.

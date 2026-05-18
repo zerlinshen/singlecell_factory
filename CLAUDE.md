@@ -38,11 +38,14 @@ As of 2026-05, this factory is a pure compute tool — no scientific outputs lan
 inside this repo. Full plan: `/home/zerlinshen/.omc/plans/factory-project-separation.md`.
 
 Three-way split:
-- **Factory tools**: this repo + `/home/zerlinshen/r_multiomics_factory/`
+- **Factory tools**: this repo + `/home/zerlinshen/r_multiomics_factory/` +
+  `/home/zerlinshen/plotting_factory/`
 - **Projects**: `/home/zerlinshen/projects/<project-id>/` (default `PROJECTS_ROOT`)
 - **Bootstrap**: `/home/zerlinshen/projects-bootstrap/omc-new-project`
 
-Sibling repo: `/home/zerlinshen/r_multiomics_factory/`
+Sibling repos:
+- `/home/zerlinshen/r_multiomics_factory/` — R-native analysis
+- `/home/zerlinshen/plotting_factory/` — dual-language visualization (`python/` + `r/`)
 
 **Agent rule**: Never write outputs inside the factory tree. Always pass and
 resolve `--project-root`.
