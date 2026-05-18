@@ -32,13 +32,57 @@ for deep operational steps.
   successful canonical runs unless `final_adata.h5ad`, `run_manifest.json`, and
   `module_status.csv` are present.
 
+## Architecture (2026-05+): Factory-Project Separation
+
+As of 2026-05, this factory is a pure compute tool — no scientific outputs land
+inside this repo. Full plan: `/home/zerlinshen/.omc/plans/factory-project-separation.md`.
+
+Three-way split:
+- **Factory tools**: this repo + `/home/zerlinshen/multiomics_r_factory/`
+- **Projects**: `/home/zerlinshen/projects/<project-id>/` (default `PROJECTS_ROOT`)
+- **Bootstrap**: `/home/zerlinshen/projects-bootstrap/omc-new-project`
+
+Sibling repo: `/home/zerlinshen/multiomics_r_factory/`
+
+**Agent rule**: Never write outputs inside the factory tree. Always pass and
+resolve `--project-root`.
+
+### Environment Switches (Round-1a)
+
+Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
+
+| Variable | Unset (default) | `=1` |
+|---|---|---|
+| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning` on stderr; falls back to legacy `output/` | Hard error `sys.exit(2)`. Pass `--project-root` or unset the var. |
+
+Warning and hard-error are mutually exclusive. Round-2 ADR will flip the default to required. Gate is mirrored in `scripts/export_singlecell_r_bundle.py` and `scripts/pack_run_for_mac.sh`.
+
+### R-factory SHA fields (Round-1a)
+
+Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
+
+Two provenance fields track `multiomics_r_factory` git SHA at two points:
+
+- `r_factory_sha_at_manifest_write` — written to `run_manifest.json` at pipeline manifest-write time.
+- `r_factory_sha_at_export` — written to `<run-id>/python/bundle/provenance.json` at bundle export time.
+
+The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
+
 ## Core Commands
-- Run pipeline:
+- Run pipeline with project-root (preferred):
+  `python -m workflow.modular.cli --project-root /home/zerlinshen/projects/<id> --project <name> --sample-root <path> --optional-modules <modules>`
+- Run pipeline fail-fast on missing --project-root (GOV-2, plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`):
+  `SC_REQUIRE_PROJECT_ROOT=1 python -m workflow.modular.cli --project-root /home/zerlinshen/projects/<id> --project <name> --sample-root <path> --optional-modules <modules>`
+- Run pipeline (legacy, still works, emits DeprecationWarning):
   `python -m workflow.modular.cli --project <name> --sample-root <path> --optional-modules <modules>`
 - Run with recovery:
   `python -m workflow.modular.cli ... --checkpoint`
 - Resume:
   `python -m workflow.modular.cli ... --checkpoint --resume-from <module>`
+- Allow dirty factory tree (records diff_sha256 in manifest):
+  `python -m workflow.modular.cli --project-root <path> --allow-dirty ...`
+- Export R bundle with project-root:
+  `python scripts/export_singlecell_r_bundle.py --project-root <path> --run-id <id> ...`
 - Run tests:
   `pytest -q`
 - Run focused modular tests:

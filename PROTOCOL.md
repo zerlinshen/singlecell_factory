@@ -10,6 +10,34 @@ This protocol is a beginner-friendly, end-to-end guide for running the current m
 
 It is aligned with the current codebase (`workflow/modular/*`) and CLI (`python -m workflow.modular.cli`).
 
+**Architecture note (2026-05+):** As of 2026-05, all pipeline runs must supply
+`--project-root <path>` to write outputs outside the factory tree. See the
+"Architecture (2026-05+)" section in `README.md` and the full plan at
+`/home/zerlinshen/.omc/plans/factory-project-separation.md`. Bootstrap new
+projects with `/home/zerlinshen/projects-bootstrap/omc-new-project <project-id>`.
+
+**Round-1a governance (2026-05):** `README.md` now documents two new subsections
+under "Architecture (2026-05+)": `### Environment Switches` (covering the
+`SC_REQUIRE_PROJECT_ROOT` fail-fast gate) and `### R-factory SHA fields`
+(covering dual-SHA provenance in `run_manifest.json` and `bundle/provenance.json`).
+See `/home/zerlinshen/.omc/plans/factories-optimization-round1.md` for the
+full Round-1a governance plan. The sibling repo `multiomics_r_factory` has
+matching documentation for the R-side contracts (renv bootstrap, schema
+hard-error, SHA mismatch warning).
+
+### Remote Factory/Project Governance
+
+Remote governance is implemented in `singlecell_factory` before any local Mac
+sync. Use `scripts/validate_project_governance.py` to inspect project roots
+read-only, and write governance reports only to factory control-plane locations
+such as `ops/governance_records/`. Do not write validation reports into
+canonical project run outputs.
+
+The project run contract is documented in
+`docs/REMOTE_FACTORY_PROJECT_GOVERNANCE.md` and
+`contracts/project_run_contract.yaml`. It keeps root `manifest.json` separate
+from producer-native Python/R/bundle provenance.
+
 
 ## Bridge Architecture
 
@@ -310,6 +338,38 @@ Current resume behavior:
 - Reuses the latest run directory for that `--project` containing `.checkpoints`.
 - Finds checkpoint nearest before `--resume-from` by searching backward in execution order.
 - Raises explicit `FileNotFoundError` if no suitable checkpoint exists.
+
+---
+
+## 9. Paper Reproduction Ladder
+
+Paper reproduction is faithful-first, then context-optimized.
+
+1. Clone or stage the upstream paper repository, scripts, and supplementary methods when available.
+2. Pin repository URL, commit/tag, DOI, data accessions, license, environment files, and raw/processed input boundaries.
+3. Run raw-data reproduction first when public raw data exists and host capacity allows it.
+4. If raw data is missing or impractical, use the earliest public computable input and label the boundary explicitly.
+5. Reproduce data objects and figures separately. Data-object parity alone is not figure parity; figure parity alone is not object-level reproducibility.
+6. Record figure/claim outcomes as exact, approximate, proxy, unsupported, or resource gap.
+7. Map each paper method to factory capability:
+   - existing module
+   - parameter/config change
+   - new reusable module
+   - paper-specific script that should not enter the factory
+8. Add or update modules only when the method should be reusable across projects.
+9. Keep paper-faithful parameters separate from context-optimized defaults.
+10. After faithful reproduction, optimize for our context: biological question, wet-lab decision, cohort scale, modality mix, memory limits, and downstream hypotheses.
+
+Required project-policy fields for reproduction work:
+
+- `upstream_repository`
+- `raw_data_reproduction`
+- `data_object_reproduction`
+- `figure_reproduction`
+- `module_gap_decisions`
+- `context_optimization_decisions`
+
+Use `workflow/modular/modules/paper_repro` or the project ledger for claim evidence; use `develop-and-integrate-module` / `singlecell-factory-module-delivery` when a paper method becomes a reusable factory module.
 
 ---
 

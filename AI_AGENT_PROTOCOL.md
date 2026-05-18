@@ -70,6 +70,35 @@ Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 - `r_factory_sha_at_export` in `bundle/provenance.json` — resolved at bundle export.
 - R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) warns (not errors) on mismatch.
 
+### Remote Governance Control Plane
+
+For remote factory/project governance, read
+`docs/REMOTE_FACTORY_PROJECT_GOVERNANCE.md` and
+`contracts/project_run_contract.yaml`. Governance validation reports written
+inside `singlecell_factory` are control-plane records only; they are not
+scientific outputs and must not replace project run evidence.
+
+Before governance edits, persist branch, commit, `git status --short`, tracked
+diff hash, and untracked inventory/hash in a durable
+`ops/governance_records/` record. Project validation must be read-only against
+`/home/zerlinshen/projects/<project-id>` unless a later plan explicitly scopes
+project-root overlays.
+
+### Multi-Cohort Annotation Policy
+
+For NC2024-scale, multi-patient, or multi-cohort work, agents must separate
+per-sample filtering from cohort-level annotation:
+
+- per-sample/per-patient runs are valid for QC, smoke tests, and module-contract
+  checks only;
+- article-level annotation should be performed on a merged clean cohort,
+  balanced sketch, or metacell atlas with explicit batch-aware integration;
+- use `sample`, `patient`, `donor`, chemistry, or lane metadata as the batch key
+  when combining cohorts;
+- transfer atlas labels back to all cells before patient-level composition,
+  pseudobulk, DE, or wet-lab/manuscript conclusions;
+- do not present one-patient annotation as final multi-cohort evidence.
+
 ## Architecture In 60 Seconds
 
 `singlecell_factory` is the upstream execution and run-truth surface for the
@@ -153,19 +182,32 @@ Prefer these over summaries or memory:
 - module output tables/figures in the relevant run directory
 - launch logs and checkpoint directories for failed or recovered runs
 
-For NC2024 full-cohort work, the canonical (post-fix) results are the **v2** runs:
-`results/nc2024_tumor_20260426_v2/` and `results/nc2024_bh_20260426_v2/`,
-with ledger entries `ops/run_ledger/nc2024_*_v2_*.json` and the methodology
-audit suite under `ops/nc2024_methodology_audit/` (`AUDIT_2026-04-26_v2.md`,
-`ALIGNMENT_REPORT_v2_2026-04-26.md`, `SEGFAULT_TRACE_2026-04-26.md`,
-`SMALL_REAL_VALIDATION_2026-04-26.md`). Publication-ready citation patterns
-live in `docs/PUBLICATION_READY.md`. The v1 dirs (`nc2024_*_20260426/` without
-the `_v2` suffix) shipped with a known annotation labeling bug and must not be
-cited as scientific evidence.
+For every project, use the project-owned latest-run retention and final-backup rule:
 
-Do not treat the `2026-04-25` `NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO_*`
-probe directories as canonical success unless `final_adata.h5ad`,
-`run_manifest.json`, and `module_status.csv` are present.
+- keep only the latest validated project run result as the active scientific output unless the project-specific retention rule says otherwise;
+- older project run directories may be deleted after a governance cleanup record captures inventory, manifest/status availability, and replacement source of truth;
+- each project must record its analysis type, method family, selected/best parameters, module list, batch/integration keys, filtering thresholds, random seed, and final backup contents before old runs are removed;
+- final backup should include root `manifest.json`, producer-native manifests, `module_status.csv`, launch command/log, parameter file, environment pins, final labeled object or compact atlas, figures/reports, and conclusion summary;
+- never delete raw data, prepared canonical inputs, launch scripts, source code, environment definitions, governance records, or currently cited report assets;
+- do not recreate or cite `singlecell_factory/results/<project>` as a canonical scientific output location. Scientific outputs belong under `/home/zerlinshen/projects/<project-id>/runs/`.
+
+For NC2024/cancer work, the current structure-validation source of truth is `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`; cleanup and run evidence are recorded under `ops/governance_records/` and `ops/before_every_run/`.
+
+
+## Paper Reproduction Ladder
+
+For paper reproduction, do not jump directly into the local preferred pipeline when an upstream route exists.
+
+1. Clone or stage the upstream paper repository/method scripts and pin URL, commit/tag, DOI, data accessions, license, and environment.
+2. Run raw-data reproduction first when public raw data exists and capacity allows it.
+3. If raw data is absent or infeasible, start from the earliest public computable input and state that boundary.
+4. Reproduce both data objects and figure panels, then write claim-level evidence.
+5. Compare each claim as exact, approximate, proxy, unsupported, or resource gap.
+6. Perform module-gap analysis: existing module, parameter change, new reusable module, or paper-specific script.
+7. Use `$develop-and-integrate-module` / `$singlecell-factory-module-delivery` only when a paper method should become reusable in `singlecell_factory`.
+8. After faithful reproduction, optimize for our context and record selected best parameters in `ledger/project_retention_policy.yaml`.
+
+For reproduction projects, project policy must include `upstream_repository`, `raw_data_reproduction`, `data_object_reproduction`, `figure_reproduction`, `module_gap_decisions`, and `context_optimization_decisions`.
 
 ## Skill And Workflow Routing
 

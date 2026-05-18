@@ -131,6 +131,93 @@ dry-run; see `scripts/migration_README.md` for the operator runbook).
 
 Sibling repo: `/home/zerlinshen/multiomics_r_factory/`
 
+### Remote Governance Control Plane
+
+Phase-1 factory/project governance is remote-first. The factory defines the
+contract and validators; project roots remain the scientific truth surface.
+Factory-side validation reports under `ops/governance_records/` or
+`docs/` are control-plane artifacts, not scientific outputs.
+
+Key files:
+- `docs/REMOTE_FACTORY_PROJECT_GOVERNANCE.md`
+- `contracts/project_run_contract.yaml`
+- `scripts/validate_project_governance.py`
+
+The validator distinguishes run-root `manifest.json` as the cross-factory
+envelope from producer-native Python/R/bundle provenance such as
+`python/run_manifest.json`, `module_status.csv`, and bundle `provenance.json`.
+Legacy or partial runs may produce warnings without blocking governance
+acceptance when substitute provenance exists. Local Reproduction Trail sync is
+downstream and out of scope for remote phase-1 governance.
+
+### Project Run Retention And Final Backup Policy
+
+The global storage rule is: keep only the latest validated run result as the
+active scientific output for each project. Older run directories can be deleted
+after their command/provenance, manifest/status availability, inventory, and
+replacement source of truth are captured in a factory governance cleanup record.
+
+Each project must also define its own retention and final-backup rule. Before
+old runs are deleted, the project-level record must preserve:
+
+- project purpose: reproduction, real biological analysis, smoke test, benchmark,
+  or exploratory method development;
+- analysis type and method family, for example public-matrix reproduction,
+  cohort atlas annotation, trajectory, multiomics integration, 3D genome, or
+  pseudobulk DE;
+- selected/best parameters, including module list, batch keys, filtering/QC
+  thresholds, clustering/integration settings, sketch/metacell settings, random
+  seed, and any paper-specific target choices;
+- latest retained source-of-truth run id and path;
+- final backup contents: root `manifest.json`, producer-native manifests,
+  `module_status.csv`, launch command/log, parameter file, environment pins,
+  final labeled object or compact atlas, human-facing figures/reports, and
+  conclusion summary.
+
+Do not delete raw data, prepared canonical inputs, launch scripts, source code,
+environments, governance records, or currently cited report assets. If a project
+needs stricter retention than latest-run-only, its project rule wins.
+
+### Paper Reproduction And Context Optimization Policy
+
+Paper reproduction follows a faithful-first ladder before any factory-specific optimization:
+
+1. Clone or stage the upstream paper repository, scripts, and supplementary methods when available.
+2. Pin repository URL, commit/tag, DOI, data accessions, license, environment files, and raw/processed input boundaries.
+3. Reproduce from raw data first when public raw data exists and host capacity allows it.
+4. If raw data is missing or impractical, use the earliest public computable input and label the boundary explicitly.
+5. Reproduce both data objects and figures: final objects/tables first, then figure panels, then figure-level and claim-level evidence.
+6. Compare against the paper with explicit outcomes: exact, approximate, proxy, unsupported, or resource gap.
+7. Map paper methods to the current factory: existing module, parameter change, new module, or paper-specific script that should remain outside the factory.
+8. Add or update modules only when the method should become reusable across projects, and keep paper-faithful parameters separate from context-optimized defaults.
+9. After faithful reproduction, optimize for our context: wet-lab decision, cohort scale, memory limits, available modalities, downstream hypotheses, and project-specific best parameters.
+
+Project policies for reproduction work must record `upstream_repository`, `raw_data_reproduction`, `data_object_reproduction`, `figure_reproduction`, `module_gap_decisions`, and `context_optimization_decisions` in addition to the standard retention/final-backup fields.
+
+### Multi-Cohort Processing Policy
+
+For multi-patient or multi-cohort datasets, do not annotate each patient in
+isolation and then treat those labels as article-level truth. That loses
+cross-patient comparability, weakens rare-state discovery, and can turn donor
+or batch effects into cell-type calls.
+
+Use this default structure instead:
+
+1. Run per-sample or per-patient QC/filtering first. Remove low-quality cells,
+   obvious doublets, and broken samples while preserving sparse/lazy storage.
+2. Merge the cleaned cells, or build a balanced sketch/metacell atlas when the
+   full object is too large for memory.
+3. Model the cohort in one shared feature space and correct batch effects with
+   an explicit `sample`, `patient`, `donor`, chemistry, or lane key.
+4. Perform cohort-level clustering and annotation on the integrated atlas.
+5. Transfer labels back to all cells, then compute patient-level composition,
+   pseudobulk, DE, and figure summaries.
+
+Single-patient runs are acceptable for smoke tests, QC, module-contract checks,
+and structure validation. They must not be promoted to final multi-cohort
+annotation evidence unless a later cohort-level atlas or label-transfer step
+confirms them.
+
 ### Environment Switches
 
 Round-1a governance switches (plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`):
@@ -1931,96 +2018,104 @@ Use [`docs/MODULE_TECH_DOC_TEMPLATE.md`](docs/MODULE_TECH_DOC_TEMPLATE.md) for e
 | 85 | Badia-i-Mompel et al., *Bioinformatics Advances*, 2022 | [10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016) | `gene_regulatory_network` (auto-detected from module source) |
 | 86 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `gene_signature_scoring` (Signature score methodology (mean expression minus matched control bin). sc.tl.score_genes implements this.) |
 | 87 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `gene_signature_scoring` (auto-detected from module source) |
-| 88 | Lieberman-Aiden et al. et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_ingest` (Original Hi-C methodology — contact-map binning conventions adopted here.) |
-| 89 | Lieberman-Aiden et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_ingest` (auto-detected from module source) |
-| 90 | Abdennur et al., *Bioinformatics*, 2019 | [10.1093/bioinformatics/btz540](https://doi.org/10.1093/bioinformatics/btz540) | `hic_ingest` (auto-detected from module source) |
-| 91 | Abdennur, Mirny et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btz540](https://doi.org/10.1093/bioinformatics/btz540) | `hic_ingest` (Canonical .cool / .mcool sparse storage format. This module reads cooler files via the optional `cooler` Python package when installed; falls back to TSV for portability.) |
-| 92 | Lieberman-Aiden et al. et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_tad` (Original A/B compartment definition via first eigenvector of the correlation matrix.) |
-| 93 | Lieberman-Aiden et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_tad` (auto-detected from module source) |
-| 94 | Nora et al. et al., *Nature*, 2012 | [10.1038/nature11049](https://doi.org/10.1038/nature11049) | `hic_tad` (Original TAD identification methodology.) |
-| 95 | Nora et al., *Nature*, 2012 | [10.1038/nature11049](https://doi.org/10.1038/nature11049) | `hic_tad` (auto-detected from module source) |
-| 96 | Crane et al. et al., *Nature*, 2015 | [10.1038/nature14450](https://doi.org/10.1038/nature14450) | `hic_tad` (Insulation-score TAD boundary detection method implemented here.) |
-| 97 | Crane et al., *Nature*, 2015 | [10.1038/nature14450](https://doi.org/10.1038/nature14450) | `hic_tad` (auto-detected from module source) |
-| 98 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `immune_phenotyping` (Same scoring methodology scoped to immune cell-type marker sets.) |
-| 99 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `immune_phenotyping` (auto-detected from module source) |
-| 100 | Zilionis et al., *Immunity*, 2019 | [10.1016/j.immuni.2019.03.009](https://doi.org/10.1016/j.immuni.2019.03.009) | `immune_phenotyping` (auto-detected from module source) |
-| 101 | Zilionis et al. et al., *Immunity*, 2019 | [10.1016/j.immuni.2019.03.009](https://doi.org/10.1016/j.immuni.2019.03.009) | `immune_phenotyping` (Canonical lung-cancer immune sub-typing markers underlying many phenotype calls.) |
-| 102 | Franzen et al. et al., *Database*, 2019 | [10.1093/database/baz046](https://doi.org/10.1093/database/baz046) | `marker_db_loader` (Broad cell type marker resource used as consensus fallback) |
-| 103 | Franzén et al., *Database*, 2019 | [10.1093/database/baz046](https://doi.org/10.1093/database/baz046) | `marker_db_loader` (auto-detected from module source) |
-| 104 | Hu et al., *Nucleic Acids Research*, 2022 | [10.1093/nar/gkac947](https://doi.org/10.1093/nar/gkac947) | `marker_db_loader` (auto-detected from module source) |
-| 105 | Ianevski et al. et al., *Nature Communications*, 2022 | [10.1038/s41467-022-28803-w](https://doi.org/10.1038/s41467-022-28803-w) | `marker_db_loader` (scType marker DB used for condition-specific sub-state detection) |
-| 106 | Ianevski et al., *Nature Communications*, 2022 | [10.1038/s41467-022-28803-w](https://doi.org/10.1038/s41467-022-28803-w) | `marker_db_loader` (auto-detected from module source) |
-| 107 | Dominguez Conde et al. et al., *Science*, 2022 | [10.1126/science.abq1006](https://doi.org/10.1126/science.abq1006) | `marker_db_loader` (CellTypist model-based marker references) |
-| 108 | Hu et al. et al., *Nucleic Acids Research*, 2023 | [10.1093/nar/gkac947](https://doi.org/10.1093/nar/gkac947) | `marker_db_loader` (Curated cell type marker database used for tissue/condition-aware annotation) |
-| 109 | Unknown et al., *Unknown*, Unknown | [10.1126/science.abq1006](https://doi.org/10.1126/science.abq1006) | `marker_db_loader` (auto-detected from module source) |
-| 110 | Persad et al. et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (SEACells metacell aggregation; primary backend.) |
-| 111 | Persad et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (auto-detected from module source) |
-| 112 | Argelaguet et al. et al., *Genome Biology*, 2020 | [10.1186/s13059-020-02015-1](https://doi.org/10.1186/s13059-020-02015-1) | `multimodal_integration` (MOFA factor model for multi-omics integration.) |
-| 113 | Argelaguet et al., *Genome Biology*, 2020 | [10.1186/s13059-020-02015-1](https://doi.org/10.1186/s13059-020-02015-1) | `multimodal_integration` (auto-detected from module source) |
-| 114 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `multimodal_integration` (Seurat WNN: weighted nearest neighbours for multimodal joint embeddings.) |
-| 115 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `multimodal_integration` (auto-detected from module source) |
-| 116 | Sandve et al. et al., *PLOS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` (Guides provenance capture and reproducibility reporting.) |
-| 117 | Sandve et al., *PLoS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` (auto-detected from module source) |
-| 118 | Subramanian et al. et al., *PNAS*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | `pathway_analysis` (GSEA methodology. gseapy is the Python port used here.) |
-| 119 | Subramanian et al., *Proceedings of the National Academy of Sciences*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | `pathway_analysis` (auto-detected from module source) |
-| 120 | Schubert et al. et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | `pathway_analysis` (PROGENy signaling-pathway responsive gene resource consumed via decoupler.) |
-| 121 | Schubert et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | `pathway_analysis` (auto-detected from module source) |
-| 122 | Pliner et al. et al., *Molecular Cell*, 2018 | [10.1016/j.molcel.2018.06.044](https://doi.org/10.1016/j.molcel.2018.06.044) | `peak_to_gene` (Distance-based peak-to-gene mapping methodology; this module implements the simple nearest-TSS variant and leaves co-accessibility scoring to a Cicero-style follow-up.) |
-| 123 | Pliner et al., *Molecular Cell*, 2018 | [10.1016/j.molcel.2018.06.044](https://doi.org/10.1016/j.molcel.2018.06.044) | `peak_to_gene` (auto-detected from module source) |
-| 124 | Ma S, Zhang B, LaFave LM, et al. et al., *Cell*, 2020 | [10.1016/j.cell.2020.09.056](https://doi.org/10.1016/j.cell.2020.09.056) | `peak_to_gene` (SHARE-seq: permutation-based FDR for peak-to-gene linkage significance, controlling block correlation structure without parametric assumptions.) |
-| 125 | Ma et al., *Cell*, 2020 | [10.1016/j.cell.2020.09.056](https://doi.org/10.1016/j.cell.2020.09.056) | `peak_to_gene` (auto-detected from module source) |
-| 126 | Trevino et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `peak_to_gene` (auto-detected from module source) |
-| 127 | Trevino AE, Müller F, Andersen J, et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `peak_to_gene` (Methods section 'Peak-to-gene linkages': Pearson correlation between peak accessibility and gene expression in 10x Multiome data as a direct regulatory coupling measure.) |
-| 128 | GENCODE consortium et al., *Documentation*, 2024 | [https://www.gencodegenes.org/](https://doi.org/https://www.gencodegenes.org/) | `peak_to_gene` (Canonical TSS coordinates expected for the --gene-tss-bed-path input.) |
-| 129 | Stoeckius et al. et al., *Nature Methods*, 2017 | [10.1038/nmeth.4380](https://doi.org/10.1038/nmeth.4380) | `protein_adt` (CITE-seq protocol; CLR normalization for ADT counts.) |
-| 130 | Stoeckius et al., *Nature Methods*, 2017 | [10.1038/nmeth.4380](https://doi.org/10.1038/nmeth.4380) | `protein_adt` (auto-detected from module source) |
-| 131 | Mulè et al. et al., *Nature Communications*, 2022 | [10.1038/s41467-022-29356-8](https://doi.org/10.1038/s41467-022-29356-8) | `protein_adt` (DSB normalization (stretch-goal stub).) |
-| 132 | Mulè et al., *Nature Communications*, 2022 | [10.1038/s41467-022-29356-8](https://doi.org/10.1038/s41467-022-29356-8) | `protein_adt` (auto-detected from module source) |
-| 133 | singlecell_factory contributors et al., *Internal documentation*, 2025 | [PMID: 33288903](https://doi.org/PMID: 33288903) | `pseudo_velocity` (Lightweight transitional-probability proxy via PCA-space KNN flow when spliced/unspliced counts are unavailable. NOT a canonical RNA velocity method — see rna_velocity.py for that. PMID points to a transcription-velocity review for context only.) |
-| 134 | Squair et al. et al., *Nature Communications*, 2021 | [10.1038/s41467-021-25960-2](https://doi.org/10.1038/s41467-021-25960-2) | `pseudobulk_de` (Benchmark demonstrating pseudobulk DE outperforms per-cell DE — methodology applied here.) |
-| 135 | Squair et al., *Nature Communications*, 2021 | [10.1038/s41467-021-25960-2](https://doi.org/10.1038/s41467-021-25960-2) | `pseudobulk_de` (auto-detected from module source) |
-| 136 | Wolf, Angerer, Theis et al., *Genome Biology*, 2018 | [10.1186/s13059-017-1382-0](https://doi.org/10.1186/s13059-017-1382-0) | `qc` (scanpy.pp.calculate_qc_metrics / pp.filter_genes / pp.filter_cells semantics used here.) |
-| 137 | Wolf et al., *Genome Biology*, 2018 | [10.1186/s13059-017-1382-0](https://doi.org/10.1186/s13059-017-1382-0) | `qc` (auto-detected from module source) |
-| 138 | Luecken, Theis et al., *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | `qc` (Canonical QC threshold guidance (mito %, n_genes/cell, doublet detection).) |
-| 139 | Luecken et al., *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | `qc` (auto-detected from module source) |
-| 140 | Ingolia et al. et al., *Science*, 2009 | [10.1126/science.1168978](https://doi.org/10.1126/science.1168978) | `ribo_ingest` (Original ribosome profiling (Ribo-seq) methodology defining the footprint count semantics consumed here.) |
-| 141 | Ingolia et al., *Science*, 2009 | [10.1126/science.1168978](https://doi.org/10.1126/science.1168978) | `ribo_ingest` (auto-detected from module source) |
-| 142 | Grosse et al., *Nature Reviews Molecular Cell Biology*, 2015 | [10.1038/nrm3950](https://doi.org/10.1038/nrm3950) | `ribo_ingest` (auto-detected from module source) |
-| 143 | Brar, Weissman et al., *Nature Reviews Molecular Cell Biology*, 2015 | [10.1038/nrm3950](https://doi.org/10.1038/nrm3950) | `ribo_ingest` (Translation efficiency (footprint / RNA) interpretation framework adopted here.) |
-| 144 | La Manno et al. et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `rna_velocity` (Original spliced/unspliced RNA velocity formulation.) |
-| 145 | La Manno et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `rna_velocity` (auto-detected from module source) |
-| 146 | Bergen et al. et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (scVelo stochastic + dynamical models. Library used here.) |
-| 147 | Bergen et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (auto-detected from module source) |
-| 148 | Chen et al. et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` |
-| 149 | Chen et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` (auto-detected from module source) |
-| 150 | 10x Genomics et al., *Unknown*, 2020 | [https://www.10xgenomics.com/products/spatial-gene-expression](https://doi.org/https://www.10xgenomics.com/products/spatial-gene-expression) | `spatial_ingest` (Spatial barcoded array; tissue_positions_list.csv schema.) |
-| 151 | 10x Genomics et al., *Unknown*, 2023 | [https://www.10xgenomics.com/products/xenium-in-situ](https://doi.org/https://www.10xgenomics.com/products/xenium-in-situ) | `spatial_ingest` (Subcellular in-situ assay; same (x,y) per-cell schema.) |
-| 152 | Palla et al. et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` |
-| 153 | Palla et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` (auto-detected from module source) |
-| 154 | Haghverdi, Buttner, Wolf et al. et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (Diffusion pseudotime (sc.tl.dpt) used for ordering cells along trajectories.) |
-| 155 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (auto-detected from module source) |
-| 156 | Setty et al. et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (Pseudotime computed over a joint manifold embedding (X_wnn or X_pca). Supports the rationale for running DPT on the best available joint embedding rather than UMAP.) |
-| 157 | Setty et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (auto-detected from module source) |
-| 158 | Wolf et al. et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (PAGA topology-preserving abstraction. sc.tl.paga used here.) |
-| 159 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (auto-detected from module source) |
-| 160 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (WNN (Weighted Nearest Neighbor) joint embedding. X_wnn is preferred over X_pca for pseudotime when available, as it captures multi-modal cell state more faithfully.) |
-| 161 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (auto-detected from module source) |
-| 162 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (Score-gene-set framework used for TME marker scoring.) |
-| 163 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (auto-detected from module source) |
-| 164 | Aran et al. et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (Reference-based lung TME phenotype assignments.) |
-| 165 | Aran et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (auto-detected from module source) |
-| 166 | Cerami et al. et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (External cancer genomics validation portal queried by this module.) |
-| 167 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (auto-detected from module source) |
-| 168 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (Canonical VDJ repertoire analysis conventions adopted here for clonotype definition (V-gene + J-gene + CDR3 nt).) |
-| 169 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (auto-detected from module source) |
-| 170 | Sturm et al. et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (Reference framework for AnnData-native VDJ analysis. This module follows scirpy's chain-pairing + clonotype semantics without taking a hard dependency on the package (so the pipeline runs in scirpy-less environments).) |
-| 171 | Sturm et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (auto-detected from module source) |
-| 172 | 10x Genomics et al., *Software documentation*, 2024 | [https://support.10xgenomics.com/single-cell-vdj/software](https://doi.org/https://support.10xgenomics.com/single-cell-vdj/software) | `vdj_ingest` (Authoritative spec for filtered_contig_annotations.csv / clonotypes.csv schemas consumed here.) |
-| 173 | Gini et al., *Studi Economico-Giuridici della Universita de Cagliari*, 1912 | [https://en.wikipedia.org/wiki/Gini_coefficient](https://doi.org/https://en.wikipedia.org/wiki/Gini_coefficient) | `vdj_metrics` (Gini coefficient used to quantify clonotype abundance inequality (1 - sum_i p_i (2 i - n - 1)/n).) |
-| 174 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (Shannon entropy used here for clonotype diversity per sample.) |
-| 175 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (auto-detected from module source) |
-| 176 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (Canonical repertoire diversity conventions adopted here (Shannon / Gini per sample; clonal expansion buckets).) |
-| 177 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (auto-detected from module source) |
+| 88 | Trevino et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `gwas_overlay` (auto-detected from module source) |
+| 89 | Trevino AE, Müller F, Andersen J, et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `gwas_overlay` (Source paper for F-7 GWAS overlay reproduction (Wave-5.6 MV3).) |
+| 90 | Sollis et al., *Nucleic Acids Research*, 2022 | [10.1093/nar/gkac1010](https://doi.org/10.1093/nar/gkac1010) | `gwas_overlay` (auto-detected from module source) |
+| 91 | Sollis E, Mosaku A, Abid A, et al. et al., *Nucleic Acids Research*, 2023 | [10.1093/nar/gkac1010](https://doi.org/10.1093/nar/gkac1010) | `gwas_overlay` (NHGRI-EBI GWAS Catalog: source of SNP-trait associations consumed by this module.) |
+| 92 | Lieberman-Aiden et al. et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_ingest` (Original Hi-C methodology — contact-map binning conventions adopted here.) |
+| 93 | Lieberman-Aiden et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_ingest` (auto-detected from module source) |
+| 94 | Abdennur et al., *Bioinformatics*, 2019 | [10.1093/bioinformatics/btz540](https://doi.org/10.1093/bioinformatics/btz540) | `hic_ingest` (auto-detected from module source) |
+| 95 | Abdennur, Mirny et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btz540](https://doi.org/10.1093/bioinformatics/btz540) | `hic_ingest` (Canonical .cool / .mcool sparse storage format. This module reads cooler files via the optional `cooler` Python package when installed; falls back to TSV for portability.) |
+| 96 | Lieberman-Aiden et al. et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_tad` (Original A/B compartment definition via first eigenvector of the correlation matrix.) |
+| 97 | Lieberman-Aiden et al., *Science*, 2009 | [10.1126/science.1181369](https://doi.org/10.1126/science.1181369) | `hic_tad` (auto-detected from module source) |
+| 98 | Nora et al. et al., *Nature*, 2012 | [10.1038/nature11049](https://doi.org/10.1038/nature11049) | `hic_tad` (Original TAD identification methodology.) |
+| 99 | Nora et al., *Nature*, 2012 | [10.1038/nature11049](https://doi.org/10.1038/nature11049) | `hic_tad` (auto-detected from module source) |
+| 100 | Crane et al. et al., *Nature*, 2015 | [10.1038/nature14450](https://doi.org/10.1038/nature14450) | `hic_tad` (Insulation-score TAD boundary detection method implemented here.) |
+| 101 | Crane et al., *Nature*, 2015 | [10.1038/nature14450](https://doi.org/10.1038/nature14450) | `hic_tad` (auto-detected from module source) |
+| 102 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `immune_phenotyping` (Same scoring methodology scoped to immune cell-type marker sets.) |
+| 103 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `immune_phenotyping` (auto-detected from module source) |
+| 104 | Zilionis et al., *Immunity*, 2019 | [10.1016/j.immuni.2019.03.009](https://doi.org/10.1016/j.immuni.2019.03.009) | `immune_phenotyping` (auto-detected from module source) |
+| 105 | Zilionis et al. et al., *Immunity*, 2019 | [10.1016/j.immuni.2019.03.009](https://doi.org/10.1016/j.immuni.2019.03.009) | `immune_phenotyping` (Canonical lung-cancer immune sub-typing markers underlying many phenotype calls.) |
+| 106 | Franzen et al. et al., *Database*, 2019 | [10.1093/database/baz046](https://doi.org/10.1093/database/baz046) | `marker_db_loader` (Broad cell type marker resource used as consensus fallback) |
+| 107 | Franzén et al., *Database*, 2019 | [10.1093/database/baz046](https://doi.org/10.1093/database/baz046) | `marker_db_loader` (auto-detected from module source) |
+| 108 | Hu et al., *Nucleic Acids Research*, 2022 | [10.1093/nar/gkac947](https://doi.org/10.1093/nar/gkac947) | `marker_db_loader` (auto-detected from module source) |
+| 109 | Ianevski et al. et al., *Nature Communications*, 2022 | [10.1038/s41467-022-28803-w](https://doi.org/10.1038/s41467-022-28803-w) | `marker_db_loader` (scType marker DB used for condition-specific sub-state detection) |
+| 110 | Ianevski et al., *Nature Communications*, 2022 | [10.1038/s41467-022-28803-w](https://doi.org/10.1038/s41467-022-28803-w) | `marker_db_loader` (auto-detected from module source) |
+| 111 | Dominguez Conde et al. et al., *Science*, 2022 | [10.1126/science.abq1006](https://doi.org/10.1126/science.abq1006) | `marker_db_loader` (CellTypist model-based marker references) |
+| 112 | Hu et al. et al., *Nucleic Acids Research*, 2023 | [10.1093/nar/gkac947](https://doi.org/10.1093/nar/gkac947) | `marker_db_loader` (Curated cell type marker database used for tissue/condition-aware annotation) |
+| 113 | Unknown et al., *Unknown*, Unknown | [10.1126/science.abq1006](https://doi.org/10.1126/science.abq1006) | `marker_db_loader` (auto-detected from module source) |
+| 114 | Persad et al. et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (SEACells metacell aggregation; primary backend.) |
+| 115 | Persad et al., *Nature Biotechnology*, 2023 | [10.1038/s41587-023-01716-9](https://doi.org/10.1038/s41587-023-01716-9) | `metacell` (auto-detected from module source) |
+| 116 | Argelaguet et al. et al., *Genome Biology*, 2020 | [10.1186/s13059-020-02015-1](https://doi.org/10.1186/s13059-020-02015-1) | `multimodal_integration` (MOFA factor model for multi-omics integration.) |
+| 117 | Argelaguet et al., *Genome Biology*, 2020 | [10.1186/s13059-020-02015-1](https://doi.org/10.1186/s13059-020-02015-1) | `multimodal_integration` (auto-detected from module source) |
+| 118 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `multimodal_integration` (Seurat WNN: weighted nearest neighbours for multimodal joint embeddings.) |
+| 119 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `multimodal_integration` (auto-detected from module source) |
+| 120 | Sandve et al. et al., *PLOS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` (Guides provenance capture and reproducibility reporting.) |
+| 121 | Sandve et al., *PLoS Computational Biology*, 2013 | [10.1371/journal.pcbi.1003285](https://doi.org/10.1371/journal.pcbi.1003285) | `paper_repro` (auto-detected from module source) |
+| 122 | Subramanian et al. et al., *PNAS*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | `pathway_analysis` (GSEA methodology. gseapy is the Python port used here.) |
+| 123 | Subramanian et al., *Proceedings of the National Academy of Sciences*, 2005 | [10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102) | `pathway_analysis` (auto-detected from module source) |
+| 124 | Schubert et al. et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | `pathway_analysis` (PROGENy signaling-pathway responsive gene resource consumed via decoupler.) |
+| 125 | Schubert et al., *Nature Communications*, 2018 | [10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6) | `pathway_analysis` (auto-detected from module source) |
+| 126 | Pliner et al. et al., *Molecular Cell*, 2018 | [10.1016/j.molcel.2018.06.044](https://doi.org/10.1016/j.molcel.2018.06.044) | `peak_to_gene` (Distance-based peak-to-gene mapping methodology; this module implements the simple nearest-TSS variant and leaves co-accessibility scoring to a Cicero-style follow-up.) |
+| 127 | Pliner et al., *Molecular Cell*, 2018 | [10.1016/j.molcel.2018.06.044](https://doi.org/10.1016/j.molcel.2018.06.044) | `peak_to_gene` (auto-detected from module source) |
+| 128 | Ma S, Zhang B, LaFave LM, et al. et al., *Cell*, 2020 | [10.1016/j.cell.2020.09.056](https://doi.org/10.1016/j.cell.2020.09.056) | `peak_to_gene` (SHARE-seq: permutation-based FDR for peak-to-gene linkage significance, controlling block correlation structure without parametric assumptions.) |
+| 129 | Ma et al., *Cell*, 2020 | [10.1016/j.cell.2020.09.056](https://doi.org/10.1016/j.cell.2020.09.056) | `peak_to_gene` (auto-detected from module source) |
+| 130 | Trevino et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `peak_to_gene` (auto-detected from module source) |
+| 131 | Trevino AE, Müller F, Andersen J, et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `peak_to_gene` (Methods section 'Peak-to-gene linkages': Pearson correlation between peak accessibility and gene expression in 10x Multiome data as a direct regulatory coupling measure.) |
+| 132 | GENCODE consortium et al., *Documentation*, 2024 | [https://www.gencodegenes.org/](https://doi.org/https://www.gencodegenes.org/) | `peak_to_gene` (Canonical TSS coordinates expected for the --gene-tss-bed-path input.) |
+| 133 | Stoeckius et al. et al., *Nature Methods*, 2017 | [10.1038/nmeth.4380](https://doi.org/10.1038/nmeth.4380) | `protein_adt` (CITE-seq protocol; CLR normalization for ADT counts.) |
+| 134 | Stoeckius et al., *Nature Methods*, 2017 | [10.1038/nmeth.4380](https://doi.org/10.1038/nmeth.4380) | `protein_adt` (auto-detected from module source) |
+| 135 | Mulè et al. et al., *Nature Communications*, 2022 | [10.1038/s41467-022-29356-8](https://doi.org/10.1038/s41467-022-29356-8) | `protein_adt` (DSB normalization (stretch-goal stub).) |
+| 136 | Mulè et al., *Nature Communications*, 2022 | [10.1038/s41467-022-29356-8](https://doi.org/10.1038/s41467-022-29356-8) | `protein_adt` (auto-detected from module source) |
+| 137 | singlecell_factory contributors et al., *Internal documentation*, 2025 | [PMID: 33288903](https://doi.org/PMID: 33288903) | `pseudo_velocity` (Lightweight transitional-probability proxy via PCA-space KNN flow when spliced/unspliced counts are unavailable. NOT a canonical RNA velocity method — see rna_velocity.py for that. PMID points to a transcription-velocity review for context only.) |
+| 138 | Squair et al. et al., *Nature Communications*, 2021 | [10.1038/s41467-021-25960-2](https://doi.org/10.1038/s41467-021-25960-2) | `pseudobulk_de` (Benchmark demonstrating pseudobulk DE outperforms per-cell DE — methodology applied here.) |
+| 139 | Squair et al., *Nature Communications*, 2021 | [10.1038/s41467-021-25960-2](https://doi.org/10.1038/s41467-021-25960-2) | `pseudobulk_de` (auto-detected from module source) |
+| 140 | Wolf, Angerer, Theis et al., *Genome Biology*, 2018 | [10.1186/s13059-017-1382-0](https://doi.org/10.1186/s13059-017-1382-0) | `qc` (scanpy.pp.calculate_qc_metrics / pp.filter_genes / pp.filter_cells semantics used here.) |
+| 141 | Wolf et al., *Genome Biology*, 2018 | [10.1186/s13059-017-1382-0](https://doi.org/10.1186/s13059-017-1382-0) | `qc` (auto-detected from module source) |
+| 142 | Luecken, Theis et al., *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | `qc` (Canonical QC threshold guidance (mito %, n_genes/cell, doublet detection).) |
+| 143 | Luecken et al., *Molecular Systems Biology*, 2019 | [10.15252/msb.20188746](https://doi.org/10.15252/msb.20188746) | `qc` (auto-detected from module source) |
+| 144 | Ingolia et al. et al., *Science*, 2009 | [10.1126/science.1168978](https://doi.org/10.1126/science.1168978) | `ribo_ingest` (Original ribosome profiling (Ribo-seq) methodology defining the footprint count semantics consumed here.) |
+| 145 | Ingolia et al., *Science*, 2009 | [10.1126/science.1168978](https://doi.org/10.1126/science.1168978) | `ribo_ingest` (auto-detected from module source) |
+| 146 | Grosse et al., *Nature Reviews Molecular Cell Biology*, 2015 | [10.1038/nrm3950](https://doi.org/10.1038/nrm3950) | `ribo_ingest` (auto-detected from module source) |
+| 147 | Brar, Weissman et al., *Nature Reviews Molecular Cell Biology*, 2015 | [10.1038/nrm3950](https://doi.org/10.1038/nrm3950) | `ribo_ingest` (Translation efficiency (footprint / RNA) interpretation framework adopted here.) |
+| 148 | La Manno et al. et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `rna_velocity` (Original spliced/unspliced RNA velocity formulation.) |
+| 149 | La Manno et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `rna_velocity` (auto-detected from module source) |
+| 150 | Bergen et al. et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (scVelo stochastic + dynamical models. Library used here.) |
+| 151 | Bergen et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (auto-detected from module source) |
+| 152 | Chen et al. et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` |
+| 153 | Chen et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` (auto-detected from module source) |
+| 154 | 10x Genomics et al., *Unknown*, 2020 | [https://www.10xgenomics.com/products/spatial-gene-expression](https://doi.org/https://www.10xgenomics.com/products/spatial-gene-expression) | `spatial_ingest` (Spatial barcoded array; tissue_positions_list.csv schema.) |
+| 155 | 10x Genomics et al., *Unknown*, 2023 | [https://www.10xgenomics.com/products/xenium-in-situ](https://doi.org/https://www.10xgenomics.com/products/xenium-in-situ) | `spatial_ingest` (Subcellular in-situ assay; same (x,y) per-cell schema.) |
+| 156 | Palla et al. et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` |
+| 157 | Palla et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` (auto-detected from module source) |
+| 158 | Aibar S, González-Blas CB, Moerman T, et al. et al., *Nature Methods*, 2017 | [10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463) | `tf_network` (TF → gene network inference framework; this module implements a chromVAR-anchored variant that requires both motif accessibility and peak-to-gene support.) |
+| 159 | Aibar et al., *Nature Methods*, 2017 | [10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463) | `tf_network` (auto-detected from module source) |
+| 160 | Trevino et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `tf_network` (auto-detected from module source) |
+| 161 | Trevino AE, Müller F, Andersen J, et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `tf_network` (Source paper for F-6 TF-gene network reproduction (Wave-5.6 MV3).) |
+| 162 | Haghverdi, Buttner, Wolf et al. et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (Diffusion pseudotime (sc.tl.dpt) used for ordering cells along trajectories.) |
+| 163 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (auto-detected from module source) |
+| 164 | Setty et al. et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (Pseudotime computed over a joint manifold embedding (X_wnn or X_pca). Supports the rationale for running DPT on the best available joint embedding rather than UMAP.) |
+| 165 | Setty et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (auto-detected from module source) |
+| 166 | Wolf et al. et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (PAGA topology-preserving abstraction. sc.tl.paga used here.) |
+| 167 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (auto-detected from module source) |
+| 168 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (WNN (Weighted Nearest Neighbor) joint embedding. X_wnn is preferred over X_pca for pseudotime when available, as it captures multi-modal cell state more faithfully.) |
+| 169 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (auto-detected from module source) |
+| 170 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (Score-gene-set framework used for TME marker scoring.) |
+| 171 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (auto-detected from module source) |
+| 172 | Aran et al. et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (Reference-based lung TME phenotype assignments.) |
+| 173 | Aran et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (auto-detected from module source) |
+| 174 | Cerami et al. et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (External cancer genomics validation portal queried by this module.) |
+| 175 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (auto-detected from module source) |
+| 176 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (Canonical VDJ repertoire analysis conventions adopted here for clonotype definition (V-gene + J-gene + CDR3 nt).) |
+| 177 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (auto-detected from module source) |
+| 178 | Sturm et al. et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (Reference framework for AnnData-native VDJ analysis. This module follows scirpy's chain-pairing + clonotype semantics without taking a hard dependency on the package (so the pipeline runs in scirpy-less environments).) |
+| 179 | Sturm et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (auto-detected from module source) |
+| 180 | 10x Genomics et al., *Software documentation*, 2024 | [https://support.10xgenomics.com/single-cell-vdj/software](https://doi.org/https://support.10xgenomics.com/single-cell-vdj/software) | `vdj_ingest` (Authoritative spec for filtered_contig_annotations.csv / clonotypes.csv schemas consumed here.) |
+| 181 | Gini et al., *Studi Economico-Giuridici della Universita de Cagliari*, 1912 | [https://en.wikipedia.org/wiki/Gini_coefficient](https://doi.org/https://en.wikipedia.org/wiki/Gini_coefficient) | `vdj_metrics` (Gini coefficient used to quantify clonotype abundance inequality (1 - sum_i p_i (2 i - n - 1)/n).) |
+| 182 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (Shannon entropy used here for clonotype diversity per sample.) |
+| 183 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (auto-detected from module source) |
+| 184 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (Canonical repertoire diversity conventions adopted here (Shannon / Gini per sample; clonal expansion buckets).) |
+| 185 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (auto-detected from module source) |
 ---
 
 ## Results
