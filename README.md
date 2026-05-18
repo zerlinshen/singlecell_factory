@@ -10,6 +10,11 @@ A comprehensive, production-ready single-cell RNA-seq analysis framework with **
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells and the NC2024 NSCLC E-MTAB-13526 cohort at full 828k-cell scale.
 
+### Wave 5 v5.1 small-real validation (2026-04-26)
+
+Layer-3 small-real validation outputs: `results/small_real_validate_20260426/`.
+File governance authority: `docs/LINUX_FILE_GOVERNANCE.md`.
+
 ### Wave 4 reproducibility evidence (2026-05-16)
 
 NC2024 NSCLC full cohort run on the verified GPU stack:

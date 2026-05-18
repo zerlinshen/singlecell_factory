@@ -27,8 +27,12 @@ else
     THIS_REPO_NAME="$(basename "$THIS_REPO")"
     PARENT_DIR="$(dirname "$THIS_REPO")"
     if [[ "$THIS_REPO_NAME" == "singlecell_factory" ]]; then
-        SIBLING="$PARENT_DIR/multiomics_r_factory"
-    elif [[ "$THIS_REPO_NAME" == "multiomics_r_factory" ]]; then
+        if [[ -d "$PARENT_DIR/r_multiomics_factory" ]]; then
+            SIBLING="$PARENT_DIR/r_multiomics_factory"
+        elif [[ -d "$PARENT_DIR/multiomics_r_factory" ]]; then
+            SIBLING="$PARENT_DIR/multiomics_r_factory"  # legacy name, accepted during transition
+        fi
+    elif [[ "$THIS_REPO_NAME" == "r_multiomics_factory" ]] || [[ "$THIS_REPO_NAME" == "multiomics_r_factory" ]]; then
         SIBLING="$PARENT_DIR/singlecell_factory"
     else
         echo "WARNING: check_contracts_cross_repo.sh: cannot determine sibling repo from repo name '$THIS_REPO_NAME'; cross-repo parity check skipped" >&2
