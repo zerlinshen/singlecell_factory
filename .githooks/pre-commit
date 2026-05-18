@@ -37,4 +37,7 @@ else
     echo "[pre-commit] WARN: repo-doc-sync skill not installed at $DETECTOR — skipping drift gate."
 fi
 
+# Advisory in Phase 2; promote to blocking in Phase 3 §3.4.
+bash scripts/ci/cross_factory_contract_gate.sh || echo "[pre-commit] WARN: cross-factory advisory check failed (not blocking)"
+
 exit 0
