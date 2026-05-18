@@ -1,0 +1,4103 @@
+diff --git a/.pre-commit-config.yaml b/.pre-commit-config.yaml
+index 6597949..3e84bb4 100644
+--- a/.pre-commit-config.yaml
++++ b/.pre-commit-config.yaml
+@@ -13,3 +13,11 @@ repos:
+     hooks:
+       - id: end-of-file-fixer
+       - id: trailing-whitespace
++  - repo: local
++    hooks:
++      - id: contracts-cross-repo-parity
++        name: contracts cross-repo parity
++        entry: tools/check_contracts_cross_repo.sh
++        language: system
++        pass_filenames: false
++        files: ^(contracts/bundle_schema\.yaml|contracts/\.expected_sha256)$
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 15b0c33..d414539 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -32,13 +32,57 @@ for deep operational steps.
+   successful canonical runs unless `final_adata.h5ad`, `run_manifest.json`, and
+   `module_status.csv` are present.
+ 
++## Architecture (2026-05+): Factory-Project Separation
++
++As of 2026-05, this factory is a pure compute tool — no scientific outputs land
++inside this repo. Full plan: `/home/zerlinshen/.omc/plans/factory-project-separation.md`.
++
++Three-way split:
++- **Factory tools**: this repo + `/home/zerlinshen/multiomics_r_factory/`
++- **Projects**: `/home/zerlinshen/projects/<project-id>/` (default `PROJECTS_ROOT`)
++- **Bootstrap**: `/home/zerlinshen/projects-bootstrap/omc-new-project`
++
++Sibling repo: `/home/zerlinshen/multiomics_r_factory/`
++
++**Agent rule**: Never write outputs inside the factory tree. Always pass and
++resolve `--project-root`.
++
++### Environment Switches (Round-1a)
++
++Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
++
++| Variable | Unset (default) | `=1` |
++|---|---|---|
++| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning` on stderr; falls back to legacy `output/` | Hard error `sys.exit(2)`. Pass `--project-root` or unset the var. |
++
++Warning and hard-error are mutually exclusive. Round-2 ADR will flip the default to required. Gate is mirrored in `scripts/export_singlecell_r_bundle.py` and `scripts/pack_run_for_mac.sh`.
++
++### R-factory SHA fields (Round-1a)
++
++Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
++
++Two provenance fields track `multiomics_r_factory` git SHA at two points:
++
++- `r_factory_sha_at_manifest_write` — written to `run_manifest.json` at pipeline manifest-write time.
++- `r_factory_sha_at_export` — written to `<run-id>/python/bundle/provenance.json` at bundle export time.
++
++The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
++
+ ## Core Commands
+-- Run pipeline:
++- Run pipeline with project-root (preferred):
++  `python -m workflow.modular.cli --project-root /home/zerlinshen/projects/<id> --project <name> --sample-root <path> --optional-modules <modules>`
++- Run pipeline fail-fast on missing --project-root (GOV-2, plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`):
++  `SC_REQUIRE_PROJECT_ROOT=1 python -m workflow.modular.cli --project-root /home/zerlinshen/projects/<id> --project <name> --sample-root <path> --optional-modules <modules>`
++- Run pipeline (legacy, still works, emits DeprecationWarning):
+   `python -m workflow.modular.cli --project <name> --sample-root <path> --optional-modules <modules>`
+ - Run with recovery:
+   `python -m workflow.modular.cli ... --checkpoint`
+ - Resume:
+   `python -m workflow.modular.cli ... --checkpoint --resume-from <module>`
++- Allow dirty factory tree (records diff_sha256 in manifest):
++  `python -m workflow.modular.cli --project-root <path> --allow-dirty ...`
++- Export R bundle with project-root:
++  `python scripts/export_singlecell_r_bundle.py --project-root <path> --run-id <id> ...`
+ - Run tests:
+   `pytest -q`
+ - Run focused modular tests:
+diff --git a/PROTOCOL.md b/PROTOCOL.md
+index 657871f..2eef5b1 100644
+--- a/PROTOCOL.md
++++ b/PROTOCOL.md
+@@ -10,6 +10,21 @@ This protocol is a beginner-friendly, end-to-end guide for running the current m
+ 
+ It is aligned with the current codebase (`workflow/modular/*`) and CLI (`python -m workflow.modular.cli`).
+ 
++**Architecture note (2026-05+):** As of 2026-05, all pipeline runs must supply
++`--project-root <path>` to write outputs outside the factory tree. See the
++"Architecture (2026-05+)" section in `README.md` and the full plan at
++`/home/zerlinshen/.omc/plans/factory-project-separation.md`. Bootstrap new
++projects with `/home/zerlinshen/projects-bootstrap/omc-new-project <project-id>`.
++
++**Round-1a governance (2026-05):** `README.md` now documents two new subsections
++under "Architecture (2026-05+)": `### Environment Switches` (covering the
++`SC_REQUIRE_PROJECT_ROOT` fail-fast gate) and `### R-factory SHA fields`
++(covering dual-SHA provenance in `run_manifest.json` and `bundle/provenance.json`).
++See `/home/zerlinshen/.omc/plans/factories-optimization-round1.md` for the
++full Round-1a governance plan. The sibling repo `multiomics_r_factory` has
++matching documentation for the R-side contracts (renv bootstrap, schema
++hard-error, SHA mismatch warning).
++
+ 
+ ## Bridge Architecture
+ 
+diff --git a/data/external/crossref_cache.json b/data/external/crossref_cache.json
+index 8b6f8d0..be6afa8 100644
+--- a/data/external/crossref_cache.json
++++ b/data/external/crossref_cache.json
+@@ -107,6 +107,18 @@
+     "title": "Simultaneous epitope and transcriptome measurement in single cells",
+     "year": "2017"
+   },
++  "10.1038/nmeth.4401": {
++    "authors": "Schep",
++    "journal": "Nature Methods",
++    "title": "chromVAR: inferring transcription-factor-associated accessibility from single-cell epigenomic data",
++    "year": "2017"
++  },
++  "10.1038/nmeth.4463": {
++    "authors": "Aibar",
++    "journal": "Nature Methods",
++    "title": "SCENIC: single-cell regulatory network inference and clustering",
++    "year": "2017"
++  },
+   "10.1038/nmeth.4612": {
+     "authors": "Soneson",
+     "journal": "Nature Methods",
+@@ -293,12 +305,24 @@
+     "title": "PanglaoDB: a web server for exploration of mouse and human single-cell RNA sequencing data",
+     "year": "2019"
+   },
++  "10.1093/nar/gkac1010": {
++    "authors": "Sollis",
++    "journal": "Nucleic Acids Research",
++    "title": "The NHGRI-EBI GWAS Catalog: knowledgebase and deposition resource",
++    "year": "2022"
++  },
+   "10.1093/nar/gkac947": {
+     "authors": "Hu",
+     "journal": "Nucleic Acids Research",
+     "title": "CellMarker 2.0: an updated database of manually curated cell markers in human/mouse and web tools based on scRNA-seq data",
+     "year": "2022"
+   },
++  "10.1093/nar/gkad1059": {
++    "authors": "Rauluseviciute",
++    "journal": "Nucleic Acids Research",
++    "title": "JASPAR 2024: 20th anniversary of the open-access database of transcription factor binding profiles",
++    "year": "2023"
++  },
+   "10.1101/gr.240663.118": {
+     "authors": "Garcia-Alonso",
+     "journal": "Genome Research",
+diff --git a/ops/before_every_run/LATEST.md b/ops/before_every_run/LATEST.md
+index 03951da..1b6c698 100644
+--- a/ops/before_every_run/LATEST.md
++++ b/ops/before_every_run/LATEST.md
+@@ -1,3 +1,200 @@
++# Latest before/after-run note — Wave-5 Trevino public Cell reproduction
++
++## 2026-05-18 05:56 CST — Figure 2C/2D public author-resource evidence
++- Mainline: Cell paper all-figure reproduction from public earliest-computable inputs; still not FASTQ-level.
++- Completed this checkpoint: Figure 2C proxy heatmap and Figure 2D GA/RNA correlation scatter from author/public resources.
++- Status 2C: `GENERATED_AUTHOR_RESOURCE_GENE_ACTIVITY_RNA_HEATMAP_NOT_CRE_ACCESSIBILITY_PAIR_PARITY`.
++- Status 2D: `REPRODUCED_AUTHOR_RESOURCE_GA_RNA_CORRELATION_WITH_LINK_COUNT_DISCREPANCY`.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure2cd_public_author_cre_gene_resources.json`.
++- Outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_2C_2D_cre_gene/`.
++- Metrics: significant links 64,030 vs paper expected 64,878 (delta -848); heatmap genes 400; pseudobulks 1267; GA/RNA table rows 19,173; unique genes 2,739.
++- Boundary: Figure 2D uses author GA_RNA_Correlations.RDS joined to public author PeakGeneLinks_Significant.RDS. Figure 2C is a proxy heatmap using author glial KNN pseudobulk ATAC gene activity and RNA matrices for genes with significant linked CREs. Exact Figure 2C CRE-accessibility pair rows are not claimed because the locally available accessibility pseudobulk RDS lacks peak names and therefore cannot be safely joined to peak.name without additional author row-order metadata.
++- Next immediate action: Figure 2E GO/gene-set enrichment, then 2F-I multiome panels.
++
++# Latest before/after-run note — Wave-5 Trevino public Cell reproduction
++
++## 2026-05-18 05:44 CST — Figure 2B author CCA matching generated/validated
++- Mainline: Cell paper all-figure reproduction from public earliest-computable inputs; still not FASTQ-level because public FASTQ/SRA raw reads are not available in the current evidence set.
++- Completed this checkpoint: Figure 2B matched RNA/ATAC cluster UMAPs from author public `CCA_Matching.RDS`.
++- Status: `REPRODUCED_AUTHOR_CCA_PUBLIC_MATRIX_FIGURE2B`; all validation checks pass.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure2b_public_author_cca_matching.json`.
++- Outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_2B_cca_matching/`.
++- Metrics: CCA rows 89,172; RNA cells 55,653; ATAC cells 12,000; RNA/ATAC match-cluster coverage 1.000/1.000; RNA cell-type proxy agreement 0.808.
++- Truth boundary: Author public CCA_Matching.RDS was used for RNA↔ATAC nearest-neighbor links. RNA UMAP is the current singlecell_factory public RNA pipeline embedding; ATAC UMAP is the bounded public gene-activity embedding produced for Figure 3B. This is not FASTQ/fragments-level reprocessing and not exact author peak-LSI UMAP parity.
++- Verification: `python -m py_compile ...` passed; `git diff --check` passed; `pytest --no-cov -q tests/test_trevino_loader.py tests/test_trevino_synthetic_fixture.py` -> 8 passed in 0.79s.
++- Next immediate action: Figure 2C/2D CRE-gene linkage heatmap/correlation evidence using public/author peak-gene resources.
++
++# Latest Wave-5 Figure 1E quality gate update (2026-05-18)
++
++- Quality gate PASS after Figure 1E addition: Python syntax checks, `git diff --check`, and Trevino loader regression tests passed.
++- Test evidence: `pytest --no-cov -q tests/test_trevino_loader.py tests/test_trevino_synthetic_fixture.py` -> `8 passed in 0.79s`.
++- Next immediate action: Figure 2B public RNA/ATAC integration evidence.
++
++---
++
++# Latest Wave-5 Figure 1E multimodal overlay update (2026-05-18)
++
++- Figure 1E public-matrix multimodal marker overlays are available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_1E_multimodal_marker_overlays`.
++- Validation PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure1e_public_matrix_multimodal_marker_overlays.json`; all checks pass `True`.
++- Metrics: RNA cells `55653`, ATAC overlay cells `12000`, markers `SOX9, EOMES, NEUROD2, DLX2`.
++- Honest caveat: RNA expression, ATAC gene activity, and chromVAR motif activity were rendered from public processed matrices. ATAC panels use the 12k public ATAC subset embedding. DLX2 uses a DLX6 motif row as a DLX-family proxy because no exact DLX2 chromVAR row was found.
++- Next immediate action: Figure 2B public RNA/ATAC integration evidence.
++
++---
++
++# Latest Wave-5 Figure 1 quality gate update (2026-05-18)
++
++- Quality gate PASS after Figure 1D/1F/1G/1H addition: Python syntax checks, `git diff --check`, and Trevino loader regression tests passed.
++- Test evidence: `pytest --no-cov -q tests/test_trevino_loader.py tests/test_trevino_synthetic_fixture.py` -> `8 passed in 0.77s`.
++- Next immediate action: Figure 1E multimodal marker overlays or Figure 2B public integration evidence.
++
++---
++
++# Latest Wave-5 Figure 1 public-matrix update (2026-05-18)
++
++- Figure 1D/1F/1G/1H public-matrix outputs are available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_1_public_panels`.
++- Validation PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure1_public_matrix_1d_1f_1g_1h.json`; all checks pass `True`.
++- Metrics: RNA `55653` cells, RNA markers `28/28`; ATAC UMAP subset `12000` cells; ATAC marker dotplot `31304` cells, ATAC markers `28/28`.
++- Honest caveat: Public processed RNA and ATAC gene-activity matrices were used. ATAC UMAP panels use the existing 12k Figure 3B subset embedding; ATAC marker dotplot uses all public 31,304 ATAC metadata-aligned cells. This is not FASTQ/fragments-level or exact author embedding parity.
++- Next immediate action: Figure 1E multimodal overlays or Figure 2B public integration evidence.
++
++---
++
++# Latest Wave-5 Figure 3 quality gate update (2026-05-18)
++
++- Quality gate PASS after Figure 3F/3H/gap-audit additions: Python syntax checks, R parse, `git diff --check`, and Trevino loader regression tests all passed.
++- Test evidence: `pytest --no-cov -q tests/test_trevino_loader.py tests/test_trevino_synthetic_fixture.py` -> `8 passed in 0.78s`.
++- Current Figure 3 status: 3A/3C/3D/3E/3F/3H generated/validated; 3B generated with weak PAX6 concordance caveat; 3G/3I honestly marked motif-synergy method-resource gaps.
++- Next immediate action: continue remaining target-matrix panels outside Figure 3, prioritizing main Figure 1/2 READY_FOR_LOADER panels.
++
++---
++
++# Latest Wave-5 Figure 3G/3H/3I motif-correlation/synergy update (2026-05-18)
++
++- Figure 3H motif/gene correlation heatmap outputs are available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3H_tf_motif_gene_correlation`.
++- Figure 3H validation PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3h_public_resource_tf_motif_gene_correlation.json`; metrics: `158/682` observed gene-motif correlations, `136` strong |rho| pairs.
++- Figure 3G/3I synergy audit: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3g_3i_public_resource_motif_synergy_gap.json`; statuses `{'3G': 'METHOD_RESOURCE_GAP_SYNERGY_NOT_REPRODUCED', '3I': 'METHOD_RESOURCE_GAP_MEAN_SYNERGY_NOT_REPRODUCED'}`.
++- Honest caveat: 3H is author-resource motif-level correlation evidence, not exact 24 motif-cluster parity; 3G/3I are not reproduced because chromVAR/motifmatchr and the motif-cluster synergy mapping/workflow are absent locally.
++- Next immediate action: run quality checks for new Figure 3 scripts, then proceed to remaining main-figure target-matrix panels.
++
++---
++
++# Latest Wave-5 Figure 3F TF/motif heatmap update (2026-05-18)
++
++- Figure 3F public-matrix TF expression / motif activity heatmap outputs are now available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3F_tf_motif_heatmap`.
++- Validation PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3f_public_matrix_tf_motif_heatmap.json`; all checks pass `True`.
++- Metrics: candidate pairs after filters `1668`, selected pairs `31`, unique genes `31`, unique motifs `22`; RNA cells binned `6000`, ATAC cells binned `12000`.
++- Honest caveat: status `GENERATED_PUBLIC_MATRIX_TF_MOTIF_HEATMAP_DERIVED_PAIRS`; TF/motif heatmap from public RNA/chromVAR matrices binned by Figure 3A/3B pseudotime and TF_MotifExpressionCorrelation-derived pairs. Not exact author 363-pseudobulk, motif-cluster, or original 31/24 object parity.
++- Next immediate action: Figure 3G/H/I resource audit or remaining Figure 3 panels, then code-quality checks for newly added scripts.
++
++---
++
++# Latest Wave-5 Figure 3E motif enrichment update (2026-05-18)
++
++- Figure 3E public-matrix derived-k5 motif enrichment outputs are now available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3E_motif_enrichment`.
++- Validation PASS for generated outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3e_public_matrix_derived_k5_motif_enrichment.json`.
++- Motif matrix readiness: `657930 x 452`; cluster count `5`; all link rows mapped to peak IDs.
++- Enrichment: `1021` positive rows in `all_consensus_peaks`; Bonferroni<=0.05 positive rows `160`.
++- Honest caveat: status `GENERATED_PUBLIC_MATRIX_DERIVED_K5_MOTIF_ENRICHMENT`; not exact LOLA/JASPAR/topGO environment parity and inherits Figure 3C derived-k5 caveat.
++- Next immediate action: Figure 3F TF expression/motif activity heatmap resource audit/build.
++
++---
++
++# Latest Wave-5 Figure 3D gene-set enrichment update (2026-05-18)
++
++- Figure 3D public-matrix local gene-set enrichment outputs are now available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3D_geneset_enrichment`.
++- Validation PASS for generated outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3d_public_matrix_local_geneset_enrichment.json`.
++- Loaded `16` local author gene-set files/terms; tested `35` enrichment rows; FDR<=0.05 rows `3`.
++- Honest caveat: status `GENERATED_PUBLIC_MATRIX_LOCAL_GENESET_ENRICHMENT_NOT_TOPGO_PARITY`; this is not exact topGO v2.36.0 / GO database-version parity.
++- Next immediate action: Figure 3E motif enrichment rework on Figure 3C derived k5 clusters.
++
++---
++
++# Latest Wave-5 Figure 3C CRE-gene heatmap update (2026-05-18)
++
++- Figure 3C public-matrix derived-k5 CRE-gene heatmap outputs are now available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3C_cre_gene_heatmap`.
++- Validation PASS for generated outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3c_public_matrix_cre_gene_heatmap.json`; PNG/SVG/PDF, link-row TSV, matrix NPZ, summary JSON, and log are present/nonempty.
++- Coverage: `12927/13989` Table S3B links usable (`0.924`); peak-coordinate mapping complete; finite ATAC accessibility and RNA expression matrices.
++- Honest caveat: the paper declares k=5, but local Table S3B has `10` cluster labels; this run derives k=5 from public RNA expression profiles and does not claim exact author 363-pseudobulk/CCA/fragment-level parity.
++- Next immediate action: Figure 3D/3E enrichment panels using `figure3c_link_row_summary.tsv`, author motif resources, and local gene-set files.
++
++---
++
++# Latest Wave-5 Figure 3B ATAC pseudotime transfer update (2026-05-18)
++
++- Figure 3B public-matrix ATAC transferred pseudotime outputs are now available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3B_atac_pseudotime`.
++- Generated-output validation PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3b_public_matrix_atac_pseudotime_transfer.json`; all expected PNG/SVG/PDF/H5AD/JSON/log files exist and are nonempty.
++- Honest biological status: `GENERATED_PUBLIC_MATRIX_SUBSET_WEAK_MARKER_CONCORDANCE`, because PAX6 direction failed (`rho=+0.053877` where pre-registered expectation was negative). SOX2 and NEUROD1/NEUROD6/SLC17A7/SATB2 directions passed.
++- Computed ATAC subset: `12000 / 31304` cells; transferred from Figure 3A RNA velocity subset with `6000` finite pseudotime reference cells; `25` shared transfer genes; finite transferred pseudotime cells `12000`.
++- Boundary: public processed ATAC gene activity + RNA velocity transfer; not fragments/FASTQ-level scATAC and not author integration-model parity.
++- Next immediate action: start Figure 3C linkage/co-accessibility evidence using Figure 3A/3B plus Table S3B/FCM/link resources.
++
++---
++
++# Latest Wave-5 Figure 3A velocity reproduction update (2026-05-18)
++
++- Figure 3A public-matrix RNA velocity/pseudotime outputs are now available at `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_3A_velocity`.
++- Validation PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure3a_public_matrix_velocity_reproduction.json`; status `REPRODUCED_PUBLIC_MATRIX_SUBSET`; all output PNG/SVG/PDF files exist and nonempty.
++- Computed subset `[6000, 2432]` from `55653` overlapping QC-passed public RNA cells; velocity graph `[6000, 6000]`; velocity pseudotime finite cells `6000`.
++- Marker direction check passed: SOX2/PAX6 decrease with pseudotime, NEUROD1/NEUROD6/SLC17A7/SATB2 increase with pseudotime.
++- Boundary: this is public processed-matrix, 6000-cell stratified-subset reproduction, not FASTQ-level or full-cell velocity graph.
++
++---
++
++# Latest Wave-5 RNA velocity input update (2026-05-18)
++
++- Full velocity-ready public RNA input: `/home/zerlinshen/projects/wave5-trevino/inputs/gse162170_public_rna_velocity_prepared/prepared_input.h5ad`; shape `57868 x 32648`; layers `['ambiguous', 'spliced', 'unspliced']`.
++- Layer audit: counts has `33355` genes, velocity layers have `32648` genes, intersection `32648`; `707` counts-only genes are intentionally dropped only for the velocity object.
++- scVelo smoke PASS: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/rna_velocity_smoke/scvelo_smoke_retry.json`; 3k-cell subset produced `velocity` layer and `velocity_graph` `[3000, 3000]` with scvelo `0.3.4`.
++- Keep the counts-only pipeline object as the clustering/annotation baseline; use this layer-aligned object for Figure 3A/RNA velocity reproduction.
++
++---
++
++# Latest Wave-5 public RNA viability update (2026-05-18)
++
++- Current public-matrix pipeline run: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/`.
++- Prepared public RNA input: `/home/zerlinshen/projects/wave5-trevino/inputs/gse162170_public_rna_prepared/prepared_input.h5ad`; shape before QC `57868 x 33355`; gene-symbol var_names mapped for marker annotation (`{'mapped_to_symbol_var_names': 32366, 'fallback_to_gene_id': 989, 'unmapped_gene_ids': 976, 'duplicate_symbols_fell_back': 13}`).
++- Pipeline output: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458` with `final_adata.h5ad`, `run_manifest.json`, and `module_status.csv` present.
++- Module status: `cellranger -> qc -> doublet_detection -> clustering -> annotation -> differential_expression -> composition` all `ok`.
++- Final object after QC/doublet filtering: `55653 x 25519`, `24` Leiden clusters; top annotations: Excitatory neuron=36503, Radial glia / neural progenitor=6973, Inhibitory interneuron=4969, Cycling progenitor=3020, Intermediate progenitor=1990.
++- Truth boundary: no public FASTQ/SRA raw-read source found yet; this lane is GEO public processed scRNA matrix-level reproduction, with velocity layers deferred to a separate loader audit.
++
++---
++
++
++# Latest Wave-5.1 Final Completion Update (2026-05-17)
++
++- Wave-5.1 Trevino Cell reproduction evidence package is complete with honest MV3 deferral.
++- Final audit: `.omx/reports/wave5-v51-final-completion-audit-20260517.json`.
++- v5.1 ledger: `ops/run_ledger/wave5_trevino_20260517T1005Z-7b539a5.v5.1.json` validates against `wave5_v5_1.schema.json`; v4.2/v5.0 schemas reject it.
++- v5.1 comparison PDF: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/comparison_3fa006c876fae372_v5.1.pdf`, SHA `3fa006c876fae37289661bc5875766b76bff25634bd1346e0276c0158b239d6d`.
++- MV3 F-3/F-6/F-7 status: `HONEST-DEFERRED` at `python/figures/v5/mv3/mv3_disposition.json`; no new dependencies or external GWAS/motif/genome resources were installed or fabricated.
++- Final targeted gate: `75 passed, 11 deselected in 1.23s`; contract parity OK; MV2 ledger status is `PASS-CONTRACT-ONLY` (not full analytical R parity).
++
++---
++
++# Latest Wave-5.1 HV1 Update (2026-05-17)
++
++- HV1 real Layer-3 metrics completed for run `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/`.
++- Outputs: `python/figures/v5/quantitative_metrics/*.json` (`15` JSON files) and `python/figures/v5/reproduction_rate.json`.
++- Real-metric figure count: `10` main/RNA-only figures with `n_scored_metrics > 0`; AC-V51-HV1-1 PASS (threshold `>=8`).
++- Reproduction rate: v5.1 `0.4031615505603515` vs v5.0.4 baseline `0.338`, delta `+0.0651615505603515`; AC-V51-HV1-3 PASS.
++- GEO SHA verification: all local GSE162170 files OK; manifest at `data/external/trevino_2021/geo/MANIFEST.json`.
++- ATAC peak Spearman remains honest `NOT-COMPUTED`: the public ATAC counts file lacks cell-barcode headers in this local copy, so F-5 is not used to inflate the headline rate.
++- Post-HV1 audit: `.omx/reports/wave5-v51-cell-mainline-gap-audit-20260517-post-hv1.json`; remaining mainline gaps are MV3 disposition, comparison_v5.1 PDF, and v5.1 ledger.
++
++---
++# Latest Wave-5.1 Trevino Cell Reproduction Update (2026-05-17)
++
++- Current v5.1 evidence run: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/`.
++- HV2 WNN pre-registered sweep completed: `288/288` OK rows, selected `resolution=0.5`, `n_neighbors=20`, `rna_weighted_2x`, `mutual`; ARI `0.5202309143816428`; selected config at `python/figures/v5/rna_only/selected_config.json`.
++- MV1a processed-count replay completed: `python/final_adata.h5ad`, `python/run_manifest.json`, and `python/module_status.csv` exist under the project root; parity vs v4.2 PASS at `python/parity/parity_vs_v4_2.json`.
++- R bundle exported under the project run at `python/bundle/` with `singlecell_r_bundle_v2.2` and `r_factory_sha_at_export=cba6162`.
++- Operational caution: this adopted run id is legacy/no-hyphen (`20260517T1005Z-7b539a5`) and does not satisfy newer `workflow.modular.project_paths` run-id regex; direct project-run paths were used for bundle export.
++- New journal: `ops/before_every_run/journal/2026-05-17-wave5-v51-hv2-mv1a.md`.
++
++---
++
+ # BeforeEveryRun Latest Summary
+ 
+ ## Current Canonical Execution State
+@@ -37,13 +234,23 @@
+ - Both Mac-led SSH orchestration and direct remote operation are valid. The Mac
+   remains the review/organization/report-packaging surface; the remote repo
+   remains the compute, remote-R, and run-truth surface.
++- As of the `2026-04-30` architecture contract round, module hierarchy metadata
++  lives in `/home/zerlinshen/singlecell_factory/workflow/modular/module_catalog.py`.
++  `workflow/modular/pipeline.py` derives the legacy dependency DAG from that
++  catalog, and CLI optional-module help derives from the same source.
++- No full-cohort rerun was launched in the architecture contract round.
++  Controller-validation smoke now lives at:
++  `/home/zerlinshen/singlecell_factory/scripts/validate_nc2024_architecture_contract.py`
++  It checks current NC2024 v2 run dirs, bundle manifests, run-ledger entries,
++  and `bridges/local_r_pipeline_macbook/{R,R_bundle}` symlinks without opening
++  the large H5ADs.
+ 
+ ## Latest Run Verdict
+ 
+ - Date: `2026-04-24`
+ - Execution mode: `debug_massive`
+ - Scale mode: `massive`
+-- Checkpoint policy: `SCF_MASSIVE_CHECKPOINT_POLICY=metadata_only`
++- Checkpoint policy: `--scale-mode massive` (sets `mandatory_only` automatically)
+ - Prepare rerun: `no`
+ - Input: canonical prepared Zarr above.
+ - Result: clean rerun wrote `final_adata.h5ad`, `run_manifest.json`,
+@@ -77,16 +284,19 @@
+   recovery work.
+ - Use controller `large -> massive` only for orchestration validation.
+ - Do not rerun prepare unless the canonical prepared Zarr is invalid.
+-- Keep `SCF_MASSIVE_CHECKPOINT_POLICY=metadata_only` for full-cohort massive runs
+-  unless there is a specific need to preserve full per-module AnnData
+-  checkpoints.
++- Use `--scale-mode massive` for full-cohort runs; it automatically sets
++  `checkpoint_policy=mandatory_only` to skip early-module AnnData checkpoints
++  unless there is a specific need to preserve full per-module AnnData checkpoints.
+ - For reproduce-stage NC2024 work, interpret "all modules" as "all eligible
+   modules", not "every imaginable module regardless of modality or contrast
+   contract".
+ - Remote R plotting/reporting is remote-side by default on `ubuntu-tail` with:
+-  `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
++  `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`
+   and
+   `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh`.
++- The previous `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript` runtime is
++  retained as rollback, but it lacks R `arrow` and is not the default for v2
++  parquet bundle plotting.
+ - The bridge folder name still says `local_r_pipeline_macbook`, but current
+   operation is remote-first; do not describe the Mac-local R pipeline as active.
+ - Python still produces module-native QC/diagnostic plots. R is preferred only
+@@ -113,6 +323,21 @@
+   project skill management; Claude project skills live in `.claude/skills/`.
+   `codex_skills/` remains only as a legacy compatibility mirror for historical
+   project-local skills.
++- For compact bundle handoff, current v2 parquet manifests validate against the
++  new singlecell-to-multiomics contract. The `r_multiomics_arrow` environment can
++  source `R_bundle/io_bundle.R`, validate NC2024 v2 manifests, read both current
++  v2 bundles through `read_bundle()`, and plot them through
++  `scripts/plot_remote_bundle_large.R`.
++- `bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh` is now
++  v2-aware: it reuses `bundle_manifest.json` parquet bundles when source
++  `final_adata.h5ad` size/mtime and requested markers/obs/obsm are compatible,
++  then delegates plotting to
++  `/home/zerlinshen/multiomics_r_factory/scripts/plot_remote_bundle_large.R`.
++- Remote report/figure outputs intended for Mac-side review must be pulled back
++  as lightweight review copies under
++  `/Users/zerlinshen/Downloads/1. Codex/2.Reproduction Trail/2026-04-23 - Nature Communications 2024 NSCLC single-cell reproduction/human_review/figures/YYYY-MM-DD-<slug>/`
++  with `README.md`, `TRANSFER_MANIFEST.tsv`, `checksums.sha256`, and provenance
++  logs. Do not pull bulky primary compute objects by default.
+ 
+ ## Current Scientific/Reporting State
+ 
+@@ -154,6 +379,9 @@
+ - `journal/2026-04-24-nc2024-extended-full-cohort-real-run.md`
+ - `journal/2026-04-24-nc2024-phase4-report-pseudobulk-contract-hardening.md`
+ - `journal/2026-04-24-nc2024-clean-rerun-three-pass-resolution.md`
++- `journal/2026-04-30-nc2024-architecture-contract-optimization.md`
++- `journal/2026-04-30-nc2024-r-arrow-environment-validation.md`
++- `journal/2026-04-30-nc2024-remote-to-mac-handoff-protocol.md`
+ 
+ ## Current Open Operational Improvement
+ 
+@@ -162,10 +390,13 @@
+   evidence cleanly.
+ - Add scale-safe CNV/evolution implementation before attempting full-cohort
+   CNV/evolution.
+-- Add package-level provenance checks for synced remote figures/tables.
++- Automate the new remote-to-Mac handoff manifest/checksum generation if this
++  pattern repeats across multiple figure/report packages.
+ - Add direct subprocess test coverage for the remote R wrapper.
+ - Add a first-class recovery manifest so pipeline failure and recovery can be
+   linked more formally than a separate recovery directory.
++- Add direct subprocess test coverage for the `r_multiomics_arrow` remote R
++  wrapper path.
+ 
+ ## Latest Hook-Confirmed Success
+ 
+@@ -177,3 +408,62 @@
+   - current clean rerun `module_reconciliation.tsv` exists
+   - current clean rerun readable R report directory exists
+   - current local Phase-5 package exists
++
++
++## Current Wave5 Cell/Trevino all-figure reproduction update — 2026-05-18 06:05 CST
++
++- Mainline remains honest reproduction of the Trevino Cell paper figures from the earliest public/computable inputs available locally; not the NC2024/NSCLC line.
++- Latest completed panel: Figure 2E GPC enrichment, status `GENERATED_LOCAL_GPC_GENESET_ENRICHMENT_NOT_TOPGO_PARITY`.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure2e_public_local_gpc_enrichment.json`; outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_2E_gpc_enrichment`.
++- Metrics: count-aligned GPCs 185 / paper 185; top TF enrichment `GO_DNA_BINDING_TRANSCRIPTION_FACTOR_ACTIVITY` BH q=2.1e-10.
++- Fresh verification: py_compile passed for Figure 2B-2E scripts; `git diff --check` passed; Trevino loader tests `8 passed in 0.78s`.
++- Boundary: Figure 2E is local Fisher/BH enrichment from public resources, not exact topGO/Table-S2 parity. Continue with Figure 2F-2I multiome resource audit/panels.
++
++
++## Current Wave5 Cell/Trevino all-figure reproduction update — 2026-05-18 06:20 CST
++
++- Figure 2F/2G/2H/2I public multiome evidence generated and verified.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure2fghi_public_multiome_evidence.json`; outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_2F_2I_multiome`.
++- Statuses: `{'2F': 'REPRODUCED_PUBLIC_AUTHOR_MULTIOME_QC_SUMMARY', '2G': 'GENERATED_PUBLIC_AUTHOR_RNA_AND_BOUNDED_ATAC_MULTIOME_PROJECTION', '2H': 'METHOD_RESOURCE_GAP_MULTIOME_LINKAGE_VENN_NOT_REPRODUCED', '2I': 'GENERATED_PUBLIC_MULTIOME_GPC_CORRELATION_CORRESPONDENCE'}`.
++- Fresh verification: py_compile passed for Figure 2B-2I scripts; `git diff --check` passed; Trevino loader tests `8 passed in 0.78s`.
++- Boundary: Figure 2H is a resource-gap audit, not a reproduced Venn; Figure 2G ATAC is bounded marker-NN projection, not exact author peak-LSI/uwot parity.
++
++
++## Current Wave5 Cell/Trevino all-figure reproduction update — 2026-05-18 06:50 CST
++
++- Figure 4/5 public author FCM panels generated/audited and verified.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure4_5_public_author_fcm_evidence.json`; outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_4_5_fcm_public_panels`.
++- Statuses: `{'4A': 'GENERATED_AUTHOR_FCM_PUBLIC_PSEUDOBULK_OVERVIEW', '4B': 'REPRODUCED_AUTHOR_FCM_MODULE_HEATMAP_FROM_CENTERS', '4C': 'REPRODUCED_AUTHOR_FCM_SELECTED_GENE_HEATMAP', '4D': 'GENERATED_AUTHOR_FCM_MODULE_SCORE_UMAPS', '4E': 'REPRODUCED_AUTHOR_FCM_CENTROID_JACCARD_NETWORK', '4F': 'REPRODUCED_AUTHOR_FCM_GENE_MEMBERSHIP_EXPRESSION', '4G': 'REPRODUCED_AUTHOR_FCM_GENE_MEMBERSHIP_EXPRESSION', '4H': 'REPRODUCED_AUTHOR_FCM_GENE_MEMBERSHIP_EXPRESSION', '4I': 'IMAGE_PANEL_NOT_COMPUTATIONAL_REPRODUCTION_LOCAL_PDF_ONLY', '4J': 'REPRODUCED_AUTHOR_FCM_GENE_MEMBERSHIP_EXPRESSION', '4K': 'IMAGE_PANEL_NOT_COMPUTATIONAL_REPRODUCTION_LOCAL_PDF_ONLY', '5A': 'REPRODUCED_AUTHOR_FCM_ASTRO_GENE_MEMBERSHIP_EXPRESSION', '5B': 'GENERATED_AUTHOR_FCM_LINKED_PEAK_MOTIF_ENRICHMENT_M13_VS_M14', '5C': 'GENERATED_AUTHOR_FCM_AQP4_POSITIVE_RECLUSTERING_LOCAL_RULE', '5D': 'GENERATED_PUBLIC_FCM_PSEUDOBULK_DE_NOT_DESEQ2_PARITY', '5E': 'METHOD_RESOURCE_GAP_BHADURI_PRIMARY10X_NOT_STAGED', '5F': 'METHOD_RESOURCE_GAP_BHADURI_PRIMARY10X_NOT_STAGED'}`.
++- Fresh verification: FCM render command passed; py_compile passed; `git diff --check` passed; 14 PNGs verified; Trevino loader tests `8 passed in 0.77s`.
++- Boundary: 4I/4K are image-only IHC panels, not recomputed matrix outputs; 5D is a local pseudo-bulk Welch-test proxy, not DESeq2/Table S5 parity; 5E/5F need Bhaduri/UCSC `primary10X` staging before reproduction can be claimed.
++- Next: Figure 6 chromatin-state/GPC branch resource audit/panels.
++
++
++## Current Wave5 Cell/Trevino all-figure reproduction update — 2026-05-18 07:05 CST
++
++- Figure 6 public FCM/GPC branch panels generated/audited and verified.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure6_public_fcm_gpc_branch_evidence.json`; outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_6_fcm_gpc_branch`.
++- Statuses: `{'6A': 'REPRODUCED_PUBLIC_FCM_CELL_CYCLE_MODULE_CORRELATION', '6B': 'GENERATED_PUBLIC_FCM_ATAC_PROJECTION_SCHEMATIC', '6C': 'REPRODUCED_AUTHOR_FCM_ATAC_BRANCH_PROJECTION_FROM_GA_ANCHORS', '6D': 'GENERATED_PUBLIC_FCM_BRANCH_GENE_ACTIVITY_HEATMAP_LOCAL_SPECIFICITY', '6E': 'GENERATED_PUBLIC_FCM_GPC_TF_MOTIF_GENE_BRANCH_HEATMAP', '6F': 'REPRODUCED_AUTHOR_FCM_GPC_ANCHOR_REPROJECTION_BRANCH_ARROWS', '6G': 'GENERATED_BOUNDED_MULTIOME_RNA_TO_FCM_NN_PROJECTION_COLORED_BY_ATAC_CLUSTER'}`.
++- Fresh verification: Figure 6 render command passed; py_compile passed; `git diff --check` passed; 7 PNGs verified; Trevino loader tests `8 passed in 0.85s`.
++- Boundary: 6D/6E use local public-branch specificity/means; 6G is bounded NN multiome RNA→FCM projection, not exact author uwot parity.
++- Next: Figure 7 disease/BPNet/ASD resource audit.
++
++
++## Current Wave5 Cell/Trevino all-figure reproduction update — 2026-05-18 07:06 CST
++
++- Figure 7 public S6/BPNet-ASD panels generated/audited and verified. Main Trevino Cell Figures 1-7 now have public-resource evidence/outputs or explicit resource-gap audits.
++- Evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/figure7_public_asd_bpnet_evidence.json`; outputs: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figures/public_matrix/figure_7_asd_bpnet_public_panels`.
++- Statuses: `{'7A': 'GENERATED_FROM_METHODS_AND_PUBLIC_TABLE_S6_COUNTS', '7B': 'GENERATED_S6D_CLUSTER_HIGH_EFFECT_SUMMARY_ON_PUBLIC_ATAC_UMAP_NOT_EXACT_AUTHOR_FISHER_DENOMINATORS', '7C': 'GENERATED_S6_COUNT_AUDIT_EXACT_OR_1_909_DENOMINATORS_NOT_PUBLIC_IN_S6', '7D': 'GENERATED_SFARI_AUDIT_CAPTION_BENCHMARK_PLUS_RECOMPUTED_COUNTS_NOT_EXACT_24_17_FROM_LOCAL_TABLES', '7E': 'REPRODUCED_FROM_PUBLIC_TABLE_S6E_MOTIF_OVERLAP_EXCESS', '7F': 'GENERATED_NFIA_S6_LOCUS_SUMMARY_NOT_EXACT_BPNET_LOGO_TRACK_PARITY', '7G': 'GENERATED_NPY_S6_LOCUS_SUMMARY_NOT_EXACT_BPNET_LOGO_TRACK_PARITY'}`.
++- Fresh verification: Figure 7 render command passed; `python -m py_compile scripts/dev/wave5_render_public_figure7_asd_bpnet.py` passed; `git diff --check` passed; 7 PNGs verified; Trevino loader tests `8 passed in 0.78s`.
++- Boundary: S6D duplicated `Cluster GluN6` yields 261/232 caption-like high-effect case/control vs paper 262/232; exact Figure 7B/7C Fisher denominators and 7F/7G BPNet logo/ref-alt tracks are not deposited in public S6/local Brain_ASD checkout.
++- Next: final quality gate/code-review and consolidated completion handoff; no additional long compute phase is currently queued.
++
++
++## Current Wave5 Cell/Trevino all-figure reproduction completion — 2026-05-18 07:13 CST
++
++- Completed conditional public-resource all-main-figure reproduction/audit.
++- Completion report: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/TREVINO_ALL_FIGURES_COMPLETION_REPORT.md`.
++- Final quality gate: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/all_figures_final_quality_gate_review.json`; code review `APPROVE/CLEAR`; scientific decision `conditional` due documented public-resource gaps.
++- Evidence audit: 17 JSON files, 53 panel statuses, 0 missing referenced paths, 0 hash mismatches, 0 unexpected false checks.
++- Pipeline viability: public RNA pipeline run has all modules `ok` and final AnnData under `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458/final_adata.h5ad`.
++- Boundary: not FASTQ/raw-fragment parity; Figure 7 exact BPNet denominators/model tracks and image-only panels remain honest resource gaps.
+diff --git a/ops/run_ledger/schema/wave5_v5_1.schema.json b/ops/run_ledger/schema/wave5_v5_1.schema.json
+index 4d0e094..ab99274 100644
+--- a/ops/run_ledger/schema/wave5_v5_1.schema.json
++++ b/ops/run_ledger/schema/wave5_v5_1.schema.json
+@@ -160,8 +160,8 @@
+     },
+     "mv2_parity_status": {
+       "type": "string",
+-      "enum": ["PASS", "FAIL-CORRELATION", "FAIL-JACCARD", "FAIL-RMS"],
+-      "description": "Overall MV2 R-Python parity result."
++      "enum": ["PASS", "PASS-CONTRACT-ONLY", "DEFERRED", "FAIL-CORRELATION", "FAIL-JACCARD", "FAIL-RMS"],
++      "description": "Overall MV2 R-Python parity result. PASS-CONTRACT-ONLY means the bundle/export contract passed but full analytical R parity was not executed."
+     },
+     "chromvar_lib_pinned": {
+       "type": "string",
+diff --git a/pyproject.toml b/pyproject.toml
+index d3e357c..a128688 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -8,6 +8,7 @@ markers = [
+     "small_real: real-data tier ~100k cells (NC2024 subset; run via `pytest -m small_real`; requires fixtures from scripts/build_staircase_fixtures.py)",
+     "medium_real: real-data tier ~500k cells (NC2024 subset; run via `pytest -m medium_real`)",
+     "full_real: full NC2024 cohort 884k cells (publication-grade; run via `pytest -m full_real`)",
++    "wave5_blocking: Wave 5 cross-module integration gate — must pass before any real Trevino run (US-W5-4)",
+ ]
+ 
+ [tool.coverage.run]
+@@ -15,9 +16,9 @@ source = ["workflow"]
+ branch = true
+ 
+ [tool.coverage.report]
+-fail_under = 20
++fail_under = 48
+ show_missing = true
+-omit = ["workflow/modular/*", "workflow/query_cbioportal.py"]
++omit = ["workflow/query_cbioportal.py"]
+ 
+ [tool.black]
+ line-length = 100
+diff --git a/scripts/dev/run_wave5_trevino_pcw21.py b/scripts/dev/run_wave5_trevino_pcw21.py
+index 1e15407..1135421 100644
+--- a/scripts/dev/run_wave5_trevino_pcw21.py
++++ b/scripts/dev/run_wave5_trevino_pcw21.py
+@@ -21,8 +21,11 @@ Wave-5 plan: ``.omc/plans/wave5-completion-consensus-2026-05-16.md``
+ from __future__ import annotations
+ 
+ import argparse
++import hashlib
+ import json
+ import os
++import re
++import subprocess
+ import sys
+ import time
+ import traceback
+@@ -51,6 +54,9 @@ from workflow.modular.modules.peak_to_gene import PeakToGeneModule
+ from workflow.modular.modules.trajectory import TrajectoryModule
+ 
+ 
++RUN_ID_RE = re.compile(r"^[0-9]{8}T[0-9]{4}Z-[0-9a-f]{7}$")
++
++
+ def _git_sha(repo: Path) -> str:
+     head = repo / ".git" / "HEAD"
+     if not head.exists():
+@@ -65,6 +71,40 @@ def _git_sha(repo: Path) -> str:
+         return "unknown"
+ 
+ 
++def _git_output(repo: Path, args: list[str]) -> str:
++    try:
++        return subprocess.run(
++            ["git", *args],
++            cwd=repo,
++            check=True,
++            capture_output=True,
++            text=True,
++        ).stdout
++    except (OSError, subprocess.CalledProcessError):
++        return ""
++
++
++def _dirty_tree_metadata(repo: Path, *, allow_dirty: bool) -> dict[str, object]:
++    """Return dirty-tree provenance and enforce the factory dirty gate."""
++    status = _git_output(repo, ["status", "--short"])
++    diff = _git_output(repo, ["diff", "--binary"])
++    dirty = bool(status.strip())
++    if dirty and not allow_dirty:
++        raise SystemExit(
++            "Factory git tree is dirty. Re-run with --allow-dirty to record "
++            "diff/status hashes in run_manifest.json."
++        )
++    return {
++        "factory_tree_dirty": dirty,
++        "allow_dirty": allow_dirty,
++        "diff_sha256": hashlib.sha256(diff.encode("utf-8")).hexdigest() if dirty else None,
++        "git_status_short_sha256": (
++            hashlib.sha256(status.encode("utf-8")).hexdigest() if dirty else None
++        ),
++        "git_status_short_count": len([line for line in status.splitlines() if line.strip()]),
++    }
++
++
+ def _run_atac_lsi(ctx: PipelineContext) -> None:
+     mod = ATACLSIModule()
+     ctx.set_module_dir(mod.name)
+@@ -80,6 +120,13 @@ def _run_multimodal(ctx: PipelineContext, second_obsm_key: str = "X_lsi") -> Non
+     mod = MultimodalIntegrationModule(config=cfg)
+     ctx.set_module_dir(mod.name)
+     mod.run(ctx)
++    if cfg.wnn_obsm_output_key not in ctx.adata.obsm:
++        status = ctx.adata.uns.get("multimodal_status", {})
++        raise RuntimeError(
++            "multimodal_integration completed without "
++            f"{cfg.wnn_obsm_output_key!r}; status={status}. "
++            "Set RSCRIPT_BIN to an R runtime with Seurat+arrow or fix the WNN driver."
++        )
+ 
+ 
+ def _run_clustering_on_wnn(ctx: PipelineContext) -> None:
+@@ -305,10 +352,10 @@ def _preprocess_rna(adata: anndata.AnnData, n_pcs: int = 30, n_top_genes: int =
+     sc.tl.pca(adata, n_comps=n_pcs, random_state=42, mask_var="highly_variable")
+ 
+ 
+-def _build_ctx(project_root: Path, project_name: str) -> PipelineContext:
++def _build_ctx(project_root: Path, project_name: str, run_id: str | None = None) -> PipelineContext:
+     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
+     sha = _git_sha(Path(__file__).resolve().parents[2])
+-    run_id = f"{ts}-{sha}"
++    run_id = run_id or f"{ts}-{sha[:7]}"
+     run_dir = project_root / "runs" / run_id / "python"
+     run_dir.mkdir(parents=True, exist_ok=True)
+ 
+@@ -349,6 +396,19 @@ def _build_ctx(project_root: Path, project_name: str) -> PipelineContext:
+ def main() -> int:
+     ap = argparse.ArgumentParser()
+     ap.add_argument("--project-root", required=True, type=Path)
++    ap.add_argument(
++        "--run-id",
++        default=None,
++        help=(
++            "Optional project run id to populate. Format: "
++            "YYYYMMDDTHHMMZ-<7 hex chars>. Existing source-truth outputs are not overwritten."
++        ),
++    )
++    ap.add_argument(
++        "--allow-dirty",
++        action="store_true",
++        help="Allow execution from a dirty factory tree and record diff/status hashes.",
++    )
+     ap.add_argument("--project", default="trevino_pcw21_v6_3")
+     ap.add_argument(
+         "--input-h5ad",
+@@ -358,7 +418,18 @@ def main() -> int:
+     )
+     args = ap.parse_args()
+ 
+-    ctx = _build_ctx(args.project_root, args.project)
++    if args.run_id and not RUN_ID_RE.fullmatch(args.run_id):
++        ap.error(f"--run-id must match {RUN_ID_RE.pattern}: {args.run_id}")
++
++    repo_root = Path(__file__).resolve().parents[2]
++    dirty_meta = _dirty_tree_metadata(repo_root, allow_dirty=args.allow_dirty)
++    ctx = _build_ctx(args.project_root, args.project, run_id=args.run_id)
++    ctx.metadata.update(dirty_meta)
++    for source_truth in ("final_adata.h5ad", "run_manifest.json", "module_status.csv"):
++        if (ctx.run_dir / source_truth).exists():
++            raise SystemExit(
++                f"Refusing to overwrite existing source-truth artifact: {ctx.run_dir / source_truth}"
++            )
+     log = lambda m: print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {m}", flush=True)
+ 
+     log(f"run_id={ctx.metadata['run_id']}  run_dir={ctx.run_dir}")
+@@ -458,6 +529,11 @@ def main() -> int:
+         "run_dir": str(ctx.run_dir),
+         "driver": ctx.metadata["driver"],
+         "repo_sha_at_manifest_write": ctx.metadata.get("repo_sha_at_manifest_write"),
++        "factory_tree_dirty": ctx.metadata.get("factory_tree_dirty"),
++        "allow_dirty": ctx.metadata.get("allow_dirty"),
++        "diff_sha256": ctx.metadata.get("diff_sha256"),
++        "git_status_short_sha256": ctx.metadata.get("git_status_short_sha256"),
++        "git_status_short_count": ctx.metadata.get("git_status_short_count"),
+         "input_h5ad": str(args.input_h5ad),
+         "modules_run": [name for name, _ in stage_starts],
+         "stage_seconds": {name: round(dt, 2) for name, dt in stage_starts},
+diff --git a/scripts/export_singlecell_r_bundle.py b/scripts/export_singlecell_r_bundle.py
+index fd86662..c291388 100755
+--- a/scripts/export_singlecell_r_bundle.py
++++ b/scripts/export_singlecell_r_bundle.py
+@@ -18,6 +18,9 @@ import hashlib
+ import json
+ import os
+ import shutil
++import socket
++import subprocess
++import sys
+ from dataclasses import dataclass, field, replace as dataclass_replace
+ from datetime import datetime, timezone
+ from pathlib import Path
+@@ -51,10 +54,12 @@ except ImportError:  # pragma: no cover
+ SCHEMA_VERSION_V1 = "singlecell_r_bundle_v1"
+ BUNDLE_SCHEMA_V2 = "singlecell_r_bundle_v2"
+ BUNDLE_SCHEMA_V2_1 = "singlecell_r_bundle_v2.1"
++BUNDLE_SCHEMA_V2_2 = "singlecell_r_bundle_v2.2"
+ # Backwards-compat alias (older callers / tests reference SCHEMA_VERSION_V2).
+ SCHEMA_VERSION_V2 = BUNDLE_SCHEMA_V2
+ SCHEMA_COMPATIBLE_WITH_V2 = ["singlecell_r_bundle_v1"]
+ SCHEMA_COMPATIBLE_WITH_V2_1 = ["singlecell_r_bundle_v1", "singlecell_r_bundle_v2"]
++SCHEMA_COMPATIBLE_WITH_V2_2 = ["singlecell_r_bundle_v1", "singlecell_r_bundle_v2", "singlecell_r_bundle_v2.1"]
+ EXPRESSION_SOURCE_SLOT = "X"
+ EXPRESSION_VALUE_SCALE = "source_X_as_stored"
+ EXPRESSION_EXPORT_DTYPE = "float32"
+@@ -138,6 +143,16 @@ class ExportConfig:
+     # the AnnData; each one round-trips as a separate parquet file.
+     include_multimodal_obsm: bool = False
+     multimodal_obsm_keys: tuple[str, ...] = ("X_wnn", "X_mofa")
++    # v2.2 marker_resolutions extension: opt-in. Exports the per-cell-type
++    # marker resolution table from context_aware_annotation. No-op when
++    # adata.uns["marker_db_index"] is absent or context_aware_annotation did
++    # not run (obs["context_aware_celltype"] missing).
++    include_marker_resolutions: bool = False
++    # v2.2 ATAC extension: opt-in, active only when the source AnnData carries
++    # the canonical ATAC contract written by ATACIngestModule/ATACLSIModule.
++    include_atac: bool = False
++    atac_lsi_obsm_key: str = "X_lsi"
++    atac_peaks_uns_key: str = "atac_peaks"
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -147,7 +162,7 @@ class ExportConfig:
+ # Known extension keys. Readers ignore unknown keys with a "skipping unknown
+ # extension" message; producers may freely register additional keys. Keep this
+ # list in sync with the R reader's known-extensions handling.
+-KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm")
++KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm", "marker_resolutions", "atac")
+ 
+ 
+ def add_extension(manifest, name, *, version, files, claim_guard=CLAIM_GUARD, **fields):
+@@ -487,6 +502,207 @@ def maybe_export_multimodal_obsm(
+     )
+ 
+ 
++def maybe_export_marker_resolutions(
++    manifest: dict,
++    output_dir: Path,
++    adata,
++) -> dict | None:
++    """Write extensions/marker_resolutions/markers.parquet and register the extension.
++
++    Reads ``adata.uns["marker_db_index"]`` (written by marker_db_loader) and
++    flattens all marker rows into the required schema:
++    ``[cell_type, marker_set, source_db, source_version, score]``.
++
++    No-op (returns None) when:
++    - ``adata.uns["marker_db_index"]`` is absent or empty, OR
++    - ``adata.obs["context_aware_celltype"]`` is absent (module did not run).
++
++    Parameters
++    ----------
++    manifest : dict
++        Bundle manifest (mutated on success).
++    output_dir : Path
++        Bundle directory (temp dir during publish).
++    adata : anndata.AnnData
++        Source AnnData (may be a backed view).
++
++    Returns
++    -------
++    dict | None
++        The extension entry registered in the manifest, or None on no-op.
++    """
++    marker_db_index = adata.uns.get("marker_db_index")
++    if not marker_db_index:
++        return None
++    if "context_aware_celltype" not in getattr(adata, "obs", {}).columns if hasattr(adata, "obs") else True:
++        return None
++
++    rows = []
++    for db_key, db_value in marker_db_index.items():
++        # db_key is the source_db name; db_value is a dict or DataFrame-like
++        # stored by marker_db_loader. Normalise to a list of dicts.
++        if hasattr(db_value, "itertuples"):
++            # It's a DataFrame (restored from checkpoint via anndata uns).
++            for row in db_value.itertuples(index=False):
++                rows.append({
++                    "cell_type": str(getattr(row, "cell_type", "")),
++                    "marker_set": str(getattr(row, "marker_set", db_key)),
++                    "source_db": str(db_key),
++                    "source_version": str(getattr(row, "source_version", "")),
++                    "score": float(getattr(row, "score", 0.0)) if hasattr(row, "score") else None,
++                })
++        elif isinstance(db_value, dict):
++            # Stored as a nested dict from anndata uns serialisation.
++            for ct, markers in db_value.items():
++                if isinstance(markers, (list, tuple)):
++                    for gene in markers:
++                        rows.append({
++                            "cell_type": str(ct),
++                            "marker_set": str(db_key),
++                            "source_db": str(db_key),
++                            "source_version": "",
++                            "score": None,
++                        })
++                else:
++                    rows.append({
++                        "cell_type": str(ct),
++                        "marker_set": str(db_key),
++                        "source_db": str(db_key),
++                        "source_version": "",
++                        "score": None,
++                    })
++
++    if not rows:
++        return None
++
++    df = pd.DataFrame(rows, columns=["cell_type", "marker_set", "source_db", "source_version", "score"])
++    df["score"] = pd.to_numeric(df["score"], errors="coerce").astype("float32")
++
++    ext_dir = output_dir / "extensions" / "marker_resolutions"
++    ext_dir.mkdir(parents=True, exist_ok=True)
++    path = ext_dir / "markers.parquet"
++    # marker_resolutions has no meaningful cell-index, so we don't reset index
++    # via _write_parquet (which adds a "cell" column). Write directly.
++    if not _HAVE_PYARROW:
++        df.to_parquet(path, engine="fastparquet", index=False)
++    else:
++        table = pa.Table.from_pandas(df, preserve_index=False)
++        pq.write_table(table, path, compression="snappy")
++
++    manifest_files = manifest.setdefault("files", {})
++    manifest_files["marker_resolutions"] = file_record(
++        path, output_dir, df.shape[0], df.shape[1], {"format": "parquet"}
++    )
++
++    return add_extension(
++        manifest,
++        "marker_resolutions",
++        version="1.0",
++        files=["marker_resolutions"],
++        columns=["cell_type", "marker_set", "source_db", "source_version", "score"],
++        n_rows=int(df.shape[0]),
++    )
++
++
++def maybe_export_atac(
++    manifest: dict,
++    output_dir: Path,
++    adata,
++    *,
++    lsi_obsm_key: str = "X_lsi",
++    peaks_uns_key: str = "atac_peaks",
++) -> dict | None:
++    """Write the v2.2 ATAC extension when LSI and peak metadata are present.
++
++    The exported payload is intentionally plotting/reporting scale: dense LSI
++    coordinates plus peak metadata. The sparse peak-count matrix remains in the
++    AnnData and is not serialized into the compact R plotting bundle.
++    """
++    obsm = getattr(adata, "obsm", {})
++    if lsi_obsm_key not in obsm:
++        return None
++    peaks = getattr(adata, "uns", {}).get(peaks_uns_key)
++    if peaks is None:
++        peaks = getattr(adata, "uns", {}).get("atac_var")
++    if peaks is None:
++        return None
++
++    lsi = np.asarray(obsm[lsi_obsm_key])
++    if lsi.ndim != 2:
++        raise ValueError(
++            f"adata.obsm['{lsi_obsm_key}'] must be 2D (cells x LSI dims); got shape {lsi.shape}"
++        )
++    n_cells, n_components = lsi.shape
++    cells = adata.obs_names[:n_cells].astype(str)
++    lsi_df = pd.DataFrame(
++        lsi.astype(np.float32, copy=False),
++        index=cells,
++        columns=[f"lsi_{i + 1}" for i in range(n_components)],
++    )
++    lsi_df.index.name = "cell"
++
++    if isinstance(peaks, pd.DataFrame):
++        peaks_df = peaks.copy()
++    else:
++        peaks_df = pd.DataFrame(peaks)
++    required_cols = {"chrom", "start", "end"}
++    missing_cols = required_cols - set(peaks_df.columns)
++    if missing_cols:
++        raise ValueError(
++            "ATAC peaks metadata must contain chrom/start/end columns; "
++            f"missing {sorted(missing_cols)}"
++        )
++    peaks_df = peaks_df.copy()
++    peaks_df["chrom"] = peaks_df["chrom"].astype(str)
++    peaks_df["start"] = pd.to_numeric(peaks_df["start"], errors="raise").astype("int64")
++    peaks_df["end"] = pd.to_numeric(peaks_df["end"], errors="raise").astype("int64")
++    if "peak_id" not in peaks_df.columns:
++        peaks_df["peak_id"] = (
++            peaks_df["chrom"].astype(str) + ":" +
++            peaks_df["start"].astype(str) + "-" +
++            peaks_df["end"].astype(str)
++        )
++    peaks_df = peaks_df[["peak_id", "chrom", "start", "end"]]
++
++    ext_dir = output_dir / "extensions" / "atac"
++    ext_dir.mkdir(parents=True, exist_ok=True)
++    lsi_path = ext_dir / "lsi.parquet"
++    peaks_path = ext_dir / "peaks.parquet"
++    _write_parquet(lsi_df, lsi_path)
++    if not _HAVE_PYARROW:
++        peaks_df.to_parquet(peaks_path, engine="fastparquet", index=False)
++    else:
++        table = pa.Table.from_pandas(peaks_df, preserve_index=False)
++        pq.write_table(table, peaks_path, compression="snappy")
++
++    manifest_files = manifest.setdefault("files", {})
++    manifest_files["atac_lsi"] = file_record(
++        lsi_path, output_dir, lsi_df.shape[0], lsi_df.shape[1], {"format": "parquet"}
++    )
++    manifest_files["atac_peaks"] = file_record(
++        peaks_path, output_dir, peaks_df.shape[0], peaks_df.shape[1], {"format": "parquet"}
++    )
++
++    return add_extension(
++        manifest,
++        "atac",
++        version="1.0",
++        files=["atac_lsi", "atac_peaks"],
++        status="active",
++        table={
++            "lsi_path": "extensions/atac/lsi.parquet",
++            "peaks_path": "extensions/atac/peaks.parquet",
++            "index_column": "cell",
++            "lsi_index_column": "cell",
++            "peak_id_column": "peak_id",
++        },
++        n_cells=int(n_cells),
++        n_components=int(n_components),
++        n_peaks=int(peaks_df.shape[0]),
++        method="tfidf_lsi",
++    )
++
++
+ def _coerce_jsonable(value):
+     """Best-effort coercion of small uns metadata values into JSON-friendly types."""
+     if isinstance(value, (str, int, float, bool)) or value is None:
+@@ -892,6 +1108,54 @@ def write_v2_files(adata, cell_idx: np.ndarray, config: ExportConfig) -> tuple[d
+     return files, markers_present, use_mtx
+ 
+ 
++# ---------------------------------------------------------------------------
++# Bundle provenance helper (PREC-1)
++# ---------------------------------------------------------------------------
++
++def _r_factory_sha_at_export(r_factory_path: str = "/home/zerlinshen/multiomics_r_factory") -> str:
++    """Return the short HEAD SHA of the R factory repo at export time, or '' on failure."""
++    try:
++        return subprocess.check_output(
++            ["git", "-C", r_factory_path, "rev-parse", "--short=7", "HEAD"],
++            stderr=subprocess.DEVNULL,
++            text=True,
++        ).strip()
++    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
++        return ""
++
++
++def _bundle_sha256_concat(output_dir: Path) -> str:
++    """SHA256 of canonical parquet files concatenated in order (obs, obsm/*, marker_expr, rank_genes)."""
++    stems = ["obs.parquet"]
++    obsm_dir = output_dir / "obsm"
++    if obsm_dir.is_dir():
++        stems += sorted(str(p.relative_to(output_dir).as_posix()) for p in obsm_dir.glob("*.parquet"))
++    for optional in ("marker_expr.parquet", "marker_expr.mtx.gz", "rank_genes.parquet"):
++        if (output_dir / optional).exists():
++            stems.append(optional)
++    digest = hashlib.sha256()
++    for stem in stems:
++        p = output_dir / stem
++        if p.exists():
++            with p.open("rb") as fh:
++                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
++                    digest.update(chunk)
++    return digest.hexdigest()
++
++
++def _write_bundle_provenance(output_dir: Path) -> None:
++    """Write bundle/provenance.json with r_factory_sha_at_export and audit fields."""
++    provenance = {
++        "r_factory_sha_at_export": _r_factory_sha_at_export(),
++        "exported_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
++        "exported_by": socket.gethostname(),
++        "bundle_sha256": _bundle_sha256_concat(output_dir),
++    }
++    (output_dir / "provenance.json").write_text(
++        json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
++    )
++
++
+ # ---------------------------------------------------------------------------
+ # Main export entry point
+ # ---------------------------------------------------------------------------
+@@ -903,8 +1167,10 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
+         raise ValueError("--marker-chunk-size must be positive.")
+     if not config.input_h5ad.exists():
+         raise FileNotFoundError(f"Input .h5ad not found: {config.input_h5ad}")
+-    if config.schema_version not in ("v1", "v2", "v2.1"):
+-        raise ValueError("--schema-version must be 'v1', 'v2', or 'v2.1'.")
++    if config.schema_version not in ("v1", "v2", "v2.1", "v2.2"):
++        raise ValueError("--schema-version must be 'v1', 'v2', 'v2.1', or 'v2.2'.")
++    if config.include_atac and config.schema_version != "v2.2":
++        raise ValueError("--include-atac requires --schema-version v2.2")
+     if config.format not in ("auto", "csv", "parquet", "mtx"):
+         raise ValueError("--format must be 'auto', 'csv', 'parquet', or 'mtx'.")
+ 
+@@ -929,7 +1195,7 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
+         try:
+             cell_idx = choose_cells(adata.n_obs, config.max_cells, config.seed)
+ 
+-            if temp_config.schema_version in ("v2", "v2.1"):
++            if temp_config.schema_version in ("v2", "v2.1", "v2.2"):
+                 manifest = _export_bundle_v2(adata, cell_idx, temp_config)
+             else:
+                 manifest = _export_bundle_v1(adata, cell_idx, temp_config)
+@@ -1043,10 +1309,18 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
+     # get the legacy literal so older readers do not see an unfamiliar
+     # schema string. The on-disk file layout is identical between v2 and
+     # v2.1; only the manifest schema string and the optional `extensions`
+-    # field differ.
+-    is_v2_1 = config.schema_version == "v2.1"
+-    schema_literal = BUNDLE_SCHEMA_V2_1 if is_v2_1 else BUNDLE_SCHEMA_V2
+-    compatible_with = SCHEMA_COMPATIBLE_WITH_V2_1 if is_v2_1 else SCHEMA_COMPATIBLE_WITH_V2
++    # field differ. v2.2 adds the marker_resolutions extension slot.
++    is_v2_2 = config.schema_version == "v2.2"
++    is_v2_1 = config.schema_version == "v2.1" or is_v2_2
++    if is_v2_2:
++        schema_literal = BUNDLE_SCHEMA_V2_2
++        compatible_with = SCHEMA_COMPATIBLE_WITH_V2_2
++    elif config.schema_version == "v2.1":
++        schema_literal = BUNDLE_SCHEMA_V2_1
++        compatible_with = SCHEMA_COMPATIBLE_WITH_V2_1
++    else:
++        schema_literal = BUNDLE_SCHEMA_V2
++        compatible_with = SCHEMA_COMPATIBLE_WITH_V2
+ 
+     source_stat = config.input_h5ad.stat()
+     manifest = {
+@@ -1161,6 +1435,34 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
+                 obsm_keys=config.multimodal_obsm_keys,
+             )
+             manifest["bundle"]["required_files"] = sorted(manifest["files"])
++        # v2.2 marker_resolutions extension. Available in v2.1 bundles too when
++        # explicitly requested, but the schema slot is only declared in v2.2.
++        if getattr(config, "include_marker_resolutions", False):
++            maybe_export_marker_resolutions(
++                manifest,
++                config.output_dir,
++                adata,
++            )
++            manifest["bundle"]["required_files"] = sorted(manifest["files"])
++        if getattr(config, "include_atac", False):
++            sub = adata[cell_idx]
++            try:
++                if hasattr(sub, "to_memory"):
++                    sub = sub.to_memory()
++            except Exception:
++                pass
++            maybe_export_atac(
++                manifest,
++                config.output_dir,
++                sub,
++                lsi_obsm_key=config.atac_lsi_obsm_key,
++                peaks_uns_key=config.atac_peaks_uns_key,
++            )
++            manifest["bundle"]["required_files"] = sorted(manifest["files"])
++    # PREC-1: write provenance.json after all parquet/mtx files are in place so
++    # the bundle_sha256 it records covers the complete file set.
++    _write_bundle_provenance(config.output_dir)
++
+     manifest_json = config.output_dir / "bundle_manifest.json"
+     manifest_json.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+     write_manifest_tsv(manifest, config.output_dir / "bundle_manifest.tsv")
+@@ -1190,6 +1492,25 @@ def build_parser() -> argparse.ArgumentParser:
+     parser.add_argument("--input", required=True, type=Path, help="Source final_adata.h5ad")
+     parser.add_argument("--output", required=True, type=Path, help="Output bundle directory")
+     parser.add_argument("--source-run-dir", type=Path, default=None, help="Source run directory")
++    parser.add_argument(
++        "--project-root",
++        default=None,
++        metavar="PATH",
++        type=Path,
++        help=(
++            "Project directory root. When set, bundle is written to "
++            "<project-root>/runs/<run-id>/python/bundle/ and --output is ignored."
++        ),
++    )
++    parser.add_argument(
++        "--run-id",
++        default=None,
++        metavar="STR",
++        help=(
++            "Run identifier (format: YYYY-MM-DDTHHMMZ-<7hex>). "
++            "Auto-generated when absent. Only used when --project-root is set."
++        ),
++    )
+     parser.add_argument("--obs-cols", default=None, help="Comma-separated obs columns to export")
+     parser.add_argument("--markers", default=None, help="Comma-separated marker genes to export")
+     parser.add_argument("--obsm", default=None, help="Comma-separated obsm keys to export")
+@@ -1197,10 +1518,11 @@ def build_parser() -> argparse.ArgumentParser:
+     parser.add_argument("--max-cells", type=int, default=None, help="Optional deterministic subset size")
+     parser.add_argument("--seed", type=int, default=1)
+     parser.add_argument("--marker-chunk-size", type=int, default=50000)
+-    parser.add_argument("--schema-version", choices=("v1", "v2", "v2.1"), default="v2.1",
++    parser.add_argument("--schema-version", choices=("v1", "v2", "v2.1", "v2.2"), default="v2.1",
+                         help=("Bundle schema version. Default: v2.1 (additive "
+                               "Phase B schema with an `extensions` field). "
+-                              "Pass 'v2' for the legacy non-extension v2 "
++                              "Pass 'v2.2' to enable marker_resolutions slot, "
++                              "'v2' for the legacy non-extension v2 "
+                               "layout, or 'v1' for the original CSV bundle."))
+     parser.add_argument("--format", choices=("auto", "csv", "parquet", "mtx"), default="auto",
+                         help="Output format for v2 (default: auto)")
+@@ -1229,14 +1551,71 @@ def build_parser() -> argparse.ArgumentParser:
+                         help=("List of adata.obsm keys to publish under the "
+                               "multimodal_obsm extension. Keys not present on "
+                               "the adata are silently skipped."))
++    parser.add_argument("--include-marker-resolutions", action="store_true",
++                        help=("v2.1/v2.2: write extensions/marker_resolutions/markers.parquet "
++                              "from adata.uns['marker_db_index'] and register the "
++                              "`marker_resolutions` extension. No-op when "
++                              "marker_db_loader did not run or context_aware_annotation "
++                              "is absent."))
++    parser.add_argument("--include-atac", action="store_true",
++                        help=("v2.2 only: write extensions/atac/lsi.parquet and "
++                              "extensions/atac/peaks.parquet from the canonical "
++                              "ATAC AnnData contract and register the `atac` extension."))
++    parser.add_argument("--atac-lsi-obsm-key", default="X_lsi",
++                        help="adata.obsm key holding the ATAC LSI embedding.")
++    parser.add_argument("--atac-peaks-uns-key", default="atac_peaks",
++                        help="adata.uns key holding ATAC peak metadata.")
+     return parser
+ 
+ 
+ def main(argv: Sequence[str] | None = None) -> int:
++    import sys
++    import warnings
++
+     args = build_parser().parse_args(argv)
++
++    # GOV-2 cutover semantics:
++    # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` emits
++    # `DeprecationWarning` and falls back to legacy `output/`. When
++    # `SC_REQUIRE_PROJECT_ROOT=1`: a missing `--project-root` is a hard error
++    # (exit code 2). Warning and hard-error are mutually exclusive (no
++    # double-fire). Round-2 ADR will flip the default to required.
++    if args.project_root is None:
++        if os.environ.get("SC_REQUIRE_PROJECT_ROOT") == "1":
++            print(
++                "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). "
++                "Pass --project-root or unset the env var.",
++                file=sys.stderr,
++            )
++            sys.exit(2)
++
++    # Resolve effective output directory.
++    if args.project_root is not None:
++        import sys as _sys
++        _factory_root = Path(__file__).resolve().parent.parent
++        _project_paths_mod = _factory_root / "workflow" / "modular"
++        if str(_project_paths_mod) not in _sys.path:
++            _sys.path.insert(0, str(_factory_root))
++        from workflow.modular.project_paths import resolve_run_dir, bundle_dir
++        _run_dir = resolve_run_dir(args.project_root, run_id=args.run_id)
++        effective_output = bundle_dir(_run_dir)
++    else:
++        warnings.warn(
++            "--project-root will be required in a future release; "
++            "legacy --output layout will be removed",
++            DeprecationWarning,
++            stacklevel=2,
++        )
++        print(
++            "DeprecationWarning: --project-root will be required in a future release; "
++            "legacy --output layout will be removed",
++            file=sys.stderr,
++        )
++        effective_output = args.output
++
+     config = ExportConfig(
+         input_h5ad=args.input,
+-        output_dir=args.output,
++        output_dir=effective_output,
+         source_run_dir=args.source_run_dir,
+         obs_columns=parse_csv_list(args.obs_cols, DEFAULT_OBS_COLUMNS),
+         markers=parse_csv_list(args.markers, DEFAULT_MARKERS),
+@@ -1255,6 +1634,10 @@ def main(argv: Sequence[str] | None = None) -> int:
+         spatial_include_image_paths=not bool(args.no_spatial_image_paths),
+         include_multimodal_obsm=bool(args.include_multimodal_obsm),
+         multimodal_obsm_keys=tuple(args.multimodal_obsm_keys),
++        include_marker_resolutions=bool(args.include_marker_resolutions),
++        include_atac=bool(args.include_atac),
++        atac_lsi_obsm_key=args.atac_lsi_obsm_key,
++        atac_peaks_uns_key=args.atac_peaks_uns_key,
+     )
+     manifest = export_bundle(config)
+     print(json.dumps({"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}))
+diff --git a/scripts/pack_run_for_mac.sh b/scripts/pack_run_for_mac.sh
+index dedb3ef..0b082ce 100755
+--- a/scripts/pack_run_for_mac.sh
++++ b/scripts/pack_run_for_mac.sh
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env bash
+-# pack_run_for_mac.sh <run_dir> [--schema-version v1|v2]
++# pack_run_for_mac.sh <run_dir> [--schema-version v1|v2] [--project-root PATH --run-id ID]
+ #
+ # Exports a v2 R bundle (default) from the run's final_adata.h5ad, then
+ # produces three tarballs + SHA256 sidecars under <run_dir>/mac_assets/:
+@@ -10,29 +10,71 @@
+ #
+ # Also writes <run_dir>/mac_assets/mac_pull_command.sh — run this on the Mac
+ # to pull the tarballs via scp.
++#
++# New --project-root / --run-id mode:
++#   When --project-root and --run-id are both set, RUN_DIR is derived as
++#   <project-root>/runs/<run-id>/python/ and the bundle is placed at
++#   <project-root>/runs/<run-id>/python/bundle/.
++#   Legacy positional <run_dir> argument is still accepted for backward compat.
+ set -euo pipefail
+ 
+ # ---------------------------------------------------------------------------
+ # Parse args
+ # ---------------------------------------------------------------------------
+-if [[ $# -lt 1 ]]; then
+-  echo "Usage: $0 <run_dir> [--schema-version v1|v2]" >&2
+-  exit 1
+-fi
+-
+-RUN_DIR="$(realpath "$1")"
++PROJECT_ROOT=""
++RUN_ID_ARG=""
+ SCHEMA_VERSION="v2"
++POSITIONAL_RUN_DIR=""
+ 
+-shift
+ while [[ $# -gt 0 ]]; do
+   case "$1" in
+     --schema-version)
+       SCHEMA_VERSION="$2"; shift 2 ;;
+-    *)
++    --project-root)
++      PROJECT_ROOT="$2"; shift 2 ;;
++    --run-id)
++      RUN_ID_ARG="$2"; shift 2 ;;
++    --*)
+       echo "Unknown option: $1" >&2; exit 1 ;;
++    *)
++      if [[ -z "$POSITIONAL_RUN_DIR" ]]; then
++        POSITIONAL_RUN_DIR="$1"
++      else
++        echo "Unexpected positional argument: $1" >&2; exit 1
++      fi
++      shift ;;
+   esac
+ done
+ 
++# Resolve RUN_DIR from --project-root/--run-id (new) or positional arg (legacy).
++if [[ -n "$PROJECT_ROOT" && -n "$RUN_ID_ARG" ]]; then
++  RUN_DIR="$(realpath "$PROJECT_ROOT")/runs/${RUN_ID_ARG}/python"
++  BUNDLE_DIR_OVERRIDE="$(realpath "$PROJECT_ROOT")/runs/${RUN_ID_ARG}/python/bundle"
++elif [[ -n "$PROJECT_ROOT" || -n "$RUN_ID_ARG" ]]; then
++  echo "ERROR: --project-root and --run-id must be supplied together." >&2
++  exit 1
++elif [[ -n "$POSITIONAL_RUN_DIR" ]]; then
++  RUN_DIR="$(realpath "$POSITIONAL_RUN_DIR")"
++  BUNDLE_DIR_OVERRIDE=""
++else
++  echo "Usage: $0 <run_dir> [--schema-version v1|v2]" >&2
++  echo "       $0 --project-root PATH --run-id ID [--schema-version v1|v2]" >&2
++  exit 1
++fi
++
++# GOV-2 cutover semantics:
++# When SC_REQUIRE_PROJECT_ROOT is UNSET: a missing --project-root emits a
++# deprecation warning and falls back to legacy output/. When
++# SC_REQUIRE_PROJECT_ROOT=1: a missing --project-root is a hard error
++# (exit code 2). Warning and hard-error are mutually exclusive (no
++# double-fire). Round-2 ADR will flip the default to required.
++if [[ -z "$PROJECT_ROOT" ]]; then
++  if [[ "${SC_REQUIRE_PROJECT_ROOT:-}" == "1" ]]; then
++    echo "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). Pass --project-root or unset the env var." >&2
++    exit 2
++  fi
++fi
++
+ if [[ ! -d "$RUN_DIR" ]]; then
+   echo "Run directory not found: $RUN_DIR" >&2
+   exit 1
+@@ -42,7 +84,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+ 
+ ASSETS_DIR="${RUN_DIR}/mac_assets"
+-BUNDLE_DIR="${RUN_DIR}/r_bundle"
++if [[ -n "${BUNDLE_DIR_OVERRIDE:-}" ]]; then
++  BUNDLE_DIR="$BUNDLE_DIR_OVERRIDE"
++else
++  BUNDLE_DIR="${RUN_DIR}/r_bundle"
++fi
+ H5AD="${RUN_DIR}/final_adata.h5ad"
+ 
+ mkdir -p "$ASSETS_DIR"
+@@ -54,11 +100,21 @@ if [[ ! -f "$H5AD" ]]; then
+   echo "WARNING: final_adata.h5ad not found at ${H5AD}. Skipping bundle export." >&2
+ else
+   echo "[pack_run_for_mac] Exporting R bundle (schema=${SCHEMA_VERSION}) ..."
+-  python "${REPO_ROOT}/scripts/export_singlecell_r_bundle.py" \
+-    --input    "$H5AD" \
+-    --output   "$BUNDLE_DIR" \
+-    --schema-version "$SCHEMA_VERSION" \
+-    --format   auto
++  if [[ -n "${BUNDLE_DIR_OVERRIDE:-}" ]]; then
++    python "${REPO_ROOT}/scripts/export_singlecell_r_bundle.py" \
++      --input    "$H5AD" \
++      --output   "$BUNDLE_DIR" \
++      --project-root "$PROJECT_ROOT" \
++      --run-id   "$RUN_ID_ARG" \
++      --schema-version "$SCHEMA_VERSION" \
++      --format   auto
++  else
++    python "${REPO_ROOT}/scripts/export_singlecell_r_bundle.py" \
++      --input    "$H5AD" \
++      --output   "$BUNDLE_DIR" \
++      --schema-version "$SCHEMA_VERSION" \
++      --format   auto
++  fi
+   echo "[pack_run_for_mac] Bundle exported to: $BUNDLE_DIR"
+ fi
+ 
+@@ -79,7 +135,7 @@ make_tarball() {
+ # Step 3 — bundle.tgz
+ # ---------------------------------------------------------------------------
+ if [[ -d "$BUNDLE_DIR" ]]; then
+-  make_tarball bundle -C "$RUN_DIR" r_bundle
++  make_tarball bundle -C "$(dirname "$BUNDLE_DIR")" "$(basename "$BUNDLE_DIR")"
+ else
+   echo "[pack_run_for_mac] WARNING: bundle dir not found, skipping bundle.tgz" >&2
+ fi
+diff --git a/scripts/prepare_emtab13526_full_cohort_zarr.py b/scripts/prepare_emtab13526_full_cohort_zarr.py
+index c904e55..ceb1cd2 100644
+--- a/scripts/prepare_emtab13526_full_cohort_zarr.py
++++ b/scripts/prepare_emtab13526_full_cohort_zarr.py
+@@ -106,8 +106,7 @@ def build_sample_meta(sdrf_path: Path) -> pd.DataFrame:
+ 
+ def make_var_out(var_ref: pd.DataFrame) -> pd.DataFrame:
+     var_out = var_ref.copy()
+-    var_out.index = pd.Index(var_out["gene_name"].astype(str))
+-    var_out.index.name = None
++    var_out.index = pd.Index(var_out["gene_name"].astype(str), name="gene_symbol")
+     var_out["gene_symbol"] = var_out["gene_name"].astype(str)
+     var_out = var_out.drop(columns=["gene_name"])
+     return var_out
+@@ -357,7 +356,6 @@ def write_part(
+ ) -> Path:
+     var_out = make_var_out(var_ref)
+     adata = ad.AnnData(X=mat.tocsr(), obs=obs, var=var_out)
+-    adata.var.index.name = None
+     adata.var_names_make_unique()
+     part_path = parts_root / f"{sample}.zarr"
+     print(f"WRITE_PART {sample} -> {part_path}", flush=True)
+@@ -520,6 +518,21 @@ def prepare_full_cohort(
+ 
+     print(f"CONCAT_FULL_COHORT -> {prepared_zarr}", flush=True)
+     concat_on_disk(part_paths, prepared_zarr, axis=0, join="outer", max_loaded_elems=50_000_000)
++    # Ensure no spurious '_index' columns survive concat_on_disk (reserved by modern anndata).
++    _merged = ad.read_zarr(prepared_zarr)
++    _dirty = False
++    for _df_attr in ("obs", "var"):
++        _df = getattr(_merged, _df_attr)
++        if "_index" in _df.columns:
++            _df.drop(columns=["_index"], inplace=True)
++            setattr(_merged, _df_attr, _df)
++            _dirty = True
++    if _merged.obs.index.name is None:
++        _merged.obs.index.name = "cell_barcode"
++        _dirty = True
++    if _dirty:
++        _merged.write_zarr(prepared_zarr)
++    del _merged
+     summary_payload = build_prepare_summary(
+         sample_summaries,
+         prepared_zarr=prepared_zarr,
+diff --git a/tests/test_densify_audit.py b/tests/test_densify_audit.py
+index d47c35d..43d8348 100644
+--- a/tests/test_densify_audit.py
++++ b/tests/test_densify_audit.py
+@@ -3,8 +3,10 @@
+ 
+ Fail fast so developers learn the policy before merging.
+ """
++import io
+ import re
+ import textwrap
++import tokenize
+ from pathlib import Path
+ 
+ MODULES_DIR = Path(__file__).parent.parent / "workflow" / "modular" / "modules"
+@@ -14,12 +16,39 @@ _CALL_RE = re.compile(r"\.(toarray|todense)\s*\(")
+ _MARKER_RE = re.compile(r"#\s*densify-allowed\s*:", re.IGNORECASE)
+ 
+ 
++def _call_line_numbers(path: Path) -> set[int]:
++    """Return source line numbers containing real toarray/todense calls.
++
++    Tokenizing keeps policy enforcement focused on executable code and avoids
++    false positives from comments or module docstrings that mention the banned
++    method names while explaining the policy.
++    """
++    source = path.read_text()
++    calls: set[int] = set()
++    try:
++        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
++    except tokenize.TokenError:
++        return {
++            i + 1 for i, line in enumerate(source.splitlines())
++            if _CALL_RE.search(line)
++        }
++    for idx in range(len(tokens) - 2):
++        tok, nxt, after = tokens[idx], tokens[idx + 1], tokens[idx + 2]
++        if (
++            tok.type == tokenize.OP and tok.string == "."
++            and nxt.type == tokenize.NAME and nxt.string in {"toarray", "todense"}
++            and after.type == tokenize.OP and after.string == "("
++        ):
++            calls.add(tok.start[0])
++    return calls
++
++
+ def _check_file(path: Path) -> list[str]:
+     violations: list[str] = []
+     lines = path.read_text().splitlines()
+-    for i, line in enumerate(lines):
+-        if not _CALL_RE.search(line):
+-            continue
++    for line_no in sorted(_call_line_numbers(path)):
++        i = line_no - 1
++        line = lines[i]
+         # Allow if this line carries the marker comment
+         if _MARKER_RE.search(line):
+             continue
+diff --git a/tests/test_modular.py b/tests/test_modular.py
+index 51810cb..4010b31 100644
+--- a/tests/test_modular.py
++++ b/tests/test_modular.py
+@@ -66,12 +66,13 @@ def test_modular_cli_parse(monkeypatch):
+ def test_new_modules_in_dag():
+     from workflow.modular.pipeline import MODULE_DEPENDENCIES
+ 
+-    # Verify all modules are registered (3 mandatory + 26 optional = 29).
++    # Verify all modules are registered (3 mandatory + 28 optional = 31).
+     # Phase B (v2.1) added the protein_adt ingest module as the first consumer
+     # of the bundle extension API; the spatial lane (spatial_ingest +
+     # spatial_neighborhoods) is the second; the multimodal_integration lane
+     # (EXPERIMENTAL, off by default) is the third.
+-    assert len(MODULE_DEPENDENCIES) == 29
++    # Phase 1A added marker_db_loader (P1A.S2) and context_aware_annotation (P1A.S3).
++    assert len(MODULE_DEPENDENCIES) == 31
+ 
+     # Verify new modules exist with correct dependencies
+     assert "immune_phenotyping" in MODULE_DEPENDENCIES
+@@ -82,6 +83,8 @@ def test_new_modules_in_dag():
+     assert "spatial_ingest" in MODULE_DEPENDENCIES
+     assert "spatial_neighborhoods" in MODULE_DEPENDENCIES
+     assert "multimodal_integration" in MODULE_DEPENDENCIES
++    assert "marker_db_loader" in MODULE_DEPENDENCIES
++    assert "context_aware_annotation" in MODULE_DEPENDENCIES
+     assert "annotation" in MODULE_DEPENDENCIES["immune_phenotyping"]
+     assert "annotation" in MODULE_DEPENDENCIES["tumor_microenvironment"]
+     assert "clustering" in MODULE_DEPENDENCIES["gene_signature_scoring"]
+diff --git a/tests/test_r_bundle_contract.py b/tests/test_r_bundle_contract.py
+index 87924e1..fd6ab85 100644
+--- a/tests/test_r_bundle_contract.py
++++ b/tests/test_r_bundle_contract.py
+@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
+ from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle
+ 
+ IO_BUNDLE_R = "/home/zerlinshen/multiomics_r_factory/R_bundle/io_bundle.R"
++ATAC_MODULE_R = "/home/zerlinshen/multiomics_r_factory/R/atac_module.R"
+ 
+ # ---------------------------------------------------------------------------
+ # Helpers
+@@ -58,6 +59,45 @@ def _make_tiny_h5ad(path: Path, n_cells: int = 6, n_genes: int = 5) -> None:
+     adata.write_h5ad(path)
+ 
+ 
++def _make_tiny_atac_h5ad(
++    path: Path,
++    n_cells: int = 6,
++    n_genes: int = 5,
++    n_peaks: int = 4,
++    n_lsi: int = 2,
++) -> None:
++    rng = np.random.default_rng(44)
++    x = sparse.csr_matrix(
++        rng.integers(0, 10, size=(n_cells, n_genes)).astype(np.float32)
++    )
++    obs = pd.DataFrame(
++        {
++            "cell_type": [["T", "B", "Myeloid"][i % 3] for i in range(n_cells)],
++            "leiden": [str(i % 3) for i in range(n_cells)],
++        },
++        index=[f"cell_{i}" for i in range(n_cells)],
++    )
++    var = pd.DataFrame(index=["CD3E", "LYZ", "MS4A1", "NKG7", "ELF3"][:n_genes])
++    adata = ad.AnnData(X=x, obs=obs, var=var)
++    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
++    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
++    adata.obsm["X_lsi"] = rng.normal(size=(n_cells, n_lsi)).astype(np.float32)
++    adata.obsm["atac_peaks"] = sparse.csr_matrix(
++        rng.integers(0, 4, size=(n_cells, n_peaks)).astype(np.float32)
++    )
++    starts = np.arange(1000, 1000 + n_peaks * 200, 200)
++    peaks = pd.DataFrame(
++        {
++            "peak_id": [f"chr1:{start}-{start + 100}" for start in starts],
++            "chrom": ["chr1"] * n_peaks,
++            "start": starts.astype("int64"),
++            "end": (starts + 100).astype("int64"),
++        }
++    )
++    adata.uns["atac_peaks"] = peaks
++    adata.write_h5ad(path)
++
++
+ def _run_r(rscript: str, script: str, timeout: int = 60) -> subprocess.CompletedProcess:
+     return subprocess.run(
+         [rscript, "-e", script],
+@@ -1201,6 +1241,73 @@ def test_multimodal_extension_round_trip(rscript_path, tmp_path):
+     assert kv["ROWS_MATCH"] == "TRUE"
+ 
+ 
++@pytest.mark.r_contract
++def test_atac_extension_round_trip(rscript_path, tmp_path):
++    """Python writes v2.2 ATAC LSI/peaks; R attaches the active ATAC payload."""
++    h5ad = tmp_path / "tiny_atac.h5ad"
++    bundle_dir = tmp_path / "bundle_v2_atac"
++    n_cells = 6
++    n_peaks = 4
++    n_lsi = 2
++    _make_tiny_atac_h5ad(h5ad, n_cells=n_cells, n_peaks=n_peaks, n_lsi=n_lsi)
++
++    export_bundle(
++        ExportConfig(
++            input_h5ad=h5ad,
++            output_dir=bundle_dir,
++            obs_columns=("cell_type", "leiden"),
++            markers=("CD3E", "LYZ"),
++            obsm_keys=("X_umap", "X_pca"),
++            schema_version="v2.2",
++            format="parquet",
++            include_atac=True,
++            atac_lsi_obsm_key="X_lsi",
++            atac_peaks_uns_key="atac_peaks",
++        )
++    )
++
++    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
++    assert manifest["schema_version"] == "singlecell_r_bundle_v2.2"
++    atac_ext = manifest["extensions"]["atac"]
++    assert atac_ext["status"] == "active"
++    assert atac_ext["files"] == ["atac_lsi", "atac_peaks"]
++    assert atac_ext["n_cells"] == n_cells
++    assert atac_ext["n_components"] == n_lsi
++    assert atac_ext["n_peaks"] == n_peaks
++    assert atac_ext["table"]["lsi_index_column"] == "cell"
++    assert atac_ext["table"]["peak_id_column"] == "peak_id"
++    peaks_df = pd.read_parquet(bundle_dir / "extensions" / "atac" / "peaks.parquet")
++    assert list(peaks_df.columns) == ["peak_id", "chrom", "start", "end"]
++
++    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
++    script = (
++        f"source('{IO_BUNDLE_R}'); "
++        f"source('{ATAC_MODULE_R}'); "
++        f"b <- read_bundle_v2('{bundle_dir_r}'); "
++        f"m <- b$extensions$atac$metadata; "
++        f"d <- b$extensions$atac$data; "
++        f"cat(sprintf('STATUS=%s\\n', m$status)); "
++        f"cat(sprintf('LSI_NROW=%d\\n', nrow(d$lsi))); "
++        f"cat(sprintf('LSI_NCOL=%d\\n', ncol(d$lsi))); "
++        f"cat(sprintf('PEAKS_NROW=%d\\n', nrow(d$peaks))); "
++        f"cat(sprintf('ROWS_MATCH=%s\\n', as.character(identical(rownames(d$lsi), rownames(b$obs))))); "
++        f"cat(sprintf('PEAK_ID=%s\\n', d$peaks$peak_id[1])); "
++        f"p <- plot_atac_lsi(b, group_by='cell_type'); "
++        f"cols <- unique(ggplot2::ggplot_build(p)$data[[1]]$colour); "
++        f"cat(sprintf('PLOT_COLORS=%d\\n', length(cols)))"
++    )
++    proc = _run_r(rscript_path, script)
++    _assert_r_ok(proc, "atac_round_trip")
++    kv = _parse_kv_stdout(proc.stdout)
++    assert kv["STATUS"] == "active"
++    assert int(kv["LSI_NROW"]) == n_cells
++    assert int(kv["LSI_NCOL"]) == n_lsi
++    assert int(kv["PEAKS_NROW"]) == n_peaks
++    assert kv["ROWS_MATCH"] == "TRUE"
++    assert kv["PEAK_ID"].startswith("chr1:")
++    assert int(kv["PLOT_COLORS"]) >= 2
++
++
+ def test_multimodal_module_off_by_default(tmp_path):
+     """Default config (engine='off') is a no-op: no obsm keys added, status='off'."""
+     from workflow.modular.modules.multimodal_integration import (
+diff --git a/tests/test_run_ledger.py b/tests/test_run_ledger.py
+index b5a29a5..dcc01ae 100644
+--- a/tests/test_run_ledger.py
++++ b/tests/test_run_ledger.py
+@@ -104,7 +104,7 @@ def test_ledger_failure_does_not_raise(tmp_path):
+ def test_env_filter_only_sc_and_safe_keys(tmp_path):
+     injection = {
+         "SC_DE_ENGINE": "sparse",
+-        "SCF_MASSIVE_CHECKPOINT_POLICY": "metadata_only",
++        "SCF_MASSIVE_CHECKPOINT_POLICY": "full",
+         "CUDA_VISIBLE_DEVICES": "0",
+         "CONDA_DEFAULT_ENV": "sc_gpu",
+         "PATH": "/usr/bin:/bin",        # must NOT appear
+diff --git a/tests/test_scale_mode_preset_compat.py b/tests/test_scale_mode_preset_compat.py
+index c6ffbcb..b90b5b2 100644
+--- a/tests/test_scale_mode_preset_compat.py
++++ b/tests/test_scale_mode_preset_compat.py
+@@ -51,7 +51,7 @@ def test_massive_preset_bundle_exact():
+     assert caps["lazy_read"] == "true"
+     assert caps["doublet_strategy"] == "grouped"
+     assert caps["clustering_engine"] == "css"
+-    assert caps["checkpoint_policy"] == "mandatory_only"
++    assert caps["checkpoint_policy"] == "full"
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -65,7 +65,7 @@ def test_apply_scale_mode_massive_expands_flags():
+     assert result.lazy_read == "true"
+     assert result.doublet_strategy == "grouped"
+     assert result.clustering_engine == "css"
+-    assert result.checkpoint_policy == "mandatory_only"
++    assert result.checkpoint_policy == "full"
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -83,7 +83,7 @@ def test_explicit_flag_overrides_preset():
+     # Other flags should still come from the massive preset.
+     assert result.lazy_read == "true"
+     assert result.doublet_strategy == "grouped"
+-    assert result.checkpoint_policy == "mandatory_only"
++    assert result.checkpoint_policy == "full"
+ 
+ 
+ # ---------------------------------------------------------------------------
+diff --git a/workflow/modular/__init__.py b/workflow/modular/__init__.py
+index de44ca3..42f4bb8 100644
+--- a/workflow/modular/__init__.py
++++ b/workflow/modular/__init__.py
+@@ -2,6 +2,30 @@
+ 
+ from typing import TYPE_CHECKING, Any
+ 
++
++def _install_series_nonzero_shim() -> None:
++    """Shim pd.Series.nonzero for pandas 2.0+.
++
++    pandas removed Series.nonzero in 2.0; upstream scanpy / rapids-singlecell
++    still call it on large-cohort DE paths (observed on 800k cells × 33
++    clusters during the Wave 3 NC2024 run). Restoring the method as a thin
++    wrapper around np.flatnonzero preserves the upstream call shape exactly.
++    Idempotent — only installs when missing.
++    """
++    try:
++        import pandas as pd
++        import numpy as np
++    except Exception:
++        return
++    if not hasattr(pd.Series, "nonzero"):
++        pd.Series.nonzero = lambda self: (np.flatnonzero(self.to_numpy()),)
++
++
++_install_series_nonzero_shim()
++
++
++
++
+ if TYPE_CHECKING:
+     from .config import PipelineConfig
+ 
+diff --git a/workflow/modular/_shutdown.py b/workflow/modular/_shutdown.py
+index 05a54b0..ce3ef13 100644
+--- a/workflow/modular/_shutdown.py
++++ b/workflow/modular/_shutdown.py
+@@ -29,7 +29,7 @@ def run_shutdown_cleanup(adata=None) -> None:
+     gc.collect()
+ 
+     # 3. Torch: free CPU tensors and any cached CUDA state.
+-    #    harmonypy imports torch even on CPU-only runs.
++    #    Some optional backends (scVI, etc.) import torch.
+     if "torch" in sys.modules:
+         try:
+             import torch
+@@ -66,6 +66,13 @@ def run_shutdown_cleanup(adata=None) -> None:
+         except Exception as exc:
+             logger.debug("zarr shutdown cleanup skipped: %s", exc)
+ 
+-    # 6. Second GC pass — collect anything freed by steps 3-5.
++    # 6. Neighbors cache: clear in-process LRU cache before GC teardown.
++    try:
++        from . import _neighbors_cache
++        _neighbors_cache.clear()
++    except Exception as exc:
++        logger.debug("neighbors_cache clear skipped: %s", exc)
++
++    # 7. Second GC pass — collect anything freed by steps 3-6.
+     gc.collect()
+     gc.collect()
+diff --git a/workflow/modular/cli.py b/workflow/modular/cli.py
+index 6afe344..1a7ef70 100644
+--- a/workflow/modular/cli.py
++++ b/workflow/modular/cli.py
+@@ -123,8 +123,8 @@ def parse_args() -> argparse.Namespace:
+     parser.add_argument(
+         "--checkpoint-policy",
+         default="",
+-        choices=["", "full", "mandatory_only", "metadata_only"],
+-        help="Checkpoint policy: full (save all), mandatory_only (skip early modules), metadata_only. Overrides scale-mode preset.",
++        choices=["", "full"],
++        help="Checkpoint policy: full (save all checkpoints). Overrides scale-mode preset.",
+     )
+ 
+     # Cohort subset
+@@ -141,6 +141,22 @@ def parse_args() -> argparse.Namespace:
+         ),
+     )
+ 
++    parser.add_argument(
++        "--multimodal-engine",
++        default=None,
++        choices=["off", "wnn", "mofa"],
++        help="Engine for multimodal_integration module (default off). Set SC_MULTIMODAL_ENGINE to override; module must also be in --optional-modules.",
++    )
++    parser.add_argument(
++        "--second-obsm-key",
++        default=None,
++        help=(
++            "Second-modality obsm key for multimodal_integration (default: protein_clr). "
++            "When set, passing the key is treated as an explicit opt-in: missing key raises "
++            "ModuleContractError for wnn/mofa engines. Set SC_MULTIMODAL_SECOND_OBSM to override."
++        ),
++    )
++
+     # Differential expression
+     parser.add_argument(
+         "--de-method",
+@@ -348,6 +364,43 @@ def parse_args() -> argparse.Namespace:
+         ),
+     )
+ 
++    # Marker intelligence (P1A)
++    parser.add_argument(
++        "--tissue",
++        default="lung",
++        help="Tissue type for marker DB routing (default: lung)",
++    )
++    parser.add_argument(
++        "--condition",
++        default="NSCLC",
++        help="Disease/condition for marker DB routing (default: NSCLC)",
++    )
++    parser.add_argument(
++        "--validate-context",
++        action="store_true",
++        help="Compute per-cluster context validation scores and write context_validation.json (AC-4)",
++    )
++    parser.add_argument(
++        "--context-mismatch-threshold",
++        type=float,
++        default=0.3,
++        help="Score threshold below which a cluster triggers a context mismatch warning (default: 0.3)",
++    )
++    parser.add_argument(
++        "--context-min-cells",
++        type=int,
++        default=20,
++        help="Minimum cells per cluster for context validation (default: 20)",
++    )
++
++    # Reproducibility
++    parser.add_argument(
++        "--random-state",
++        type=int,
++        default=42,
++        help="Global random seed propagated to all stochastic modules (default: 42)",
++    )
++
+     # Checkpointing & resume
+     parser.add_argument(
+         "--checkpoint", action="store_true",
+@@ -366,6 +419,35 @@ def parse_args() -> argparse.Namespace:
+         default=1,
+         help="Number of parallel workers for independent modules (default: 1 = sequential)",
+     )
++
++    # Project-root layout (additive; legacy --output-dir still works when absent)
++    parser.add_argument(
++        "--project-root",
++        default=None,
++        metavar="PATH",
++        help=(
++            "Project directory root. When set, all artifacts are written to "
++            "<project-root>/runs/<run-id>/python/. "
++            "Preferred over legacy --output-dir."
++        ),
++    )
++    parser.add_argument(
++        "--run-id",
++        default=None,
++        metavar="STR",
++        help=(
++            "Run identifier (format: YYYY-MM-DDTHHMMZ-<7hex>). "
++            "Auto-generated from UTC timestamp + factory SHA when absent."
++        ),
++    )
++    parser.add_argument(
++        "--allow-dirty",
++        action="store_true",
++        help=(
++            "Allow pipeline to run when factory git tree has uncommitted changes. "
++            "The diff SHA256 is recorded in manifest.json for forensics."
++        ),
++    )
+     return parser.parse_args()
+ 
+ 
+@@ -477,13 +559,41 @@ def main() -> None:
+     """CLI entrypoint."""
+     import faulthandler
+     import logging
++    import os
++    import socket
++    import sys
+     from ._run_ledger import RunLedger
+     from ._shutdown import run_shutdown_cleanup
++    from .project_paths import resolve_run_dir, python_dir
++    from .manifest_writer import factory_git_state, write_manifest
+ 
+     faulthandler.enable()
+ 
+     args = _apply_scale_mode(parse_args())
++
++    # Propagate --multimodal-engine to env var the module reads at runtime.
++    if args.multimodal_engine is not None and "SC_MULTIMODAL_ENGINE" not in os.environ:
++        os.environ["SC_MULTIMODAL_ENGINE"] = args.multimodal_engine
++    # Propagate --second-obsm-key: env var wins if already set; CLI flag is explicit opt-in.
++    if args.second_obsm_key is not None and "SC_MULTIMODAL_SECOND_OBSM" not in os.environ:
++        os.environ["SC_MULTIMODAL_SECOND_OBSM"] = args.second_obsm_key
+     _validate_args(args)
++
++    # GOV-2 cutover semantics:
++    # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` emits
++    # `DeprecationWarning` and falls back to legacy `output/`. When
++    # `SC_REQUIRE_PROJECT_ROOT=1`: a missing `--project-root` is a hard error
++    # (exit code 2). Warning and hard-error are mutually exclusive (no
++    # double-fire). Round-2 ADR will flip the default to required.
++    if args.project_root is None:
++        if os.environ.get("SC_REQUIRE_PROJECT_ROOT") == "1":
++            print(
++                "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). "
++                "Pass --project-root or unset the env var.",
++                file=sys.stderr,
++            )
++            sys.exit(2)
++
+     sample_root = Path(args.sample_root)
+     outs_dir = (
+         Path(args.outs_dir)
+@@ -491,9 +601,45 @@ def main() -> None:
+         else sample_root / "outs" / "filtered_feature_bc_matrix"
+     )
+ 
++    # Resolve effective output directory from --project-root or legacy --output-dir.
++    _FACTORY_ROOT = Path(__file__).resolve().parent.parent.parent
++    _run_dir = None
++    _run_id = None
++    if args.project_root is not None:
++        # Dirty-tree gate: abort unless --allow-dirty is set.
++        _py_state = factory_git_state(_FACTORY_ROOT)
++        if _py_state["dirty"] and not args.allow_dirty:
++            print(
++                "ERROR: singlecell_factory has uncommitted changes. "
++                "Commit or stash them, or pass --allow-dirty to record the diff.",
++                file=sys.stderr,
++            )
++            raise SystemExit(1)
++        _run_dir = resolve_run_dir(
++            Path(args.project_root),
++            run_id=args.run_id,
++            factory_sha=_py_state["sha"] or None,
++        )
++        _run_id = _run_dir.name
++        effective_output_dir = python_dir(_run_dir)
++    else:
++        import warnings
++        warnings.warn(
++            "--project-root will be required in a future release; "
++            "legacy output/ layout will be removed",
++            DeprecationWarning,
++            stacklevel=2,
++        )
++        print(
++            "DeprecationWarning: --project-root will be required in a future release; "
++            "legacy output/ layout will be removed",
++            file=sys.stderr,
++        )
++        effective_output_dir = Path(args.output_dir)
++
+     cfg = PipelineConfig(
+         project=args.project,
+-        output_dir=Path(args.output_dir),
++        output_dir=effective_output_dir,
+         cellranger=CellRangerConfig(
+             sample_root=sample_root,
+             outs_dir=outs_dir,
+@@ -603,11 +749,18 @@ def main() -> None:
+         checkpoint_policy=args.checkpoint_policy,
+         cohort_subset=args.cohort_subset,
+         annotation_strategy=args.annotation_strategy,
++        random_state=args.random_state,
++        tissue=args.tissue,
++        condition=args.condition,
++        validate_context=args.validate_context,
++        context_mismatch_threshold=args.context_mismatch_threshold,
++        context_min_cells=args.context_min_cells,
+     )
+     ledger = None
+     try:
+         _ledger_ctx = type("_LedgerCtx", (), {"cfg": cfg})()
+-        ledger = RunLedger(_ledger_ctx, args.project, Path(args.output_dir))
++        ledger_root = _run_dir if _run_dir is not None else Path(args.output_dir)
++        ledger = RunLedger(_ledger_ctx, args.project, ledger_root)
+         ledger.record_start()
+     except Exception as _ledger_exc:
+         logging.getLogger(__name__).warning("RunLedger.record_start failed: %s", _ledger_exc)
+@@ -626,6 +779,21 @@ def main() -> None:
+     try:
+         manifest = run_pipeline(cfg, ledger=ledger)
+         print(manifest)
++        if _run_dir is not None:
++            try:
++                modules_run = list(manifest.get("modules_run", [])) if isinstance(manifest, dict) else []
++                bundle_sha256 = manifest.get("bundle_sha256", "") if isinstance(manifest, dict) else ""
++                write_manifest(
++                    _run_dir,
++                    project_id=args.project,
++                    run_id=_run_id,
++                    modules_run=modules_run,
++                    bundle_sha256=bundle_sha256 or None,
++                    produced_on=socket.gethostname(),
++                    factory_python_path=_FACTORY_ROOT,
++                )
++            except Exception as _mf_exc:
++                logging.getLogger(__name__).warning("manifest write failed: %s", _mf_exc)
+     finally:
+         run_shutdown_cleanup()
+ 
+diff --git a/workflow/modular/config.py b/workflow/modular/config.py
+index 592157a..16c7ebc 100644
+--- a/workflow/modular/config.py
++++ b/workflow/modular/config.py
+@@ -194,16 +194,29 @@ class PipelineConfig:
+     reference_k: int = 15
+     reference_min_confidence: float = 0.6
+     reference_override_mode: str = "conservative"  # conservative, all
++    random_state: int = 42  # global seed propagated to all stochastic modules via ctx.random_state
+     gpu_mode: str = "auto"  # auto, off, force
+     scale_mode: str = "standard"  # standard, large, massive — kept as preset bundle for backwards compat
+     # Capability flags — set explicitly or expanded from scale_mode via scale_mode_to_capabilities()
+     lazy_read: str = "auto"          # auto, true, false
+     doublet_strategy: str = "auto"   # auto, grouped, whole, skip
+     clustering_engine: str = "auto"  # auto, sparse_exact, css, gpu
+-    checkpoint_policy: str = "full"  # full, mandatory_only, metadata_only
++    checkpoint_policy: str = "full"  # full
++    # Wave 3 (US-W3-2). Policy for GPU clustering failure post-host-mutation.
++    # raise (default): poison adata + raise ClusteringContractViolation.
++    # restore-cpu: restore from adata.raw and route to CPU clustering (M2 only).
++    # reload-checkpoint: reload adata from on-disk h5ad checkpoint (requires --checkpoint).
++    # Overridable via SC_GPU_FAILURE_POLICY env var.
++    gpu_failure_policy: str = "raise"
+     # Cohort subset: obs_col=val1,val2 filter applied after loading (supports list for AND-chaining)
+     cohort_subset: Optional[list[str]] = None
+     annotation_strategy: str = "cluster_voting"  # cluster_voting, cell_argmax
++    # Marker intelligence (P1A)
++    tissue: str = "lung"
++    condition: str = "NSCLC"
++    validate_context: bool = False
++    context_mismatch_threshold: float = 0.3
++    context_min_cells: int = 20
+ 
+ 
+ # Maps scale_mode preset names to their capability flag bundles.
+@@ -225,7 +238,7 @@ _SCALE_MODE_PRESETS: dict[str, dict[str, str]] = {
+         "lazy_read": "true",
+         "doublet_strategy": "grouped",
+         "clustering_engine": "css",
+-        "checkpoint_policy": "mandatory_only",
++        "checkpoint_policy": "full",
+     },
+ }
+ 
+diff --git a/workflow/modular/context.py b/workflow/modular/context.py
+index e7c162c..88c0ea7 100644
+--- a/workflow/modular/context.py
++++ b/workflow/modular/context.py
+@@ -19,6 +19,12 @@ from .config import PipelineConfig
+ 
+ logger = logging.getLogger(__name__)
+ 
++SC_CHECKPOINT_SCHEMA_VERSION = 2
++
++
++class CheckpointSchemaMismatch(Exception):
++    pass
++
+ 
+ @dataclass
+ class PipelineContext:
+@@ -36,6 +42,11 @@ class PipelineContext:
+     _figure_futures: list[Future] = field(default_factory=list, repr=False)
+     _status_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+ 
++    @property
++    def random_state(self) -> int:
++        """Global random seed for all stochastic modules. Source of truth for AC-10 reproducibility."""
++        return getattr(self.cfg, "random_state", 42)
++
+     def status(self, module: str, ok: bool | str, message: str) -> None:
+         """Record module execution status (thread-safe)."""
+         if isinstance(ok, str):
+@@ -73,17 +84,9 @@ class PipelineContext:
+             return False
+ 
+     def _should_save_adata_checkpoint(self, module_name: str) -> bool:
+-        # SC_CHECKPOINT_POLICY env var takes priority, then cfg.checkpoint_policy, then scale_mode fallback.
+-        policy = (
+-            os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
+-            or os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", "").strip().lower()
+-            or getattr(self.cfg, "checkpoint_policy", "full")
+-        )
+-        if policy in {"metadata_only", "json_only", "sidecar_only"}:
+-            return False
+-        if policy == "mandatory_only":
+-            return module_name not in {"cellranger", "qc", "doublet_detection"}
+-        # "full" or unknown — save everything
++        # After B.4b, only `full` policy remains, so adata is always saved when
++        # cfg.checkpoint is True. Method retained as a hook for future per-module
++        # opt-out, but currently constant.
+         return True
+ 
+     def _compact_adata_for_checkpoint(self) -> None:
+@@ -139,6 +142,7 @@ class PipelineContext:
+         elif self.adata is not None:
+             logger.info("Skipping full AnnData checkpoint after %s in massive mode to reduce memory/IO pressure", module_name)
+         sidecar = {
++            "schema_version": SC_CHECKPOINT_SCHEMA_VERSION,
+             "module": module_name,
+             "adata_checkpoint_policy": os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", ""),
+             "metadata": self.metadata,
+@@ -163,6 +167,13 @@ class PipelineContext:
+             return False
+         if cp_json.exists():
+             sidecar = json.loads(cp_json.read_text(encoding="utf-8"))
++            schema_v = sidecar.get("schema_version", 1)
++            if schema_v < SC_CHECKPOINT_SCHEMA_VERSION:
++                raise CheckpointSchemaMismatch(
++                    f"checkpoint at {cp_json} is v{schema_v} but pipeline is v{SC_CHECKPOINT_SCHEMA_VERSION}; "
++                    f"regenerate prepared zarr OR rerun from cellranger. "
++                    f"Use scripts/dev/regenerate_prepared_zarr.py to migrate."
++                )
+             self.metadata = sidecar.get("metadata", {})
+             self.module_status = sidecar.get("module_status", [])
+             raw_dirs = sidecar.get("module_dirs", {})
+diff --git a/workflow/modular/module_catalog.py b/workflow/modular/module_catalog.py
+index 54c1b40..61f8ac0 100644
+--- a/workflow/modular/module_catalog.py
++++ b/workflow/modular/module_catalog.py
+@@ -242,6 +242,159 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
+             "bundle v2.1 multimodal_obsm extension."
+         ),
+     ),
++    "marker_db_loader": ModuleSpec(
++        name="marker_db_loader",
++        depends_on=(),
++        layer="annotation",
++        modality="singlecell_rna",
++        bridge_ready=False,
++        description=(
++            "Load offline-vendored marker DBs (CellMarker2, PanglaoDB, CellTypist, scTypeDB) "
++            "for (tissue, condition) routing. Writes adata.uns['marker_db_index']. "
++            "No clustering dependency — consumed by context_aware_annotation."
++        ),
++    ),
++    "context_aware_annotation": ModuleSpec(
++        name="context_aware_annotation",
++        depends_on=("clustering", "marker_db_loader"),
++        layer="annotation",
++        modality="singlecell_rna",
++        bridge_ready=True,
++        description=(
++            "Context-aware cell type annotation driven by (tissue, condition) marker DBs. "
++            "Writes adata.obs['context_aware_celltype'] and optionally "
++            "adata.obs['context_aware_substate']. Opt-in; leaves legacy annotation.py untouched (AC-10)."
++        ),
++    ),
++    "modality_registry": ModuleSpec(
++        name="modality_registry",
++        depends_on=(),
++        layer="ingest",
++        modality="agnostic",
++        bridge_ready=False,
++        description=(
++            "Detect present modalities (RNA/ATAC/VDJ/Ribo/Hi-C/protein/spatial) by scanning "
++            "obsm keys and obs columns. Writes adata.uns['modalities_present'] and "
++            "runs/<run-id>/manifest/modalities.json. Wave 2 / P1B.S8."
++        ),
++    ),
++    "cross_modality_qc": ModuleSpec(
++        name="cross_modality_qc",
++        depends_on=("modality_registry",),
++        layer="quality_control",
++        modality="agnostic",
++        bridge_ready=False,
++        description=(
++            "Barcode overlap QC across modalities. Tri-state status: "
++            "skipped_single_modality | ran | warn_divergence. Sparse-safe (no full-X densification). "
++            "Wave 2 / P1B.S9."
++        ),
++    ),
++    "atac_ingest": ModuleSpec(
++        name="atac_ingest",
++        depends_on=(),
++        layer="ingest",
++        modality="atac",
++        bridge_ready=True,
++        description=(
++            "ATAC-seq sparse peak matrix ingest with TF-IDF + LSI embedding "
++            "(Cusanovich 2018 methodology). Memory-safe: never densifies the peak matrix. "
++            "Writes sparse adata.obsm['atac_peaks'], compatibility adata.obsm['X_atac'], "
++            "and adata.uns['atac_peaks']. Wave 2 / P2.S11."
++        ),
++    ),
++    "vdj_ingest": ModuleSpec(
++        name="vdj_ingest",
++        depends_on=(),
++        layer="ingest",
++        modality="vdj",
++        bridge_ready=True,
++        description=(
++            "VDJ receptor ingest: parse cellranger-vdj filtered_contig_annotations.csv "
++            "into per-cell clonotype_id + chain_pairing. Memory-safe (pandas-only, no AnnData "
++            "duplication). Wave 2B / P2.S15."
++        ),
++    ),
++    "vdj_metrics": ModuleSpec(
++        name="vdj_metrics",
++        depends_on=("vdj_ingest",),
++        layer="metrics",
++        modality="vdj",
++        bridge_ready=True,
++        description=(
++            "Per-sample VDJ diversity (Shannon + Gini) and per-cell clonal_expansion class. "
++            "Wave 2B / P2.S16."
++        ),
++    ),
++    "atac_qc": ModuleSpec(
++        name="atac_qc",
++        depends_on=(),
++        layer="quality_control",
++        modality="atac",
++        bridge_ready=False,
++        description=(
++            "Per-cell ATAC QC: TSS enrichment + FRiP from fragments.tsv.gz, ENCODE-style "
++            "pass/warn/fail thresholds. Memory-safe (streams fragments). Wave 2B / P2.S12."
++        ),
++    ),
++    "atac_lsi": ModuleSpec(
++        name="atac_lsi",
++        depends_on=("atac_ingest",),
++        layer="embedding",
++        modality="atac",
++        bridge_ready=False,
++        description=(
++            "TF-IDF normalisation + truncated SVD (LSI) on adata.obsm['atac_peaks']. "
++            "Writes adata.obsm['X_lsi'] (49 components, first dropped) and "
++            "adata.uns['lsi_variance_explained']. Wave 5 / US-W5-1."
++        ),
++    ),
++    "peak_to_gene": ModuleSpec(
++        name="peak_to_gene",
++        depends_on=("atac_ingest", "atac_lsi"),
++        layer="annotation_prep",
++        modality="atac",
++        bridge_ready=False,
++        description=(
++            "Distance-based linkage of ATAC peaks to nearest gene TSS (Cicero-style). "
++            "Writes adata.uns['peak_to_gene'] for joint RNA+ATAC analysis. Wave 2B / P2.S13."
++        ),
++    ),
++    "hic_ingest": ModuleSpec(
++        name="hic_ingest",
++        depends_on=(),
++        layer="ingest",
++        modality="hic",
++        bridge_ready=True,
++        description=(
++            "Hi-C / scHi-C contact map ingest. Reads .cool/.mcool (via cooler) or "
++            "TSV contact-pair format. Stores contacts as scipy.sparse CSR. Wave 2B / P2.S18."
++        ),
++    ),
++    "hic_tad": ModuleSpec(
++        name="hic_tad",
++        depends_on=("hic_ingest",),
++        layer="annotation_prep",
++        modality="hic",
++        bridge_ready=True,
++        description=(
++            "TAD boundary detection via insulation score (Crane 2015) + A/B compartment "
++            "scoring via first eigenvector of correlation matrix (Lieberman-Aiden 2009). "
++            "Wave 2B / P2.S19."
++        ),
++    ),
++    "ribo_ingest": ModuleSpec(
++        name="ribo_ingest",
++        depends_on=(),
++        layer="ingest",
++        modality="ribo",
++        bridge_ready=True,
++        description=(
++            "Ribosome profiling (Ribo-seq) ingest. Computes per-gene per-sample "
++            "translation efficiency (footprint / RNA + pseudocount). Memory-safe "
++            "(sparse-aware RNA aggregation). Wave 2B / P2.S21."
++        ),
++    ),
+ }
+ 
+ 
+diff --git a/workflow/modular/modules/annotation.py b/workflow/modular/modules/annotation.py
+index db5dfe4..9e260d4 100644
+--- a/workflow/modular/modules/annotation.py
++++ b/workflow/modular/modules/annotation.py
+@@ -19,6 +19,27 @@ sc = import_scanpy_or_stub()
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "Tirosh_marker_scoring_2016": {
++        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
++        "authors": "Tirosh et al.",
++        "journal": "Science",
++        "year": "2016",
++        "doi": "10.1126/science.aad0501",
++        "description": "Cluster-vote marker-mean scoring approach for cell type assignment.",
++    },
++    "Stuart_label_transfer_2019": {
++        "title": "Comprehensive Integration of Single-Cell Data",
++        "authors": "Stuart et al.",
++        "journal": "Cell",
++        "year": "2019",
++        "doi": "10.1016/j.cell.2019.05.031",
++        "description": "Reference-based label transfer principles; this module uses a simpler sklearn.NearestNeighbors KNN majority vote on a labeled reference.",
++    },
++}
++
++
++
+ DEFAULT_MARKERS = {
+     "Tumor epithelial": ["EPCAM", "KRT7", "KRT8", "KRT18", "KRT19", "MUC1"],
+     "T cell": ["CD3D", "CD3E", "TRAC", "CD4", "CD8A", "IL7R"],
+diff --git a/workflow/modular/modules/batch_correction.py b/workflow/modular/modules/batch_correction.py
+index 1f997c6..762d314 100644
+--- a/workflow/modular/modules/batch_correction.py
++++ b/workflow/modular/modules/batch_correction.py
+@@ -13,6 +13,60 @@ sc = import_scanpy_or_stub()
+ 
+ from ..context import PipelineContext
+ from ._gpu_utils import gpu_available
++from .._neighbors_cache import get_or_compute_neighbors
++
++
++__references__ = {
++    "Korsunsky_Harmony_2019": {
++        "title": "Fast, sensitive and accurate integration of single-cell data with Harmony",
++        "authors": "Korsunsky et al.",
++        "journal": "Nature Methods",
++        "year": "2019",
++        "doi": "10.1038/s41592-019-0619-0",
++        "description": "Default backend (rsc.pp.harmony_integrate GPU port, US-B3 parity ARI=1.000).",
++    },
++    "Polanski_BBKNN_2020": {
++        "title": "BBKNN: fast batch alignment of single cell transcriptomes",
++        "authors": "Polanski et al.",
++        "journal": "Bioinformatics",
++        "year": "2020",
++        "doi": "10.1093/bioinformatics/btz625",
++        "description": "BBKNN backend.",
++    },
++    "Johnson_ComBat_2007": {
++        "title": "Adjusting batch effects in microarray expression data using empirical Bayes methods",
++        "authors": "Johnson, Li, Rabinovic",
++        "journal": "Biostatistics",
++        "year": "2007",
++        "doi": "10.1093/biostatistics/kxj037",
++        "description": "ComBat backend (sc.pp.combat).",
++    },
++    "Hie_Scanorama_2019": {
++        "title": "Efficient integration of heterogeneous single-cell transcriptomes using Scanorama",
++        "authors": "Hie, Bryson, Berger",
++        "journal": "Nature Biotechnology",
++        "year": "2019",
++        "doi": "10.1038/s41587-019-0113-3",
++        "description": "Scanorama backend.",
++    },
++    "Lopez_scVI_2018": {
++        "title": "Deep generative modeling for single-cell transcriptomics",
++        "authors": "Lopez et al.",
++        "journal": "Nature Methods",
++        "year": "2018",
++        "doi": "10.1038/s41592-018-0229-2",
++        "description": "scVI backend via scvi-tools.",
++    },
++    "Haghverdi_MNN_2018": {
++        "title": "Batch effects in single-cell RNA-sequencing data are corrected by matching mutual nearest neighbors",
++        "authors": "Haghverdi et al.",
++        "journal": "Nature Biotechnology",
++        "year": "2018",
++        "doi": "10.1038/nbt.4091",
++        "description": "MNN / fastMNN backends.",
++    },
++}
++
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -62,6 +116,8 @@ class BatchCorrectionModule:
+             raise ValueError("Batch correction requires AnnData.")
+ 
+         cfg = ctx.cfg.batch
++        # Sync canonical seed into clustering cfg so post-correction UMAP/Leiden are deterministic
++        ctx.cfg.clustering.random_state = ctx.random_state
+         batch_key = cfg.batch_key
+ 
+         if batch_key not in adata.obs.columns:
+@@ -139,7 +195,19 @@ class BatchCorrectionModule:
+                 import rapids_singlecell as rsc
+                 logger.info("GPU batch post-processing: neighbors/UMAP/Leiden")
+                 if cfg.method != "bbknn":
+-                    rsc.pp.neighbors(adata, use_rep=use_rep)
++                    # bbknn bypasses cache: incompatible neighbors API signature
++                    get_or_compute_neighbors(
++                        adata,
++                        backend_id="rapids",
++                        method="umap",
++                        metric="euclidean",
++                        n_pcs=None,
++                        n_neighbors=ctx.cfg.clustering.n_neighbors,
++                        use_rep=use_rep,
++                        knn=True,
++                        random_state=ctx.cfg.clustering.random_state,
++                        compute_fn=lambda: rsc.pp.neighbors(adata, use_rep=use_rep),
++                    )
+                 rsc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
+                 rsc.tl.leiden(adata, resolution=ctx.cfg.clustering.leiden_resolution,
+                               random_state=ctx.cfg.clustering.random_state)
+@@ -153,7 +221,19 @@ class BatchCorrectionModule:
+         if not use_gpu:
+             try:
+                 if cfg.method != "bbknn":
+-                    sc.pp.neighbors(adata, use_rep=use_rep)
++                    # bbknn bypasses cache: incompatible neighbors API signature
++                    get_or_compute_neighbors(
++                        adata,
++                        backend_id="scanpy",
++                        method="umap",
++                        metric="euclidean",
++                        n_pcs=None,
++                        n_neighbors=ctx.cfg.clustering.n_neighbors,
++                        use_rep=use_rep,
++                        knn=True,
++                        random_state=ctx.cfg.clustering.random_state,
++                        compute_fn=lambda: sc.pp.neighbors(adata, use_rep=use_rep),
++                    )
+                 sc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
+                 sc.tl.leiden(
+                     adata,
+@@ -172,6 +252,7 @@ class BatchCorrectionModule:
+         ctx.metadata["batch_post_backend"] = "gpu" if use_gpu else "cpu"
+         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique()) if "leiden" in adata.obs else 0
+         ctx.metadata["batch_correction_status"] = "completed"
++        ctx.metadata["batch_correction_random_state"] = ctx.random_state
+ 
+         # Post-correction UMAP
+         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+@@ -188,37 +269,20 @@ class BatchCorrectionModule:
+         if "X_pca" not in adata.obsm:
+             raise ValueError("Harmony requires PCA (run clustering first).")
+         try:
+-            import harmonypy
++            import rapids_singlecell as rsc
+         except ImportError:
+             raise ImportError(
+-                "harmonypy is required for Harmony batch correction. "
+-                "Install with: pip install harmonypy"
++                "rapids_singlecell is required for Harmony batch correction. "
++                "Activate the sc_gpu_stable conda environment."
+             )
+-
+-        def _apply(device: str):
+-            x = np.asarray(adata.obsm["X_pca"], dtype=np.float64)
+-            ho = harmonypy.run_harmony(x, adata.obs, batch_key, device=device)
+-            z = np.asarray(ho.Z_corr)
+-            if z.shape == x.shape:
+-                corrected = z
+-            elif z.T.shape == x.shape:
+-                corrected = z.T
+-            else:
+-                raise ValueError(
+-                    f"Harmony output shape mismatch: got {z.shape}, expected {x.shape} or {x.T.shape}"
+-                )
+-            adata.obsm["X_pca_harmony"] = corrected.astype(np.float32, copy=False)
+-
+-        try:
+-            device = "cuda" if ctx.cfg.gpu_mode == "force" else "cpu"
+-            ctx.metadata["harmony_device"] = device
+-            _apply(device)
+-        except Exception as exc:
+-            if ctx.cfg.gpu_mode == "force":
+-                raise
+-            ctx.metadata["harmony_fallback_reason"] = str(exc)
+-            ctx.metadata["harmony_device"] = "cpu"
+-            _apply("cpu")
++        # rsc.pp.harmony_integrate writes corrected embeddings to
++        # adata.obsm["X_pca_harmony"] in place (US-B3, ARI=1.000 parity gate passed).
++        ctx.metadata["harmony_device"] = "gpu"
++        rsc.pp.harmony_integrate(adata, key=batch_key)
++        # Ensure float32 for downstream consistency
++        adata.obsm["X_pca_harmony"] = np.asarray(
++            adata.obsm["X_pca_harmony"], dtype=np.float32
++        )
+ 
+     @staticmethod
+     def _run_bbknn(adata, batch_key: str, ctx) -> None:
+diff --git a/workflow/modular/modules/cell_communication.py b/workflow/modular/modules/cell_communication.py
+index 97a2464..a6d65db 100644
+--- a/workflow/modular/modules/cell_communication.py
++++ b/workflow/modular/modules/cell_communication.py
+@@ -11,6 +11,27 @@ import pandas as pd
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "Dimitrov_LIANA_2022": {
++        "title": "Comparison of methods and resources for cell-cell communication inference from single-cell RNA-Seq data",
++        "authors": "Dimitrov et al.",
++        "journal": "Nature Communications",
++        "year": "2022",
++        "doi": "10.1038/s41467-022-30755-0",
++        "description": "LIANA benchmark + framework. Used here via liana-py.",
++    },
++    "Efremova_CellPhoneDB_2020": {
++        "title": "CellPhoneDB: inferring cell-cell communication from combined expression of multi-subunit ligand-receptor complexes",
++        "authors": "Efremova et al.",
++        "journal": "Nature Protocols",
++        "year": "2020",
++        "doi": "10.1038/s41596-020-0292-x",
++        "description": "Source ligand-receptor resource consumed by LIANA.",
++    },
++}
++
++
++
+ class CellCommunicationModule:
+     """Optional module: cell-cell communication analysis via ligand-receptor interactions.
+ 
+diff --git a/workflow/modular/modules/cell_cycle.py b/workflow/modular/modules/cell_cycle.py
+index 1112a2b..3306b35 100644
+--- a/workflow/modular/modules/cell_cycle.py
++++ b/workflow/modular/modules/cell_cycle.py
+@@ -10,6 +10,19 @@ sc = import_scanpy_or_stub()
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Tirosh_cellcycle_2016": {
++        "title": "Single-cell RNA-seq supports a developmental hierarchy in human oligodendroglioma",
++        "authors": "Tirosh et al.",
++        "journal": "Nature",
++        "year": "2016",
++        "doi": "10.1038/nature20123",
++        "description": "Source of canonical S and G2/M cell-cycle gene sets; sc.tl.score_genes_cell_cycle implements this.",
++    },
++}
++
++
+ # Tirosh et al. 2016 cell cycle gene sets (commonly used in Scanpy/Seurat)
+ S_GENES = [
+     "MCM5", "PCNA", "TYMS", "FEN1", "MCM2", "MCM4", "RRM1", "UNG",
+diff --git a/workflow/modular/modules/cell_fate.py b/workflow/modular/modules/cell_fate.py
+index c66d505..4219ec0 100644
+--- a/workflow/modular/modules/cell_fate.py
++++ b/workflow/modular/modules/cell_fate.py
+@@ -12,6 +12,19 @@ from scipy.sparse import diags, issparse
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Lange_CellRank_2022": {
++        "title": "CellRank for directed single-cell fate mapping",
++        "authors": "Lange et al.",
++        "journal": "Nature Methods",
++        "year": "2022",
++        "doi": "10.1038/s41592-021-01346-6",
++        "description": "Directed transition-probability based fate mapping \u2014 methodology this module's Pearson sampling approximates.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/workflow/modular/modules/cellranger.py b/workflow/modular/modules/cellranger.py
+index 6b2c38c..d7cfd03 100644
+--- a/workflow/modular/modules/cellranger.py
++++ b/workflow/modular/modules/cellranger.py
+@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "Zheng_10x_2017": {
++        "title": "Massively parallel digital transcriptional profiling of single cells",
++        "authors": "Zheng et al.",
++        "journal": "Nature Communications",
++        "year": "2017",
++        "doi": "10.1038/ncomms14049",
++        "description": "10x Chromium Single Cell 3' chemistry \u2014 describes the output format this module ingests.",
++    },
++    "CellRanger_software": {
++        "title": "Cell Ranger Single Cell Software (v7+)",
++        "authors": "10x Genomics",
++        "journal": "Software documentation",
++        "year": "2024",
++        "doi": "https://support.10xgenomics.com/single-cell-gene-expression/software",
++        "description": "Authoritative spec for the barcodes.tsv.gz / features.tsv.gz / matrix.mtx.gz layout consumed here.",
++    },
++}
++
++
++
+ class CellRangerModule:
+     """Mandatory module: validate/run Cell Ranger and load matrix."""
+ 
+@@ -150,6 +171,19 @@ class CellRangerModule:
+             adata.var_names_make_unique()
+             self._annotate_flex_probe_groups(adata, sample_root, ctx)
+             adata = self._apply_cohort_subset(adata, ctx)
++            if cfg.sample_id and cfg.sample_id != "lusc":
++                if "sample" not in adata.obs.columns:
++                    raise ValueError(
++                        f"--sample-id={cfg.sample_id!r} given but adata.obs has no 'sample' column; "
++                        f"use --cohort-subset instead"
++                    )
++                sample_ids = [s.strip() for s in cfg.sample_id.split(",")]
++                mask = adata.obs["sample"].astype(str).isin(sample_ids)
++                n_before = adata.n_obs
++                adata = adata[mask].copy()
++                ctx.metadata["sample_id_filter_applied"] = sample_ids
++                ctx.metadata["sample_id_filter_n_before"] = int(n_before)
++                ctx.metadata["sample_id_filter_n_after"] = int(adata.n_obs)
+             if self._needs_counts_layer(ctx) and "counts" not in adata.layers:
+                 # Keep the logical raw-count layer available for pseudobulk but
+                 # defer any heavy lazy-backend materialization until the
+diff --git a/workflow/modular/modules/clustering.py b/workflow/modular/modules/clustering.py
+index c2e235d..c609b0b 100644
+--- a/workflow/modular/modules/clustering.py
++++ b/workflow/modular/modules/clustering.py
+@@ -19,6 +19,52 @@ sc = import_scanpy_or_stub()
+ 
+ from ..context import PipelineContext
+ from ._gpu_utils import gpu_available
++from .._neighbors_cache import get_or_compute_neighbors
++
++
++__references__ = {
++    "scanpy": {
++        "title": "SCANPY: large-scale single-cell gene expression data analysis",
++        "authors": "Wolf, Angerer, Theis",
++        "journal": "Genome Biology",
++        "year": "2018",
++        "doi": "10.1186/s13059-017-1382-0",
++        "description": "scanpy pp.pca / pp.neighbors / tl.umap / tl.leiden stack.",
++    },
++    "Halko_TruncatedSVD_2011": {
++        "title": "Finding Structure with Randomness: Probabilistic Algorithms for Constructing Approximate Matrix Decompositions",
++        "authors": "Halko, Martinsson, Tropp",
++        "journal": "SIAM Review",
++        "year": "2011",
++        "doi": "10.1137/090771806",
++        "description": "Truncated SVD method underlying sklearn.decomposition.TruncatedSVD used in CSS path.",
++    },
++    "McInnes_UMAP_2018": {
++        "title": "UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction",
++        "authors": "McInnes, Healy, Melville",
++        "journal": "arXiv preprint",
++        "year": "2018",
++        "doi": "arXiv:1802.03426",
++        "description": "KNN-graph + UMAP layout used by scanpy.pp.neighbors / sc.tl.umap.",
++    },
++    "Traag_Leiden_2019": {
++        "title": "From Louvain to Leiden: guaranteeing well-connected communities",
++        "authors": "Traag, Waltman, van Eck",
++        "journal": "Scientific Reports",
++        "year": "2019",
++        "doi": "10.1038/s41598-019-41695-z",
++        "description": "Leiden community detection used as the clustering algorithm.",
++    },
++    "rapids_singlecell": {
++        "title": "rapids-singlecell \u2014 GPU-accelerated scanpy",
++        "authors": "scverse contributors",
++        "journal": "Software (scverse)",
++        "year": "2024",
++        "doi": "https://github.com/scverse/rapids_singlecell",
++        "description": "GPU acceleration path. Falls back to CPU scanpy when unavailable.",
++    },
++}
++
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -44,6 +90,52 @@ class ClusteringModule:
+             return x.tocsr().astype(np.float32)
+         return np.asarray(x, dtype=np.float32)
+ 
++    @staticmethod
++    def _clone_for_gpu_lite(adata):
++        """US-007 Hotspot 1 mitigation: GPU clone with smaller peak RSS than adata.copy().
++
++        Deep-copies X (log1p/scale mutate in place) and var (HVG mutates columns);
++        shares obs/obsm/varm/uns/layers by reference. Design + safety predicate
++        in docs/HOTSPOT1_DIAGNOSIS.md "US-007 mitigation".
++        """
++        import anndata as ad
++        X = adata.X
++        if X is None:
++            X_clone = None
++        elif sparse.issparse(X):
++            X_clone = X.copy()
++        else:
++            X_clone = np.array(X, copy=True)
++        return ad.AnnData(
++            X=X_clone,
++            obs=adata.obs,
++            var=adata.var.copy(),
++            obsm=dict(adata.obsm) if adata.obsm is not None else None,
++            varm=dict(adata.varm) if adata.varm is not None else None,
++            uns=dict(adata.uns) if adata.uns is not None else None,
++            layers=dict(adata.layers) if adata.layers is not None else None,
++        )
++
++    @staticmethod
++    def _log_rss(ctx, tag: str) -> None:
++        """Log peak resident set size (MB) at tag points for Hotspot 1 diagnosis.
++
++        Audit doc docs/SCIENTIFIC_AUDIT_2026-05-15.md identifies the GPU clustering
++        path as the Wave 1 memory hotspot. This helper captures `ru_maxrss` (peak
++        RSS since process start, in KB on Linux) and writes both to logger and
++        ctx.metadata["clustering_rss_trace"]. Purely instrumentation — no
++        behavioural change. Used by tests/test_hotspot1_instrumentation.py.
++        """
++        try:
++            import resource
++            rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
++            rss_mb = rss_kb / 1024.0  # Linux ru_maxrss is in KB
++            logger.info("[hotspot1-trace] %s peak_rss=%.1fMB", tag, rss_mb)
++            trace = ctx.metadata.setdefault("clustering_rss_trace", [])
++            trace.append({"tag": tag, "peak_rss_mb": round(rss_mb, 1)})
++        except Exception as exc:  # pragma: no cover — instrumentation must never break clustering
++            logger.debug("_log_rss(%s) failed: %s", tag, exc)
++
+     """Optional module: normalization, PCA/UMAP and Leiden clustering.
+ 
+     Supports GPU acceleration via rapids-singlecell when available.
+@@ -72,6 +164,8 @@ class ClusteringModule:
+         if adata is None:
+             raise ValueError("Clustering requires AnnData.")
+         cfg = ctx.cfg.clustering
++        # Canonical seed: ctx.random_state overrides per-module ClusteringConfig.random_state
++        cfg.random_state = ctx.random_state
+         sc.settings.n_jobs = max(1, os.cpu_count() or 1)
+ 
+         if self._should_use_css(ctx, adata):
+@@ -94,20 +188,80 @@ class ClusteringModule:
+                 use_gpu = False
+             if use_gpu:
+                 logger.info("GPU detected — using rapids-singlecell for PCA/neighbors/UMAP/Leiden")
+-                adata_gpu = adata.copy()
++                # Wave 3 / US-W3-1 — M2 mechanism (selected over M1 in US-W3-0 spike
++                # due to RTX 5090 D v2 + cuSOLVER incompatibility on rsc.pp.pca; see
++                # docs/HOTSPOT1_DIAGNOSIS.md). Site-1 elimination: skip the host-side
++                # _clone_for_gpu_lite and run _run_gpu directly on the original adata.
++                # Mandate adata.raw preservation so the GPU-failure fallback can
++                # restore counts via adata.raw.to_adata() — safe even though
++                # log1p/scale mutate adata.X in place (scanpy/_simple.py:364,
++                # scanpy/_scale.py:200), because raw holds an immutable reference
++                # to the pre-mutation counts.
++                from .._contract_violation import (
++                    ClusteringContractViolation,
++                    poison_adata,
++                    resolve_gpu_failure_policy,
++                )
++                gpu_failure_policy = resolve_gpu_failure_policy(ctx.cfg)
++                ctx.metadata["clustering_clone_strategy"] = "m2_inplace_raw_mandate"
++                ctx.metadata["gpu_failure_policy"] = gpu_failure_policy
++                self._log_rss(ctx, "hotspot1:before_inplace_gpu")
++                # M2 invariant — raw MUST be preserved for the GPU path to enable
++                # restore-on-fallback. Override the checkpoint-policy gate.
++                if adata.raw is None:
++                    adata.raw = adata.copy()
++                    ctx.metadata["m2_raw_preserved"] = True
++                self._log_rss(ctx, "hotspot1:after_raw_preserve")
+                 try:
+-                    self._run_gpu(adata_gpu, cfg, ctx)
+-                    adata = adata_gpu
++                    self._run_gpu(adata, cfg, ctx)
++                    self._log_rss(ctx, "hotspot1:after_inplace_gpu_success")
++                    gc.collect()
+                 except Exception as exc:
+                     if ctx.cfg.gpu_mode == "force":
+                         raise RuntimeError(f"GPU clustering failed in force mode: {exc}") from exc
+-                    logger.warning("GPU clustering failed (%s), trying hybrid GPU path", exc)
++                    logger.warning("GPU clustering failed (%s); applying policy=%s", exc, gpu_failure_policy)
+                     ctx.metadata["clustering_gpu_fallback_reason"] = str(exc)
+-                    use_gpu = False
+-                    if self._run_hybrid_gpu_graph(adata, cfg, ctx):
+-                        ctx.metadata["clustering_backend"] = "hybrid"
+-                    else:
+-                        self._run_cpu(adata, cfg, ctx)
++                    if gpu_failure_policy == "raise":
++                        poison_adata(adata, f"GPU clustering failure: {exc}")
++                        raise ClusteringContractViolation(
++                            f"GPU clustering failed and SC_GPU_FAILURE_POLICY=raise; "
++                            f"adata poisoned. Original error: {exc}"
++                        ) from exc
++                    if gpu_failure_policy == "restore-cpu":
++                        if adata.raw is None:
++                            poison_adata(adata, "GPU failed + raw missing under restore-cpu")
++                            raise ClusteringContractViolation(
++                                "GPU clustering failed under policy=restore-cpu but adata.raw "
++                                "is None — cannot restore counts. adata poisoned."
++                            ) from exc
++                        logger.info("Restoring adata from preserved raw before CPU fallback")
++                        adata = adata.raw.to_adata()
++                        ctx.adata = adata
++                        ctx.metadata["clustering_restored_from_raw"] = True
++                        use_gpu = False
++                        if self._run_hybrid_gpu_graph(adata, cfg, ctx):
++                            ctx.metadata["clustering_backend"] = "hybrid"
++                        else:
++                            self._run_cpu(adata, cfg, ctx)
++                    elif gpu_failure_policy == "reload-checkpoint":
++                        checkpoint_path = getattr(ctx, "last_checkpoint_path", None)
++                        if checkpoint_path is None or not checkpoint_path.exists():
++                            poison_adata(adata, "GPU failed + no checkpoint under reload-checkpoint")
++                            raise ClusteringContractViolation(
++                                "GPU clustering failed under policy=reload-checkpoint but no "
++                                "pre-clustering checkpoint exists. Re-run with --checkpoint. "
++                                "adata poisoned."
++                            ) from exc
++                        import anndata as ad
++                        logger.info("Reloading adata from %s before CPU fallback", checkpoint_path)
++                        adata = ad.read_h5ad(str(checkpoint_path))
++                        ctx.adata = adata
++                        ctx.metadata["clustering_reloaded_from_checkpoint"] = str(checkpoint_path)
++                        use_gpu = False
++                        if self._run_hybrid_gpu_graph(adata, cfg, ctx):
++                            ctx.metadata["clustering_backend"] = "hybrid"
++                        else:
++                            self._run_cpu(adata, cfg, ctx)
+                 finally:
+                     gc.collect()
+             else:
+@@ -117,6 +271,7 @@ class ClusteringModule:
+         ctx.adata = adata
+         ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
+         ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
++        ctx.metadata["clustering_random_state"] = ctx.random_state
+         if "clustering_backend" not in ctx.metadata:
+             ctx.metadata["clustering_backend"] = "gpu" if use_gpu else "cpu"
+ 
+@@ -230,7 +385,18 @@ class ClusteringModule:
+         adata.obsm["X_css"] = css
+         css_n_pcs = min(cfg.n_pcs, X_latent.shape[1], 50)
+         adata.obsm["X_pca"] = X_latent[:, :css_n_pcs].copy() if X_latent.shape[1] >= css_n_pcs else X_latent.copy()
+-        sc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, use_rep="X_css", method="umap")
++        get_or_compute_neighbors(
++            adata,
++            backend_id="scanpy",
++            method="umap",
++            metric="euclidean",
++            n_pcs=None,
++            n_neighbors=cfg.n_neighbors,
++            use_rep="X_css",
++            knn=True,
++            random_state=cfg.random_state,
++            compute_fn=lambda: sc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, use_rep="X_css", method="umap"),
++        )
+         sc.tl.umap(adata, random_state=cfg.random_state)
+         sc.tl.leiden(adata, resolution=cfg.leiden_resolution, flavor="igraph", directed=False, random_state=cfg.random_state)
+         ctx.metadata["css_n_reference_clusters"] = int(css.shape[1])
+@@ -260,7 +426,18 @@ class ClusteringModule:
+                 mask_var="highly_variable",
+             )
+             self._plot_pca_variance(adata, ctx, cfg.n_pcs)
+-            rsc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, n_pcs=cfg.n_pcs, use_rep="X_pca")
++            get_or_compute_neighbors(
++                adata,
++                backend_id="rapids",
++                method="umap",
++                metric="euclidean",
++                n_pcs=cfg.n_pcs,
++                n_neighbors=cfg.n_neighbors,
++                use_rep="X_pca",
++                knn=True,
++                random_state=cfg.random_state,
++                compute_fn=lambda: rsc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, n_pcs=cfg.n_pcs, use_rep="X_pca"),
++            )
+             rsc.tl.umap(adata, random_state=cfg.random_state)
+             rsc.tl.leiden(adata, resolution=cfg.leiden_resolution, random_state=cfg.random_state)
+             ctx.metadata["clustering_hybrid_reason"] = "gpu_pca_unstable_cpu_pca_gpu_graph"
+@@ -273,8 +450,7 @@ class ClusteringModule:
+     def _should_preserve_raw(ctx) -> bool:
+         """Return True when it is safe/desired to preserve adata.raw.
+ 
+-        Skipped under mandatory_only/metadata_only checkpoint policies to avoid
+-        doubling memory footprint during large-cohort runs.
++        Evaluated to preserve adata.raw when checkpoint policy permits.
+         """
+         policy = (
+             os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
+@@ -301,12 +477,23 @@ class ClusteringModule:
+             mask_var="highly_variable",
+         )
+         self._plot_pca_variance(adata, ctx, cfg.n_pcs)
+-        sc.pp.neighbors(
++        get_or_compute_neighbors(
+             adata,
+-            n_neighbors=cfg.n_neighbors,
++            backend_id="scanpy",
++            method="umap",
++            metric="euclidean",
+             n_pcs=cfg.n_pcs,
++            n_neighbors=cfg.n_neighbors,
+             use_rep="X_pca",
+-            method="umap",
++            knn=True,
++            random_state=cfg.random_state,
++            compute_fn=lambda: sc.pp.neighbors(
++                adata,
++                n_neighbors=cfg.n_neighbors,
++                n_pcs=cfg.n_pcs,
++                use_rep="X_pca",
++                method="umap",
++            ),
+         )
+         sc.tl.umap(adata, random_state=cfg.random_state)
+         sc.tl.leiden(
+@@ -323,9 +510,13 @@ class ClusteringModule:
+ 
+         sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
+         sc.pp.log1p(adata)
+-        if adata.raw is None and self._should_preserve_raw(ctx):
+-            adata.raw = adata
++        # M2 mandates adata.raw upstream in _run_impl, so the legacy
++        # preserve-raw gate that lived here is unreachable on the M2 path.
++        # Tags retained for downstream provenance comparison.
++        self._log_rss(ctx, "hotspot1:_run_gpu:before_preserve_raw")
++        self._log_rss(ctx, "hotspot1:_run_gpu:after_preserve_raw")
+         adata.X = self._materialize_matrix(adata.X)
++        self._log_rss(ctx, "hotspot1:_run_gpu:after_materialize_X")
+         if cfg.scale_data:
+             sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
+         sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
+@@ -333,7 +524,18 @@ class ClusteringModule:
+         # GPU-accelerated PCA, neighbors, UMAP
+         rsc.pp.pca(adata, n_comps=cfg.n_pcs, mask_var="highly_variable")
+         self._plot_pca_variance(adata, ctx, cfg.n_pcs)
+-        rsc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, n_pcs=cfg.n_pcs, use_rep="X_pca")
++        get_or_compute_neighbors(
++            adata,
++            backend_id="rapids",
++            method="umap",
++            metric="euclidean",
++            n_pcs=cfg.n_pcs,
++            n_neighbors=cfg.n_neighbors,
++            use_rep="X_pca",
++            knn=True,
++            random_state=cfg.random_state,
++            compute_fn=lambda: rsc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, n_pcs=cfg.n_pcs, use_rep="X_pca"),
++        )
+         rsc.tl.umap(adata, random_state=cfg.random_state)
+         rsc.tl.leiden(adata, resolution=cfg.leiden_resolution, random_state=cfg.random_state)
+ 
+diff --git a/workflow/modular/modules/cnv_inference.py b/workflow/modular/modules/cnv_inference.py
+index 5d91dcc..4831cca 100644
+--- a/workflow/modular/modules/cnv_inference.py
++++ b/workflow/modular/modules/cnv_inference.py
+@@ -17,6 +17,27 @@ from ..context import PipelineContext
+ from .._densify_policy import plan_densify, DensifyDecision
+ 
+ import logging
++
++
++__references__ = {
++    "Patel_inferCNV_2014": {
++        "title": "Single-cell RNA-seq highlights intratumoral heterogeneity in primary glioblastoma",
++        "authors": "Patel et al.",
++        "journal": "Science",
++        "year": "2014",
++        "doi": "10.1126/science.1254257",
++        "description": "Chromosome-window CNV inference from scRNA expression \u2014 methodology this module re-implements via scipy.ndimage.uniform_filter1d.",
++    },
++    "inferCNV_Broad": {
++        "title": "inferCNV \u2014 open-source CNV inference from scRNA-seq",
++        "authors": "Tickle, T.L. et al. (Broad Institute)",
++        "journal": "Open-source software",
++        "year": "2019",
++        "doi": "https://github.com/broadinstitute/inferCNV",
++        "description": "R-side inferCNV is the canonical implementation; Python port here matches the windowed-mean methodology.",
++    },
++}
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/workflow/modular/modules/composition.py b/workflow/modular/modules/composition.py
+index 950b28f..ccfe4a5 100644
+--- a/workflow/modular/modules/composition.py
++++ b/workflow/modular/modules/composition.py
+@@ -11,6 +11,19 @@ import pandas as pd
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Buttner_scCODA_2021": {
++        "title": "scCODA is a Bayesian model for compositional single-cell data analysis",
++        "authors": "Buttner, Ostner, et al.",
++        "journal": "Nature Communications",
++        "year": "2021",
++        "doi": "10.1038/s41467-021-27150-6",
++        "description": "Bayesian compositional analysis; preferred path via pertpy. Chi-square fallback used when scCODA unavailable.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/workflow/modular/modules/differential_expression.py b/workflow/modular/modules/differential_expression.py
+index a33febe..5f4a239 100644
+--- a/workflow/modular/modules/differential_expression.py
++++ b/workflow/modular/modules/differential_expression.py
+@@ -16,6 +16,35 @@ from ..context import PipelineContext
+ from ._gpu_utils import gpu_available
+ from .._densify_policy import plan_densify, DensifyDecision
+ 
++
++__references__ = {
++    "scanpy": {
++        "title": "SCANPY: large-scale single-cell gene expression data analysis",
++        "authors": "Wolf, Angerer, Theis",
++        "journal": "Genome Biology",
++        "year": "2018",
++        "doi": "10.1186/s13059-017-1382-0",
++        "description": "scanpy.tl.rank_genes_groups implementation (Wilcoxon/t-test/MAST/ROC).",
++    },
++    "Soneson_DE_benchmark_2018": {
++        "title": "Bias, robustness and scalability in single-cell differential expression analysis",
++        "authors": "Soneson, Robinson",
++        "journal": "Nature Methods",
++        "year": "2018",
++        "doi": "10.1038/nmeth.4612",
++        "description": "Benchmark showing Wilcoxon competitive with bespoke single-cell DE methods.",
++    },
++    "Benjamini_Hochberg_1995": {
++        "title": "Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing",
++        "authors": "Benjamini, Hochberg",
++        "journal": "Journal of the Royal Statistical Society B",
++        "year": "1995",
++        "doi": "10.1111/j.2517-6161.1995.tb02031.x",
++        "description": "BH FDR correction applied to per-gene p-values and per-substate marker scoring.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+@@ -119,6 +148,12 @@ class DifferentialExpressionModule:
+         ctx.metadata["de_method"] = method
+         ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
+         ctx.metadata["de_n_genes"] = int(n_genes)
++        ctx.metadata["de_random_state"] = ctx.random_state
++
++        # --- P1A.S3b: per-substate DE CSVs (AC-2 support) ---
++        # Gated on column presence; AC-10 zero-regression when column absent.
++        if "context_aware_substate" in adata.obs:
++            self._write_substate_de(adata, markers, ctx)
+ 
+         # --- Visualizations ---
+         # Dot plot of top markers per cluster
+@@ -363,3 +398,119 @@ class DifferentialExpressionModule:
+         plt.tight_layout()
+         plt.savefig(ctx.figure_dir / "de_volcano.png", dpi=160, bbox_inches="tight")
+         plt.close()
++
++    @staticmethod
++    def _write_substate_de(adata, markers: pd.DataFrame, ctx: PipelineContext) -> None:
++        """Write per-substate DE CSVs when context_aware_substate column is present (P1A.S3b).
++
++        Output: runs/<run-id>/differential_expression/substates/<substate_name>.csv
++        Columns: gene, log2fc, pvalue, fdr, pct_in_substate, pct_in_parent
++
++        Gated strictly on column presence. When column is absent, this method is never
++        called — preserving AC-10 zero-regression for default runs.
++        """
++        substate_col = adata.obs.get("context_aware_substate")
++        if substate_col is None:
++            return
++
++        # Only process rows where substate is non-null
++        valid_mask = substate_col.notna() & (substate_col.astype(str) != "None")
++        if not valid_mask.any():
++            return
++
++        from scipy import sparse, stats as _stats
++
++        substates = substate_col[valid_mask].unique()
++        substates_dir = ctx.table_dir.parent / "differential_expression" / "substates"
++        substates_dir.mkdir(parents=True, exist_ok=True)
++
++        written: list[str] = []
++        for substate in substates:
++            substate_str = str(substate)
++            # Find the parent cell type: everything before the last space-separated qualifier
++            # or the full string if no qualifier. Use leiden-mapped cell type if available.
++            substate_mask = (
++                substate_col.notna() &
++                (substate_col.astype(str) == substate_str)
++            )
++            # Parent = all cells that share the same leiden cluster (context_aware_celltype parent)
++            # Fallback: all non-substate cells as parent reference
++            parent_mask = ~substate_mask
++
++            n_in = int(substate_mask.sum())
++            n_parent = int(parent_mask.sum())
++            if n_in < 3 or n_parent < 3:
++                continue
++
++            import scipy.sparse as sp
++            X = adata.X
++            if sp.issparse(X):
++                sub_shape = (n_in, X.shape[1])
++                par_shape = (n_parent, X.shape[1])
++                sub_decision = plan_densify(
++                    sub_shape,
++                    np.float64,
++                    reason="context-aware substate DE input group for Mann-Whitney test",
++                )
++                par_decision = plan_densify(
++                    par_shape,
++                    np.float64,
++                    reason="context-aware substate DE parent group for Mann-Whitney test",
++                )
++                if DensifyDecision.ABORT in (sub_decision, par_decision):
++                    from .._mem_guard import MemoryGuardError
++                    raise MemoryGuardError(
++                        "differential_expression substate DE: sparse subset too large "
++                        f"to densify safely (substate={sub_shape}, parent={par_shape})"
++                    )
++                if DensifyDecision.CHUNK in (sub_decision, par_decision):
++                    logger.warning(
++                        "differential_expression substate DE densify in CHUNK range "
++                        "(substate=%s, parent=%s); proceeding",
++                        sub_shape,
++                        par_shape,
++                    )
++                # densify-allowed: guarded substate subset for scipy Mann-Whitney fallback
++                X_sub = np.asarray(X[substate_mask].todense(), dtype=np.float64)
++                # densify-allowed: guarded parent subset for scipy Mann-Whitney fallback
++                X_par = np.asarray(X[parent_mask].todense(), dtype=np.float64)
++            else:
++                X_sub = np.asarray(X[substate_mask], dtype=np.float64)
++                X_par = np.asarray(X[parent_mask], dtype=np.float64)
++
++            mean_sub = X_sub.mean(axis=0) + 1e-9
++            mean_par = X_par.mean(axis=0) + 1e-9
++            log2fc = np.log2(mean_sub / mean_par)
++            pct_in = (X_sub > 0).mean(axis=0)
++            pct_par = (X_par > 0).mean(axis=0)
++
++            try:
++                _, pvals = _stats.mannwhitneyu(X_sub, X_par, axis=0, alternative="two-sided")
++                pvals = np.nan_to_num(np.asarray(pvals, dtype=float), nan=1.0)
++            except Exception:
++                pvals = np.ones(X_sub.shape[1], dtype=float)
++
++            fdr = DifferentialExpressionModule._benjamini_hochberg(pvals)
++
++            genes = np.asarray(adata.var_names.astype(str))
++            result = pd.DataFrame({
++                "gene": genes,
++                "log2fc": log2fc.ravel(),
++                "pvalue": pvals.ravel(),
++                "fdr": fdr.ravel(),
++                "pct_in_substate": pct_in.ravel(),
++                "pct_in_parent": pct_par.ravel(),
++            })
++            result = result.sort_values("fdr").reset_index(drop=True)
++
++            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in substate_str)
++            out_path = substates_dir / f"{safe_name}.csv"
++            result.to_csv(out_path, index=False)
++            written.append(substate_str)
++            logger.info(
++                "DE substates: wrote %d genes for substate '%s' → %s",
++                len(result), substate_str, out_path,
++            )
++
++        ctx.metadata["de_substates_written"] = written
++        ctx.metadata["de_substates_count"] = len(written)
+diff --git a/workflow/modular/modules/doublet_detection.py b/workflow/modular/modules/doublet_detection.py
+index 872efd6..dcb9896 100644
+--- a/workflow/modular/modules/doublet_detection.py
++++ b/workflow/modular/modules/doublet_detection.py
+@@ -15,8 +15,30 @@ sc = import_scanpy_or_stub()
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Wolock_Scrublet_2019": {
++        "title": "Scrublet: Computational Identification of Cell Doublets in Single-Cell Transcriptomic Data",
++        "authors": "Wolock, Lopez, Klein",
++        "journal": "Cell Systems",
++        "year": "2019",
++        "doi": "10.1016/j.cels.2018.11.005",
++        "description": "Reference implementation; supports whole-dataset and per-sample (grouped) doublet rate calibration.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
++# ---------------------------------------------------------------------------
++# GPU availability probe (evaluated once at import time)
++# ---------------------------------------------------------------------------
++try:
++    import rapids_singlecell as _rsc  # noqa: F401
++    _RSC_AVAILABLE = True
++except ImportError:
++    _RSC_AVAILABLE = False
++
+ 
+ class DoubletDetectionModule:
+     """Mandatory module: detect and remove doublets using Scrublet.
+@@ -24,22 +46,22 @@ class DoubletDetectionModule:
+     Should run after QC and before clustering. Doublets (two cells captured
+     in one droplet) can create artificial intermediate clusters and corrupt
+     downstream differential expression results.
++
++    GPU path (preferred): uses ``rsc.pp.scrublet`` when rapids-singlecell is
++    available.  Falls back to CPU ``scrublet.Scrublet`` only if rsc is not
++    importable.
+     """
+ 
+     name = "doublet_detection"
+     required = True
+ 
+     @staticmethod
+-    def _scrublet_params(n_obs: int, n_vars: int) -> dict:
+-        return {
+-            "min_counts": 2,
+-            "min_cells": 3,
+-            "min_gene_variability_pctl": 85,
+-            "n_prin_comps": max(2, min(30, n_obs - 1, n_vars - 1)),
+-        }
++    def _n_prin_comps(n_obs: int, n_vars: int) -> int:
++        return max(2, min(30, n_obs - 1, n_vars - 1))
+ 
+     @staticmethod
+     def _materialize_counts_matrix(x):
++        """Return a CPU CSR matrix, materializing lazy/dask/GPU arrays."""
+         if sparse.issparse(x):
+             return x.tocsr()
+         if hasattr(x, "to_memory"):
+@@ -83,42 +105,121 @@ class DoubletDetectionModule:
+             return "grouped"
+         return "whole"
+ 
+-    def _run_grouped_scrublet(self, adata, scrublet_cls, cfg, ctx):
+-        sample_key = 'sample' if 'sample' in adata.obs.columns else None
++    # ------------------------------------------------------------------
++    # GPU (rsc) paths
++    # ------------------------------------------------------------------
++
++    def _run_rsc_scrublet_whole(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, float | None]:
++        """Run rsc.pp.scrublet on the full dataset."""
++        import rapids_singlecell as rsc
++
++        adata_gpu = adata.copy()
++        rsc.get.anndata_to_GPU(adata_gpu)
++        rsc.pp.scrublet(
++            adata_gpu,
++            expected_doublet_rate=cfg.expected_doublet_rate,
++            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
++            random_state=ctx.random_state,
++            verbose=False,
++        )
++        scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
++        predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
++        threshold = adata_gpu.uns.get("scrublet", {}).get("threshold", None)
++        ctx.metadata["doublet_method"] = "scrublet_gpu"
++        return scores, predicted, threshold
++
++    def _run_rsc_scrublet_grouped(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, None]:
++        """Run rsc.pp.scrublet with batch_key for per-sample doublet detection."""
++        import rapids_singlecell as rsc
++
++        sample_key = "sample" if "sample" in adata.obs.columns else None
++        if sample_key is None:
++            raise ValueError("grouped scrublet requested without sample labels")
++
++        adata_gpu = adata.copy()
++        rsc.get.anndata_to_GPU(adata_gpu)
++        rsc.pp.scrublet(
++            adata_gpu,
++            batch_key=sample_key,
++            expected_doublet_rate=cfg.expected_doublet_rate,
++            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
++            random_state=ctx.random_state,
++            verbose=False,
++        )
++        scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
++        predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
++        ctx.metadata["doublet_grouped_key"] = sample_key
++        ctx.metadata["doublet_method"] = "scrublet_gpu_grouped"
++        return scores, predicted, None
++
++    # ------------------------------------------------------------------
++    # CPU fallback paths (used only when rsc is unavailable)
++    # ------------------------------------------------------------------
++
++    def _run_cpu_scrublet_grouped(self, adata, scrublet_cls, cfg, ctx) -> tuple[np.ndarray, np.ndarray, None]:
++        sample_key = "sample" if "sample" in adata.obs.columns else None
+         if sample_key is None:
+-            raise ValueError('grouped scrublet requested without sample labels')
++            raise ValueError("grouped scrublet requested without sample labels")
++        random_state = ctx.random_state
+         labels = pd.Series(adata.obs[sample_key].astype(str), index=adata.obs_names)
+         scores = np.zeros(adata.n_obs, dtype=np.float32)
+         predicted = np.zeros(adata.n_obs, dtype=bool)
+         thresholds = {}
++        scrublet_params = {
++            "min_counts": 2,
++            "min_cells": 3,
++            "min_gene_variability_pctl": 85,
++            "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
++        }
+         for group in labels.unique():
+             idx = np.where(labels.values == group)[0]
+             if len(idx) < 20:
+                 continue
+             subX = self._materialize_counts_matrix(adata.X[idx])
+-            scrub = scrublet_cls(subX, expected_doublet_rate=cfg.expected_doublet_rate)
++            scrub = scrublet_cls(subX, expected_doublet_rate=cfg.expected_doublet_rate, random_state=random_state)
+             try:
+-                s, p = scrub.scrub_doublets(**self._scrublet_params(len(idx), adata.n_vars))
++                s, p = scrub.scrub_doublets(**{**scrublet_params, "n_prin_comps": self._n_prin_comps(len(idx), adata.n_vars)})
+                 scores[idx] = s.astype(np.float32, copy=False)
+                 predicted[idx] = p.astype(bool, copy=False)
+-                thr = getattr(scrub, 'threshold_', None)
++                thr = getattr(scrub, "threshold_", None)
+                 if thr is not None:
+                     thresholds[str(group)] = float(thr)
+             except Exception as exc:
+-                logger.warning('Grouped Scrublet failed for %s, falling back to singlets: %s', group, exc)
+-        ctx.metadata['doublet_grouped_key'] = sample_key
+-        ctx.metadata['doublet_grouped_thresholds'] = thresholds
+-        ctx.metadata['doublet_method'] = 'scrublet_grouped'
++                logger.warning("Grouped Scrublet failed for %s, falling back to singlets: %s", group, exc)
++        ctx.metadata["doublet_grouped_key"] = sample_key
++        ctx.metadata["doublet_grouped_thresholds"] = thresholds
++        ctx.metadata["doublet_method"] = "scrublet_grouped"
+         return scores, predicted, None
+ 
++    # ------------------------------------------------------------------
++    # Helpers
++    # ------------------------------------------------------------------
++
++    @staticmethod
++    def _col_to_numpy(col) -> np.ndarray:
++        """Convert pandas or cudf Series to a numpy array."""
++        if hasattr(col, "to_numpy"):
++            return col.to_numpy()
++        return np.asarray(col)
++
++    @staticmethod
++    def _fallback_all_singlets(n_obs: int, reason: str) -> tuple[np.ndarray, np.ndarray]:
++        scores = np.zeros(n_obs, dtype=np.float32)
++        predicted = np.zeros(n_obs, dtype=bool)
++        logger.info("Doublet detection fallback activated: %s", reason)
++        return scores, predicted
++
++    # ------------------------------------------------------------------
++    # Entry point
++    # ------------------------------------------------------------------
++
+     def run(self, ctx: PipelineContext) -> None:
+         adata = ctx.adata
+         if adata is None:
+             raise ValueError("Doublet detection requires loaded AnnData.")
+ 
+-        import scrublet as scr
+-
+         cfg = ctx.cfg.doublet
++        random_state = ctx.random_state
+         threshold = None
+ 
+         # Scrublet can fail on tiny/degenerate datasets; keep pipeline usable by
+@@ -132,23 +233,54 @@ class DoubletDetectionModule:
+         else:
+             strategy = self._resolve_doublet_strategy(ctx, adata)
+             use_grouped = strategy == "grouped"
+-            if use_grouped:
+-                doublet_scores, predicted_doublets, threshold = self._run_grouped_scrublet(adata, scr.Scrublet, cfg, ctx)
+-            else:
+-                scrub = scr.Scrublet(self._materialize_counts_matrix(adata.X), expected_doublet_rate=cfg.expected_doublet_rate)
++
++            if _RSC_AVAILABLE:
++                # --- GPU path ---
+                 try:
+-                    doublet_scores, predicted_doublets = scrub.scrub_doublets(**self._scrublet_params(adata.n_obs, adata.n_vars))
+-                    threshold = getattr(scrub, "threshold_", None)
++                    if use_grouped:
++                        doublet_scores, predicted_doublets, threshold = self._run_rsc_scrublet_grouped(adata, cfg, ctx)
++                    else:
++                        doublet_scores, predicted_doublets, threshold = self._run_rsc_scrublet_whole(adata, cfg, ctx)
+                     if threshold is not None:
+-                        logger.info("Scrublet auto-threshold: %.4f", threshold)
+-                    ctx.metadata["doublet_method"] = "scrublet"
++                        logger.info("rsc.pp.scrublet auto-threshold: %.4f", threshold)
+                 except Exception as exc:
+-                    logger.warning("Scrublet failed, falling back to all singlets: %s", exc)
++                    logger.warning("rsc.pp.scrublet failed, falling back to all singlets: %s", exc)
+                     doublet_scores, predicted_doublets = self._fallback_all_singlets(
+-                        adata.n_obs,
+-                        reason=str(exc),
++                        adata.n_obs, reason=str(exc)
+                     )
+                     ctx.metadata["doublet_method"] = "fallback_all_singlets"
++            else:
++                # --- CPU fallback path (rsc not installed) ---
++                import scrublet as scr
++
++                if use_grouped:
++                    doublet_scores, predicted_doublets, threshold = self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
++                else:
++                    scrub = scr.Scrublet(
++                        self._materialize_counts_matrix(adata.X),
++                        expected_doublet_rate=cfg.expected_doublet_rate,
++                        random_state=random_state,
++                    )
++                    scrublet_params = {
++                        "min_counts": 2,
++                        "min_cells": 3,
++                        "min_gene_variability_pctl": 85,
++                        "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
++                    }
++                    try:
++                        doublet_scores, predicted_doublets = scrub.scrub_doublets(**scrublet_params)
++                        threshold = getattr(scrub, "threshold_", None)
++                        if threshold is not None:
++                            logger.info("Scrublet auto-threshold: %.4f", threshold)
++                        ctx.metadata["doublet_method"] = "scrublet"
++                    except Exception as exc:
++                        logger.warning("Scrublet failed, falling back to all singlets: %s", exc)
++                        doublet_scores, predicted_doublets = self._fallback_all_singlets(
++                            adata.n_obs, reason=str(exc)
++                        )
++                        ctx.metadata["doublet_method"] = "fallback_all_singlets"
++
++        ctx.metadata["doublet_random_state"] = random_state
+ 
+         adata.obs["doublet_score"] = doublet_scores
+         adata.obs["predicted_doublet"] = predicted_doublets
+@@ -180,10 +312,3 @@ class DoubletDetectionModule:
+             ctx.adata = adata
+             ctx.metadata["cells_after_doublet_removal"] = int(adata.n_obs)
+             ctx.metadata["doublets_removed"] = int(before - adata.n_obs)
+-
+-    @staticmethod
+-    def _fallback_all_singlets(n_obs: int, reason: str) -> tuple[np.ndarray, np.ndarray]:
+-        scores = np.zeros(n_obs, dtype=np.float32)
+-        predicted = np.zeros(n_obs, dtype=bool)
+-        logger.info("Doublet detection fallback activated: %s", reason)
+-        return scores, predicted
+diff --git a/workflow/modular/modules/evolution.py b/workflow/modular/modules/evolution.py
+index e1200c3..9bcbc5c 100644
+--- a/workflow/modular/modules/evolution.py
++++ b/workflow/modular/modules/evolution.py
+@@ -18,6 +18,19 @@ from scipy.spatial.distance import pdist
+ from ..context import PipelineContext
+ from .._densify_policy import plan_densify, DensifyDecision
+ 
++
++__references__ = {
++    "Andor_clonal_evolution_2016": {
++        "title": "Pan-cancer analysis of the extent and consequences of intratumor heterogeneity",
++        "authors": "Andor et al.",
++        "journal": "Nature Medicine",
++        "year": "2016",
++        "doi": "10.1038/nm.3984",
++        "description": "Clonal evolution framework for tumor heterogeneity quantified here from CNV-derived signals.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/workflow/modular/modules/gene_regulatory_network.py b/workflow/modular/modules/gene_regulatory_network.py
+index f246213..861d611 100644
+--- a/workflow/modular/modules/gene_regulatory_network.py
++++ b/workflow/modular/modules/gene_regulatory_network.py
+@@ -12,6 +12,27 @@ import pandas as pd
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "BadiaiMompel_decoupler_2022": {
++        "title": "decoupleR: ensemble of computational methods to infer biological activities from omics data",
++        "authors": "Badia-i-Mompel et al.",
++        "journal": "Bioinformatics Advances",
++        "year": "2022",
++        "doi": "10.1093/bioadv/vbac016",
++        "description": "decoupler ensemble framework used for TF activity scoring.",
++    },
++    "GarciaAlonso_DoRothEA_2019": {
++        "title": "Benchmark and integration of resources for the estimation of human transcription factor activities",
++        "authors": "Garcia-Alonso et al.",
++        "journal": "Genome Research",
++        "year": "2019",
++        "doi": "10.1101/gr.240663.118",
++        "description": "DoRothEA TF-target regulons consumed by decoupler.",
++    },
++}
++
++
++
+ class GeneRegulatoryNetworkModule:
+     """Optional module: transcription factor activity inference.
+ 
+diff --git a/workflow/modular/modules/gene_signature_scoring.py b/workflow/modular/modules/gene_signature_scoring.py
+index 0246d3f..5f98cdf 100644
+--- a/workflow/modular/modules/gene_signature_scoring.py
++++ b/workflow/modular/modules/gene_signature_scoring.py
+@@ -15,6 +15,19 @@ sc = import_scanpy_or_stub()
+ from ..context import PipelineContext
+ from . import score_gene_sets
+ 
++
++__references__ = {
++    "Tirosh_scoring_2016": {
++        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
++        "authors": "Tirosh et al.",
++        "journal": "Science",
++        "year": "2016",
++        "doi": "10.1126/science.aad0501",
++        "description": "Signature score methodology (mean expression minus matched control bin). sc.tl.score_genes implements this.",
++    },
++}
++
++
+ # Built-in cancer-relevant gene signatures from high-impact publications.
+ BUILTIN_SIGNATURES = {
+     # Proliferation — MKI67/TOP2A panel (standard in oncology)
+diff --git a/workflow/modular/modules/immune_phenotyping.py b/workflow/modular/modules/immune_phenotyping.py
+index 12dec4a..7a5c776 100644
+--- a/workflow/modular/modules/immune_phenotyping.py
++++ b/workflow/modular/modules/immune_phenotyping.py
+@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
+ from ..context import PipelineContext
+ from . import score_gene_sets
+ 
++
++__references__ = {
++    "Tirosh_scoring_2016": {
++        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
++        "authors": "Tirosh et al.",
++        "journal": "Science",
++        "year": "2016",
++        "doi": "10.1126/science.aad0501",
++        "description": "Same scoring methodology scoped to immune cell-type marker sets.",
++    },
++    "Zilionis_immune_atlas_2019": {
++        "title": "Single-cell transcriptomics of human and mouse lung cancers reveals conserved myeloid populations",
++        "authors": "Zilionis et al.",
++        "journal": "Immunity",
++        "year": "2019",
++        "doi": "10.1016/j.immuni.2019.03.009",
++        "description": "Canonical lung-cancer immune sub-typing markers underlying many phenotype calls.",
++    },
++}
++
++
+ # Immune subtype markers based on Zheng et al. (Science 2017),
+ # Zhang et al. (Nature 2018), and Tirosh et al. (Science 2016).
+ IMMUNE_SUBTYPES = {
+diff --git a/workflow/modular/modules/metacell.py b/workflow/modular/modules/metacell.py
+index 00b085c..45976fb 100644
+--- a/workflow/modular/modules/metacell.py
++++ b/workflow/modular/modules/metacell.py
+@@ -11,6 +11,19 @@ import pandas as pd
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Persad_SEACells_2023": {
++        "title": "SEACells infers transcriptional and epigenomic cellular states from single-cell genomics data",
++        "authors": "Persad et al.",
++        "journal": "Nature Biotechnology",
++        "year": "2023",
++        "doi": "10.1038/s41587-023-01716-9",
++        "description": "SEACells metacell aggregation; primary backend.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/workflow/modular/modules/multimodal_integration.py b/workflow/modular/modules/multimodal_integration.py
+index a7b3b1f..906d2a4 100644
+--- a/workflow/modular/modules/multimodal_integration.py
++++ b/workflow/modular/modules/multimodal_integration.py
+@@ -39,6 +39,7 @@ from pathlib import Path
+ import numpy as np
+ import pandas as pd
+ 
++from .._contract_violation import ModuleContractError
+ from ..context import PipelineContext
+ 
+ logger = logging.getLogger(__name__)
+@@ -64,11 +65,9 @@ __references__ = {
+ }
+ 
+ 
+-# Default driver-script path on disk. Mirrors the protein/spatial
+-# path-resolution chain: env override -> repo-relative canonical fallback.
+-_DEFAULT_RUN_WNN_R = (
+-    "/home/zerlinshen/multiomics_r_factory/scripts/run_wnn.R"
+-)
++# Canonical driver-script path: in-repo vendored under _r_scripts/.
++from pathlib import Path as _Path
++_DEFAULT_RUN_WNN_R = str(_Path(__file__).parent / "_r_scripts" / "run_wnn.R")
+ 
+ 
+ @dataclass(frozen=True)
+@@ -77,6 +76,9 @@ class MultimodalIntegrationConfig:
+ 
+     Off by default. To enable, set ``engine`` to ``"wnn"`` or ``"mofa"`` (or
+     set the ``SC_MULTIMODAL_ENGINE`` env var to one of those literals).
++
++    ``_explicitly_set``: True when ``second_obsm_key`` was provided via CLI
++    flag, env var, or explicit config — not inferred from the dataclass default.
+     """
+ 
+     engine: str = "off"  # "off" | "wnn" | "mofa"
+@@ -88,6 +90,7 @@ class MultimodalIntegrationConfig:
+     rscript_bin: str | None = None  # falls back to PATH lookup / RSCRIPT_BIN
+     run_wnn_r_path: str | None = None  # override path to scripts/run_wnn.R
+     subprocess_timeout: int = 600  # seconds
++    _explicitly_set: bool = False  # sentinel: True iff second_obsm_key was explicitly provided
+ 
+ 
+ class MultimodalIntegrationModule:
+@@ -102,7 +105,7 @@ class MultimodalIntegrationModule:
+     name = "multimodal_integration"
+     required = False
+     mutates_structure = False
+-    requires_keys: dict[str, list[str]] = {}
++    requires_keys: dict[str, list[str]] = {"obsm": ["X_pca"]}
+     provides_keys: dict[str, list[str]] = {
+         "obsm": ["X_wnn", "X_mofa"],
+         "uns": ["multimodal_status", "mofa_factors"],
+@@ -134,13 +137,33 @@ class MultimodalIntegrationModule:
+             ctx.status(self.name, "skipped", "engine=off (default)")
+             return
+ 
+-        # Pre-condition: both latent obsm keys must be present.
++        # Pre-condition: RNA latent must always be present.
+         rna_key = cfg.rna_obsm_key
+-        sec_key = cfg.second_obsm_key
+-        if rna_key not in adata.obsm or sec_key not in adata.obsm:
++        sec_key, sec_explicitly_set = self._resolve_second_obsm_key(cfg)
++        if rna_key not in adata.obsm:
++            reason = f"missing latents (rna='{rna_key}' present=False)"
++            logger.info("%s: %s; skipping engine=%s.", self.name, reason, engine)
++            adata.uns["multimodal_status"] = {
++                "engine": engine,
++                "status": "skipped",
++                "reason": reason,
++            }
++            ctx.metadata["multimodal_status"] = "skipped_no_inputs"
++            ctx.status(self.name, "skipped", reason)
++            return
++
++        # Second-modality key check: scoped raise when explicitly configured and missing.
++        if sec_key not in adata.obsm:
++            if sec_explicitly_set and engine in {"wnn", "mofa"}:
++                raise ModuleContractError(
++                    f"{self.name}: explicitly-configured second obsm key '{sec_key}' "
++                    f"is absent from adata.obsm (engine={engine}). "
++                    f"Set SC_MULTIMODAL_SECOND_OBSM / --second-obsm-key only when the "
++                    f"key is guaranteed to exist, or unset to fall back to silent skip."
++                )
+             reason = (
+                 f"missing latents (rna='{rna_key}' present={rna_key in adata.obsm}, "
+-                f"second='{sec_key}' present={sec_key in adata.obsm})"
++                f"second='{sec_key}' present=False)"
+             )
+             logger.info("%s: %s; skipping engine=%s.", self.name, reason, engine)
+             adata.uns["multimodal_status"] = {
+@@ -397,6 +420,9 @@ class MultimodalIntegrationModule:
+             return runtime
+         if isinstance(runtime, dict):
+             base = self.config
++            explicitly_set = bool(runtime.get("_explicitly_set", base._explicitly_set))
++            if "second_obsm_key" in runtime:
++                explicitly_set = True
+             return MultimodalIntegrationConfig(
+                 engine=str(runtime.get("engine", base.engine)),
+                 rna_obsm_key=str(runtime.get("rna_obsm_key", base.rna_obsm_key)),
+@@ -407,6 +433,7 @@ class MultimodalIntegrationModule:
+                 rscript_bin=runtime.get("rscript_bin", base.rscript_bin),
+                 run_wnn_r_path=runtime.get("run_wnn_r_path", base.run_wnn_r_path),
+                 subprocess_timeout=int(runtime.get("subprocess_timeout", base.subprocess_timeout)),
++                _explicitly_set=explicitly_set,
+             )
+         return self.config
+ 
+@@ -417,6 +444,24 @@ class MultimodalIntegrationModule:
+             return env.strip().lower()
+         return cfg.engine.strip().lower()
+ 
++    @staticmethod
++    def _resolve_second_obsm_key(cfg: MultimodalIntegrationConfig) -> tuple[str, bool]:
++        """Return (key, explicitly_set).
++
++        explicitly_set=True when the key was provided via env var, CLI flag, or
++        a non-default config value (even if the value equals the default string).
++        Value-comparison against the default is intentionally REJECTED: a user
++        who passes --second-obsm-key=protein_clr has made an explicit opt-in and
++        must be treated as such.
++        """
++        env = os.environ.get("SC_MULTIMODAL_SECOND_OBSM")
++        if env:
++            return env.strip(), True
++        # cfg._explicitly_set flag is set by CLI wiring when --second-obsm-key is passed.
++        if getattr(cfg, "_explicitly_set", False):
++            return cfg.second_obsm_key, True
++        return cfg.second_obsm_key, False
++
+     @staticmethod
+     def _resolve_rscript(cfg: MultimodalIntegrationConfig) -> str | None:
+         if cfg.rscript_bin and os.access(cfg.rscript_bin, os.X_OK):
+diff --git a/workflow/modular/modules/pathway_analysis.py b/workflow/modular/modules/pathway_analysis.py
+index ba0254d..67a4bd0 100644
+--- a/workflow/modular/modules/pathway_analysis.py
++++ b/workflow/modular/modules/pathway_analysis.py
+@@ -12,6 +12,27 @@ import pandas as pd
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Subramanian_GSEA_2005": {
++        "title": "Gene set enrichment analysis: A knowledge-based approach for interpreting genome-wide expression profiles",
++        "authors": "Subramanian et al.",
++        "journal": "PNAS",
++        "year": "2005",
++        "doi": "10.1073/pnas.0506580102",
++        "description": "GSEA methodology. gseapy is the Python port used here.",
++    },
++    "Schubert_PROGENy_2018": {
++        "title": "Perturbation-response genes reveal signaling footprints in cancer gene expression",
++        "authors": "Schubert et al.",
++        "journal": "Nature Communications",
++        "year": "2018",
++        "doi": "10.1038/s41467-017-02391-6",
++        "description": "PROGENy signaling-pathway responsive gene resource consumed via decoupler.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+diff --git a/workflow/modular/modules/pseudo_velocity.py b/workflow/modular/modules/pseudo_velocity.py
+index 169e8d7..764c2ff 100644
+--- a/workflow/modular/modules/pseudo_velocity.py
++++ b/workflow/modular/modules/pseudo_velocity.py
+@@ -11,6 +11,19 @@ from sklearn.neighbors import NearestNeighbors
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "project_local_proxy": {
++        "title": "Project-local KNN-based pseudo-velocity proxy",
++        "authors": "singlecell_factory contributors",
++        "journal": "Internal documentation",
++        "year": "2025",
++        "doi": "PMID: 33288903",
++        "description": "Lightweight transitional-probability proxy via PCA-space KNN flow when spliced/unspliced counts are unavailable. NOT a canonical RNA velocity method \u2014 see rna_velocity.py for that. PMID points to a transcription-velocity review for context only.",
++    },
++}
++
++
++
+ def _get_cell_group_col(adata) -> str:
+     """Return 'cell_type' if available, otherwise 'leiden' fallback."""
+     if "cell_type" in adata.obs.columns:
+diff --git a/workflow/modular/modules/pseudobulk_de.py b/workflow/modular/modules/pseudobulk_de.py
+index 53c37cc..ce22d88 100644
+--- a/workflow/modular/modules/pseudobulk_de.py
++++ b/workflow/modular/modules/pseudobulk_de.py
+@@ -14,6 +14,19 @@ from scipy import sparse
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Squair_pseudobulk_2021": {
++        "title": "Confronting false discoveries in single-cell differential expression",
++        "authors": "Squair et al.",
++        "journal": "Nature Communications",
++        "year": "2021",
++        "doi": "10.1038/s41467-021-25960-2",
++        "description": "Benchmark demonstrating pseudobulk DE outperforms per-cell DE \u2014 methodology applied here.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ MIN_CELLS_PER_SAMPLE = 3
+ MIN_SAMPLES_PER_CONDITION = 2
+diff --git a/workflow/modular/modules/qc.py b/workflow/modular/modules/qc.py
+index 5d4e0fe..1363839 100644
+--- a/workflow/modular/modules/qc.py
++++ b/workflow/modular/modules/qc.py
+@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "scanpy": {
++        "title": "SCANPY: large-scale single-cell gene expression data analysis",
++        "authors": "Wolf, Angerer, Theis",
++        "journal": "Genome Biology",
++        "year": "2018",
++        "doi": "10.1186/s13059-017-1382-0",
++        "description": "scanpy.pp.calculate_qc_metrics / pp.filter_genes / pp.filter_cells semantics used here.",
++    },
++    "Luecken_Theis_2019": {
++        "title": "Current best practices in single-cell RNA-seq analysis: a tutorial",
++        "authors": "Luecken, Theis",
++        "journal": "Molecular Systems Biology",
++        "year": "2019",
++        "doi": "10.15252/msb.20188746",
++        "description": "Canonical QC threshold guidance (mito %, n_genes/cell, doublet detection).",
++    },
++}
++
++
++
+ class QCModule:
+     """Mandatory module: compute QC metrics, filter low-quality cells/genes, and generate QC plots."""
+ 
+diff --git a/workflow/modular/modules/rna_velocity.py b/workflow/modular/modules/rna_velocity.py
+index e213f70..d30c527 100644
+--- a/workflow/modular/modules/rna_velocity.py
++++ b/workflow/modular/modules/rna_velocity.py
+@@ -22,6 +22,27 @@ from scipy import sparse
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Bergen_scVelo_2020": {
++        "title": "Generalizing RNA velocity to transient cell states through dynamical modeling",
++        "authors": "Bergen et al.",
++        "journal": "Nature Biotechnology",
++        "year": "2020",
++        "doi": "10.1038/s41587-020-0591-3",
++        "description": "scVelo stochastic + dynamical models. Library used here.",
++    },
++    "LaManno_velocity_2018": {
++        "title": "RNA velocity of single cells",
++        "authors": "La Manno et al.",
++        "journal": "Nature",
++        "year": "2018",
++        "doi": "10.1038/s41586-018-0414-6",
++        "description": "Original spliced/unspliced RNA velocity formulation.",
++    },
++}
++
++
+ logger = logging.getLogger(__name__)
+ _SCVELO_NUMPY2_PATCH_DONE = False
+ _WORKER_STATE: dict[str, Any] = {}
+@@ -275,6 +296,9 @@ class RNAVelocityModule:
+         _patch_scvelo_numpy2()
+ 
+         cfg = ctx.cfg.velocity
++        # Seed numpy RNG for stochastic velocity (scVelo uses numpy internally)
++        import numpy as _np
++        _np.random.seed(ctx.random_state)
+         n_vars_original = adata.n_vars
+         step_times: dict[str, float] = {}
+ 
+@@ -335,6 +359,7 @@ class RNAVelocityModule:
+                 adata_v.obs["velocity_confidence"].mean()
+             )
+         ctx.metadata["velocity_mode"] = cfg.mode
++        ctx.metadata["velocity_random_state"] = ctx.random_state
+         ctx.metadata["velocity_step_seconds"] = {
+             k: round(v, 3) for k, v in step_times.items()
+         }
+diff --git a/workflow/modular/modules/spatial_ingest.py b/workflow/modular/modules/spatial_ingest.py
+index 5df5efd..02ba5cd 100644
+--- a/workflow/modular/modules/spatial_ingest.py
++++ b/workflow/modular/modules/spatial_ingest.py
+@@ -52,6 +52,7 @@ __references__ = {
+         "title": "Visium Spatial Gene Expression",
+         "authors": "10x Genomics",
+         "year": "2020",
++        "doi": "https://www.10xgenomics.com/products/spatial-gene-expression",
+         "description": "Spatial barcoded array; tissue_positions_list.csv schema.",
+     },
+     "merfish_chen_2015": {
+@@ -65,6 +66,7 @@ __references__ = {
+         "title": "Xenium In Situ platform",
+         "authors": "10x Genomics",
+         "year": "2023",
++        "doi": "https://www.10xgenomics.com/products/xenium-in-situ",
+         "description": "Subcellular in-situ assay; same (x,y) per-cell schema.",
+     },
+ }
+diff --git a/workflow/modular/modules/trajectory.py b/workflow/modular/modules/trajectory.py
+index 001d5ae..7d8e8d2 100644
+--- a/workflow/modular/modules/trajectory.py
++++ b/workflow/modular/modules/trajectory.py
+@@ -14,6 +14,43 @@ from scipy import sparse
+ from ..context import PipelineContext
+ 
+ 
++__references__ = {
++    "Wolf_PAGA_2019": {
++        "title": "PAGA: graph abstraction reconciles clustering with trajectory inference through a topology preserving map of single cells",
++        "authors": "Wolf et al.",
++        "journal": "Genome Biology",
++        "year": "2019",
++        "doi": "10.1186/s13059-019-1663-x",
++        "description": "PAGA topology-preserving abstraction. sc.tl.paga used here.",
++    },
++    "Haghverdi_DPT_2016": {
++        "title": "Diffusion pseudotime robustly reconstructs lineage branching",
++        "authors": "Haghverdi, Buttner, Wolf et al.",
++        "journal": "Nature Methods",
++        "year": "2016",
++        "doi": "10.1038/nmeth.3971",
++        "description": "Diffusion pseudotime (sc.tl.dpt) used for ordering cells along trajectories.",
++    },
++    "Hao_WNN_2021": {
++        "title": "Integrated analysis of multimodal single-cell data",
++        "authors": "Hao et al.",
++        "journal": "Cell",
++        "year": "2021",
++        "doi": "10.1016/j.cell.2021.04.048",
++        "description": "WNN (Weighted Nearest Neighbor) joint embedding. X_wnn is preferred over X_pca for pseudotime when available, as it captures multi-modal cell state more faithfully.",
++    },
++    "Setty_Palantir_2019": {
++        "title": "Characterization of cell fate probabilities in single-cell data with Palantir",
++        "authors": "Setty et al.",
++        "journal": "Nature Biotechnology",
++        "year": "2019",
++        "doi": "10.1038/s41587-019-0068-4",
++        "description": "Pseudotime computed over a joint manifold embedding (X_wnn or X_pca). Supports the rationale for running DPT on the best available joint embedding rather than UMAP.",
++    },
++}
++
++
++
+ class TrajectoryModule:
+     """Optional module: comprehensive pseudotime trajectory inference.
+ 
+@@ -29,13 +66,27 @@ class TrajectoryModule:
+     """
+ 
+     name = "trajectory"
+-    requires_keys = {"obsm": ["X_umap"]}
++    requires_keys = {"obsm_any_of": ["X_wnn", "X_pca"]}
+     provides_keys = {"obs": ["dpt_pseudotime"]}
+ 
+     def run(self, ctx: PipelineContext) -> None:
++        from .._contract_violation import ModuleContractError
++
+         adata = ctx.adata
+-        if adata is None or "X_umap" not in adata.obsm:
+-            raise ValueError("Trajectory requires UMAP embedding.")
++        if adata is None:
++            raise ValueError("Trajectory requires AnnData.")
++
++        if "X_wnn" in adata.obsm:
++            embedding_key = "X_wnn"
++        elif "X_pca" in adata.obsm:
++            embedding_key = "X_pca"
++        else:
++            raise ModuleContractError(
++                "trajectory: neither adata.obsm['X_wnn'] nor adata.obsm['X_pca'] is present. "
++                "Run multimodal_integration (for X_wnn) or clustering (for X_pca) first."
++            )
++
++        ctx.metadata["trajectory_embedding_key"] = embedding_key
+ 
+         # --- PAGA trajectory graph ---
+         if "leiden" in adata.obs:
+diff --git a/workflow/modular/modules/tumor_microenvironment.py b/workflow/modular/modules/tumor_microenvironment.py
+index 4b2f3f2..9d2e348 100644
+--- a/workflow/modular/modules/tumor_microenvironment.py
++++ b/workflow/modular/modules/tumor_microenvironment.py
+@@ -13,6 +13,27 @@ sc = import_scanpy_or_stub()
+ from ..context import PipelineContext
+ from . import score_gene_sets
+ 
++
++__references__ = {
++    "Aran_TME_2019": {
++        "title": "Reference-based analysis of lung single-cell sequencing reveals a transitional profibrotic macrophage",
++        "authors": "Aran et al.",
++        "journal": "Nature Immunology",
++        "year": "2019",
++        "doi": "10.1038/s41590-018-0276-y",
++        "description": "Reference-based lung TME phenotype assignments.",
++    },
++    "Tirosh_scoring_2016": {
++        "title": "Dissecting the multicellular ecosystem of metastatic melanoma by single-cell RNA-seq",
++        "authors": "Tirosh et al.",
++        "journal": "Science",
++        "year": "2016",
++        "doi": "10.1126/science.aad0501",
++        "description": "Score-gene-set framework used for TME marker scoring.",
++    },
++}
++
++
+ # Literature-derived TME scoring signatures.
+ TME_SIGNATURES = {
+     # Cytolytic Activity Score — Rooney et al., Cell 2015
+diff --git a/workflow/modular/modules/validate_cbioportal.py b/workflow/modular/modules/validate_cbioportal.py
+index cc05517..effb058 100644
+--- a/workflow/modular/modules/validate_cbioportal.py
++++ b/workflow/modular/modules/validate_cbioportal.py
+@@ -9,6 +9,19 @@ import requests
+ 
+ from ..context import PipelineContext
+ 
++
++__references__ = {
++    "Cerami_cBioPortal_2012": {
++        "title": "The cBio Cancer Genomics Portal: An Open Platform for Exploring Multidimensional Cancer Genomics Data",
++        "authors": "Cerami et al.",
++        "journal": "Cancer Discovery",
++        "year": "2012",
++        "doi": "10.1158/2159-8290.CD-12-0095",
++        "description": "External cancer genomics validation portal queried by this module.",
++    },
++}
++
++
+ BASE_URL = "https://www.cbioportal.org/api"
+ 
+ 
+diff --git a/workflow/modular/pipeline.py b/workflow/modular/pipeline.py
+index b290da2..0e397b2 100644
+--- a/workflow/modular/pipeline.py
++++ b/workflow/modular/pipeline.py
+@@ -101,7 +101,12 @@ def _finalize_stage_success(
+ 
+ 
+ def _check_requires(mod, ctx: PipelineContext) -> list[str]:
+-    """Return list of missing keys declared in mod.requires_keys."""
++    """Return list of missing keys declared in mod.requires_keys.
++
++    Supports two obsm primitives:
++    - ``obsm``: all listed keys must be present.
++    - ``obsm_any_of``: at least one listed key must be present.
++    """
+     missing = []
+     adata = ctx.adata
+     if adata is None:
+@@ -113,6 +118,9 @@ def _check_requires(mod, ctx: PipelineContext) -> list[str]:
+     for key in reqs.get("obsm", []):
+         if key not in adata.obsm:
+             missing.append(f"obsm.{key}")
++    any_of_keys = reqs.get("obsm_any_of", [])
++    if any_of_keys and not any(key in adata.obsm for key in any_of_keys):
++        missing.append(f"obsm_any_of({','.join(any_of_keys)})")
+     for key in reqs.get("uns", []):
+         if key not in adata.uns:
+             missing.append(f"uns.{key}")
+@@ -198,6 +206,19 @@ def _build_registry() -> dict[str, object]:
+     from .modules.spatial_ingest import SpatialIngestModule
+     from .modules.spatial_neighborhoods import SpatialNeighborhoodsModule
+     from .modules.multimodal_integration import MultimodalIntegrationModule
++    from .modules.marker_db_loader import MarkerDbLoaderModule
++    from .modules.context_aware_annotation import ContextAwareAnnotationModule
++    from .modules.modality_registry import ModalityRegistryModule
++    from .modules.cross_modality_qc import CrossModalityQCModule
++    from .modules.atac_ingest import ATACIngestModule
++    from .modules.vdj_ingest import VDJIngestModule
++    from .modules.vdj_metrics import VDJMetricsModule
++    from .modules.atac_qc import ATACQCModule
++    from .modules.atac_lsi import ATACLSIModule
++    from .modules.peak_to_gene import PeakToGeneModule
++    from .modules.hic_ingest import HiCIngestModule
++    from .modules.hic_tad import HiCTADModule
++    from .modules.ribo_ingest import RiboIngestModule
+ 
+     return {
+         "cellranger": CellRangerModule(),
+@@ -228,7 +249,20 @@ def _build_registry() -> dict[str, object]:
+         "protein_adt": ProteinADTModule(),
+         "spatial_ingest": SpatialIngestModule(),
+         "spatial_neighborhoods": SpatialNeighborhoodsModule(),
++        "atac_ingest": ATACIngestModule(),
++        "atac_qc": ATACQCModule(),
++        "atac_lsi": ATACLSIModule(),
+         "multimodal_integration": MultimodalIntegrationModule(),
++        "marker_db_loader": MarkerDbLoaderModule(),
++        "context_aware_annotation": ContextAwareAnnotationModule(),
++        "modality_registry": ModalityRegistryModule(),
++        "cross_modality_qc": CrossModalityQCModule(),
++        "vdj_ingest": VDJIngestModule(),
++        "vdj_metrics": VDJMetricsModule(),
++        "peak_to_gene": PeakToGeneModule(),
++        "hic_ingest": HiCIngestModule(),
++        "hic_tad": HiCTADModule(),
++        "ribo_ingest": RiboIngestModule(),
+     }
+ 
+ 
+@@ -336,6 +370,12 @@ class _SkipModule(Exception):
+ 
+ def _run_module(mod, ctx: PipelineContext, *, mandatory: bool = False) -> None:
+     """Validate requires_keys then run a module. Raises _SkipModule for optional modules."""
++    # Wave 3 US-W3-2 — orchestrator-level poison guard. If a prior module
++    # raised ClusteringContractViolation and a caller accidentally swallowed
++    # it, the next module entry MUST abort here. See _contract_violation.py.
++    from ._contract_violation import assert_not_corrupted
++    name = getattr(mod, "name", type(mod).__name__)
++    assert_not_corrupted(ctx.adata, name)
+     missing = _check_requires(mod, ctx)
+     if missing:
+         name = getattr(mod, "name", type(mod).__name__)

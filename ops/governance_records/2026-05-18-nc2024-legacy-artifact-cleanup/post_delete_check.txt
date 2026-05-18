@@ -1,0 +1,9 @@
+# post-delete check
+2026-05-18T18:22:42+08:00
+canonical_exists=yes
+policy_exists=yes
+validation_report_exists=yes
+deleted_run_exists=no
+factory_test_dirs=0
+factory_results_ops_exists=no
+factory_output_exists=no

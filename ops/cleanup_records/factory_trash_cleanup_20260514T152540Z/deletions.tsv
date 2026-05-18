@@ -1,0 +1,22 @@
+path	reason
+/tmp/pytest-of-zerlinshen	obvious temporary pytest scratch
+/tmp/numba_cache	obvious temporary numba cache
+/tmp/codex-bwrap-synthetic-mount-targets-1000	obvious temporary Codex sandbox scratch
+/home/zerlinshen/singlecell_factory/results/nc2024_tumor_20260426/nc2024_tumor_20260426_121139/.checkpoints	non-canonical v1 checkpoint cache; provenance and final v2 output preserved
+/home/zerlinshen/singlecell_factory/results/nc2024_bh_20260426/nc2024_bh_20260426_132950/.checkpoints	non-canonical v1 checkpoint cache; provenance and final v2 output preserved
+/home/zerlinshen/singlecell_factory/results/nc2024_tumor_20260426	annotation-bugged v1 output; do-not-cite per project AGENTS.md; provenance copied before deletion
+/home/zerlinshen/singlecell_factory/results/nc2024_bh_20260426	annotation-bugged v1 output; do-not-cite per project AGENTS.md; provenance copied before deletion
+/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO_20260425_211822	checkpoint-only sparse-exact probe without final_adata/run_manifest/module_status
+/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO_20260425_212725	checkpoint-only sparse-exact probe without final_adata/run_manifest/module_status
+/home/zerlinshen/singlecell_factory/results/test_20260514_*	tiny transient test result directories
+/home/zerlinshen/multiomics_r_factory/output	factory-local smoke outputs; downstream outputs should live under project roots
+/home/zerlinshen/singlecell_factory/.pytest_cache	pytest cache
+/home/zerlinshen/singlecell_factory/.mplconfig	matplotlib cache/config scratch
+/home/zerlinshen/singlecell_factory/coverage.json	generated coverage artifact
+/home/zerlinshen/singlecell_factory/**/__pycache__	repo-local Python bytecode caches outside envs/results/.venv_pdf
+/home/zerlinshen/.cache/pip	pip download/build cache
+/home/zerlinshen/.cache/uv	uv package cache
+/home/zerlinshen/.cache/numba	numba compilation cache
+/home/zerlinshen/.cache/matplotlib	matplotlib cache
+/home/zerlinshen/.cache/google-chrome	browser cache
+/home/zerlinshen/conda/pkgs conda-clean-cache	conda clean --all --yes removed tarballs, index cache, and unused packages

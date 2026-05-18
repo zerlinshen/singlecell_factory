@@ -1,0 +1,88 @@
+{
+  "schema_version": "nc2024-architecture-validation/v1",
+  "generated_at": "2026-05-18T08:57:09Z",
+  "verdict": "PROJECT_ARCHITECTURE_PASS_WITH_FACTORY_LEGACY_DEBT",
+  "branch": "wave6-trevino-v5.1",
+  "head": "13c2c885c981262fc634125cc46f4abc9c08298f",
+  "project_root": "/home/zerlinshen/projects/nc-reproduction",
+  "factory_repo": "/home/zerlinshen/singlecell_factory",
+  "project_entries": {
+    "project.yaml": true,
+    "inputs": true,
+    "configs": true,
+    "notebooks": true,
+    "runs": true
+  },
+  "governance_validator": {
+    "overall_status": "pass",
+    "severity_counts": {
+      "info": 2,
+      "warning": 1
+    },
+    "control_plane_only": true,
+    "report": "ops/governance_records/2026-05-18-nc2024-architecture-validation/project_validations/nc-reproduction_all-runs.governance_validation.json"
+  },
+  "run_summaries": [
+    {
+      "run_id": "2026-05-14T0542Z-d192836",
+      "has_root_manifest": true,
+      "has_python_dir": true,
+      "has_r_dir": true,
+      "has_logs_dir": true,
+      "python_run_manifest_count": 0,
+      "module_status_count": 0,
+      "module_status_rows": 0,
+      "module_status_all_ok_or_completed": null,
+      "figure_count": 12,
+      "evidence_json_count": 0
+    },
+    {
+      "run_id": "2026-05-15T1815Z-wave4-200k-preflight",
+      "has_root_manifest": false,
+      "has_python_dir": true,
+      "has_r_dir": true,
+      "has_logs_dir": true,
+      "python_run_manifest_count": 0,
+      "module_status_count": 0,
+      "module_status_rows": 0,
+      "module_status_all_ok_or_completed": null,
+      "figure_count": 11,
+      "evidence_json_count": 0
+    },
+    {
+      "run_id": "2026-05-15T1833Z-wave4-800k-clustering",
+      "has_root_manifest": true,
+      "has_python_dir": true,
+      "has_r_dir": true,
+      "has_logs_dir": true,
+      "python_run_manifest_count": 1,
+      "module_status_count": 1,
+      "module_status_rows": 8,
+      "module_status_all_ok_or_completed": false,
+      "figure_count": 11,
+      "evidence_json_count": 0
+    }
+  ],
+  "project_governance_stray_files": [],
+  "factory_control_plane": {
+    "governance_record": "ops/governance_records/2026-05-18-nc2024-architecture-validation",
+    "old_ops_run_records_exists": false,
+    "new_governance_records_exists": true
+  },
+  "factory_legacy_nc2024_results": {
+    "count": 48,
+    "total_bytes": 30667532081,
+    "paths_file": "ops/governance_records/2026-05-18-nc2024-architecture-validation/factory_legacy_nc2024_results.txt",
+    "classification": "legacy_pre_project_architecture_scientific_or_test_outputs; not moved/deleted in this validation pass"
+  },
+  "purity_assessment": {
+    "project_layer": "pass: NC2024 evidence is present under /home/zerlinshen/projects/nc-reproduction with run roots and manifests/provenance where available",
+    "factory_control_plane": "pass: this validation writes only under ops/governance_records",
+    "factory_scientific_outputs": "legacy_debt: NC2024 outputs still exist under singlecell_factory/results and should be retention-reviewed before deletion or archival"
+  },
+  "hashes_after_validation": {
+    "tracked_diff_sha256": "0f99ffb410fa7a150e2a95bb1912cfab00057b30e37b50bd8875641217aaf650",
+    "untracked_inventory_sha256": "c3eeef24613550bb5d45869bb6c3111db0c3e326f68e07b7350bc0056a358877",
+    "status_count": 966
+  }
+}

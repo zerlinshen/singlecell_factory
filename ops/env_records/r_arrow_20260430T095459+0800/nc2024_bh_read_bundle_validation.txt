@@ -1,0 +1,5 @@
+read_bundle_ok
+obs_n=6426
+obsm_keys=X_umap,X_pca
+expr_dim=6426x9
+rank_genes=FALSE

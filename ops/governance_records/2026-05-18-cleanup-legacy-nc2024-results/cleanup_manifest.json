@@ -1,0 +1,263 @@
+{
+  "schema_version": "factory-cleanup/v1",
+  "timestamp_utc": "2026-05-18T09:00:10Z",
+  "decision": "Delete legacy NC2024 factory results after user approval; article validation now uses project-owned runs and new structure requires a clean factory surface.",
+  "target_patterns": [
+    "results/NC2024*",
+    "results/nc2024*"
+  ],
+  "deleted_count": 48,
+  "deleted_total_bytes": 30667532081,
+  "deleted_entries": [
+    {
+      "path": "results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_100K_AUTO_20260423_203921",
+      "kind": "dir",
+      "bytes": 7548561
+    },
+    {
+      "path": "results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_100K_AUTO_20260423_203921.launch.log",
+      "kind": "file",
+      "bytes": 115
+    },
+    {
+      "path": "results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203603",
+      "kind": "dir",
+      "bytes": 3751977
+    },
+    {
+      "path": "results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203603.launch.log",
+      "kind": "file",
+      "bytes": 110
+    },
+    {
+      "path": "results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203821",
+      "kind": "dir",
+      "bytes": 3756839
+    },
+    {
+      "path": "results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203821.launch.log",
+      "kind": "file",
+      "bytes": 110
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_ABUNDANCE_CORR_AUTO_20260423_072002",
+      "kind": "dir",
+      "bytes": 127034
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_CELLCOMM_AUTO_20260423_071941",
+      "kind": "dir",
+      "bytes": 3654206
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_CONTROLLER_VALIDATE.start.out",
+      "kind": "file",
+      "bytes": 383
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 33266
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.start.out",
+      "kind": "file",
+      "bytes": 120
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_085807.inventory.txt",
+      "kind": "file",
+      "bytes": 26421
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_094017.inventory.txt",
+      "kind": "file",
+      "bytes": 164796
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_095133.inventory.txt",
+      "kind": "file",
+      "bytes": 30097
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_095138.inventory.txt",
+      "kind": "file",
+      "bytes": 26938
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_095906.inventory.txt",
+      "kind": "file",
+      "bytes": 165341
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_171615.inventory.txt",
+      "kind": "file",
+      "bytes": 165651
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_172014.inventory.txt",
+      "kind": "file",
+      "bytes": 30952
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_172724.inventory.txt",
+      "kind": "file",
+      "bytes": 165668
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_172752.inventory.txt",
+      "kind": "file",
+      "bytes": 45691
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_173334.inventory.txt",
+      "kind": "file",
+      "bytes": 165886
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_174801.inventory.txt",
+      "kind": "file",
+      "bytes": 165995
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_194800.inventory.txt",
+      "kind": "file",
+      "bytes": 167274
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_PREPARE.launch.log",
+      "kind": "file",
+      "bytes": 60763
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 50480
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_190353",
+      "kind": "dir",
+      "bytes": 1798173183
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 0
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_LARGE_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 2031
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 28890
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 28903
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO.start.out",
+      "kind": "file",
+      "bytes": 125
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_DD_FIX_AUTO.start.out",
+      "kind": "file",
+      "bytes": 120
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO.launch.log",
+      "kind": "file",
+      "bytes": 28902
+    },
+    {
+      "path": "results/NC2024_NSCLC_FULL_COHORT_STAGE1_WITH_FALLBACK.launch.log",
+      "kind": "file",
+      "bytes": 607
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACROPHAGE_STATE_AUTO_20260423_073217",
+      "kind": "dir",
+      "bytes": 1904173
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACROPHAGE_STATE_SUMMARY_AUTO_20260423_073520",
+      "kind": "dir",
+      "bytes": 939
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACRO_GRN_FALLBACK_AUTO_20260423_074100",
+      "kind": "dir",
+      "bytes": 60980
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACRO_NKT_CORR_AUTO_20260423_073500",
+      "kind": "dir",
+      "bytes": 2285
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACRO_PATHWAY_AUTO_20260423_075000",
+      "kind": "dir",
+      "bytes": 1903853
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACRO_PROGRAM_AUTO_20260423_074300",
+      "kind": "dir",
+      "bytes": 2163
+    },
+    {
+      "path": "results/NC2024_NSCLC_MACRO_PROGRAM_DE_AUTO_20260423_074500",
+      "kind": "dir",
+      "bytes": 1484
+    },
+    {
+      "path": "results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528",
+      "kind": "dir",
+      "bytes": 7101513
+    },
+    {
+      "path": "results/NC2024_NSCLC_SUBTYPE_CHECKPOINT_AUDIT_AUTO_20260423_162105",
+      "kind": "dir",
+      "bytes": 128358
+    },
+    {
+      "path": "results/NC2024_NSCLC_SUBTYPE_CHECKPOINT_AUDIT_FORMALIZED_AUTO_20260423_165106",
+      "kind": "dir",
+      "bytes": 120061
+    },
+    {
+      "path": "results/NC2024_NSCLC_SUBTYPE_CHECKPOINT_AUDIT_VERIFIED_AUTO_20260423_172758",
+      "kind": "dir",
+      "bytes": 126978
+    },
+    {
+      "path": "results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900",
+      "kind": "dir",
+      "bytes": 195477
+    },
+    {
+      "path": "results/nc2024_bh_20260426_v2",
+      "kind": "dir",
+      "bytes": 247377943
+    },
+    {
+      "path": "results/nc2024_tumor_20260426_v2",
+      "kind": "dir",
+      "bytes": 28590038439
+    }
+  ],
+  "preserved": [
+    "/home/zerlinshen/projects/nc-reproduction",
+    "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526",
+    "factory source code, contracts, validators, docs, tests, environments",
+    "ops/governance_records/*"
+  ],
+  "disk_before_df": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/nvme0n1p5  563G  327G  207G  62% /\n",
+  "disk_after_df": "Filesystem      Size  Used Avail Use% Mounted on\n/dev/nvme0n1p5  563G  299G  236G  56% /\n",
+  "results_du_before": "29G\tresults",
+  "results_du_after": "27M\tresults"
+}

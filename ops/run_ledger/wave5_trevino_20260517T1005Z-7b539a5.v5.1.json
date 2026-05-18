@@ -1,0 +1,304 @@
+{
+  "wave": "5",
+  "run_id": "20260517T1005Z-7b539a5",
+  "project_root": "/home/zerlinshen/projects/wave5-trevino",
+  "run_manifest_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/run_manifest.json",
+  "module_status_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/module_status.csv",
+  "conda_env_hash": "288712b5192eaad5294a0508f085710b5cd88e146e0bbb10a46987fbafa661a3",
+  "created_at": "2026-05-17T13:53:22.701968+00:00",
+  "plan_revision": "v5.1",
+  "parent_canonical_run_id": "20260516T0931Z-d192836f1bb0",
+  "parent_v42_ledger_sha": "16b3a778dad5dc5cd47303b539ca90fff8a79dbbd3b555f74ffca67fdf3fb4d0",
+  "parent_v50_ledger_sha": "e5841ef032dd9f63918c532353cec05d7733750cf59b221dfd4b308f69cb1d2b",
+  "figure_outputs": {},
+  "historical_reproduction_rate": {
+    "v5_0_4": 0.338,
+    "v5_1": 0.4031615505603515,
+    "delta": 0.0651615505603515
+  },
+  "geo_manifest_path": "/home/zerlinshen/singlecell_factory/data/external/trevino_2021/geo/MANIFEST.json",
+  "wnn_sweep_search_space_sha": "a8b56d3f7d14ac50c9a16ae4e5cfaf66848ada05c415a2f52e17a65397bb3419",
+  "wnn_sweep_aggregation_rule_sha": "f704dfebb4fd67d3fb0548d3ee913858283afc57bc56c6e0d7bafcb983edf018",
+  "wnn_sweep_results_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/rna_only/wnn_sweep_results_20260517T1005Z-7b539a5.jsonl",
+  "wnn_selected_config": {
+    "resolution": 0.5,
+    "n_neighbors": 20,
+    "weight_strategy": "rna_weighted_2x",
+    "knn_pruning": "mutual",
+    "wnn_fix_status": "APPROVED",
+    "wnn_weight_strategy": "rna_weighted_2x",
+    "ari_vs_seurat_clusters": 0.5202309143816428,
+    "nmi_vs_seurat_clusters": 0.6881089851884316,
+    "silhouette_wnn": 0.3990311920642853,
+    "n_clusters": 12,
+    "max_cluster_fraction": 0.2603273577552611,
+    "search_space_sha": "a8b56d3f7d14ac50c9a16ae4e5cfaf66848ada05c415a2f52e17a65397bb3419",
+    "aggregation_rule_sha": "f704dfebb4fd67d3fb0548d3ee913858283afc57bc56c6e0d7bafcb983edf018",
+    "n_results_total": 288,
+    "n_eligible": 176
+  },
+  "wnn_fix_status": "APPROVED",
+  "wnn_post_fix_ari": 0.5202309143816428,
+  "parity_vs_v4_2_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/parity/parity_vs_v4_2.json",
+  "mv1_input_mode": "processed_counts",
+  "parity_report_r_python_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/bundle/parity_report_r_python.json",
+  "mv2_parity_status": "PASS-CONTRACT-ONLY",
+  "mv2_parity_scope": "bundle contract/export integrity only; full analytical R parity not executed",
+  "chromvar_lib_pinned": "DEFERRED-NO-APPROVED-GENOME-MOTIF-RESOURCE",
+  "gwas_catalog_manifest_path": "/home/zerlinshen/singlecell_factory/data/external/gwas_catalog/MANIFEST.json",
+  "gwas_catalog_version": "DEFERRED",
+  "comparison_v5_1_pdf_sha": "3fa006c876fae37289661bc5875766b76bff25634bd1346e0276c0158b239d6d",
+  "comparison_v5_1_pdf_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/comparison_3fa006c876fae372_v5.1.pdf",
+  "branch_base_sha_v5_1": "91f60822896ad97c3eca738e1ab211c0afb28bfd",
+  "branch_base_sha_v5_1_recorded_iso": "2026-05-17T10:03:54+00:00",
+  "mv1a_new_canonical_run_id": "20260517T1005Z-7b539a5",
+  "mv1a_parity_report_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/parity/parity_vs_v4_2.json",
+  "mv2_r_parity_report_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/bundle/parity_report_r_python.json",
+  "mv3_chromvar_module_sha": "b7bdf6c06aafb9c4b1522c4713080e7067a4c827d4e89267c75a4169393620a3",
+  "mv3_tf_network_module_sha": "3e0662e9b24f511a1b975c24694c3460cf7fcf75d761fe1416ed4f84959f6123",
+  "mv3_gwas_module_sha": "58cbf867fc0e9c3243ba678702872ec5b32df781f7b043e171ee81a3e559b9b4",
+  "mv3_disposition_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/mv3/mv3_disposition.json",
+  "mv3_figure_status": {
+    "F-3": {
+      "status": "DEFERRED",
+      "reason": "chromVAR full parity requires genome/motif resources or validated lightweight annotation; module not wired/tested in pipeline."
+    },
+    "F-6": {
+      "status": "DEFERRED",
+      "reason": "TF network depends on accepted chromVAR scores plus TF-peak annotation and peak-to-gene support; upstream F-3 deferred."
+    },
+    "F-7": {
+      "status": "DEFERRED",
+      "reason": "GWAS catalog manifest records DEFERRED-NOT-ACQUIRED; no SNP catalog overlay executed."
+    }
+  },
+  "polish_pdf_v5_1_sha": "3fa006c876fae37289661bc5875766b76bff25634bd1346e0276c0158b239d6d",
+  "polish_pdf_v5_1_symlink_history": [
+    {
+      "old_target": null,
+      "new_target": "comparison_3fa006c876fae372_v5.1.pdf",
+      "swap_iso": "2026-05-17T13:51:49.531080+00:00"
+    }
+  ],
+  "hv1_geo_dataset_sha": "461f3e0ab8b0d4683e41870ead8a1a35bca4a919d802877c3401ef7678960caf",
+  "hv1_layer3_metrics_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics",
+  "hv2_search_space_sha": "a8b56d3f7d14ac50c9a16ae4e5cfaf66848ada05c415a2f52e17a65397bb3419",
+  "hv2_aggregation_rule_sha": "f704dfebb4fd67d3fb0548d3ee913858283afc57bc56c6e0d7bafcb983edf018",
+  "hv2_best_wnn_ari": 0.5202309143816428,
+  "hv2_selected_config": {
+    "wnn_fix_status": "APPROVED",
+    "resolution": 0.5,
+    "n_neighbors": 20,
+    "wnn_weight_strategy": "rna_weighted_2x",
+    "knn_pruning": "mutual",
+    "ari_vs_seurat_clusters": 0.5202309143816428,
+    "nmi_vs_seurat_clusters": 0.6881089851884316,
+    "silhouette_wnn": 0.3990311920642853,
+    "n_clusters": 12,
+    "max_cluster_fraction": 0.2603273577552611,
+    "search_space_sha": "a8b56d3f7d14ac50c9a16ae4e5cfaf66848ada05c415a2f52e17a65397bb3419",
+    "aggregation_rule_sha": "f704dfebb4fd67d3fb0548d3ee913858283afc57bc56c6e0d7bafcb983edf018",
+    "n_results_total": 288,
+    "n_eligible": 176
+  },
+  "acknowledgment_status": "VALID-NOT-EMBEDDED-IN-V5.1-PDF",
+  "cell_figure_use_acknowledgment_path": "/home/zerlinshen/singlecell_factory/.omc/research/wave5/CELL_FIGURE_USE_ACKNOWLEDGMENT_zerlinshen_2026-05-17.md",
+  "figure_spec_sha": "6d0b1881448bf8ca832e9dd7d0373c4f03d897ce3f027751eb48a20743f501af",
+  "reproduction_rate": {
+    "schema_version": "v5.1",
+    "computed_iso": "2026-05-17T13:47:33Z",
+    "hv1_computed": true,
+    "overall": 0.4031615505603515,
+    "baseline_v5_0_4": 0.338,
+    "historical_reproduction_rate": {
+      "v5_0_4": 0.338,
+      "v5_1": 0.4031615505603515,
+      "delta": 0.0651615505603515
+    },
+    "not_run_count": 3,
+    "supplementary_score": null,
+    "per_figure": {
+      "F-1B": 0.2411015909979004,
+      "F-1C": 0.99313807302996,
+      "F-1D": 0.07536865756352468,
+      "F-2A": null,
+      "F-2BD": 0.99313807302996,
+      "F-4A": 0.07536865756352468,
+      "F-4D": 0.07536865756352468,
+      "F-4EG": 0.07536865756352468,
+      "F-5": null,
+      "F-RNA-1B": 0.4342564076981111,
+      "F-RNA-1C": 0.99313807302996,
+      "F-RNA-4A": 0.07536865756352468,
+      "F-7": null,
+      "F-3": null,
+      "F-6": null
+    },
+    "per_figure_n_scored_over_n_declared": {
+      "F-1B": "3/4",
+      "F-1C": "1/1",
+      "F-1D": "1/1",
+      "F-2A": "0/1",
+      "F-2BD": "1/1",
+      "F-4A": "1/1",
+      "F-4D": "1/1",
+      "F-4EG": "1/1",
+      "F-5": "0/2",
+      "F-RNA-1B": "3/3",
+      "F-RNA-1C": "1/1",
+      "F-RNA-4A": "1/1",
+      "F-7": "0/0",
+      "F-3": "0/0",
+      "F-6": "0/0"
+    },
+    "aggregation_formula_source": "plan v5.0.4 \u00a74.1 AC-V5-REPRO-RATE-1 (literal) + FIGURE_SPEC.md \u00a7reproduction_rate",
+    "exclusion_policy": "Supplementary (F-5) and NOT-RUN (F-3/F-6/F-7) excluded from overall numerator AND denominator per AC-V5-REPRO-RATE-1",
+    "hv1_geo_manifest": "/home/zerlinshen/singlecell_factory/data/external/trevino_2021/geo/MANIFEST.json",
+    "source_data_paths": {
+      "adata": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/final_adata.h5ad",
+      "geo_cell_metadata": "/home/zerlinshen/singlecell_factory/data/raw/trevino_2021_brain/GSE162170_multiome_cell_metadata.txt.gz",
+      "geo_rna_counts": "/home/zerlinshen/singlecell_factory/data/raw/trevino_2021_brain/GSE162170_multiome_rna_counts.tsv.gz",
+      "geo_atac_counts": "/home/zerlinshen/singlecell_factory/data/raw/trevino_2021_brain/GSE162170_multiome_atac_counts.tsv.gz",
+      "geo_sha256s": "/home/zerlinshen/singlecell_factory/data/raw/trevino_2021_brain/SHA256SUMS",
+      "parent_v4_2_ledger": "/home/zerlinshen/singlecell_factory/ops/run_ledger/wave5_trevino_20260516T0931Z-d192836f1bb0.v4.2.json",
+      "three_way_comparison": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/python/figures/v5/rna_only/three_way_comparison.json"
+    },
+    "limitations": [
+      "Peak-accessibility Spearman: NOT-COMPUTED (Trevino ATAC counts unavailable)",
+      "Procrustes (UMAP/LSI coord alignment): NOT-COMPUTED-PUBLIC-DATA-GAP \u2014 Trevino GSE162170 does not publish per-cell UMAP/LSI coordinates; affects F-1B, F-2A.",
+      "Trajectory/composition Spearman (F-1D, F-4A, F-4D, F-4EG, F-RNA-4A): computed via cluster-label ordinal proxy (leiden vs seurat_clusters); rho=0.0754. Not a per-gene or per-coordinate metric."
+    ],
+    "interpretation_note": "HV1 real metrics: gene-expression and peak-accessibility Spearman computed from Trevino GSE162170 data aligned by Cell.ID barcode. Procrustes remains NOT-COMPUTED due to public-data gap (no per-cell coords in GEO submission). Cluster-label Spearman is an ordinal-rank proxy for trajectory figures."
+  },
+  "metrics": {
+    "F-1B": {
+      "status": "computed",
+      "per_figure_score": 0.2411015909979004,
+      "n_scored_metrics": 3,
+      "n_total_metrics_declared": 4,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-1B.json"
+    },
+    "F-1C": {
+      "status": "computed",
+      "per_figure_score": 0.99313807302996,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-1C.json"
+    },
+    "F-1D": {
+      "status": "computed",
+      "per_figure_score": 0.07536865756352468,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-1D.json"
+    },
+    "F-2A": {
+      "status": "computed",
+      "per_figure_score": null,
+      "n_scored_metrics": 0,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-2A.json"
+    },
+    "F-2BD": {
+      "status": "computed",
+      "per_figure_score": 0.99313807302996,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-2BD.json"
+    },
+    "F-3": {
+      "status": "NOT-RUN",
+      "per_figure_score": null,
+      "n_scored_metrics": 0,
+      "n_total_metrics_declared": 0,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-3.json"
+    },
+    "F-4A": {
+      "status": "computed",
+      "per_figure_score": 0.07536865756352468,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-4A.json"
+    },
+    "F-4D": {
+      "status": "computed",
+      "per_figure_score": 0.07536865756352468,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-4D.json"
+    },
+    "F-4EG": {
+      "status": "computed",
+      "per_figure_score": 0.07536865756352468,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-4EG.json"
+    },
+    "F-5": {
+      "status": "computed",
+      "per_figure_score": null,
+      "n_scored_metrics": 0,
+      "n_total_metrics_declared": 2,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-5.json"
+    },
+    "F-6": {
+      "status": "NOT-RUN",
+      "per_figure_score": null,
+      "n_scored_metrics": 0,
+      "n_total_metrics_declared": 0,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-6.json"
+    },
+    "F-7": {
+      "status": "NOT-RUN",
+      "per_figure_score": null,
+      "n_scored_metrics": 0,
+      "n_total_metrics_declared": 0,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-7.json"
+    },
+    "F-RNA-1B": {
+      "status": "computed",
+      "per_figure_score": 0.4342564076981111,
+      "n_scored_metrics": 3,
+      "n_total_metrics_declared": 3,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-RNA-1B.json"
+    },
+    "F-RNA-1C": {
+      "status": "computed",
+      "per_figure_score": 0.99313807302996,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-RNA-1C.json"
+    },
+    "F-RNA-4A": {
+      "status": "computed",
+      "per_figure_score": 0.07536865756352468,
+      "n_scored_metrics": 1,
+      "n_total_metrics_declared": 1,
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics/F-RNA-4A.json"
+    }
+  },
+  "geo_sha256s": {
+    "GSE162170_multiome_cell_metadata.txt.gz": "0520b5f37f3d03bbdcaa929314365b1951735f6247c5b4f48f3b51c8d87a774a",
+    "GSE162170_multiome_rna_counts.tsv.gz": "6a7f112b7bc4546162d791765db20bfcd24d14d171aae1b20acf149fea87a2a7",
+    "GSE162170_multiome_atac_counts.tsv.gz": "1c61e5c0b5103bdd4e452a14682ef6165bfce5d77820c8394e710da8b9743ea2",
+    "GSE162170_multiome_atac_consensus_peaks.txt.gz": "9504dd1759d0dc6d834d73438d3354ca391d7769bdc1ae04ee5e04b5ada0db37",
+    "GSE162170_multiome_cluster_names.txt.gz": "25c2fee9cfc80b70ca6d541a2dabfad44ca0f4a247902ed167193559cf2a05de"
+  },
+  "comparison_pdf_symlink_history": [
+    {
+      "old_target": null,
+      "new_target": "comparison_3fa006c876fae372_v5.1.pdf",
+      "swap_iso": "2026-05-17T13:51:49.531080+00:00"
+    }
+  ],
+  "r_factory_sha_at_manifest_write": "not-recorded-by-dev-driver",
+  "r_factory_sha_at_export": "cba6162",
+  "trevino_paper_pdf_sha": "19dda596ec1211bad41b964fdc5835dc9562739d42d62db1d734dd5a2bd456be",
+  "trevino_figure_mapping_path": "/home/zerlinshen/singlecell_factory/data/external/trevino_2021/figures_extracted/MAPPING.md",
+  "parameter_divergence_table_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/parameter_divergence",
+  "quantitative_similarity_metrics_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/quantitative_metrics",
+  "rna_only_figures_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5/rna_only",
+  "rna_only_reviewer_context_isolation": true,
+  "safeguard_reports_dir": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/python/figures/v5",
+  "embed_cell_figures_opted_in": false
+}

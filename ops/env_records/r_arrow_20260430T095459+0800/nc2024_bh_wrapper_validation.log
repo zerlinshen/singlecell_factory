@@ -1,0 +1,5 @@
+Reusing validated R bundle: /home/zerlinshen/singlecell_factory/results/nc2024_bh_20260426_v2/r_bundle
+Error in find_bundle_csv(bundle_dir, stem) : 
+  Missing required bundle file: obs(.csv|.csv.gz)
+Calls: validate_remote_bundle -> <Anonymous> -> lapply -> FUN -> find_bundle_csv
+Execution halted

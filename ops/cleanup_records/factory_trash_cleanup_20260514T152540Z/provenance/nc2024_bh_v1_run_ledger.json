@@ -1,0 +1,140 @@
+{
+  "schema_version": "run_ledger_v1",
+  "timestamp_utc": "2026-04-26T05:29:50.263743Z",
+  "project": "nc2024_bh",
+  "cli_args": [
+    "/home/zerlinshen/singlecell_factory/workflow/modular/cli.py",
+    "--project",
+    "nc2024_bh",
+    "--sample-root",
+    "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort",
+    "--output-dir",
+    "/home/zerlinshen/singlecell_factory/results/nc2024_bh_20260426",
+    "--optional-modules",
+    "clustering,batch_correction,differential_expression,annotation,pseudobulk_de",
+    "--cohort-subset",
+    "condition=healthy_background",
+    "--n-pcs",
+    "15",
+    "--leiden-resolution",
+    "1.0",
+    "--expected-doublet-rate",
+    "0.06",
+    "--batch-method",
+    "harmony",
+    "--batch-key",
+    "sample",
+    "--checkpoint",
+    "--no-run-cellranger-if-missing",
+    "--doublet-strategy",
+    "grouped",
+    "--clustering-engine",
+    "sparse_exact",
+    "--checkpoint-policy",
+    "mandatory_only",
+    "--lazy-read",
+    "auto",
+    "--de-correction",
+    "bonferroni",
+    "--de-min-pct",
+    "0.30",
+    "--de-method",
+    "wilcoxon",
+    "--de-logfc-threshold",
+    "0.0"
+  ],
+  "env": {
+    "CONDA_EXE": "/home/zerlinshen/conda/bin/conda",
+    "CONDA_TOOLCHAIN_BUILD": "x86_64-conda-linux-gnu",
+    "CONDA_ROOT": "/home/zerlinshen/conda",
+    "CONDA_PREFIX": "/home/zerlinshen/conda/envs/sc_gpu",
+    "CONDA_TOOLCHAIN_HOST": "x86_64-conda-linux-gnu",
+    "HOME": "/home/zerlinshen",
+    "LANG": "en_US.UTF-8",
+    "CONDA_PROMPT_MODIFIER": "(sc_gpu) ",
+    "USER": "zerlinshen",
+    "CONDA_SHLVL": "2",
+    "CONDA_PYTHON_EXE": "/home/zerlinshen/conda/bin/python",
+    "CONDA_DEFAULT_ENV": "sc_gpu",
+    "LC_ALL": "C.UTF-8",
+    "CONDA_PREFIX_1": "/home/zerlinshen/conda",
+    "CONDA_BUILD_CROSS_COMPILATION": "",
+    "CONDA_BUILD_SYSROOT": "/home/zerlinshen/conda/envs/sc_gpu/x86_64-conda-linux-gnu/sysroot"
+  },
+  "git_sha": "fdc48efb1becd940472388d5a41c4c281b6b158a",
+  "git_branch": "main",
+  "git_dirty": true,
+  "conda_env": "sc_gpu",
+  "python_version": "3.13.12 | packaged by conda-forge | (main, Feb  5 2026, 05:53:46) [GCC 14.3.0]",
+  "hostname": "zerlinshen-MS-7E49",
+  "sample_root": "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort",
+  "optional_modules": [
+    "clustering",
+    "batch_correction",
+    "differential_expression",
+    "annotation",
+    "pseudobulk_de"
+  ],
+  "end_timestamp_utc": "2026-04-26T05:30:15.796849Z",
+  "total_wall_seconds": 25.533,
+  "peak_rss_bytes": 18769174528,
+  "final_adata_sha256": "268ae5a314306e107c1c90b24d48ec860a8ddbae0319ffa765042e867abd3091",
+  "module_results": [
+    {
+      "name": "cellranger",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 6.572,
+      "rss_peak_bytes": 911069184
+    },
+    {
+      "name": "qc",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 1.205,
+      "rss_peak_bytes": 897417216
+    },
+    {
+      "name": "doublet_detection",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 1.983,
+      "rss_peak_bytes": 880435200
+    },
+    {
+      "name": "clustering",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 8.331,
+      "rss_peak_bytes": 1108815872
+    },
+    {
+      "name": "annotation",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 1.417,
+      "rss_peak_bytes": 1129349120
+    },
+    {
+      "name": "batch_correction",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 2.575,
+      "rss_peak_bytes": 2573160448
+    },
+    {
+      "name": "differential_expression",
+      "status": "ok",
+      "message": "completed",
+      "wall_seconds": 2.611,
+      "rss_peak_bytes": 2777133056
+    },
+    {
+      "name": "pseudobulk_de",
+      "status": "skipped",
+      "message": "No explicit confirmatory pseudobulk contrast was provided.",
+      "wall_seconds": 0.412,
+      "rss_peak_bytes": 2777444352
+    }
+  ]
+}

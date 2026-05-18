@@ -1,0 +1,37 @@
+{
+  "schema_version": "cell-reproduction-status/v1",
+  "generated_at": "2026-05-18T09:20:32Z",
+  "project": "wave5-trevino Cell public-resource reproduction",
+  "run_dir": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88",
+  "quality_gate_json": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/all_figures_final_quality_gate_review.json",
+  "decision": "conditional",
+  "reason": "Code review is clean for current scope; scientific gate is conditional because expected false checks/resource gaps remain explicitly documented rather than forced.",
+  "evidence_json_count": 17,
+  "evidence_panel_count_direct": 31,
+  "panel_count_from_progress_snapshot": 53,
+  "expected_false_checks": [
+    "figure2cd_public_author_cre_gene_resources.json:figure2c_public_link_count_matches_paper_64878",
+    "figure3b_public_matrix_atac_pseudotime_transfer.json:all_marker_direction_checks_pass",
+    "figure7_public_asd_bpnet_evidence.json:s6d_caption_like_case_matches_262"
+  ],
+  "unexpected_false_checks": [],
+  "missing_referenced_paths": [],
+  "hash_mismatches": [],
+  "resource_boundaries": [
+    "Current computation starts from GEO public matrices, public author RDS/tables, and Cell supplementary tables, not public FASTQ/SRA raw reads; no FASTQ-to-CellRanger parity is claimed.",
+    "Figure 7 exact BPNet denominator universe/model weights/ref-alt tracks are absent from staged public resources; S6-derived summaries are generated with explicit gap panels.",
+    "Non-computational/IHC/source-image panels are classified as not reproducible from single-cell matrices unless raw microscopy images are obtained."
+  ],
+  "code_review": {
+    "recommendation": "APPROVE",
+    "architectural_status": "CLEAR",
+    "clean": true,
+    "scope": "Current Trevino public-resource reproduction artifacts and Figure 7 script; broad pre-existing dirty tree not claimed clean.",
+    "findings": [],
+    "watches": [
+      "Quality gate decision is conditional scientifically: exact FASTQ/fragments-to-paper parity and some author-only/model-derived panels remain resource gaps, but the code/evidence is honest and non-blocking.",
+      "The repository has many pre-existing modified/untracked files outside this continuation; final claims are limited to the verified Wave5/Trevino run artifacts and scripts."
+    ]
+  },
+  "retention_decision": "No Cell/Trevino run deletion performed in this pass; latest evidence run remains 20260517T1436Z-13c2c88."
+}

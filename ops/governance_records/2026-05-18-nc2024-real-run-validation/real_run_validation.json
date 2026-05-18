@@ -1,0 +1,112 @@
+{
+  "schema_version": "nc2024-real-run-validation/v1",
+  "generated_at": "2026-05-18T09:03:03Z",
+  "verdict": "REAL_RUN_PASS_PROJECT_ARCHITECTURE_CONFIRMED",
+  "run_id": "2026-05-18T0900Z-13c2c88",
+  "run_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88",
+  "project_root": "/home/zerlinshen/projects/nc-reproduction",
+  "factory_repo": "/home/zerlinshen/singlecell_factory",
+  "launch_mode": "STAGE_A=subsample equivalent direct command after launcher run-id recovery",
+  "initial_launcher_failure": {
+    "observed": true,
+    "reason": "legacy launcher generated run id with non-hex suffix, rejected by project_paths run-id regex",
+    "recovery": "reran with valid run id using factory git short SHA; patched launch_wave3_nc2024.sh RUN_ID line for future runs",
+    "invalid_logs": [
+      "/home/zerlinshen/projects/nc-reproduction/runs/launch_wave3_subsample_structure_validation_20260518T090019Z.log"
+    ]
+  },
+  "module_status": {
+    "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/module_status.csv",
+    "counts": {
+      "ok": 8,
+      "skipped": 1
+    },
+    "rows": [
+      {
+        "module": "cellranger",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "marker_db_loader",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "qc",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "doublet_detection",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "clustering",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "annotation",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "batch_correction",
+        "status": "skipped",
+        "message": "Only one batch found in 'sample'."
+      },
+      {
+        "module": "context_aware_annotation",
+        "status": "ok",
+        "message": "completed"
+      },
+      {
+        "module": "differential_expression",
+        "status": "ok",
+        "message": "completed"
+      }
+    ],
+    "pass_condition": "all statuses are ok or expected skipped; batch_correction skipped because one sample has only one batch"
+  },
+  "final_adata": {
+    "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/final_adata.h5ad",
+    "shape": [
+      5281,
+      19504
+    ],
+    "obs_columns_checked": [
+      "leiden",
+      "cell_type",
+      "context_aware_celltype",
+      "context_aware_substate",
+      "sample"
+    ]
+  },
+  "governance_validation": {
+    "single_run_status": "pass",
+    "single_run_severity_counts": {},
+    "all_runs_status": "pass",
+    "all_runs_severity_counts": {
+      "info": 2,
+      "warning": 1
+    },
+    "single_run_report": "ops/governance_records/2026-05-18-nc2024-real-run-validation/project_validations/nc-reproduction_2026-05-18T0900Z-13c2c88.governance_validation.json"
+  },
+  "cleanup_before_run": {
+    "record": "ops/governance_records/2026-05-18-cleanup-legacy-nc2024-results/cleanup_manifest.json",
+    "deleted_count": 48,
+    "deleted_total_bytes": 30667532081,
+    "results_du_before": "29G\tresults",
+    "results_du_after": "27M\tresults"
+  },
+  "factory_purity": {
+    "factory_nc_result_leftovers": [],
+    "factory_results_du": "27M\t/home/zerlinshen/singlecell_factory/results",
+    "new_scientific_outputs_in_factory": false
+  },
+  "logs": [
+    "/home/zerlinshen/projects/nc-reproduction/runs/launch_wave3_subsample_structure_validation_2026-05-18T0900Z-13c2c88.log"
+  ]
+}

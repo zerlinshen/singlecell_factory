@@ -1,0 +1,122 @@
+# Project-specific retention and final-backup policy for Trevino Cell reproduction.
+schema_version: project-retention-policy/v1
+created_at: 2026-05-18T09:30:11Z
+project_id: wave5-trevino
+project_root: /home/zerlinshen/projects/wave5-trevino
+project_purpose: manuscript_reproduction
+analysis_type: public_resource_multiomic_figure_reproduction
+method_family:
+  - public_processed_matrix_reanalysis
+  - author_resource_evidence_audit
+  - figure_level_reproduction
+  - claim_level_quality_gate
+scientific_question: >-
+  Reproduce and audit the Trevino et al. Cell developmental brain multiome figures from the earliest public computable inputs, while separating exact reproductions, public-resource approximations, and hard resource gaps.
+truth_boundary: >-
+  Current source of truth starts from GEO public processed matrices, author public RDS/tables, Cell supplementary tables, and local figure-rendering scripts. Do not claim FASTQ/fragments/BPNet-model parity until those resources are staged and validated.
+latest_source_of_truth_run_id: 20260517T1436Z-13c2c88
+latest_source_of_truth_run_path: /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88
+linked_pipeline_run_id: 2026-05-17T2004Z-13c2c88
+linked_pipeline_run_path: /home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88
+retention_rule:
+  default: keep_latest_validated_reproduction_result
+  current_action: do_not_delete_existing_cell_runs_without_a_separate_cell_retention_round
+  rationale: >-
+    The latest evidence run is the human/scientific source of truth, but older Cell runs still encode staged resource acquisition and pipeline-viability context. Delete them only after a Cell-specific cleanup inventory confirms the newest run and final backup cover the cited evidence.
+  retain_latest_source_of_truth_run: true
+  retain_current_linked_pipeline_run: true
+  superseded_run_ids:
+    - 20260516T0931Z-d192836f1bb0
+    - 20260517T1005Z-7b539a5
+  candidate_cleanup_run_ids:
+    - 20260516T0931Z-d192836f1bb0
+    - 20260517T1005Z-7b539a5
+  protected_until_reviewed_run_ids:
+    - 2026-05-17T2004Z-13c2c88
+selected_best_parameters:
+  rna_velocity_subset_cells: 6000
+  atac_transfer_subset_cells: 12000
+  figure3c_link_cluster_strategy: derived_k5_from_public_rna_expression_profiles
+  figure3e_enrichment_strategy: derived_k5_public_matrix_motif_enrichment
+  figure3f_pair_selection: public_rna_chromvar_correlated_tf_motif_pairs
+  figure4_6_fcm_source: author_public_FCM_Object_RDS
+  figure7_strategy: public_ASD_BPNet_gap_audit_with_explicit_denominator_boundary
+module_list:
+  - public_resource_download_inventory
+  - loader_smoke
+  - rna_velocity
+  - atac_pseudotime_transfer
+  - cre_gene_linkage_heatmap
+  - local_gene_set_enrichment
+  - motif_enrichment
+  - tf_motif_correlation
+  - multiome_marker_overlay
+  - fcm_public_evidence
+  - asd_bpnet_gap_audit
+  - final_quality_gate
+filtering_thresholds:
+  rna_cells_public_overlap: 55653
+  atac_cells_public_gene_activity: 31304
+  figure3a_velocity_subset: 6000
+  figure3b_atac_transfer_subset: 12000
+  evidence_json_required_minimum: 17
+  unexpected_false_checks_allowed: 0
+batch_or_integration_keys:
+  biological_alignment_keys:
+    - figure_panel
+    - public_matrix_modality
+    - author_resource_table
+  integration_notes: >-
+    This is not a batch-corrected cohort analysis. Cross-modality claims are made only where public RNA/ATAC/author-resource joins are explicitly recorded by evidence JSON.
+sketch_or_metacell_settings:
+  use_sketch_for_exact_reproduction_claims: false
+  note: >-
+    Subsets are computationally bounded reproduction subsets, not atlas-level sketches. Exactness is judged by evidence checks and documented resource boundaries.
+random_seed:
+  status: script_level_when_available
+  required_for_future_runs: true
+quality_gate:
+  decision: conditional
+  evidence_json_count: 17
+  evidence_panel_count_direct: 31
+  panel_count_from_progress_snapshot: 53
+  unexpected_false_checks: []
+  expected_false_checks:
+    - figure2cd_public_author_cre_gene_resources.json:figure2c_public_link_count_matches_paper_64878
+    - figure3b_public_matrix_atac_pseudotime_transfer.json:all_marker_direction_checks_pass
+    - figure7_public_asd_bpnet_evidence.json:s6d_caption_like_case_matches_262
+  status_record: /home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-cell-reproduction-status/REPORT.md
+human_facing_outputs:
+  - /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/TREVINO_ALL_FIGURES_COMPLETION_REPORT.md
+  - /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/FINAL_QUALITY_GATE_REVIEW.md
+  - /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/progress_snapshot.md
+agent_facing_evidence:
+  - /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/progress_snapshot.json
+  - /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/all_figures_final_quality_gate_review.json
+  - /home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/reproduction_ledger/current_reproduction_ledger.json
+final_backup_contents:
+  - project.yaml
+  - ledger/project_retention_policy.yaml
+  - TREVINO_ALL_FIGURES_COMPLETION_REPORT.md
+  - FINAL_QUALITY_GATE_REVIEW.md
+  - progress_snapshot.json
+  - progress_snapshot.md
+  - python/figure_reproduction_evidence/*.json
+  - python/figure_target_matrix/figure_target_matrix.*
+  - python/reproduction_ledger/current_reproduction_ledger.*
+  - resource_manifest.json
+  - author_*_manifest.json
+  - download and build logs supporting cited public resources
+  - figure output directories under python/figures/public_matrix/
+never_delete_assets:
+  - /home/zerlinshen/projects/wave5-trevino/inputs
+  - /home/zerlinshen/projects/wave5-trevino/configs
+  - /home/zerlinshen/projects/wave5-trevino/ledger
+  - /home/zerlinshen/projects/wave5-trevino/docs
+  - /home/zerlinshen/projects/wave5-trevino/project.yaml
+  - /home/zerlinshen/singlecell_factory/ops/governance_records
+next_agent_rules:
+  - Treat 20260517T1436Z-13c2c88 as the current Cell/Trevino human-facing source of truth.
+  - Do not convert conditional scientific pass into exact raw-data parity.
+  - Before deleting older Cell runs, create a cleanup inventory and prove all cited human reports/evidence are preserved in the latest run or final backup.
+  - Future exactness upgrades should stage missing FASTQ/fragments/BPNet resources first, then open a new validated run and update this policy.

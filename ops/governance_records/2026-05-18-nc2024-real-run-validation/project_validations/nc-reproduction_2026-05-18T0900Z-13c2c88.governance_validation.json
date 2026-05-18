@@ -1,0 +1,33 @@
+{
+  "schema_version": "project-governance-validation/v1",
+  "generated_at": "2026-05-18T09:01:44Z",
+  "control_plane_only": true,
+  "project_root": "/home/zerlinshen/projects/nc-reproduction",
+  "project_id": "nc-reproduction",
+  "requested_run_id": "2026-05-18T0900Z-13c2c88",
+  "overall_status": "pass",
+  "severity_counts": {},
+  "project_findings": [],
+  "runs": [
+    {
+      "run_id": "2026-05-18T0900Z-13c2c88",
+      "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88",
+      "root_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/manifest.json",
+      "producer_native_provenance": {
+        "python_run_manifests": [
+          "NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/run_manifest.json"
+        ],
+        "python_module_status": [
+          "NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/module_status.csv"
+        ],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 13,
+        "evidence_json": 0
+      },
+      "findings": []
+    }
+  ]
+}

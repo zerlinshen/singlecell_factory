@@ -1,0 +1,42 @@
+{
+  "ledger_entry_id": "wave2_us018_disk_preflight_20260515",
+  "captured_at": "2026-05-15T18:00:00Z",
+  "wave": "Wave 2+ Track E preflight (US-018)",
+  "purpose": "Pre-flight disk inventory and Wave 1 salvage h5ad provenance pin before the Track E NC real re-run launches (US-019).",
+  "disk_state": {
+    "filesystem": "/dev/nvme0n1p5",
+    "size_total_gb": 563,
+    "used_gb": 198,
+    "free_gb": 336,
+    "use_pct": 38,
+    "headroom_gb_above_250_floor": 86,
+    "gate_check": "df -BG /home/zerlinshen | awk 'NR==2 {if ($4+0 < 250) exit 1}' → exit 0"
+  },
+  "preserved_artifacts": [
+    {
+      "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-14T1738Z-d192836/python/NC2024_NSCLC_CANDIDATE_20260515_013812/.checkpoints/after_annotation.h5ad",
+      "size_gb": 21,
+      "sha256": "22c8b47150997a88cebd43138c7732f2f18fca9e8ec15ccf917411701990de32",
+      "role": "Wave 1 T7 v6 candidate after_annotation checkpoint",
+      "ac_evidence": "Source for AC-1 PASS (macro_f1_delta_pp=25pp) and AC-2 PASS (3 substates FDR=0) — via scripts/eval/salvage_t7_context_aware.py + salvage_t7_substate_de.py",
+      "provenance_json": "after_annotation.provenance.json (sibling file in .checkpoints/)"
+    },
+    {
+      "path": "/home/zerlinshen/singlecell_factory/results/nc2024_tumor_20260426_v2/",
+      "size_gb": 27,
+      "role": "April-26 NC2024 tumor cohort baseline — paper_reproduction_results.json + r_bundle/",
+      "ac_evidence": "April-26 ledger entries (this dir) cite the 5/5 cluster-mislabel pattern that motivated the C1 marker intelligence work (deep-interview Round 1)."
+    }
+  ],
+  "deleted_or_archived": {
+    "summary": "Disk cleanup already executed 2026-05-15 (170GB recovered): Tier A legacy NC runs (4 dirs × ~30G), Tier B stale Wave 1 zarr checkpoints (52GB), failed T7 v3 partial outputs.",
+    "see": "ops/run_ledger/ April-26 ledger entries + Wave 2+ consensus plan §3 Track E.0"
+  },
+  "go_no_go_for_us_019_nc_rerun": {
+    "verdict": "GO when Track B Hotspot 1 fix lands (US-007 + US-008). Disk headroom is sufficient for two ~130GB paired runs with checkpoint enabled.",
+    "blocking_dependencies": [
+      "US-007 (B.2 Hotspot 1 fix in clustering._run_gpu)",
+      "US-008 (B.3 200k/800k memory regression test)"
+    ]
+  }
+}

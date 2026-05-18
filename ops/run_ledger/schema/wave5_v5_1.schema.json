@@ -160,8 +160,8 @@
     },
     "mv2_parity_status": {
       "type": "string",
-      "enum": ["PASS", "FAIL-CORRELATION", "FAIL-JACCARD", "FAIL-RMS"],
-      "description": "Overall MV2 R-Python parity result."
+      "enum": ["PASS", "PASS-CONTRACT-ONLY", "DEFERRED", "FAIL-CORRELATION", "FAIL-JACCARD", "FAIL-RMS"],
+      "description": "Overall MV2 R-Python parity result. PASS-CONTRACT-ONLY means the bundle/export contract passed but full analytical R parity was not executed."
     },
     "chromvar_lib_pinned": {
       "type": "string",

@@ -1,0 +1,402 @@
+Channels:
+ - conda-forge
+Platform: linux-64
+Collecting package metadata (repodata.json): - \ | done
+Solving environment: - \ | / done
+
+
+==> WARNING: A newer version of conda exists. <==
+    current version: 26.1.1
+    latest version: 26.3.2
+
+Please update conda by running
+
+    $ conda update -n base -c conda-forge conda
+
+
+
+## Package Plan ##
+
+  environment location: /home/zerlinshen/conda/envs/r_multiomics_arrow
+
+  added / updated specs:
+    - r-arrow
+
+
+The following packages will be downloaded:
+
+    package                    |            build
+    ---------------------------|-----------------
+    aws-c-io-0.26.3            |       h692f434_1         177 KB  conda-forge
+    libarrow-24.0.0            |   ha7f89c6_0_cpu         6.2 MB  conda-forge
+    libarrow-acero-24.0.0      |   h635bf11_0_cpu         579 KB  conda-forge
+    libarrow-compute-24.0.0    |   h53684a4_0_cpu         2.9 MB  conda-forge
+    libarrow-dataset-24.0.0    |   h635bf11_0_cpu         578 KB  conda-forge
+    libarrow-substrait-24.0.0  |   hb4dd7c2_0_cpu         490 KB  conda-forge
+    libparquet-24.0.0          |   h7376487_0_cpu         1.4 MB  conda-forge
+    libthrift-0.22.0           |       h7d032f7_2         414 KB  conda-forge
+    r-arrow-24.0.0             |    r45hecca717_0         4.4 MB  conda-forge
+    s2n-1.7.2                  |       hc5a330e_1         378 KB  conda-forge
+    ------------------------------------------------------------
+                                           Total:        17.3 MB
+
+The following NEW packages will be INSTALLED:
+
+  aws-c-auth         conda-forge/linux-64::aws-c-auth-0.10.1-h2d2dd48_2 
+  aws-c-cal          conda-forge/linux-64::aws-c-cal-0.9.13-h2c9d079_1 
+  aws-c-common       conda-forge/linux-64::aws-c-common-0.12.6-hb03c661_0 
+  aws-c-compression  conda-forge/linux-64::aws-c-compression-0.3.2-h8b1a151_0 
+  aws-c-event-stream conda-forge/linux-64::aws-c-event-stream-0.6.0-h9b893ba_1 
+  aws-c-http         conda-forge/linux-64::aws-c-http-0.10.12-h4bacb7b_1 
+  aws-c-io           conda-forge/linux-64::aws-c-io-0.26.3-h692f434_1 
+  aws-c-mqtt         conda-forge/linux-64::aws-c-mqtt-0.15.2-he9ea9c5_1 
+  aws-c-s3           conda-forge/linux-64::aws-c-s3-0.11.5-h6d69fc9_5 
+  aws-c-sdkutils     conda-forge/linux-64::aws-c-sdkutils-0.2.4-h8b1a151_4 
+  aws-checksums      conda-forge/linux-64::aws-checksums-0.2.10-h8b1a151_0 
+  aws-crt-cpp        conda-forge/linux-64::aws-crt-cpp-0.37.4-h4c8aef7_3 
+  aws-sdk-cpp        conda-forge/linux-64::aws-sdk-cpp-1.11.747-hc3785e1_3 
+  azure-core-cpp     conda-forge/linux-64::azure-core-cpp-1.16.2-h206d751_0 
+  azure-identity-cpp conda-forge/linux-64::azure-identity-cpp-1.13.3-hed0cdb0_1 
+  azure-storage-blo~ conda-forge/linux-64::azure-storage-blobs-cpp-12.16.0-hdd73cc9_1 
+  azure-storage-com~ conda-forge/linux-64::azure-storage-common-cpp-12.12.0-ha7a2c86_1 
+  azure-storage-fil~ conda-forge/linux-64::azure-storage-files-datalake-cpp-12.14.0-h52c5a47_1 
+  gflags             conda-forge/linux-64::gflags-2.2.2-h5888daf_1005 
+  glog               conda-forge/linux-64::glog-0.7.1-hbabe93e_0 
+  libabseil          conda-forge/linux-64::libabseil-20260107.1-cxx17_h7b12aa8_0 
+  libarrow           conda-forge/linux-64::libarrow-24.0.0-ha7f89c6_0_cpu 
+  libarrow-acero     conda-forge/linux-64::libarrow-acero-24.0.0-h635bf11_0_cpu 
+  libarrow-compute   conda-forge/linux-64::libarrow-compute-24.0.0-h53684a4_0_cpu 
+  libarrow-dataset   conda-forge/linux-64::libarrow-dataset-24.0.0-h635bf11_0_cpu 
+  libarrow-substrait conda-forge/linux-64::libarrow-substrait-24.0.0-hb4dd7c2_0_cpu 
+  libbrotlicommon    conda-forge/linux-64::libbrotlicommon-1.2.0-hb03c661_1 
+  libbrotlidec       conda-forge/linux-64::libbrotlidec-1.2.0-hb03c661_1 
+  libbrotlienc       conda-forge/linux-64::libbrotlienc-1.2.0-hb03c661_1 
+  libcrc32c          conda-forge/linux-64::libcrc32c-1.1.2-h9c3ff4c_0 
+  libevent           conda-forge/linux-64::libevent-2.1.12-hf998b51_1 
+  libgoogle-cloud    conda-forge/linux-64::libgoogle-cloud-3.3.0-h25dbb67_1 
+  libgoogle-cloud-s~ conda-forge/linux-64::libgoogle-cloud-storage-3.3.0-hdbdcf42_1 
+  libgrpc            conda-forge/linux-64::libgrpc-1.78.1-h1d1128b_0 
+  libopentelemetry-~ conda-forge/linux-64::libopentelemetry-cpp-1.26.0-h9692893_0 
+  libopentelemetry-~ conda-forge/linux-64::libopentelemetry-cpp-headers-1.26.0-ha770c72_0 
+  libparquet         conda-forge/linux-64::libparquet-24.0.0-h7376487_0_cpu 
+  libprotobuf        conda-forge/linux-64::libprotobuf-6.33.5-h2b00c02_0 
+  libre2-11          conda-forge/linux-64::libre2-11-2025.11.05-h0dc7533_1 
+  libthrift          conda-forge/linux-64::libthrift-0.22.0-h7d032f7_2 
+  libutf8proc        conda-forge/linux-64::libutf8proc-2.11.3-hfe17d71_0 
+  lz4-c              conda-forge/linux-64::lz4-c-1.10.0-h5888daf_1 
+  nlohmann_json      conda-forge/linux-64::nlohmann_json-3.12.0-h54a6638_1 
+  orc                conda-forge/linux-64::orc-2.3.0-h21090e2_0 
+  prometheus-cpp     conda-forge/linux-64::prometheus-cpp-1.3.0-ha5d0236_0 
+  r-arrow            conda-forge/linux-64::r-arrow-24.0.0-r45hecca717_0 
+  re2                conda-forge/linux-64::re2-2025.11.05-h5301d42_1 
+  s2n                conda-forge/linux-64::s2n-1.7.2-hc5a330e_1 
+  snappy             conda-forge/linux-64::snappy-1.2.2-h03e3b7b_1 
+  zlib               conda-forge/linux-64::zlib-1.3.2-h25fd6f3_2 
+
+
+
+Downloading and Extracting Packages: ...working...libarrow-24.0.0      | 6.2 MB    |            |   0% 
+r-arrow-24.0.0       | 4.4 MB    |            |   0% [A
+
+libarrow-compute-24. | 2.9 MB    |            |   0% [A[A
+
+
+libparquet-24.0.0    | 1.4 MB    |            |   0% [A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    |            |   0% [A[A[A[A
+
+
+
+
+libarrow-dataset-24. | 578 KB    |            |   0% [A[A[A[A[A
+
+
+
+
+
+libarrow-substrait-2 | 490 KB    |            |   0% [A[A[A[A[A[A
+
+
+
+
+
+
+libthrift-0.22.0     | 414 KB    |            |   0% [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+s2n-1.7.2            | 378 KB    |            |   0% [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+aws-c-io-0.26.3      | 177 KB    |            |   0% [A[A[A[A[A[A[A[A[Alibarrow-24.0.0      | 6.2 MB    |            |   0% libarrow-24.0.0      | 6.2 MB    | ###4       |  34% libarrow-24.0.0      | 6.2 MB    | ######1    |  61% 
+
+
+
+libarrow-acero-24.0. | 579 KB    | 2          |   3% [A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    |            |   0% [Alibarrow-24.0.0      | 6.2 MB    | ########4  |  84% 
+
+
+libparquet-24.0.0    | 1.4 MB    | 1          |   1% [A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | 5          |   6% [A[A[A[Alibarrow-24.0.0      | 6.2 MB    | ########## | 100% 
+r-arrow-24.0.0       | 4.4 MB    |            |   1% [Alibarrow-24.0.0      | 6.2 MB    | ########## | 100% 
+
+libarrow-compute-24. | 2.9 MB    |            |   1% [A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | 2          |   2% [A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | #1         |  11% [A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | 1          |   1% [A
+
+libarrow-compute-24. | 2.9 MB    | 1          |   2% [A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | 5          |   6% [A[A[A
+
+
+
+
+libarrow-dataset-24. | 578 KB    | 2          |   3% [A[A[A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | #9         |  19% [A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | 2          |   2% [A
+
+libarrow-compute-24. | 2.9 MB    | 2          |   3% [A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | ###5       |  36% [A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | 3          |   4% [A
+
+libarrow-compute-24. | 2.9 MB    | 4          |   5% [A[A
+
+
+
+
+libarrow-dataset-24. | 578 KB    | ########3  |  83% [A[A[A[A[A
+
+
+
+
+libarrow-dataset-24. | 578 KB    | ########## | 100% [A[A[A[A[A
+
+
+
+
+libarrow-dataset-24. | 578 KB    | ########## | 100% [A[A[A[A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | 8          |   8% [A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | #####5     |  55% [A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | 5          |   5% [A
+
+libarrow-compute-24. | 2.9 MB    | 8          |   8% [A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | ##1        |  22% [A[A[A
+r-arrow-24.0.0       | 4.4 MB    | 8          |   9% [A
+
+
+
+libarrow-acero-24.0. | 579 KB    | #########6 |  97% [A[A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | ########## | 100% [A[A[A[A
+
+
+
+libarrow-acero-24.0. | 579 KB    | ########## | 100% [A[A[A[A
+
+libarrow-compute-24. | 2.9 MB    | #4         |  15% [A[A
+
+
+
+
+
+libarrow-substrait-2 | 490 KB    | 3          |   3% [A[A[A[A[A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | ###4       |  34% [A[A[A
+
+
+
+
+
+libarrow-substrait-2 | 490 KB    | ########## | 100% [A[A[A[A[A[A
+
+
+
+
+
+libarrow-substrait-2 | 490 KB    | ########## | 100% [A[A[A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | #5         |  16% [A
+
+libarrow-compute-24. | 2.9 MB    | ##5        |  26% [A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | #####7     |  57% [A[A[A
+r-arrow-24.0.0       | 4.4 MB    | ##6        |  26% [A
+
+libarrow-compute-24. | 2.9 MB    | ####6      |  47% [A[A
+
+
+
+
+
+
+libthrift-0.22.0     | 414 KB    | 3          |   4% [A[A[A[A[A[A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | #########8 |  99% [A[A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | ########## | 100% [A[A[A
+
+
+libparquet-24.0.0    | 1.4 MB    | ########## | 100% [A[A[A
+
+
+
+
+
+
+
+s2n-1.7.2            | 378 KB    | 4          |   4% [A[A[A[A[A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | ####3      |  44% [A
+
+
+
+
+
+
+
+s2n-1.7.2            | 378 KB    | ########## | 100% [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+libthrift-0.22.0     | 414 KB    | ########## | 100% [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+s2n-1.7.2            | 378 KB    | ########## | 100% [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+libthrift-0.22.0     | 414 KB    | ########## | 100% [A[A[A[A[A[A[A
+
+libarrow-compute-24. | 2.9 MB    | ########1  |  81% [A[A
+
+libarrow-compute-24. | 2.9 MB    | ########## | 100% [A[A
+
+libarrow-compute-24. | 2.9 MB    | ########## | 100% [A[A
+r-arrow-24.0.0       | 4.4 MB    | ########2  |  82% [A
+r-arrow-24.0.0       | 4.4 MB    | ########## | 100% [A
+
+
+
+
+
+
+
+
+aws-c-io-0.26.3      | 177 KB    | 9          |   9% [A[A[A[A[A[A[A[A[A
+r-arrow-24.0.0       | 4.4 MB    | ########## | 100% [A
+
+
+
+
+
+
+
+
+aws-c-io-0.26.3      | 177 KB    | ########## | 100% [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+aws-c-io-0.26.3      | 177 KB    | ########## | 100% [A[A[A[A[A[A[A[A[A                                                     
+                                                     [A
+
+                                                     [A[A
+
+
+                                                     [A[A[A
+
+
+
+                                                     [A[A[A[A
+
+
+
+
+                                                     [A[A[A[A[A
+
+
+
+
+
+                                                     [A[A[A[A[A[A
+
+
+
+
+
+
+                                                     [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+                                                     [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+                                                     [A[A[A[A[A[A[A[A[A done
+Preparing transaction: \ done
+Verifying transaction: / - \ | / - done
+Executing transaction: | / done

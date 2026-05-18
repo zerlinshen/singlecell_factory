@@ -1,0 +1,73 @@
+# Cleanup Legacy NC2024 Factory Results
+
+Control-plane cleanup record only; not a scientific output.
+
+- Timestamp UTC: `2026-05-18T09:00:10Z`
+- Deleted entries: `48`
+- Deleted total bytes: `30667532081`
+- Preserved raw data/reference/project runs and factory source surfaces.
+
+## Deleted Entries
+
+- `results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_100K_AUTO_20260423_203921` (dir, 7548561 bytes)
+- `results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_100K_AUTO_20260423_203921.launch.log` (file, 115 bytes)
+- `results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203603` (dir, 3751977 bytes)
+- `results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203603.launch.log` (file, 110 bytes)
+- `results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203821` (dir, 3756839 bytes)
+- `results/NC2024_NSCLC_CSS_FIDELITY_AUDIT_AUTO_20260423_203821.launch.log` (file, 110 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_ABUNDANCE_CORR_AUTO_20260423_072002` (dir, 127034 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_CELLCOMM_AUTO_20260423_071941` (dir, 3654206 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_CONTROLLER_VALIDATE.start.out` (file, 383 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.launch.log` (file, 33266 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.start.out` (file, 120 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_085807.inventory.txt` (file, 26421 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_094017.inventory.txt` (file, 164796 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_095133.inventory.txt` (file, 30097 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_095138.inventory.txt` (file, 26938 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_095906.inventory.txt` (file, 165341 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_171615.inventory.txt` (file, 165651 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_172014.inventory.txt` (file, 30952 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_172724.inventory.txt` (file, 165668 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_172752.inventory.txt` (file, 45691 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_173334.inventory.txt` (file, 165886 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_174801.inventory.txt` (file, 165995 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREFLIGHT_20260422_194800.inventory.txt` (file, 167274 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_PREPARE.launch.log` (file, 60763 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO.launch.log` (file, 50480 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_190353` (dir, 1798173183 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_SPARSE_EXACT_REAL_AUTO.launch.log` (file, 0 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_LARGE_AUTO.launch.log` (file, 2031 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO.launch.log` (file, 28890 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO.launch.log` (file, 28903 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO.start.out` (file, 125 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_DD_FIX_AUTO.start.out` (file, 120 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO.launch.log` (file, 28902 bytes)
+- `results/NC2024_NSCLC_FULL_COHORT_STAGE1_WITH_FALLBACK.launch.log` (file, 607 bytes)
+- `results/NC2024_NSCLC_MACROPHAGE_STATE_AUTO_20260423_073217` (dir, 1904173 bytes)
+- `results/NC2024_NSCLC_MACROPHAGE_STATE_SUMMARY_AUTO_20260423_073520` (dir, 939 bytes)
+- `results/NC2024_NSCLC_MACRO_GRN_FALLBACK_AUTO_20260423_074100` (dir, 60980 bytes)
+- `results/NC2024_NSCLC_MACRO_NKT_CORR_AUTO_20260423_073500` (dir, 2285 bytes)
+- `results/NC2024_NSCLC_MACRO_PATHWAY_AUTO_20260423_075000` (dir, 1903853 bytes)
+- `results/NC2024_NSCLC_MACRO_PROGRAM_AUTO_20260423_074300` (dir, 2163 bytes)
+- `results/NC2024_NSCLC_MACRO_PROGRAM_DE_AUTO_20260423_074500` (dir, 1484 bytes)
+- `results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528` (dir, 7101513 bytes)
+- `results/NC2024_NSCLC_SUBTYPE_CHECKPOINT_AUDIT_AUTO_20260423_162105` (dir, 128358 bytes)
+- `results/NC2024_NSCLC_SUBTYPE_CHECKPOINT_AUDIT_FORMALIZED_AUTO_20260423_165106` (dir, 120061 bytes)
+- `results/NC2024_NSCLC_SUBTYPE_CHECKPOINT_AUDIT_VERIFIED_AUTO_20260423_172758` (dir, 126978 bytes)
+- `results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900` (dir, 195477 bytes)
+- `results/nc2024_bh_20260426_v2` (dir, 247377943 bytes)
+- `results/nc2024_tumor_20260426_v2` (dir, 28590038439 bytes)
+
+## Disk
+
+Before:
+```text
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  563G  327G  207G  62% /
+```
+
+After:
+```text
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  563G  299G  236G  56% /
+```

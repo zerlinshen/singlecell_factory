@@ -1,0 +1,108 @@
+{
+  "schema_version": "project-governance-validation/v1",
+  "generated_at": "2026-05-18T09:01:44Z",
+  "control_plane_only": true,
+  "project_root": "/home/zerlinshen/projects/nc-reproduction",
+  "project_id": "nc-reproduction",
+  "requested_run_id": null,
+  "overall_status": "pass",
+  "severity_counts": {
+    "info": 2,
+    "warning": 1
+  },
+  "project_findings": [],
+  "runs": [
+    {
+      "run_id": "2026-05-14T0542Z-d192836",
+      "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-14T0542Z-d192836",
+      "root_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-14T0542Z-d192836/manifest.json",
+      "producer_native_provenance": {
+        "python_run_manifests": [],
+        "python_module_status": [],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 12,
+        "evidence_json": 0
+      },
+      "findings": [
+        {
+          "severity": "info",
+          "code": "no_producer_native_manifest_found",
+          "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-14T0542Z-d192836",
+          "message": "No producer-native manifest/module-status files found at expected paths; inspect legacy evidence manually if this run is cited."
+        }
+      ]
+    },
+    {
+      "run_id": "2026-05-15T1815Z-wave4-200k-preflight",
+      "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-15T1815Z-wave4-200k-preflight",
+      "root_manifest": null,
+      "producer_native_provenance": {
+        "python_run_manifests": [],
+        "python_module_status": [],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 11,
+        "evidence_json": 0
+      },
+      "findings": [
+        {
+          "severity": "warning",
+          "code": "missing_root_manifest",
+          "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-15T1815Z-wave4-200k-preflight/manifest.json",
+          "message": "Missing cross-factory run envelope; acceptable as legacy/partial state when substitute provenance exists."
+        },
+        {
+          "severity": "info",
+          "code": "no_producer_native_manifest_found",
+          "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-15T1815Z-wave4-200k-preflight",
+          "message": "No producer-native manifest/module-status files found at expected paths; inspect legacy evidence manually if this run is cited."
+        }
+      ]
+    },
+    {
+      "run_id": "2026-05-15T1833Z-wave4-800k-clustering",
+      "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-15T1833Z-wave4-800k-clustering",
+      "root_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-15T1833Z-wave4-800k-clustering/manifest.json",
+      "producer_native_provenance": {
+        "python_run_manifests": [
+          "NC2024_WAVE4_800K_CLUSTERING_20260516_023316/run_manifest.json"
+        ],
+        "python_module_status": [
+          "NC2024_WAVE4_800K_CLUSTERING_20260516_023316/module_status.csv"
+        ],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 11,
+        "evidence_json": 0
+      },
+      "findings": []
+    },
+    {
+      "run_id": "2026-05-18T0900Z-13c2c88",
+      "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88",
+      "root_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/manifest.json",
+      "producer_native_provenance": {
+        "python_run_manifests": [
+          "NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/run_manifest.json"
+        ],
+        "python_module_status": [
+          "NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/module_status.csv"
+        ],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 13,
+        "evidence_json": 0
+      },
+      "findings": []
+    }
+  ]
+}

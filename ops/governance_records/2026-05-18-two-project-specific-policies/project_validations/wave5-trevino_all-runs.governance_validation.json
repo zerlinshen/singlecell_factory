@@ -1,0 +1,157 @@
+{
+  "schema_version": "project-governance-validation/v1",
+  "generated_at": "2026-05-18T09:30:53Z",
+  "control_plane_only": true,
+  "project_root": "/home/zerlinshen/projects/wave5-trevino",
+  "project_id": "wave5-trevino",
+  "requested_run_id": null,
+  "overall_status": "pass",
+  "severity_counts": {
+    "warning": 9,
+    "info": 1
+  },
+  "project_findings": [],
+  "runs": [
+    {
+      "run_id": "2026-05-17T2004Z-13c2c88",
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88",
+      "root_manifest": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/manifest.json",
+      "producer_native_provenance": {
+        "python_run_manifests": [
+          "wave5_trevino_public_rna_20260518_040458/run_manifest.json"
+        ],
+        "python_module_status": [
+          "wave5_trevino_public_rna_20260518_040458/module_status.csv"
+        ],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 15,
+        "evidence_json": 0
+      },
+      "findings": []
+    },
+    {
+      "run_id": "20260516T0931Z-d192836f1bb0",
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0",
+      "root_manifest": null,
+      "producer_native_provenance": {
+        "python_run_manifests": [
+          "run_manifest.json"
+        ],
+        "python_module_status": [
+          "module_status.csv"
+        ],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 54,
+        "evidence_json": 0
+      },
+      "findings": [
+        {
+          "severity": "warning",
+          "code": "missing_root_manifest",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/manifest.json",
+          "message": "Missing cross-factory run envelope; acceptable as legacy/partial state when substitute provenance exists."
+        },
+        {
+          "severity": "warning",
+          "code": "missing_r_dir",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/r",
+          "message": "Missing canonical run subdirectory; warning for legacy/partial runs."
+        },
+        {
+          "severity": "warning",
+          "code": "missing_logs_dir",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/logs",
+          "message": "Missing canonical run subdirectory; warning for legacy/partial runs."
+        }
+      ]
+    },
+    {
+      "run_id": "20260517T1005Z-7b539a5",
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5",
+      "root_manifest": null,
+      "producer_native_provenance": {
+        "python_run_manifests": [
+          "run_manifest.json"
+        ],
+        "python_module_status": [
+          "module_status.csv"
+        ],
+        "bundle_provenance": [
+          "bundle/provenance.json"
+        ],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 6,
+        "evidence_json": 0
+      },
+      "findings": [
+        {
+          "severity": "warning",
+          "code": "missing_root_manifest",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/manifest.json",
+          "message": "Missing cross-factory run envelope; acceptable as legacy/partial state when substitute provenance exists."
+        },
+        {
+          "severity": "warning",
+          "code": "missing_r_dir",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/r",
+          "message": "Missing canonical run subdirectory; warning for legacy/partial runs."
+        },
+        {
+          "severity": "warning",
+          "code": "missing_logs_dir",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1005Z-7b539a5/logs",
+          "message": "Missing canonical run subdirectory; warning for legacy/partial runs."
+        }
+      ]
+    },
+    {
+      "run_id": "20260517T1436Z-13c2c88",
+      "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88",
+      "root_manifest": null,
+      "producer_native_provenance": {
+        "python_run_manifests": [],
+        "python_module_status": [],
+        "bundle_provenance": [],
+        "r_manifests": []
+      },
+      "artifact_counts": {
+        "figures": 173,
+        "evidence_json": 4
+      },
+      "findings": [
+        {
+          "severity": "warning",
+          "code": "missing_root_manifest",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/manifest.json",
+          "message": "Missing cross-factory run envelope; acceptable as legacy/partial state when substitute provenance exists."
+        },
+        {
+          "severity": "warning",
+          "code": "missing_r_dir",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/r",
+          "message": "Missing canonical run subdirectory; warning for legacy/partial runs."
+        },
+        {
+          "severity": "warning",
+          "code": "missing_logs_dir",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/logs",
+          "message": "Missing canonical run subdirectory; warning for legacy/partial runs."
+        },
+        {
+          "severity": "info",
+          "code": "no_producer_native_manifest_found",
+          "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88",
+          "message": "No producer-native manifest/module-status files found at expected paths; inspect legacy evidence manually if this run is cited."
+        }
+      ]
+    }
+  ]
+}

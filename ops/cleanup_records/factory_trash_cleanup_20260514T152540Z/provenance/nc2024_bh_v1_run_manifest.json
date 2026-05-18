@@ -1,0 +1,114 @@
+{
+  "project": "nc2024_bh",
+  "generated_at": "2026-04-26T05:30:15.796189Z",
+  "run_dir": "/home/zerlinshen/singlecell_factory/results/nc2024_bh_20260426/nc2024_bh_20260426_132950",
+  "optional_modules": [
+    "clustering",
+    "batch_correction",
+    "differential_expression",
+    "annotation",
+    "pseudobulk_de"
+  ],
+  "module_status": [
+    {
+      "module": "cellranger",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "qc",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "doublet_detection",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "clustering",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "annotation",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "batch_correction",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "differential_expression",
+      "status": "ok",
+      "message": "completed"
+    },
+    {
+      "module": "pseudobulk_de",
+      "status": "skipped",
+      "message": "No explicit confirmatory pseudobulk contrast was provided."
+    }
+  ],
+  "metadata": {
+    "prepared_input_loading_mode": "eager_zarr",
+    "prepared_input_source": "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr",
+    "cohort_subset_applied": "condition=healthy_background",
+    "cohort_subset_n_obs_before": 884050,
+    "cohort_subset_n_obs_after": 7027,
+    "counts_layer_preserved": true,
+    "prepared_input_h5ad": "/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr",
+    "raw_cells": 7027,
+    "raw_genes": 33538,
+    "module_runtime_sec": {
+      "cellranger": 6.572,
+      "qc": 1.205,
+      "doublet_detection": 1.983,
+      "clustering": 8.331,
+      "annotation": 1.417,
+      "batch_correction": 2.575,
+      "differential_expression": 2.611,
+      "pseudobulk_de": 0.412
+    },
+    "cells_after_qc": 6443,
+    "genes_after_qc": 19888,
+    "qc_removed_cells": 584,
+    "doublet_grouped_key": "sample",
+    "doublet_grouped_thresholds": {
+      "D1_1": 0.3733697395696229,
+      "D1_2": 0.3228753098243681,
+      "D2_1": 0.4834552849198318,
+      "D2_2": 0.3505826442734065,
+      "D2_3": 0.3750009485166867,
+      "D2_4": 0.33385777851276766
+    },
+    "doublet_method": "scrublet_grouped",
+    "doublets_detected": 17,
+    "doublet_rate_pct": 0.26,
+    "cells_after_doublet_removal": 6426,
+    "doublets_removed": 17,
+    "css_status": "disabled_sparse_exact_engine",
+    "clustering_engine": "sparse_exact",
+    "clustering_gpu_disabled_reason": "checkpoint_policy_non_full",
+    "pca_cumulative_var_90pct": 15,
+    "n_clusters": 17,
+    "gpu_mode": "auto",
+    "clustering_backend": "cpu",
+    "reference_mapping_status": "skipped_no_reference",
+    "annotation_unknown_pct": 11.05,
+    "n_batches": 6,
+    "batch_method": "harmony",
+    "harmony_device": "cpu",
+    "batch_post_backend": "gpu",
+    "n_clusters_after_batch": 14,
+    "batch_correction_status": "completed",
+    "de_backend": "gpu",
+    "de_significant_genes": 4200,
+    "de_method": "wilcoxon",
+    "de_n_genes": 300,
+    "pseudobulk_de_status": "skipped_missing_contrast_contract",
+    "pseudobulk_de_mode": "skipped",
+    "pipeline_wall_seconds": 25.44
+  }
+}

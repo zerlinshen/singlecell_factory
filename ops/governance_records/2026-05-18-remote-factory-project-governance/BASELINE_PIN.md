@@ -1,0 +1,15 @@
+# Remote Factory/Project Governance Baseline Pin
+
+Control-plane governance record only; not a scientific output.
+
+timestamp_utc: 2026-05-18T07:51:06Z
+pwd: /home/zerlinshen/singlecell_factory
+branch: wave6-trevino-v5.1
+head: 13c2c885c981262fc634125cc46f4abc9c08298f
+status_count_current_including_this_record: 955
+tracked_diff_sha256_current: 488958f6cb54d26a9fc1f44f2fb53e55ddd33884b2373fbe5db2b0c2c05578d8
+untracked_inventory_sha256_current_including_this_record: 9c66a1f487f5e8e8ea59c29eff510f475a2cf4cdbd7c74b3d6baf3bc9a41d1f4
+pre_governance_untracked_inventory_sha256_excluding_this_record: 17ae5da4eef5e75fe5dcafc40dacbb57d204852a85ec48b04a606d11755f8ebc
+pre_governance_untracked_inventory_count_excluding_this_record: 962
+
+Note: this run record directory is intentionally excluded from the pre-governance untracked inventory hash.

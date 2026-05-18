@@ -1,0 +1,98 @@
+# Project-specific retention and final-backup policy for NC2024 NSCLC reproduction.
+schema_version: project-retention-policy/v1
+created_at: 2026-05-18T09:30:11Z
+project_id: nc-reproduction
+project_root: /home/zerlinshen/projects/nc-reproduction
+project_purpose: real_dataset_pipeline_validation_and_article_reproduction_seed
+analysis_type: nsclc_single_cell_project_architecture_validation
+method_family:
+  - per_sample_filter_then_cohort_merge_strategy
+  - project_root_pipeline_execution
+  - marker_annotation_and_context_annotation
+  - batch_aware_future_cohort_analysis
+scientific_question: >-
+  Validate that NC2024 NSCLC data can run under the new project-root architecture and establish the correct rule for future article-scale analysis: filter per sample/patient first, then merge the smaller clean objects for cohort-level integration, annotation, and batch-effect control.
+latest_source_of_truth_run_id: 2026-05-18T0900Z-13c2c88
+latest_source_of_truth_run_path: /home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88
+retention_rule:
+  default: keep_latest_validated_run_result
+  current_action: older_project_runs_already_deleted_after_inventory
+  retained_run_ids:
+    - 2026-05-18T0900Z-13c2c88
+  superseded_run_ids:
+    - 2026-05-14T0542Z-d192836
+    - 2026-05-15T1815Z-wave4-200k-preflight
+    - 2026-05-15T1833Z-wave4-800k-clustering
+  cleanup_record: /home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-nc2024-project-latest-run-retention/
+selected_best_parameters:
+  sample_scope_for_current_validated_run: P15_T1
+  execution_mode: controller_validation
+  project_root_required: true
+  run_id_pattern: YYYY-MM-DDTHHMMZ-7hexsha
+  modules:
+    - marker_db_loader
+    - clustering
+    - batch_correction
+    - annotation
+    - context_aware_annotation
+    - differential_expression
+  expected_skip_conditions:
+    batch_correction: skip_is_expected_when_only_one_batch_is_present
+  final_anndata_shape: "5281 x 19504"
+module_list:
+  - marker_db_loader
+  - clustering
+  - batch_correction
+  - annotation
+  - context_aware_annotation
+  - differential_expression
+filtering_thresholds:
+  current_run_input_scope: one filtered sample P15_T1
+  current_run_final_cells: 5281
+  current_run_final_genes: 19504
+  future_multi_sample_rule: filter_each_sample_or_patient_first_then_merge_clean_smaller_objects
+batch_or_integration_keys:
+  current_run: single_sample_no_batch_key_required
+  future_article_scale_required_keys:
+    - patient_id
+    - sample_id
+    - batch_or_lane
+    - tissue_site
+    - treatment_or_condition_when_available
+  future_rule: >-
+    Do not annotate many samples one patient at a time as the final scientific answer. Per-sample runs are allowed for QC and filtering; final labels should come from merged/sketched/metacell cohort-level analysis with explicit batch-aware integration and label transfer.
+sketch_or_metacell_settings:
+  current_run: not_used_single_sample_validation
+  future_large_dataset_default: >-
+    Use memory-safe sketch or metacell representation after per-sample filtering when full merged AnnData exceeds host memory; preserve all-cell label transfer outputs for downstream wet-lab interpretation.
+random_seed:
+  status: pipeline_default_or_manifest_recorded
+  required_for_future_runs: true
+human_facing_outputs:
+  - /home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-nc2024-real-run-validation/REPORT.md
+agent_facing_evidence:
+  - /home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/manifest.json
+  - /home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-nc2024-real-run-validation/real_run_validation.json
+  - /home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-nc2024-project-latest-run-retention/cleanup_manifest.json
+final_backup_contents:
+  - project.yaml
+  - ledger/project_retention_policy.yaml
+  - runs/2026-05-18T0900Z-13c2c88/manifest.json
+  - run launch wrapper and logs from runs root
+  - module_status.csv or substitute module-status evidence when present
+  - final AnnData or compact validated atlas from the retained run
+  - governance validation report
+  - real run validation report and JSON
+  - cleanup inventory for deleted superseded runs
+never_delete_assets:
+  - /home/zerlinshen/projects/nc-reproduction/inputs
+  - /home/zerlinshen/projects/nc-reproduction/configs
+  - /home/zerlinshen/projects/nc-reproduction/notebooks
+  - /home/zerlinshen/projects/nc-reproduction/project.yaml
+  - /home/zerlinshen/projects/nc-reproduction/runs/launch_wave3_nc2024.sh
+  - /home/zerlinshen/singlecell_factory/ops/governance_records
+next_agent_rules:
+  - Treat 2026-05-18T0900Z-13c2c88 as the current NC2024 project source of truth.
+  - Do not recreate bulky NC2024 results under /home/zerlinshen/singlecell_factory/results.
+  - For full article-scale work, filter per patient/sample first, then merge clean smaller objects and apply batch-aware cohort annotation.
+  - Record selected best parameters in this policy whenever a new source-of-truth run supersedes the current one.
