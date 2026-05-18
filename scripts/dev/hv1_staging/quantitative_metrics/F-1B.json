@@ -1,0 +1,25 @@
+{
+  "fig_id": "F-1B",
+  "metrics_raw": {
+    "procrustes": null,
+    "ari": 0.1683,
+    "nmi": 0.5550047729937012,
+    "diag_frac": 0.0
+  },
+  "metrics_scored": {
+    "procrustes": null,
+    "ari": 0.1683,
+    "nmi": 0.5550047729937012,
+    "diag_frac": 0.0
+  },
+  "rationale": {
+    "procrustes": "NOT-COMPUTED-PUBLIC-DATA-GAP: Trevino GSE162170 metadata does not publish per-cell UMAP/LSI coordinates (only seurat_cluster labels); Procrustes alignment requires paired coordinate arrays.",
+    "ari": "ARI(WNN leiden vs Trevino seurat_clusters) from three_way_comparison.json / v4.2 ledger",
+    "nmi": "NMI from three_way_comparison.json",
+    "diag_frac": "diag_frac(WNN leiden, Trevino seurat_clusters) \u2014 row-normalized confusion matrix trace per AC-V5-REPRO-RATE-1"
+  },
+  "per_figure_score": 0.2411015909979004,
+  "n_scored_metrics": 3,
+  "n_total_metrics_declared": 4,
+  "hv1_computed": true
+}
