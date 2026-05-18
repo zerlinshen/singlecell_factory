@@ -29,10 +29,11 @@ else
     if [[ "$THIS_REPO_NAME" == "singlecell_factory" ]]; then
         if [[ -d "$PARENT_DIR/r_multiomics_factory" ]]; then
             SIBLING="$PARENT_DIR/r_multiomics_factory"
-        elif [[ -d "$PARENT_DIR/multiomics_r_factory" ]]; then  # legacy name accepted during transition
-            SIBLING="$PARENT_DIR/multiomics_r_factory"  # legacy name, accepted during transition
+        else
+            echo "WARNING: check_contracts_cross_repo.sh: expected sibling r_multiomics_factory not found under $PARENT_DIR" >&2
+            exit 0
         fi
-    elif [[ "$THIS_REPO_NAME" == "r_multiomics_factory" ]] || [[ "$THIS_REPO_NAME" == "multiomics_r_factory" ]]; then  # legacy name accepted during transition
+    elif [[ "$THIS_REPO_NAME" == "r_multiomics_factory" ]]; then
         SIBLING="$PARENT_DIR/singlecell_factory"
     else
         echo "WARNING: check_contracts_cross_repo.sh: cannot determine sibling repo from repo name '$THIS_REPO_NAME'; cross-repo parity check skipped" >&2
@@ -54,118 +55,94 @@ if ! command -v sha256sum >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# Paths
+# Helpers
 # ---------------------------------------------------------------------------
-THIS_SCHEMA="$THIS_REPO/contracts/bundle_schema.yaml"
-THIS_FIG_SCHEMA="$THIS_REPO/contracts/figure_bundle_schema.yaml"
-THIS_EXPECTED="$THIS_REPO/contracts/.expected_sha256"
-SIBLING_SCHEMA="$SIBLING/contracts/bundle_schema.yaml"
-SIBLING_FIG_SCHEMA="$SIBLING/contracts/figure_bundle_schema.yaml"
-SIBLING_EXPECTED="$SIBLING/contracts/.expected_sha256"
-
-# ---------------------------------------------------------------------------
-# Verify required files exist
-# ---------------------------------------------------------------------------
-for f in "$THIS_SCHEMA" "$THIS_FIG_SCHEMA" "$THIS_EXPECTED" "$SIBLING_SCHEMA" "$SIBLING_FIG_SCHEMA" "$SIBLING_EXPECTED"; do
-    if [[ ! -f "$f" ]]; then
-        echo "ERROR: check_contracts_cross_repo.sh: required file missing: $f" >&2
-        exit 2
-    fi
-done
-
-# ---------------------------------------------------------------------------
-# Parse expected hash for a key from a named manifest, with legacy single-hash fallback.
-# ---------------------------------------------------------------------------
-get_expected_hash() {
-    local file="$1"
+expected_hash_for_key() {
+    local expected_file="$1"
     local key="$2"
     local value
 
-    value="$(awk -v key="$key" '$1==key { print $2; exit }' "$file")"
+    value="$(awk -v key="$key" '$1 == key { print $2 }' "$expected_file")"
     if [[ -n "$value" ]]; then
         printf '%s\n' "$value"
         return 0
     fi
 
-    value="$(tr -d '[:space:]' < "$file")"
-    if [[ -n "$value" ]]; then
-        printf '%s\n' "$value"
-        return 0
+    # Legacy fallback: the Phase 2 sentinel was a single bare sha for
+    # bundle_schema only. Figure schema governance requires named sentinels.
+    if [[ "$key" == "bundle_schema" ]]; then
+        value="$(tr -d '[:space:]' < "$expected_file")"
+        if [[ "$value" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
     fi
 
+    echo "ERROR: check_contracts_cross_repo.sh: missing '$key' entry in $expected_file" >&2
     return 1
 }
 
-# ---------------------------------------------------------------------------
-# Compute sha256 hashes
-# ---------------------------------------------------------------------------
-THIS_HASH="$(sha256sum "$THIS_SCHEMA" | cut -d' ' -f1)"
-SIBLING_HASH="$(sha256sum "$SIBLING_SCHEMA" | cut -d' ' -f1)"
-THIS_FIG_HASH="$(sha256sum "$THIS_FIG_SCHEMA" | cut -d' ' -f1)"
-SIBLING_FIG_HASH="$(sha256sum "$SIBLING_FIG_SCHEMA" | cut -d' ' -f1)"
+check_schema_key() {
+    local key="$1"
+    local filename="$2"
+    local this_schema="$THIS_REPO/contracts/$filename"
+    local sibling_schema="$SIBLING/contracts/$filename"
+    local this_expected="$THIS_REPO/contracts/.expected_sha256"
+    local sibling_expected="$SIBLING/contracts/.expected_sha256"
 
-THIS_EXPECTED_HASH="$(get_expected_hash "$THIS_EXPECTED" bundle_schema)"
-SIBLING_EXPECTED_HASH="$(get_expected_hash "$SIBLING_EXPECTED" bundle_schema)"
-THIS_FIG_EXPECTED_HASH="$(get_expected_hash "$THIS_EXPECTED" figure_bundle_schema)"
-SIBLING_FIG_EXPECTED_HASH="$(get_expected_hash "$SIBLING_EXPECTED" figure_bundle_schema)"
+    for f in "$this_schema" "$sibling_schema" "$this_expected" "$sibling_expected"; do
+        if [[ ! -f "$f" ]]; then
+            echo "ERROR: check_contracts_cross_repo.sh: required file missing for $key: $f" >&2
+            exit 2
+        fi
+    done
 
-if [[ -z "$THIS_HASH" || -z "$SIBLING_HASH" || -z "$THIS_FIG_HASH" || -z "$SIBLING_FIG_HASH" ||
-      -z "$THIS_EXPECTED_HASH" || -z "$SIBLING_EXPECTED_HASH" || -z "$THIS_FIG_EXPECTED_HASH" || -z "$SIBLING_FIG_EXPECTED_HASH" ]]; then
-    echo "ERROR: check_contracts_cross_repo.sh: failed to parse expected hash in one or more files" >&2
-    exit 2
-fi
+    local this_hash sibling_hash this_expected_hash sibling_expected_hash
+    this_hash="$(sha256sum "$this_schema" | cut -d' ' -f1)"
+    sibling_hash="$(sha256sum "$sibling_schema" | cut -d' ' -f1)"
+    if ! this_expected_hash="$(expected_hash_for_key "$this_expected" "$key")"; then
+        exit 2
+    fi
+    if ! sibling_expected_hash="$(expected_hash_for_key "$sibling_expected" "$key")"; then
+        exit 2
+    fi
+
+    if [[ "$this_hash" != "$sibling_hash" ]]; then
+        echo "contracts parity FAIL: $key ($filename) hash mismatch between repos" >&2
+        echo "  $THIS_REPO: $this_hash" >&2
+        echo "  $SIBLING: $sibling_hash" >&2
+        FAIL=1
+    fi
+
+    if [[ "$this_hash" != "$this_expected_hash" ]]; then
+        echo "contracts parity FAIL: $THIS_REPO $key hash does not match .expected_sha256" >&2
+        echo "  computed: $this_hash" >&2
+        echo "  expected: $this_expected_hash" >&2
+        FAIL=1
+    fi
+
+    if [[ "$sibling_hash" != "$sibling_expected_hash" ]]; then
+        echo "contracts parity FAIL: $SIBLING $key hash does not match .expected_sha256" >&2
+        echo "  computed: $sibling_hash" >&2
+        echo "  expected: $sibling_expected_hash" >&2
+        FAIL=1
+    fi
+
+    if [[ "$this_hash" == "$sibling_hash" && "$this_hash" == "$this_expected_hash" && "$sibling_hash" == "$sibling_expected_hash" ]]; then
+        echo "contracts parity OK: $key sha256=$this_hash"
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # Parity checks
 # ---------------------------------------------------------------------------
 FAIL=0
 
-if [[ "$THIS_HASH" != "$SIBLING_HASH" ]]; then
-    echo "contracts parity FAIL: bundle_schema.yaml hash mismatch between repos" >&2
-    echo "  $THIS_REPO:    $THIS_HASH" >&2
-    echo "  $SIBLING: $SIBLING_HASH" >&2
-    FAIL=1
-fi
-
-if [[ "$THIS_HASH" != "$THIS_EXPECTED_HASH" ]]; then
-    echo "contracts parity FAIL: $THIS_REPO bundle_schema.yaml hash does not match .expected_sha256" >&2
-    echo "  computed:  $THIS_HASH" >&2
-    echo "  expected:  $THIS_EXPECTED_HASH" >&2
-    FAIL=1
-fi
-
-if [[ "$SIBLING_HASH" != "$SIBLING_EXPECTED_HASH" ]]; then
-    echo "contracts parity FAIL: $SIBLING bundle_schema.yaml hash does not match .expected_sha256" >&2
-    echo "  computed:  $SIBLING_HASH" >&2
-    echo "  expected:  $SIBLING_EXPECTED_HASH" >&2
-    FAIL=1
-fi
-
-if [[ "$THIS_FIG_HASH" != "$SIBLING_FIG_HASH" ]]; then
-    echo "contracts parity FAIL: figure_bundle_schema.yaml hash mismatch between repos" >&2
-    echo "  $THIS_REPO:    $THIS_FIG_HASH" >&2
-    echo "  $SIBLING: $SIBLING_FIG_HASH" >&2
-    FAIL=1
-fi
-
-if [[ "$THIS_FIG_HASH" != "$THIS_FIG_EXPECTED_HASH" ]]; then
-    echo "contracts parity FAIL: $THIS_REPO figure_bundle_schema.yaml hash does not match .expected_sha256" >&2
-    echo "  computed:  $THIS_FIG_HASH" >&2
-    echo "  expected:  $THIS_FIG_EXPECTED_HASH" >&2
-    FAIL=1
-fi
-
-if [[ "$SIBLING_FIG_HASH" != "$SIBLING_FIG_EXPECTED_HASH" ]]; then
-    echo "contracts parity FAIL: $SIBLING figure_bundle_schema.yaml hash does not match .expected_sha256" >&2
-    echo "  computed:  $SIBLING_FIG_HASH" >&2
-    echo "  expected:  $SIBLING_FIG_EXPECTED_HASH" >&2
-    FAIL=1
-fi
+check_schema_key "bundle_schema" "bundle_schema.yaml"
+check_schema_key "figure_bundle_schema" "figure_bundle_schema.yaml"
 
 if [[ "$FAIL" -ne 0 ]]; then
     exit 1
 fi
 
-echo "contracts parity OK: bundle_schema sha256=$THIS_HASH"
-echo "contracts parity OK: figure_bundle_schema sha256=$THIS_FIG_HASH"
 exit 0
