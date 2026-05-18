@@ -1,5 +1,6 @@
 # Remote factory/project governance contract.
 # Control-plane contract only; not a scientific output.
+# Version: 1.1 (C2 reproduction fields added 2026-05-18)
 schema_version: project-run-governance/v1
 
 principles:
@@ -160,3 +161,172 @@ phase_1_prohibitions:
   - do_not_rewrite_legacy_manifests
   - do_not_consolidate_repositories
   - do_not_treat_local_reproduction_trail_as_target
+
+# ---------------------------------------------------------------------------
+# C2 Reproduction Methodology Fields (all optional — existing projects do not
+# need to populate these; new reproduction projects should populate all six)
+# Added: 2026-05-18 (C2.3)
+# See: docs/PAPER_REPRODUCTION_SOP.md for field semantics and parity taxonomy
+# ---------------------------------------------------------------------------
+
+upstream_repository:
+  optional: true
+  description: >-
+    Provenance of the upstream paper repository that this project reproduces.
+    All sub-fields are optional but should be populated before the first
+    reproduction run is launched.
+  fields:
+    url:
+      type: string
+      optional: true
+      description: Git URL of the upstream paper repository or Zenodo deposit URL.
+    commit_or_tag:
+      type: string
+      optional: true
+      description: Pinned git commit SHA or release tag used for reproduction.
+    doi:
+      type: string
+      optional: true
+      description: DOI of the paper or code deposit (e.g., 10.1016/j.cell.2021.07.023).
+    license:
+      type: string
+      optional: true
+      description: SPDX license identifier of the upstream repository (e.g., MIT, CC-BY-4.0).
+    forked_at:
+      type: string
+      optional: true
+      description: ISO-8601 date when the upstream repo was forked/cloned (e.g., 2026-05-18).
+    fork_path:
+      type: string
+      optional: true
+      description: >-
+        Local absolute path of the upstream clone, e.g.
+        projects/<project-id>/upstream/<repo-name>/
+
+raw_data_reproduction:
+  optional: true
+  description: >-
+    Records whether raw-data reproduction was attempted and what the outcome
+    or blocking boundary was.
+  fields:
+    attempted:
+      type: boolean
+      description: true if any pipeline run was launched from raw data (FASTQ/fragments).
+    success:
+      type: boolean
+      description: true if the raw-data run produced outputs matching the paper's reported metrics.
+    boundary:
+      type: string
+      optional: true
+      description: >-
+        Free-text description of what stopped reproduction when success is false,
+        e.g. "GPU OOM at module 7", "missing reference genome hg38",
+        "FASTQ not publicly available".
+
+data_object_reproduction:
+  optional: true
+  description: >-
+    Parity evaluation keyed by data object class name (e.g. obs, obsm, markers).
+    Each value must be one of the five parity taxonomy classes:
+    exact | approximate | proxy | unsupported | resource_gap
+    See docs/PAPER_REPRODUCTION_SOP.md §6 for class definitions.
+  value_type: parity_taxonomy_class
+  allowed_values:
+    - exact
+    - approximate
+    - proxy
+    - unsupported
+    - resource_gap
+  example:
+    obs: exact
+    obsm: approximate
+    markers: proxy
+
+figure_reproduction:
+  optional: true
+  description: >-
+    Parity evaluation keyed by figure panel ID (e.g. figure1a, figure3b).
+    Each value must be one of the five parity taxonomy classes.
+    See docs/PAPER_REPRODUCTION_SOP.md §6 for class definitions.
+  value_type: parity_taxonomy_class
+  allowed_values:
+    - exact
+    - approximate
+    - proxy
+    - unsupported
+    - resource_gap
+  example:
+    figure1a: approximate
+    figure2b: resource_gap
+
+module_gap_decisions:
+  optional: true
+  description: >-
+    List of per-method gap routing decisions. Each item declares where the
+    method gap is absorbed in the three-factory architecture.
+    target must be one of: singlecell_factory | r_multiomics_factory |
+    plotting_factory | paper_specific_script | parameter_change_only
+    See docs/PAPER_REPRODUCTION_SOP.md §7 for routing rules.
+  item_schema:
+    module:
+      type: string
+      description: Method or analysis step name.
+    gap_class:
+      type: string
+      description: Parity taxonomy class for this gap (from data_object_reproduction taxonomy).
+    target:
+      type: string
+      description: Factory routing target for this gap.
+      allowed_values:
+        - singlecell_factory
+        - r_multiomics_factory
+        - plotting_factory
+        - paper_specific_script
+        - parameter_change_only
+    rationale:
+      type: string
+      description: Free-text justification for the routing decision.
+  example:
+    - module: bpnet_tf_footprinting
+      gap_class: resource_gap
+      target: paper_specific_script
+      rationale: >-
+        Requires BPNet model training on 8× A100 GPUs; not feasible in current
+        environment. Paper-specific script retained under projects/wave5-trevino/.
+
+context_optimization_decisions:
+  optional: true
+  description: >-
+    List of per-parameter tuning records where our run diverges from the
+    upstream paper's stated settings. Every divergence must have an entry.
+    See docs/PAPER_REPRODUCTION_SOP.md §8 for schema and rules.
+  item_schema:
+    parameter:
+      type: string
+      description: Parameter name (e.g. n_neighbors, resolution, min_cells).
+    upstream_value:
+      type: any
+      description: Value from the paper's code or methods section.
+    our_value:
+      type: any
+      description: Value actually used in our run.
+    rationale:
+      type: string
+      description: >-
+        Free text explaining the divergence (dataset size, resource constraint,
+        library version, batch structure, etc.).
+    parity_class:
+      type: string
+      description: Parity impact class from the taxonomy in data_object_reproduction.
+      allowed_values:
+        - exact
+        - approximate
+        - proxy
+        - unsupported
+        - resource_gap
+  example:
+    - parameter: n_neighbors
+      upstream_value: 30
+      our_value: 15
+      rationale: Smaller dataset (42k cells vs 130k) benefits from lower k to avoid over-smoothing.
+      parity_class: approximate

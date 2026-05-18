@@ -7,6 +7,11 @@
 # so a v4.2-revision record routed here will EXIT NON-ZERO with a clear
 # mutual-rejection message (and vice versa for the v4.2 gate).
 #
+# Three-factory context (post-2026-05-18):
+# This gate validates the SC-side run_ledger schema. R factory artifacts (plot
+# bundle, figure schema) are validated by separate gates owned by
+# r_multiomics_factory and plotting_factory respectively.
+#
 # Exit codes:
 #   0  ledger validates against the dispatched schema
 #   1  schema validation failure (mismatch fields, missing required, etc.)
