@@ -209,6 +209,8 @@ For paper reproduction, do not jump directly into the local preferred pipeline w
 
 For reproduction projects, project policy must include `upstream_repository`, `raw_data_reproduction`, `data_object_reproduction`, `figure_reproduction`, `module_gap_decisions`, and `context_optimization_decisions`.
 
+**See Also (2026-05-18, C2 reproduction methodology):** For the operational procedure (fork upstream → record provenance → run raw → identify parity gaps → route fixes per three-factory targets → record context-tuning), follow `docs/PAPER_REPRODUCTION_SOP.md`. The companion skill `paper-reproduction-from-upstream` (at `~/.claude/skills/paper-reproduction-from-upstream/SKILL.md`) provides the agent walk-through. The schema for the six policy fields above lives in `contracts/project_run_contract.yaml`, and `scripts/validate_project_governance.py` emits advisory warnings when fields are missing or malformed.
+
 ## Skill And Workflow Routing
 
 - Before remote execution: `$before-every-run`
