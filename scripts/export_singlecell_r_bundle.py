@@ -18,6 +18,9 @@ import hashlib
 import json
 import os
 import shutil
+import socket
+import subprocess
+import sys
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,10 +54,12 @@ except ImportError:  # pragma: no cover
 SCHEMA_VERSION_V1 = "singlecell_r_bundle_v1"
 BUNDLE_SCHEMA_V2 = "singlecell_r_bundle_v2"
 BUNDLE_SCHEMA_V2_1 = "singlecell_r_bundle_v2.1"
+BUNDLE_SCHEMA_V2_2 = "singlecell_r_bundle_v2.2"
 # Backwards-compat alias (older callers / tests reference SCHEMA_VERSION_V2).
 SCHEMA_VERSION_V2 = BUNDLE_SCHEMA_V2
 SCHEMA_COMPATIBLE_WITH_V2 = ["singlecell_r_bundle_v1"]
 SCHEMA_COMPATIBLE_WITH_V2_1 = ["singlecell_r_bundle_v1", "singlecell_r_bundle_v2"]
+SCHEMA_COMPATIBLE_WITH_V2_2 = ["singlecell_r_bundle_v1", "singlecell_r_bundle_v2", "singlecell_r_bundle_v2.1"]
 EXPRESSION_SOURCE_SLOT = "X"
 EXPRESSION_VALUE_SCALE = "source_X_as_stored"
 EXPRESSION_EXPORT_DTYPE = "float32"
@@ -138,6 +143,16 @@ class ExportConfig:
     # the AnnData; each one round-trips as a separate parquet file.
     include_multimodal_obsm: bool = False
     multimodal_obsm_keys: tuple[str, ...] = ("X_wnn", "X_mofa")
+    # v2.2 marker_resolutions extension: opt-in. Exports the per-cell-type
+    # marker resolution table from context_aware_annotation. No-op when
+    # adata.uns["marker_db_index"] is absent or context_aware_annotation did
+    # not run (obs["context_aware_celltype"] missing).
+    include_marker_resolutions: bool = False
+    # v2.2 ATAC extension: opt-in, active only when the source AnnData carries
+    # the canonical ATAC contract written by ATACIngestModule/ATACLSIModule.
+    include_atac: bool = False
+    atac_lsi_obsm_key: str = "X_lsi"
+    atac_peaks_uns_key: str = "atac_peaks"
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +162,7 @@ class ExportConfig:
 # Known extension keys. Readers ignore unknown keys with a "skipping unknown
 # extension" message; producers may freely register additional keys. Keep this
 # list in sync with the R reader's known-extensions handling.
-KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm")
+KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm", "marker_resolutions", "atac")
 
 
 def add_extension(manifest, name, *, version, files, claim_guard=CLAIM_GUARD, **fields):
@@ -484,6 +499,207 @@ def maybe_export_multimodal_obsm(
         embeddings=embeddings_meta,
         engine_used=engine_used,
         experimental=True,
+    )
+
+
+def maybe_export_marker_resolutions(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+) -> dict | None:
+    """Write extensions/marker_resolutions/markers.parquet and register the extension.
+
+    Reads ``adata.uns["marker_db_index"]`` (written by marker_db_loader) and
+    flattens all marker rows into the required schema:
+    ``[cell_type, marker_set, source_db, source_version, score]``.
+
+    No-op (returns None) when:
+    - ``adata.uns["marker_db_index"]`` is absent or empty, OR
+    - ``adata.obs["context_aware_celltype"]`` is absent (module did not run).
+
+    Parameters
+    ----------
+    manifest : dict
+        Bundle manifest (mutated on success).
+    output_dir : Path
+        Bundle directory (temp dir during publish).
+    adata : anndata.AnnData
+        Source AnnData (may be a backed view).
+
+    Returns
+    -------
+    dict | None
+        The extension entry registered in the manifest, or None on no-op.
+    """
+    marker_db_index = adata.uns.get("marker_db_index")
+    if not marker_db_index:
+        return None
+    if "context_aware_celltype" not in getattr(adata, "obs", {}).columns if hasattr(adata, "obs") else True:
+        return None
+
+    rows = []
+    for db_key, db_value in marker_db_index.items():
+        # db_key is the source_db name; db_value is a dict or DataFrame-like
+        # stored by marker_db_loader. Normalise to a list of dicts.
+        if hasattr(db_value, "itertuples"):
+            # It's a DataFrame (restored from checkpoint via anndata uns).
+            for row in db_value.itertuples(index=False):
+                rows.append({
+                    "cell_type": str(getattr(row, "cell_type", "")),
+                    "marker_set": str(getattr(row, "marker_set", db_key)),
+                    "source_db": str(db_key),
+                    "source_version": str(getattr(row, "source_version", "")),
+                    "score": float(getattr(row, "score", 0.0)) if hasattr(row, "score") else None,
+                })
+        elif isinstance(db_value, dict):
+            # Stored as a nested dict from anndata uns serialisation.
+            for ct, markers in db_value.items():
+                if isinstance(markers, (list, tuple)):
+                    for gene in markers:
+                        rows.append({
+                            "cell_type": str(ct),
+                            "marker_set": str(db_key),
+                            "source_db": str(db_key),
+                            "source_version": "",
+                            "score": None,
+                        })
+                else:
+                    rows.append({
+                        "cell_type": str(ct),
+                        "marker_set": str(db_key),
+                        "source_db": str(db_key),
+                        "source_version": "",
+                        "score": None,
+                    })
+
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows, columns=["cell_type", "marker_set", "source_db", "source_version", "score"])
+    df["score"] = pd.to_numeric(df["score"], errors="coerce").astype("float32")
+
+    ext_dir = output_dir / "extensions" / "marker_resolutions"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    path = ext_dir / "markers.parquet"
+    # marker_resolutions has no meaningful cell-index, so we don't reset index
+    # via _write_parquet (which adds a "cell" column). Write directly.
+    if not _HAVE_PYARROW:
+        df.to_parquet(path, engine="fastparquet", index=False)
+    else:
+        table = pa.Table.from_pandas(df, preserve_index=False)
+        pq.write_table(table, path, compression="snappy")
+
+    manifest_files = manifest.setdefault("files", {})
+    manifest_files["marker_resolutions"] = file_record(
+        path, output_dir, df.shape[0], df.shape[1], {"format": "parquet"}
+    )
+
+    return add_extension(
+        manifest,
+        "marker_resolutions",
+        version="1.0",
+        files=["marker_resolutions"],
+        columns=["cell_type", "marker_set", "source_db", "source_version", "score"],
+        n_rows=int(df.shape[0]),
+    )
+
+
+def maybe_export_atac(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+    *,
+    lsi_obsm_key: str = "X_lsi",
+    peaks_uns_key: str = "atac_peaks",
+) -> dict | None:
+    """Write the v2.2 ATAC extension when LSI and peak metadata are present.
+
+    The exported payload is intentionally plotting/reporting scale: dense LSI
+    coordinates plus peak metadata. The sparse peak-count matrix remains in the
+    AnnData and is not serialized into the compact R plotting bundle.
+    """
+    obsm = getattr(adata, "obsm", {})
+    if lsi_obsm_key not in obsm:
+        return None
+    peaks = getattr(adata, "uns", {}).get(peaks_uns_key)
+    if peaks is None:
+        peaks = getattr(adata, "uns", {}).get("atac_var")
+    if peaks is None:
+        return None
+
+    lsi = np.asarray(obsm[lsi_obsm_key])
+    if lsi.ndim != 2:
+        raise ValueError(
+            f"adata.obsm['{lsi_obsm_key}'] must be 2D (cells x LSI dims); got shape {lsi.shape}"
+        )
+    n_cells, n_components = lsi.shape
+    cells = adata.obs_names[:n_cells].astype(str)
+    lsi_df = pd.DataFrame(
+        lsi.astype(np.float32, copy=False),
+        index=cells,
+        columns=[f"lsi_{i + 1}" for i in range(n_components)],
+    )
+    lsi_df.index.name = "cell"
+
+    if isinstance(peaks, pd.DataFrame):
+        peaks_df = peaks.copy()
+    else:
+        peaks_df = pd.DataFrame(peaks)
+    required_cols = {"chrom", "start", "end"}
+    missing_cols = required_cols - set(peaks_df.columns)
+    if missing_cols:
+        raise ValueError(
+            "ATAC peaks metadata must contain chrom/start/end columns; "
+            f"missing {sorted(missing_cols)}"
+        )
+    peaks_df = peaks_df.copy()
+    peaks_df["chrom"] = peaks_df["chrom"].astype(str)
+    peaks_df["start"] = pd.to_numeric(peaks_df["start"], errors="raise").astype("int64")
+    peaks_df["end"] = pd.to_numeric(peaks_df["end"], errors="raise").astype("int64")
+    if "peak_id" not in peaks_df.columns:
+        peaks_df["peak_id"] = (
+            peaks_df["chrom"].astype(str) + ":" +
+            peaks_df["start"].astype(str) + "-" +
+            peaks_df["end"].astype(str)
+        )
+    peaks_df = peaks_df[["peak_id", "chrom", "start", "end"]]
+
+    ext_dir = output_dir / "extensions" / "atac"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    lsi_path = ext_dir / "lsi.parquet"
+    peaks_path = ext_dir / "peaks.parquet"
+    _write_parquet(lsi_df, lsi_path)
+    if not _HAVE_PYARROW:
+        peaks_df.to_parquet(peaks_path, engine="fastparquet", index=False)
+    else:
+        table = pa.Table.from_pandas(peaks_df, preserve_index=False)
+        pq.write_table(table, peaks_path, compression="snappy")
+
+    manifest_files = manifest.setdefault("files", {})
+    manifest_files["atac_lsi"] = file_record(
+        lsi_path, output_dir, lsi_df.shape[0], lsi_df.shape[1], {"format": "parquet"}
+    )
+    manifest_files["atac_peaks"] = file_record(
+        peaks_path, output_dir, peaks_df.shape[0], peaks_df.shape[1], {"format": "parquet"}
+    )
+
+    return add_extension(
+        manifest,
+        "atac",
+        version="1.0",
+        files=["atac_lsi", "atac_peaks"],
+        status="active",
+        table={
+            "lsi_path": "extensions/atac/lsi.parquet",
+            "peaks_path": "extensions/atac/peaks.parquet",
+            "index_column": "cell",
+            "lsi_index_column": "cell",
+            "peak_id_column": "peak_id",
+        },
+        n_cells=int(n_cells),
+        n_components=int(n_components),
+        n_peaks=int(peaks_df.shape[0]),
+        method="tfidf_lsi",
     )
 
 
@@ -893,6 +1109,54 @@ def write_v2_files(adata, cell_idx: np.ndarray, config: ExportConfig) -> tuple[d
 
 
 # ---------------------------------------------------------------------------
+# Bundle provenance helper (PREC-1)
+# ---------------------------------------------------------------------------
+
+def _r_factory_sha_at_export(r_factory_path: str = "/home/zerlinshen/multiomics_r_factory") -> str:
+    """Return the short HEAD SHA of the R factory repo at export time, or '' on failure."""
+    try:
+        return subprocess.check_output(
+            ["git", "-C", r_factory_path, "rev-parse", "--short=7", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return ""
+
+
+def _bundle_sha256_concat(output_dir: Path) -> str:
+    """SHA256 of canonical parquet files concatenated in order (obs, obsm/*, marker_expr, rank_genes)."""
+    stems = ["obs.parquet"]
+    obsm_dir = output_dir / "obsm"
+    if obsm_dir.is_dir():
+        stems += sorted(str(p.relative_to(output_dir).as_posix()) for p in obsm_dir.glob("*.parquet"))
+    for optional in ("marker_expr.parquet", "marker_expr.mtx.gz", "rank_genes.parquet"):
+        if (output_dir / optional).exists():
+            stems.append(optional)
+    digest = hashlib.sha256()
+    for stem in stems:
+        p = output_dir / stem
+        if p.exists():
+            with p.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_bundle_provenance(output_dir: Path) -> None:
+    """Write bundle/provenance.json with r_factory_sha_at_export and audit fields."""
+    provenance = {
+        "r_factory_sha_at_export": _r_factory_sha_at_export(),
+        "exported_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "exported_by": socket.gethostname(),
+        "bundle_sha256": _bundle_sha256_concat(output_dir),
+    }
+    (output_dir / "provenance.json").write_text(
+        json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main export entry point
 # ---------------------------------------------------------------------------
 
@@ -903,8 +1167,10 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
         raise ValueError("--marker-chunk-size must be positive.")
     if not config.input_h5ad.exists():
         raise FileNotFoundError(f"Input .h5ad not found: {config.input_h5ad}")
-    if config.schema_version not in ("v1", "v2", "v2.1"):
-        raise ValueError("--schema-version must be 'v1', 'v2', or 'v2.1'.")
+    if config.schema_version not in ("v1", "v2", "v2.1", "v2.2"):
+        raise ValueError("--schema-version must be 'v1', 'v2', 'v2.1', or 'v2.2'.")
+    if config.include_atac and config.schema_version != "v2.2":
+        raise ValueError("--include-atac requires --schema-version v2.2")
     if config.format not in ("auto", "csv", "parquet", "mtx"):
         raise ValueError("--format must be 'auto', 'csv', 'parquet', or 'mtx'.")
 
@@ -929,7 +1195,7 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
         try:
             cell_idx = choose_cells(adata.n_obs, config.max_cells, config.seed)
 
-            if temp_config.schema_version in ("v2", "v2.1"):
+            if temp_config.schema_version in ("v2", "v2.1", "v2.2"):
                 manifest = _export_bundle_v2(adata, cell_idx, temp_config)
             else:
                 manifest = _export_bundle_v1(adata, cell_idx, temp_config)
@@ -1043,10 +1309,18 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
     # get the legacy literal so older readers do not see an unfamiliar
     # schema string. The on-disk file layout is identical between v2 and
     # v2.1; only the manifest schema string and the optional `extensions`
-    # field differ.
-    is_v2_1 = config.schema_version == "v2.1"
-    schema_literal = BUNDLE_SCHEMA_V2_1 if is_v2_1 else BUNDLE_SCHEMA_V2
-    compatible_with = SCHEMA_COMPATIBLE_WITH_V2_1 if is_v2_1 else SCHEMA_COMPATIBLE_WITH_V2
+    # field differ. v2.2 adds the marker_resolutions extension slot.
+    is_v2_2 = config.schema_version == "v2.2"
+    is_v2_1 = config.schema_version == "v2.1" or is_v2_2
+    if is_v2_2:
+        schema_literal = BUNDLE_SCHEMA_V2_2
+        compatible_with = SCHEMA_COMPATIBLE_WITH_V2_2
+    elif config.schema_version == "v2.1":
+        schema_literal = BUNDLE_SCHEMA_V2_1
+        compatible_with = SCHEMA_COMPATIBLE_WITH_V2_1
+    else:
+        schema_literal = BUNDLE_SCHEMA_V2
+        compatible_with = SCHEMA_COMPATIBLE_WITH_V2
 
     source_stat = config.input_h5ad.stat()
     manifest = {
@@ -1161,6 +1435,34 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
                 obsm_keys=config.multimodal_obsm_keys,
             )
             manifest["bundle"]["required_files"] = sorted(manifest["files"])
+        # v2.2 marker_resolutions extension. Available in v2.1 bundles too when
+        # explicitly requested, but the schema slot is only declared in v2.2.
+        if getattr(config, "include_marker_resolutions", False):
+            maybe_export_marker_resolutions(
+                manifest,
+                config.output_dir,
+                adata,
+            )
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
+        if getattr(config, "include_atac", False):
+            sub = adata[cell_idx]
+            try:
+                if hasattr(sub, "to_memory"):
+                    sub = sub.to_memory()
+            except Exception:
+                pass
+            maybe_export_atac(
+                manifest,
+                config.output_dir,
+                sub,
+                lsi_obsm_key=config.atac_lsi_obsm_key,
+                peaks_uns_key=config.atac_peaks_uns_key,
+            )
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
+    # PREC-1: write provenance.json after all parquet/mtx files are in place so
+    # the bundle_sha256 it records covers the complete file set.
+    _write_bundle_provenance(config.output_dir)
+
     manifest_json = config.output_dir / "bundle_manifest.json"
     manifest_json.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     write_manifest_tsv(manifest, config.output_dir / "bundle_manifest.tsv")
@@ -1190,6 +1492,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", required=True, type=Path, help="Source final_adata.h5ad")
     parser.add_argument("--output", required=True, type=Path, help="Output bundle directory")
     parser.add_argument("--source-run-dir", type=Path, default=None, help="Source run directory")
+    parser.add_argument(
+        "--project-root",
+        default=None,
+        metavar="PATH",
+        type=Path,
+        help=(
+            "Project directory root. When set, bundle is written to "
+            "<project-root>/runs/<run-id>/python/bundle/ and --output is ignored."
+        ),
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        metavar="STR",
+        help=(
+            "Run identifier (format: YYYY-MM-DDTHHMMZ-<7hex>). "
+            "Auto-generated when absent. Only used when --project-root is set."
+        ),
+    )
     parser.add_argument("--obs-cols", default=None, help="Comma-separated obs columns to export")
     parser.add_argument("--markers", default=None, help="Comma-separated marker genes to export")
     parser.add_argument("--obsm", default=None, help="Comma-separated obsm keys to export")
@@ -1197,10 +1518,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cells", type=int, default=None, help="Optional deterministic subset size")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--marker-chunk-size", type=int, default=50000)
-    parser.add_argument("--schema-version", choices=("v1", "v2", "v2.1"), default="v2.1",
+    parser.add_argument("--schema-version", choices=("v1", "v2", "v2.1", "v2.2"), default="v2.1",
                         help=("Bundle schema version. Default: v2.1 (additive "
                               "Phase B schema with an `extensions` field). "
-                              "Pass 'v2' for the legacy non-extension v2 "
+                              "Pass 'v2.2' to enable marker_resolutions slot, "
+                              "'v2' for the legacy non-extension v2 "
                               "layout, or 'v1' for the original CSV bundle."))
     parser.add_argument("--format", choices=("auto", "csv", "parquet", "mtx"), default="auto",
                         help="Output format for v2 (default: auto)")
@@ -1229,14 +1551,71 @@ def build_parser() -> argparse.ArgumentParser:
                         help=("List of adata.obsm keys to publish under the "
                               "multimodal_obsm extension. Keys not present on "
                               "the adata are silently skipped."))
+    parser.add_argument("--include-marker-resolutions", action="store_true",
+                        help=("v2.1/v2.2: write extensions/marker_resolutions/markers.parquet "
+                              "from adata.uns['marker_db_index'] and register the "
+                              "`marker_resolutions` extension. No-op when "
+                              "marker_db_loader did not run or context_aware_annotation "
+                              "is absent."))
+    parser.add_argument("--include-atac", action="store_true",
+                        help=("v2.2 only: write extensions/atac/lsi.parquet and "
+                              "extensions/atac/peaks.parquet from the canonical "
+                              "ATAC AnnData contract and register the `atac` extension."))
+    parser.add_argument("--atac-lsi-obsm-key", default="X_lsi",
+                        help="adata.obsm key holding the ATAC LSI embedding.")
+    parser.add_argument("--atac-peaks-uns-key", default="atac_peaks",
+                        help="adata.uns key holding ATAC peak metadata.")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    import sys
+    import warnings
+
     args = build_parser().parse_args(argv)
+
+    # GOV-2 cutover semantics:
+    # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` emits
+    # `DeprecationWarning` and falls back to legacy `output/`. When
+    # `SC_REQUIRE_PROJECT_ROOT=1`: a missing `--project-root` is a hard error
+    # (exit code 2). Warning and hard-error are mutually exclusive (no
+    # double-fire). Round-2 ADR will flip the default to required.
+    if args.project_root is None:
+        if os.environ.get("SC_REQUIRE_PROJECT_ROOT") == "1":
+            print(
+                "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). "
+                "Pass --project-root or unset the env var.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+    # Resolve effective output directory.
+    if args.project_root is not None:
+        import sys as _sys
+        _factory_root = Path(__file__).resolve().parent.parent
+        _project_paths_mod = _factory_root / "workflow" / "modular"
+        if str(_project_paths_mod) not in _sys.path:
+            _sys.path.insert(0, str(_factory_root))
+        from workflow.modular.project_paths import resolve_run_dir, bundle_dir
+        _run_dir = resolve_run_dir(args.project_root, run_id=args.run_id)
+        effective_output = bundle_dir(_run_dir)
+    else:
+        warnings.warn(
+            "--project-root will be required in a future release; "
+            "legacy --output layout will be removed",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        print(
+            "DeprecationWarning: --project-root will be required in a future release; "
+            "legacy --output layout will be removed",
+            file=sys.stderr,
+        )
+        effective_output = args.output
+
     config = ExportConfig(
         input_h5ad=args.input,
-        output_dir=args.output,
+        output_dir=effective_output,
         source_run_dir=args.source_run_dir,
         obs_columns=parse_csv_list(args.obs_cols, DEFAULT_OBS_COLUMNS),
         markers=parse_csv_list(args.markers, DEFAULT_MARKERS),
@@ -1255,6 +1634,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         spatial_include_image_paths=not bool(args.no_spatial_image_paths),
         include_multimodal_obsm=bool(args.include_multimodal_obsm),
         multimodal_obsm_keys=tuple(args.multimodal_obsm_keys),
+        include_marker_resolutions=bool(args.include_marker_resolutions),
+        include_atac=bool(args.include_atac),
+        atac_lsi_obsm_key=args.atac_lsi_obsm_key,
+        atac_peaks_uns_key=args.atac_peaks_uns_key,
     )
     manifest = export_bundle(config)
     print(json.dumps({"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}))

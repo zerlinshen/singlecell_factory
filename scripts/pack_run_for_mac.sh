@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pack_run_for_mac.sh <run_dir> [--schema-version v1|v2]
+# pack_run_for_mac.sh <run_dir> [--schema-version v1|v2] [--project-root PATH --run-id ID]
 #
 # Exports a v2 R bundle (default) from the run's final_adata.h5ad, then
 # produces three tarballs + SHA256 sidecars under <run_dir>/mac_assets/:
@@ -10,28 +10,70 @@
 #
 # Also writes <run_dir>/mac_assets/mac_pull_command.sh — run this on the Mac
 # to pull the tarballs via scp.
+#
+# New --project-root / --run-id mode:
+#   When --project-root and --run-id are both set, RUN_DIR is derived as
+#   <project-root>/runs/<run-id>/python/ and the bundle is placed at
+#   <project-root>/runs/<run-id>/python/bundle/.
+#   Legacy positional <run_dir> argument is still accepted for backward compat.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Parse args
 # ---------------------------------------------------------------------------
-if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <run_dir> [--schema-version v1|v2]" >&2
-  exit 1
-fi
-
-RUN_DIR="$(realpath "$1")"
+PROJECT_ROOT=""
+RUN_ID_ARG=""
 SCHEMA_VERSION="v2"
+POSITIONAL_RUN_DIR=""
 
-shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --schema-version)
       SCHEMA_VERSION="$2"; shift 2 ;;
-    *)
+    --project-root)
+      PROJECT_ROOT="$2"; shift 2 ;;
+    --run-id)
+      RUN_ID_ARG="$2"; shift 2 ;;
+    --*)
       echo "Unknown option: $1" >&2; exit 1 ;;
+    *)
+      if [[ -z "$POSITIONAL_RUN_DIR" ]]; then
+        POSITIONAL_RUN_DIR="$1"
+      else
+        echo "Unexpected positional argument: $1" >&2; exit 1
+      fi
+      shift ;;
   esac
 done
+
+# Resolve RUN_DIR from --project-root/--run-id (new) or positional arg (legacy).
+if [[ -n "$PROJECT_ROOT" && -n "$RUN_ID_ARG" ]]; then
+  RUN_DIR="$(realpath "$PROJECT_ROOT")/runs/${RUN_ID_ARG}/python"
+  BUNDLE_DIR_OVERRIDE="$(realpath "$PROJECT_ROOT")/runs/${RUN_ID_ARG}/python/bundle"
+elif [[ -n "$PROJECT_ROOT" || -n "$RUN_ID_ARG" ]]; then
+  echo "ERROR: --project-root and --run-id must be supplied together." >&2
+  exit 1
+elif [[ -n "$POSITIONAL_RUN_DIR" ]]; then
+  RUN_DIR="$(realpath "$POSITIONAL_RUN_DIR")"
+  BUNDLE_DIR_OVERRIDE=""
+else
+  echo "Usage: $0 <run_dir> [--schema-version v1|v2]" >&2
+  echo "       $0 --project-root PATH --run-id ID [--schema-version v1|v2]" >&2
+  exit 1
+fi
+
+# GOV-2 cutover semantics:
+# When SC_REQUIRE_PROJECT_ROOT is UNSET: a missing --project-root emits a
+# deprecation warning and falls back to legacy output/. When
+# SC_REQUIRE_PROJECT_ROOT=1: a missing --project-root is a hard error
+# (exit code 2). Warning and hard-error are mutually exclusive (no
+# double-fire). Round-2 ADR will flip the default to required.
+if [[ -z "$PROJECT_ROOT" ]]; then
+  if [[ "${SC_REQUIRE_PROJECT_ROOT:-}" == "1" ]]; then
+    echo "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). Pass --project-root or unset the env var." >&2
+    exit 2
+  fi
+fi
 
 if [[ ! -d "$RUN_DIR" ]]; then
   echo "Run directory not found: $RUN_DIR" >&2
@@ -42,7 +84,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 ASSETS_DIR="${RUN_DIR}/mac_assets"
-BUNDLE_DIR="${RUN_DIR}/r_bundle"
+if [[ -n "${BUNDLE_DIR_OVERRIDE:-}" ]]; then
+  BUNDLE_DIR="$BUNDLE_DIR_OVERRIDE"
+else
+  BUNDLE_DIR="${RUN_DIR}/r_bundle"
+fi
 H5AD="${RUN_DIR}/final_adata.h5ad"
 
 mkdir -p "$ASSETS_DIR"
@@ -54,11 +100,21 @@ if [[ ! -f "$H5AD" ]]; then
   echo "WARNING: final_adata.h5ad not found at ${H5AD}. Skipping bundle export." >&2
 else
   echo "[pack_run_for_mac] Exporting R bundle (schema=${SCHEMA_VERSION}) ..."
-  python "${REPO_ROOT}/scripts/export_singlecell_r_bundle.py" \
-    --input    "$H5AD" \
-    --output   "$BUNDLE_DIR" \
-    --schema-version "$SCHEMA_VERSION" \
-    --format   auto
+  if [[ -n "${BUNDLE_DIR_OVERRIDE:-}" ]]; then
+    python "${REPO_ROOT}/scripts/export_singlecell_r_bundle.py" \
+      --input    "$H5AD" \
+      --output   "$BUNDLE_DIR" \
+      --project-root "$PROJECT_ROOT" \
+      --run-id   "$RUN_ID_ARG" \
+      --schema-version "$SCHEMA_VERSION" \
+      --format   auto
+  else
+    python "${REPO_ROOT}/scripts/export_singlecell_r_bundle.py" \
+      --input    "$H5AD" \
+      --output   "$BUNDLE_DIR" \
+      --schema-version "$SCHEMA_VERSION" \
+      --format   auto
+  fi
   echo "[pack_run_for_mac] Bundle exported to: $BUNDLE_DIR"
 fi
 
@@ -79,7 +135,7 @@ make_tarball() {
 # Step 3 — bundle.tgz
 # ---------------------------------------------------------------------------
 if [[ -d "$BUNDLE_DIR" ]]; then
-  make_tarball bundle -C "$RUN_DIR" r_bundle
+  make_tarball bundle -C "$(dirname "$BUNDLE_DIR")" "$(basename "$BUNDLE_DIR")"
 else
   echo "[pack_run_for_mac] WARNING: bundle dir not found, skipping bundle.tgz" >&2
 fi

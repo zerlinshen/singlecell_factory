@@ -1,0 +1,65 @@
+# nc_regression_tolerance_spec.yaml — Wave 1 P-CC.S26 / Wave 2+ US-010
+#
+# Declares per-metric thresholds and library bindings for the NC regression
+# gate (`scripts/ci/nc_regression_gate.sh`). Consumed via yq / python yaml.
+#
+# Source-of-truth lives here; the gate script reads thresholds at run-time so
+# they can be tuned without editing bash.
+
+schema_version: "1.0"
+
+# Adjusted Rand Index between leiden cluster labels (baseline vs candidate).
+# Library: sklearn.metrics.adjusted_rand_score (per docs/SCIENTIFIC_AUDIT_2026-05-15.md).
+cluster_label_ari:
+  library: "sklearn.metrics.adjusted_rand_score"
+  threshold_min: 0.99
+  description: >
+    ARI of 0.99 allows a small handful of cell-by-cell cluster ID renumbering
+    or boundary jitter but rejects any wholesale clustering structure change.
+    Wave 1 baseline (random_state=42, harmony) yielded 32 stable leiden clusters
+    on the 800k NSCLC tumor cohort; a re-run with identical seeds should
+    reproduce that partition within this bound.
+
+# Top-50 DE marker overlap per cluster (set-Jaccard).
+top_de_markers_jaccard:
+  library: "set_jaccard"   # |A & B| / |A | B| over symbol sets
+  top_k: 50
+  per_cluster_threshold_min: 0.95
+  description: >
+    Per cluster: take the top 50 markers by FDR (or by score if FDR ties), build
+    the set, compare baseline-vs-candidate via Jaccard. Tolerates minor
+    re-ordering (rank ties) and slight HVG drift but rejects substantive marker
+    changes that would shift downstream cell-type annotation.
+
+# Byte-identical structural fields on final_adata.h5ad.
+# Stochastic outputs (UMAP coords, neighbor graph) are explicitly excluded.
+structural_byte_identical:
+  fields:
+    - shape
+    - X.dtype
+    - obs.columns
+    - obs.dtypes
+    - var.columns
+    - var.dtypes
+  description: >
+    Shape + dtype + column schema must match exactly. Floating-point coordinates
+    (X_umap, X_pca, distances/connectivities, embedding norms) are NOT compared
+    here — they go through the ARI/Jaccard gates above.
+
+# Optional: schema parity between bundle exports.
+bundle_schema:
+  schema_version_min: "singlecell_r_bundle_v2.1"
+  description: >
+    Both baseline and candidate bundle_manifest.json must declare a
+    schema_version in the accepted set; v2.2 introduces new extension slots
+    (atac/vdj/ribo/hic/marker_resolutions) which must round-trip without
+    affecting v2.1 baseline load.
+
+# Exit code behaviour.
+exit_codes:
+  0: "all four sub-gates pass"
+  10: "ARI sub-gate failed (clustering structure diverged)"
+  11: "Jaccard sub-gate failed (DE marker overlap below threshold)"
+  12: "Structural sub-gate failed (shape/dtype/schema mismatch)"
+  13: "Bundle schema sub-gate failed (incompatible schema versions)"
+  2: "missing baseline or candidate inputs"

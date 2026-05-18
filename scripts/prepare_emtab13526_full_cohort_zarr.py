@@ -106,8 +106,7 @@ def build_sample_meta(sdrf_path: Path) -> pd.DataFrame:
 
 def make_var_out(var_ref: pd.DataFrame) -> pd.DataFrame:
     var_out = var_ref.copy()
-    var_out.index = pd.Index(var_out["gene_name"].astype(str))
-    var_out.index.name = None
+    var_out.index = pd.Index(var_out["gene_name"].astype(str), name="gene_symbol")
     var_out["gene_symbol"] = var_out["gene_name"].astype(str)
     var_out = var_out.drop(columns=["gene_name"])
     return var_out
@@ -357,7 +356,6 @@ def write_part(
 ) -> Path:
     var_out = make_var_out(var_ref)
     adata = ad.AnnData(X=mat.tocsr(), obs=obs, var=var_out)
-    adata.var.index.name = None
     adata.var_names_make_unique()
     part_path = parts_root / f"{sample}.zarr"
     print(f"WRITE_PART {sample} -> {part_path}", flush=True)
@@ -520,6 +518,21 @@ def prepare_full_cohort(
 
     print(f"CONCAT_FULL_COHORT -> {prepared_zarr}", flush=True)
     concat_on_disk(part_paths, prepared_zarr, axis=0, join="outer", max_loaded_elems=50_000_000)
+    # Ensure no spurious '_index' columns survive concat_on_disk (reserved by modern anndata).
+    _merged = ad.read_zarr(prepared_zarr)
+    _dirty = False
+    for _df_attr in ("obs", "var"):
+        _df = getattr(_merged, _df_attr)
+        if "_index" in _df.columns:
+            _df.drop(columns=["_index"], inplace=True)
+            setattr(_merged, _df_attr, _df)
+            _dirty = True
+    if _merged.obs.index.name is None:
+        _merged.obs.index.name = "cell_barcode"
+        _dirty = True
+    if _dirty:
+        _merged.write_zarr(prepared_zarr)
+    del _merged
     summary_payload = build_prepare_summary(
         sample_summaries,
         prepared_zarr=prepared_zarr,

@@ -21,8 +21,11 @@ Wave-5 plan: ``.omc/plans/wave5-completion-consensus-2026-05-16.md``
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 import traceback
@@ -51,6 +54,9 @@ from workflow.modular.modules.peak_to_gene import PeakToGeneModule
 from workflow.modular.modules.trajectory import TrajectoryModule
 
 
+RUN_ID_RE = re.compile(r"^[0-9]{8}T[0-9]{4}Z-[0-9a-f]{7}$")
+
+
 def _git_sha(repo: Path) -> str:
     head = repo / ".git" / "HEAD"
     if not head.exists():
@@ -63,6 +69,40 @@ def _git_sha(repo: Path) -> str:
         return ref[:12]
     except OSError:
         return "unknown"
+
+
+def _git_output(repo: Path, args: list[str]) -> str:
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def _dirty_tree_metadata(repo: Path, *, allow_dirty: bool) -> dict[str, object]:
+    """Return dirty-tree provenance and enforce the factory dirty gate."""
+    status = _git_output(repo, ["status", "--short"])
+    diff = _git_output(repo, ["diff", "--binary"])
+    dirty = bool(status.strip())
+    if dirty and not allow_dirty:
+        raise SystemExit(
+            "Factory git tree is dirty. Re-run with --allow-dirty to record "
+            "diff/status hashes in run_manifest.json."
+        )
+    return {
+        "factory_tree_dirty": dirty,
+        "allow_dirty": allow_dirty,
+        "diff_sha256": hashlib.sha256(diff.encode("utf-8")).hexdigest() if dirty else None,
+        "git_status_short_sha256": (
+            hashlib.sha256(status.encode("utf-8")).hexdigest() if dirty else None
+        ),
+        "git_status_short_count": len([line for line in status.splitlines() if line.strip()]),
+    }
 
 
 def _run_atac_lsi(ctx: PipelineContext) -> None:
@@ -80,6 +120,13 @@ def _run_multimodal(ctx: PipelineContext, second_obsm_key: str = "X_lsi") -> Non
     mod = MultimodalIntegrationModule(config=cfg)
     ctx.set_module_dir(mod.name)
     mod.run(ctx)
+    if cfg.wnn_obsm_output_key not in ctx.adata.obsm:
+        status = ctx.adata.uns.get("multimodal_status", {})
+        raise RuntimeError(
+            "multimodal_integration completed without "
+            f"{cfg.wnn_obsm_output_key!r}; status={status}. "
+            "Set RSCRIPT_BIN to an R runtime with Seurat+arrow or fix the WNN driver."
+        )
 
 
 def _run_clustering_on_wnn(ctx: PipelineContext) -> None:
@@ -305,10 +352,10 @@ def _preprocess_rna(adata: anndata.AnnData, n_pcs: int = 30, n_top_genes: int = 
     sc.tl.pca(adata, n_comps=n_pcs, random_state=42, mask_var="highly_variable")
 
 
-def _build_ctx(project_root: Path, project_name: str) -> PipelineContext:
+def _build_ctx(project_root: Path, project_name: str, run_id: str | None = None) -> PipelineContext:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
     sha = _git_sha(Path(__file__).resolve().parents[2])
-    run_id = f"{ts}-{sha}"
+    run_id = run_id or f"{ts}-{sha[:7]}"
     run_dir = project_root / "runs" / run_id / "python"
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -349,6 +396,19 @@ def _build_ctx(project_root: Path, project_name: str) -> PipelineContext:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--project-root", required=True, type=Path)
+    ap.add_argument(
+        "--run-id",
+        default=None,
+        help=(
+            "Optional project run id to populate. Format: "
+            "YYYYMMDDTHHMMZ-<7 hex chars>. Existing source-truth outputs are not overwritten."
+        ),
+    )
+    ap.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="Allow execution from a dirty factory tree and record diff/status hashes.",
+    )
     ap.add_argument("--project", default="trevino_pcw21_v6_3")
     ap.add_argument(
         "--input-h5ad",
@@ -358,7 +418,18 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    ctx = _build_ctx(args.project_root, args.project)
+    if args.run_id and not RUN_ID_RE.fullmatch(args.run_id):
+        ap.error(f"--run-id must match {RUN_ID_RE.pattern}: {args.run_id}")
+
+    repo_root = Path(__file__).resolve().parents[2]
+    dirty_meta = _dirty_tree_metadata(repo_root, allow_dirty=args.allow_dirty)
+    ctx = _build_ctx(args.project_root, args.project, run_id=args.run_id)
+    ctx.metadata.update(dirty_meta)
+    for source_truth in ("final_adata.h5ad", "run_manifest.json", "module_status.csv"):
+        if (ctx.run_dir / source_truth).exists():
+            raise SystemExit(
+                f"Refusing to overwrite existing source-truth artifact: {ctx.run_dir / source_truth}"
+            )
     log = lambda m: print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {m}", flush=True)
 
     log(f"run_id={ctx.metadata['run_id']}  run_dir={ctx.run_dir}")
@@ -458,6 +529,11 @@ def main() -> int:
         "run_dir": str(ctx.run_dir),
         "driver": ctx.metadata["driver"],
         "repo_sha_at_manifest_write": ctx.metadata.get("repo_sha_at_manifest_write"),
+        "factory_tree_dirty": ctx.metadata.get("factory_tree_dirty"),
+        "allow_dirty": ctx.metadata.get("allow_dirty"),
+        "diff_sha256": ctx.metadata.get("diff_sha256"),
+        "git_status_short_sha256": ctx.metadata.get("git_status_short_sha256"),
+        "git_status_short_count": ctx.metadata.get("git_status_short_count"),
         "input_h5ad": str(args.input_h5ad),
         "modules_run": [name for name, _ in stage_starts],
         "stage_seconds": {name: round(dt, 2) for name, dt in stage_starts},
