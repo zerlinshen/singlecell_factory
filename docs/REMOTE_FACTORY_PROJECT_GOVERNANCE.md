@@ -6,10 +6,38 @@ It is a control-plane document. It is not a scientific result and must not be ci
 
 ## Authority Boundary
 
+> **Note (2026-05-18):** The two-factory bullets below are SUPERSEDED by the
+> Three-Factory Authority Boundary subsection. They are preserved verbatim for
+> historical reference. New work should follow the three-factory split.
+
 - `singlecell_factory` is a factory: it owns code, contracts, validators, schemas, docs, tests, and execution behavior.
 - `r_multiomics_factory` is a factory: it owns R-side code, reports, plotting helpers, and vendored bundle-contract consumers.
 - `/home/zerlinshen/projects/<project-id>` is the project/data layer: it owns inputs, runs, figures, reports, manifests, evidence, and project-specific conclusions.
 - The local Mac Reproduction Trail is downstream review/sync. It is not the implementation target for phase 1 remote governance.
+
+### Three-Factory Authority Boundary (2026-05-18, Phase 1)
+
+Per the factory-trifurcation ADR
+(`ops/governance_records/2026-05-18-three-factory-trifurcation/ADR.md`):
+
+- `singlecell_factory` (Python factory): code, contracts, validators, schemas,
+  docs, tests, and Python execution behavior.
+- `r_multiomics_factory` (R factory, renamed from `multiomics_r_factory`):
+  R-native analysis modules and vendored bundle-contract consumers. Plot helpers
+  formerly here are now in `plotting_factory`.
+- `plotting_factory` (new, dual-language): cross-language plot helpers under
+  `python/` and `r/` subtrees, plus shared `theme/`, `schema/`, and
+  `contracts/`. No analysis logic lives here.
+- `/home/zerlinshen/projects/<project-id>` (project/data layer): unchanged —
+  still owns inputs, runs, figures, reports, manifests, evidence, and
+  conclusions.
+
+Bridge layout (in `singlecell_factory/bridges/`):
+- `local_r_pipeline_macbook/{R,R_bundle}` → `r_multiomics_factory/{R,R_bundle}`
+- `local_plot_pipeline/{r,python}` → `plotting_factory/{r,python}` (new)
+
+All bridge symlinks use three-dot relative paths (`../../../`) and are validated
+by the hardened `scripts/ci/check_bridge_symlink.sh`.
 
 ## Human vs Agent Surfaces
 
