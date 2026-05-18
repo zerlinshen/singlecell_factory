@@ -66,13 +66,15 @@ def test_modular_cli_parse(monkeypatch):
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
-    # Verify all modules are registered (3 mandatory + 28 optional = 31).
-    # Phase B (v2.1) added the protein_adt ingest module as the first consumer
-    # of the bundle extension API; the spatial lane (spatial_ingest +
-    # spatial_neighborhoods) is the second; the multimodal_integration lane
-    # (EXPERIMENTAL, off by default) is the third.
-    # Phase 1A added marker_db_loader (P1A.S2) and context_aware_annotation (P1A.S3).
-    assert len(MODULE_DEPENDENCIES) == 31
+    # Verify all modules are registered (3 mandatory + 39 optional = 42).
+    # Phase B (v2.1) added protein_adt; spatial lane (spatial_ingest +
+    # spatial_neighborhoods); multimodal_integration (EXPERIMENTAL).
+    # Phase 1A added marker_db_loader (P1A.S2) + context_aware_annotation (P1A.S3).
+    # Wave6 multi-omics expansion added: atac lane (atac_ingest, atac_lsi,
+    # atac_qc, peak_to_gene), hic lane (hic_ingest, hic_tad), vdj lane
+    # (vdj_ingest, vdj_metrics), ribo_ingest, modality_registry,
+    # cross_modality_qc.
+    assert len(MODULE_DEPENDENCIES) == 42
 
     # Verify new modules exist with correct dependencies
     assert "immune_phenotyping" in MODULE_DEPENDENCIES
