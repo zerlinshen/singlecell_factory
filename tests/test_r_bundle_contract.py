@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle
 
 IO_BUNDLE_R = "/home/zerlinshen/multiomics_r_factory/R_bundle/io_bundle.R"
+ATAC_MODULE_R = "/home/zerlinshen/multiomics_r_factory/R/atac_module.R"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,6 +56,45 @@ def _make_tiny_h5ad(path: Path, n_cells: int = 6, n_genes: int = 5) -> None:
     adata = ad.AnnData(X=x, obs=obs, var=var)
     adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
     adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+    adata.write_h5ad(path)
+
+
+def _make_tiny_atac_h5ad(
+    path: Path,
+    n_cells: int = 6,
+    n_genes: int = 5,
+    n_peaks: int = 4,
+    n_lsi: int = 2,
+) -> None:
+    rng = np.random.default_rng(44)
+    x = sparse.csr_matrix(
+        rng.integers(0, 10, size=(n_cells, n_genes)).astype(np.float32)
+    )
+    obs = pd.DataFrame(
+        {
+            "cell_type": [["T", "B", "Myeloid"][i % 3] for i in range(n_cells)],
+            "leiden": [str(i % 3) for i in range(n_cells)],
+        },
+        index=[f"cell_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=["CD3E", "LYZ", "MS4A1", "NKG7", "ELF3"][:n_genes])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+    adata.obsm["X_lsi"] = rng.normal(size=(n_cells, n_lsi)).astype(np.float32)
+    adata.obsm["atac_peaks"] = sparse.csr_matrix(
+        rng.integers(0, 4, size=(n_cells, n_peaks)).astype(np.float32)
+    )
+    starts = np.arange(1000, 1000 + n_peaks * 200, 200)
+    peaks = pd.DataFrame(
+        {
+            "peak_id": [f"chr1:{start}-{start + 100}" for start in starts],
+            "chrom": ["chr1"] * n_peaks,
+            "start": starts.astype("int64"),
+            "end": (starts + 100).astype("int64"),
+        }
+    )
+    adata.uns["atac_peaks"] = peaks
     adata.write_h5ad(path)
 
 
@@ -1199,6 +1239,73 @@ def test_multimodal_extension_round_trip(rscript_path, tmp_path):
     assert int(kv["NROW"]) == n_cells
     assert int(kv["NCOL"]) == 2
     assert kv["ROWS_MATCH"] == "TRUE"
+
+
+@pytest.mark.r_contract
+def test_atac_extension_round_trip(rscript_path, tmp_path):
+    """Python writes v2.2 ATAC LSI/peaks; R attaches the active ATAC payload."""
+    h5ad = tmp_path / "tiny_atac.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_atac"
+    n_cells = 6
+    n_peaks = 4
+    n_lsi = 2
+    _make_tiny_atac_h5ad(h5ad, n_cells=n_cells, n_peaks=n_peaks, n_lsi=n_lsi)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.2",
+            format="parquet",
+            include_atac=True,
+            atac_lsi_obsm_key="X_lsi",
+            atac_peaks_uns_key="atac_peaks",
+        )
+    )
+
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.2"
+    atac_ext = manifest["extensions"]["atac"]
+    assert atac_ext["status"] == "active"
+    assert atac_ext["files"] == ["atac_lsi", "atac_peaks"]
+    assert atac_ext["n_cells"] == n_cells
+    assert atac_ext["n_components"] == n_lsi
+    assert atac_ext["n_peaks"] == n_peaks
+    assert atac_ext["table"]["lsi_index_column"] == "cell"
+    assert atac_ext["table"]["peak_id_column"] == "peak_id"
+    peaks_df = pd.read_parquet(bundle_dir / "extensions" / "atac" / "peaks.parquet")
+    assert list(peaks_df.columns) == ["peak_id", "chrom", "start", "end"]
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"source('{ATAC_MODULE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"m <- b$extensions$atac$metadata; "
+        f"d <- b$extensions$atac$data; "
+        f"cat(sprintf('STATUS=%s\\n', m$status)); "
+        f"cat(sprintf('LSI_NROW=%d\\n', nrow(d$lsi))); "
+        f"cat(sprintf('LSI_NCOL=%d\\n', ncol(d$lsi))); "
+        f"cat(sprintf('PEAKS_NROW=%d\\n', nrow(d$peaks))); "
+        f"cat(sprintf('ROWS_MATCH=%s\\n', as.character(identical(rownames(d$lsi), rownames(b$obs))))); "
+        f"cat(sprintf('PEAK_ID=%s\\n', d$peaks$peak_id[1])); "
+        f"p <- plot_atac_lsi(b, group_by='cell_type'); "
+        f"cols <- unique(ggplot2::ggplot_build(p)$data[[1]]$colour); "
+        f"cat(sprintf('PLOT_COLORS=%d\\n', length(cols)))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "atac_round_trip")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["STATUS"] == "active"
+    assert int(kv["LSI_NROW"]) == n_cells
+    assert int(kv["LSI_NCOL"]) == n_lsi
+    assert int(kv["PEAKS_NROW"]) == n_peaks
+    assert kv["ROWS_MATCH"] == "TRUE"
+    assert kv["PEAK_ID"].startswith("chr1:")
+    assert int(kv["PLOT_COLORS"]) >= 2
 
 
 def test_multimodal_module_off_by_default(tmp_path):

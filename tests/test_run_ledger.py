@@ -104,7 +104,7 @@ def test_ledger_failure_does_not_raise(tmp_path):
 def test_env_filter_only_sc_and_safe_keys(tmp_path):
     injection = {
         "SC_DE_ENGINE": "sparse",
-        "SCF_MASSIVE_CHECKPOINT_POLICY": "metadata_only",
+        "SCF_MASSIVE_CHECKPOINT_POLICY": "full",
         "CUDA_VISIBLE_DEVICES": "0",
         "CONDA_DEFAULT_ENV": "sc_gpu",
         "PATH": "/usr/bin:/bin",        # must NOT appear

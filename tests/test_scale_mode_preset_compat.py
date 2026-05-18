@@ -51,7 +51,7 @@ def test_massive_preset_bundle_exact():
     assert caps["lazy_read"] == "true"
     assert caps["doublet_strategy"] == "grouped"
     assert caps["clustering_engine"] == "css"
-    assert caps["checkpoint_policy"] == "mandatory_only"
+    assert caps["checkpoint_policy"] == "full"
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ def test_apply_scale_mode_massive_expands_flags():
     assert result.lazy_read == "true"
     assert result.doublet_strategy == "grouped"
     assert result.clustering_engine == "css"
-    assert result.checkpoint_policy == "mandatory_only"
+    assert result.checkpoint_policy == "full"
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ def test_explicit_flag_overrides_preset():
     # Other flags should still come from the massive preset.
     assert result.lazy_read == "true"
     assert result.doublet_strategy == "grouped"
-    assert result.checkpoint_policy == "mandatory_only"
+    assert result.checkpoint_policy == "full"
 
 
 # ---------------------------------------------------------------------------

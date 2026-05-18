@@ -3,8 +3,10 @@
 
 Fail fast so developers learn the policy before merging.
 """
+import io
 import re
 import textwrap
+import tokenize
 from pathlib import Path
 
 MODULES_DIR = Path(__file__).parent.parent / "workflow" / "modular" / "modules"
@@ -14,12 +16,39 @@ _CALL_RE = re.compile(r"\.(toarray|todense)\s*\(")
 _MARKER_RE = re.compile(r"#\s*densify-allowed\s*:", re.IGNORECASE)
 
 
+def _call_line_numbers(path: Path) -> set[int]:
+    """Return source line numbers containing real toarray/todense calls.
+
+    Tokenizing keeps policy enforcement focused on executable code and avoids
+    false positives from comments or module docstrings that mention the banned
+    method names while explaining the policy.
+    """
+    source = path.read_text()
+    calls: set[int] = set()
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except tokenize.TokenError:
+        return {
+            i + 1 for i, line in enumerate(source.splitlines())
+            if _CALL_RE.search(line)
+        }
+    for idx in range(len(tokens) - 2):
+        tok, nxt, after = tokens[idx], tokens[idx + 1], tokens[idx + 2]
+        if (
+            tok.type == tokenize.OP and tok.string == "."
+            and nxt.type == tokenize.NAME and nxt.string in {"toarray", "todense"}
+            and after.type == tokenize.OP and after.string == "("
+        ):
+            calls.add(tok.start[0])
+    return calls
+
+
 def _check_file(path: Path) -> list[str]:
     violations: list[str] = []
     lines = path.read_text().splitlines()
-    for i, line in enumerate(lines):
-        if not _CALL_RE.search(line):
-            continue
+    for line_no in sorted(_call_line_numbers(path)):
+        i = line_no - 1
+        line = lines[i]
         # Allow if this line carries the marker comment
         if _MARKER_RE.search(line):
             continue
