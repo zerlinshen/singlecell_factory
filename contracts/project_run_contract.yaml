@@ -1,0 +1,162 @@
+# Remote factory/project governance contract.
+# Control-plane contract only; not a scientific output.
+schema_version: project-run-governance/v1
+
+principles:
+  - factories_are_tools_projects_are_data
+  - project_roots_own_scientific_artifacts
+  - factory_reports_are_control_plane_not_scientific_outputs
+  - validation_is_non_destructive_by_default
+
+project_root:
+  path_pattern: "/home/zerlinshen/projects/<project-id>"
+  required_entries:
+    - project.yaml
+    - inputs/
+    - runs/
+    - configs/
+    - notebooks/
+
+run_root:
+  path_pattern: "/home/zerlinshen/projects/<project-id>/runs/<run-id>"
+  required_entries_for_new_governance_runs:
+    - manifest.json
+    - python/
+    - r/
+    - logs/
+  root_manifest_semantics: cross_factory_run_envelope
+
+human_facing_deliverables:
+  description: Stable surfaces for human review and wet-lab/manuscript decisions.
+  preferred_entries:
+    - reports/
+    - figures/
+    - conclusions.md
+    - human_summary.md
+  naming_preference: concise_biological_question_first
+  required_quality:
+    - visual_artifacts_are_discoverable
+    - conclusions_link_back_to_run_evidence
+    - no_raw_executor_logs_as_primary_entrypoint
+
+agent_facing_provenance:
+  description: Detailed surfaces for executors, validators, and reproducibility.
+  preferred_entries:
+    - manifest.json
+    - python/run_manifest.json
+    - python/module_status.csv
+    - r/**/*manifest*.json
+    - logs/
+    - .checkpoints/
+  naming_preference: explicit_timestamp_commit_module_status
+  required_quality:
+    - machine_parseable_when_possible
+    - dirty_tree_provenance_recorded
+    - enough_detail_to_resume_or_audit
+
+producer_native_provenance:
+  python:
+    examples:
+      - python/run_manifest.json
+      - python/**/run_manifest.json
+      - python/**/module_status.csv
+  r:
+    examples:
+      - r/**/manifest*.json
+      - r/**/provenance*.json
+  bundle:
+    examples:
+      - python/bundle/provenance.json
+      - python/**/bundle/provenance.json
+
+purpose_driven_module_selection:
+  description: Choose modules from the biological/reproduction question and available modalities; do not run every optional module by default.
+  required_decision_fields:
+    - scientific_question
+    - modalities_present
+    - expected_human_deliverables
+    - required_upstream_artifacts
+    - candidate_modules
+    - safe_skip_conditions
+    - wet_lab_or_manuscript_decision
+  example_lanes:
+    baseline_qc:
+      intent: confirm data quality and clustering baseline
+      modules: [cellranger, qc, doublet_detection, clustering, annotation]
+    developmental_trajectory:
+      intent: resolve lineage/fate timing and maturation gradients
+      modules: [trajectory, pseudo_velocity, rna_velocity, cell_fate, gene_signature_scoring]
+    regulatory_multiomics:
+      intent: connect chromatin/accessibility/regulatory programs to cell states
+      modules: [atac_ingest, atac_qc, atac_lsi, chromvar, peak_to_gene, multimodal_integration, tf_network]
+    three_d_genome:
+      intent: inspect contact-domain or 3D genome hypotheses
+      modules: [hic_ingest, hic_tad, gwas_overlay]
+    tumor_microenvironment:
+      intent: quantify malignant, immune, and stromal programs
+      modules: [cnv_inference, immune_phenotyping, tumor_microenvironment, cell_communication, composition]
+    manuscript_reproduction:
+      intent: reproduce selected published figures and claim-level evidence
+      modules: [paper_repro, differential_expression, pathway_analysis, pseudobulk_de]
+
+severity_model:
+  error:
+    description: Violation in a new-governance run or missing project root.
+  warning:
+    description: Legacy or partial project state, including missing manifests or dirs when substitute provenance exists.
+  info:
+    description: Optional improvement, future project pointer, or local sync recommendation.
+
+
+project_retention_and_backup_policy:
+  default_rule: keep_latest_validated_run_result
+  override_location_options:
+    - project.yaml
+    - ops/governance_records/<project-policy-round>/POLICY.md
+    - project_root/ledger/<project-policy>.yaml
+  required_project_fields:
+    - project_purpose
+    - analysis_type
+    - method_family
+    - selected_best_parameters
+    - module_list
+    - filtering_thresholds
+    - batch_or_integration_keys
+    - sketch_or_metacell_settings
+    - random_seed
+    - latest_source_of_truth_run_id
+    - latest_source_of_truth_run_path
+    - superseded_run_ids
+    - upstream_repository
+    - raw_data_reproduction
+    - data_object_reproduction
+    - figure_reproduction
+    - module_gap_decisions
+    - context_optimization_decisions
+    - final_backup_contents
+    - never_delete_assets
+  final_backup_contents:
+    - manifest.json
+    - producer_native_manifests
+    - module_status.csv
+    - launch_command_or_wrapper
+    - launch_log
+    - parameter_file
+    - environment_pins
+    - final_labeled_object_or_compact_atlas
+    - human_facing_figures_reports
+    - conclusions_summary
+  never_delete_assets:
+    - raw_data
+    - prepared_canonical_inputs
+    - source_code
+    - environment_definitions
+    - launch_scripts
+    - governance_records
+    - currently_cited_report_assets
+
+phase_1_prohibitions:
+  - do_not_move_or_delete_project_run_artifacts
+  - do_not_rewrite_legacy_manifests
+  - do_not_consolidate_repositories
+  - do_not_treat_local_reproduction_trail_as_target

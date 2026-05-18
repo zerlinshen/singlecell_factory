@@ -1,0 +1,684 @@
+# bundle_schema.yaml — Canonical schema for the singlecell_factory R bundle.
+#
+# Version: 2.2
+# Canonical location: singlecell_factory/contracts/bundle_schema.yaml
+# Vendored copy:      multiomics_r_factory/contracts/bundle_schema.yaml
+#
+# The two copies MUST be byte-identical. Use tools/sync-contracts.sh to
+# propagate changes from the canonical copy to the vendored copy.
+# A pre-commit hook in each repo asserts sha256sum matches .expected_sha256.
+#
+# Schema history:
+#   v1   — CSV/CSV.gz files only; manifest fields: schema_version, source,
+#           bundle, expression, files, precision_policy.
+#   v2   — parquet + optional mtx.gz; adds cell_alignment, compatible_with,
+#           marker_format field in bundle block.
+#   v2.1 — additive superset of v2; adds optional top-level extensions map
+#           (protein, spatial, multimodal_obsm). On-disk layout identical to v2.
+#   v2.2 — additive superset of v2.1; adds marker_resolutions extension (active)
+#           and reserves atac/vdj/ribo/hic slots (status: reserved). Each Phase 2
+#           slice merge flips its slot from reserved -> active. v2.1 loaders that
+#           ignore unknown extension keys remain fully compatible.
+#
+# Field types use a simplified notation:
+#   string, int, float, bool, list<T>, map<K,V>, nullable<T>
+# "optional" means the key may be absent in older or minimal bundles.
+# "required" means readers MUST reject a bundle that omits this key.
+
+version: "2.2"
+
+# ---------------------------------------------------------------------------
+# manifest_fields — top-level keys present in bundle_manifest.json
+# ---------------------------------------------------------------------------
+manifest_fields:
+  schema_version:
+    type: string
+    required: true
+    description: >
+      One of "singlecell_r_bundle_v1", "singlecell_r_bundle_v2",
+      "singlecell_r_bundle_v2.1". Readers dispatch on this value.
+    allowed_values:
+      - singlecell_r_bundle_v1
+      - singlecell_r_bundle_v2
+      - singlecell_r_bundle_v2.1
+      - singlecell_r_bundle_v2.2
+
+  compatible_with:
+    type: list<string>
+    required: false
+    description: >
+      Schema versions this bundle is backwards-compatible with.
+      Present in v2 and v2.1 bundles only.
+    example: ["singlecell_r_bundle_v1", "singlecell_r_bundle_v2"]
+
+  generated_at_utc:
+    type: string
+    required: true
+    description: ISO-8601 UTC timestamp of bundle creation (e.g. "2026-05-14T15:30:00+00:00").
+
+  project_id:
+    type: nullable<string>
+    required: false
+    description: >
+      Project identifier (e.g. "nc2024-nsclc"). Populated by the project-root
+      CLI plumbing when --project-root is passed; absent in legacy bundles.
+
+  run_id:
+    type: nullable<string>
+    required: false
+    description: >
+      Run identifier matching the regex ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z-[0-9a-f]{7}$.
+      Populated by the project-root CLI plumbing; absent in legacy bundles.
+
+  produced_on:
+    type: nullable<string>
+    required: false
+    description: >
+      Hostname of the machine that produced the bundle (e.g. "ubuntu-tail",
+      "mac-local"). Populated by the project-root CLI plumbing.
+
+  factory_python:
+    type: object
+    required: false
+    description: >
+      Provenance pin for the singlecell_factory Python repo at export time.
+      Populated by manifest_writer.py when --project-root is used.
+    fields:
+      sha:
+        type: string
+        description: Full git SHA of the factory HEAD commit.
+      dirty:
+        type: bool
+        description: True when the working tree had uncommitted changes.
+      diff_sha256:
+        type: nullable<string>
+        description: >
+          sha256("git diff HEAD") when dirty=true, null otherwise.
+
+  factory_r:
+    type: object
+    required: false
+    description: >
+      Provenance pin for the multiomics_r_factory R repo at export time.
+    fields:
+      sha:
+        type: string
+        description: Full git SHA of the factory HEAD commit.
+      dirty:
+        type: bool
+        description: True when the working tree had uncommitted changes.
+      diff_sha256:
+        type: nullable<string>
+        description: >
+          sha256("git diff HEAD") when dirty=true, null otherwise.
+
+  bundle_sha256:
+    type: nullable<string>
+    required: false
+    description: >
+      sha256 of the entire bundle directory (computed after all files written).
+      Populated by manifest_writer.py; absent in legacy bundles.
+
+  modules_run:
+    type: nullable<list<string>>
+    required: false
+    description: >
+      Ordered list of pipeline module names that ran to produce the source h5ad
+      (e.g. ["cellranger","qc","doublet_detection","clustering","umap"]).
+      Backfilled from run_manifest.json when available; null in legacy bundles.
+
+  claim_guard:
+    type: string
+    required: false
+    description: >
+      Literal string "not_for_de_or_new_quantitative_claims_without_full_object_validation".
+      Also present in expression block; this top-level copy is for tools that
+      inspect the manifest without navigating to expression.claim_guard.
+
+  source:
+    type: object
+    required: true
+    description: Provenance of the source AnnData h5ad.
+    fields:
+      input_h5ad:
+        type: string
+        description: Absolute path of the source h5ad at export time.
+      source_run_dir:
+        type: nullable<string>
+        description: Source pipeline run directory, if provided.
+      n_obs:
+        type: int
+        description: Number of cells in the source AnnData.
+      n_vars:
+        type: int
+        description: Number of genes/features in the source AnnData.
+      input_h5ad_bytes:
+        type: int
+        description: Size of the source h5ad in bytes.
+      input_h5ad_mtime:
+        type: float
+        description: mtime of the source h5ad as a POSIX float.
+      input_h5ad_mtime_epoch:
+        type: int
+        description: mtime rounded to integer seconds.
+      x_storage:
+        type: string
+        description: Python type name of adata.X (e.g. "CSRDataset", "csr_matrix").
+
+  bundle:
+    type: object
+    required: true
+    description: Parameters and summary of what was exported.
+    fields:
+      schema_name:
+        type: string
+        description: >
+          Human-readable schema name. v1: "compact_metadata_embedding_marker_bundle".
+          v2/v2.1: "compact_metadata_embedding_marker_bundle_v2".
+      n_cells_exported:
+        type: int
+        required: true
+        description: Number of cells written into the bundle.
+      max_cells:
+        type: nullable<int>
+        description: --max-cells argument used; null if all cells exported.
+      seed:
+        type: int
+        description: Random seed used for cell subsampling.
+      obs_columns_requested:
+        type: list<string>
+        description: obs columns requested by the exporter config.
+      obs_columns_present:
+        type: list<string>
+        description: Subset of obs_columns_requested actually found in adata.obs.
+      markers_requested:
+        type: list<string>
+        description: Marker genes requested by the exporter config.
+      markers_present:
+        type: list<string>
+        required: true
+        description: Subset of markers_requested found in adata.var_names.
+      obsm_keys:
+        type: list<string>
+        required: true
+        description: obsm keys exported (e.g. ["X_umap", "X_pca"]).
+      compression:
+        type: string
+        description: Compression used for v1 CSV files ("gzip" or "none").
+      required_files:
+        type: list<string>
+        required: true
+        description: Sorted list of file stem keys present in the files map.
+      marker_format:
+        type: string
+        required: false
+        description: >
+          Format of the marker expression payload. "parquet" or "mtx_gz".
+          Present in v2/v2.1 bundles only.
+        allowed_values:
+          - parquet
+          - mtx_gz
+
+  cell_alignment:
+    type: object
+    required: false
+    description: >
+      Alignment contract between all tabular files in the bundle.
+      Present in v2/v2.1 bundles only.
+    fields:
+      primary_index:
+        type: string
+        description: Name of the shared row index ("barcode").
+      all_files_share_primary:
+        type: bool
+        description: >
+          True when obs, obsm parquets, and marker_expr all share the same
+          ordered cell barcode index.
+
+  expression:
+    type: object
+    required: true
+    description: Metadata describing the expression values exported.
+    fields:
+      source_slot:
+        type: string
+        description: AnnData slot used ("X").
+      value_scale:
+        type: string
+        description: >
+          Scale of exported values ("source_X_as_stored"). Values are copied
+          as-is from adata.X; no normalization is applied by the exporter.
+      export_dtype:
+        type: string
+        description: numpy dtype used for exported expression values ("float32").
+      intended_use:
+        type: string
+        description: >
+          "plotting_and_visual_summary_only". This bundle is not for
+          differential expression or new quantitative biological claims.
+      claim_guard:
+        type: string
+        required: true
+        description: >
+          Must equal exactly:
+          "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+        value: "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+
+  precision_policy:
+    type: string
+    required: true
+    description: >
+      Human-readable statement that metadata, embeddings, and selected marker
+      expression are copied from the source AnnData, the full expression matrix
+      is not densified, and this bundle is for plotting/reporting handoff only.
+
+# ---------------------------------------------------------------------------
+# tables — per-file schemas for core tabular outputs
+# ---------------------------------------------------------------------------
+tables:
+  obs:
+    description: Cell metadata table. One row per exported cell.
+    format: parquet  # v2/v2.1; CSV/CSV.gz in v1
+    index_column: cell  # literal column name in parquet; row index in CSV
+    columns:
+      cell:
+        type: string
+        description: Cell barcode / obs_name from AnnData. Primary index.
+      cell_type:
+        type: nullable<string>
+        optional: true
+        description: Cell type annotation when present in adata.obs.
+      cell_type_hint:
+        type: nullable<string>
+        optional: true
+        description: Looser cell type hint annotation.
+      CellName:
+        type: nullable<string>
+        optional: true
+      leiden:
+        type: nullable<string>
+        optional: true
+        description: Leiden cluster label.
+      sample:
+        type: nullable<string>
+        optional: true
+      patient:
+        type: nullable<string>
+        optional: true
+      stage:
+        type: nullable<string>
+        optional: true
+      condition:
+        type: nullable<string>
+        optional: true
+      orig.ident:
+        type: nullable<string>
+        optional: true
+      total_counts:
+        type: nullable<float>
+        optional: true
+      n_genes_by_counts:
+        type: nullable<float>
+        optional: true
+      pct_counts_mt:
+        type: nullable<float>
+        optional: true
+      doublet_score:
+        type: nullable<float>
+        optional: true
+      predicted_doublet:
+        type: nullable<bool>
+        optional: true
+      immune_subtype:
+        type: nullable<string>
+        optional: true
+      tme_subtype:
+        type: nullable<string>
+        optional: true
+    note: >
+      Columns are a subset of adata.obs determined by obs_columns_requested
+      intersected with columns actually present. Categorical columns are
+      preserved as parquet Dictionary type; ordering and levels are retained.
+
+  X_umap:
+    description: UMAP embedding. One row per exported cell; columns UMAP_1, UMAP_2 (and UMAP_3 if 3D).
+    format: parquet  # v2/v2.1; CSV/CSV.gz in v1; stored under obsm/ subdir in v2
+    index_column: cell
+    path_pattern: "obsm/X_umap.parquet"
+    columns:
+      cell:
+        type: string
+        description: Cell barcode. Must match obs.cell in the same order.
+      UMAP_1:
+        type: float32
+        description: UMAP dimension 1.
+      UMAP_2:
+        type: float32
+        description: UMAP dimension 2.
+
+  X_pca:
+    description: PCA embedding. One row per exported cell; columns PC_1..PC_N.
+    format: parquet  # v2/v2.1; CSV/CSV.gz in v1; stored under obsm/ subdir in v2
+    index_column: cell
+    path_pattern: "obsm/X_pca.parquet"
+    columns:
+      cell:
+        type: string
+        description: Cell barcode. Must match obs.cell in the same order.
+      PC_N:
+        type: float32
+        description: Principal component N (N starts at 1).
+
+  marker_expr:
+    description: >
+      Marker gene expression matrix. Cells x genes. Values are float32
+      copied from adata.X as-is (source_X_as_stored). Subject to claim_guard.
+    format_v2: parquet  # when marker count < MTX_AUTO_THRESHOLD or --format parquet
+    format_v2_large: mtx_gz  # when marker count >= MTX_AUTO_THRESHOLD or --format mtx
+    index_column: cell
+    columns:
+      cell:
+        type: string
+        description: Cell barcode. Must match obs.cell in the same order.
+      GENE_NAME:
+        type: float32
+        description: One column per marker gene present in adata.var_names.
+    mtx_gz_sidecars:
+      marker_expr_barcodes:
+        path: "marker_expr.barcodes.tsv.gz"
+        description: Ordered cell barcodes (one per line); row index for the mtx.
+      marker_expr_genes:
+        path: "marker_expr.genes.tsv.gz"
+        description: Ordered gene names (one per line); column index for the mtx.
+
+# ---------------------------------------------------------------------------
+# extensions — optional modality extensions (v2.1+)
+# ---------------------------------------------------------------------------
+#
+# v2.2 extension registry:
+#   status: active   — produced by the pipeline; R loader has a dispatch surface.
+#   status: reserved — slot reserved for a future Phase 2 vertical slice; not yet
+#                      produced. R loaders must load reserved slots as NULL with
+#                      a fail-soft message() (never stop()).
+#
+# v2.2 layout (all keys optional; v2.1 loaders that ignore unknown keys are compatible):
+#   marker_resolutions: { status: active, required_when: context_aware_annotation_ran,
+#                         columns: [cell_type, marker_set, source_db, source_version, score] }
+#   atac:               { status: active, required_when: include_atac_exported }
+#   vdj:                { status: reserved }
+#   ribo:               { status: reserved }
+#   hic:                { status: reserved }
+extensions_v22:
+  marker_resolutions:
+    status: active
+    required_when: context_aware_annotation_ran
+    description: >
+      Per-cluster marker resolution table produced by context_aware_annotation.
+      Present only when the context_aware_annotation module ran in the pipeline.
+      Written to extensions/marker_resolutions/markers.parquet inside the bundle.
+    columns:
+      - cell_type
+      - marker_set
+      - source_db
+      - source_version
+      - score
+    table:
+      path: "extensions/marker_resolutions/markers.parquet"
+      index_column: cell_type
+  atac:
+    status: active
+    description: >
+      ATAC-seq vertical slice (Phase 2, P2.S11-S14): TF-IDF + LSI embedding
+      produced by atac_ingest. Consumed by multiomics_r_factory/R/atac_module.R
+      for accessibility plots.
+    columns:
+      lsi:
+        - cell
+        - lsi_1
+        - lsi_2
+        - "..."   # actual components depend on --atac-n-components (default 30)
+      peaks:
+        - chrom
+        - start
+        - end
+    table:
+      lsi_path: "extensions/atac/lsi.parquet"
+      peaks_path: "extensions/atac/peaks.parquet"
+      index_column: cell
+      lsi_index_column: cell
+      peak_id_column: peak_id
+  vdj:
+    status: reserved
+    description: >
+      Reserved VDJ vertical slice (Phase 2, P2.S15-S17): per-cell clonotype_id +
+      chain_pairing + clonal_expansion + per-sample diversity (Shannon, Gini).
+      R-side loaders must return NULL until the exporter publishes this slot.
+    columns:
+      clonotypes:
+        - clonotype_id
+        - n_cells
+        - v_genes
+        - j_genes
+        - cdr3_nts
+      diversity:
+        - sample
+        - n_cells_with_vdj
+        - n_clonotypes
+        - shannon
+        - gini
+    table:
+      clonotypes_path: "extensions/vdj/clonotypes.parquet"
+      diversity_path: "extensions/vdj/diversity.parquet"
+      index_column: clonotype_id
+  ribo:
+    status: reserved
+    description: >
+      Reserved ribosome profiling vertical slice (Phase 2, P2.S21-S22): per-gene
+      per-sample translation efficiency (footprint / RNA + pseudocount).
+      R-side loaders must return NULL until the exporter publishes this slot.
+    columns:
+      te:
+        - gene
+        - sample
+        - footprint_count
+        - rna_count
+        - te
+    table:
+      te_path: "extensions/ribo/translation_efficiency.parquet"
+      index_column: gene
+  hic:
+    status: reserved
+    description: >
+      Reserved Hi-C / scHi-C vertical slice (Phase 2, P2.S18-S20): bin x bin sparse
+      contact matrix + insulation-score TAD boundaries + first-eigenvector
+      A/B compartments. R-side loaders must return NULL until the exporter
+      publishes this slot.
+    columns:
+      bins:
+        - bin_id
+        - chrom
+        - start
+        - end
+      contacts:
+        - row
+        - col
+        - count
+      boundaries:
+        - bin_id
+        - chrom
+        - position
+        - insulation
+        - is_boundary
+      compartments:
+        - bin_id
+        - chrom
+        - position
+        - eigenvector_1
+        - compartment
+    table:
+      bins_path: "extensions/hic/bins.parquet"
+      contacts_path: "extensions/hic/contacts.parquet"
+      boundaries_path: "extensions/hic/boundaries.parquet"
+      compartments_path: "extensions/hic/compartments.parquet"
+      index_column: bin_id
+
+# ---------------------------------------------------------------------------
+# extensions — optional modality extensions (v2.1 only)
+# ---------------------------------------------------------------------------
+extensions:
+  protein:
+    description: >
+      Optional protein/ADT CLR-normalized expression matrix. Written when
+      --include-protein is passed and adata.obsm[protein_obsm_key] is present.
+    version: "1.0"
+    files:
+      - protein  # stem; resolves to protein.parquet in bundle root
+    fields:
+      normalization:
+        type: string
+        value: "CLR"
+      isotype_controls:
+        type: list<string>
+        description: Protein names that are isotype controls (may be empty).
+      n_proteins:
+        type: int
+        description: Number of protein features.
+      claim_guard:
+        type: string
+        value: "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    table:
+      path: "protein.parquet"
+      index_column: cell
+      columns:
+        cell:
+          type: string
+        PROTEIN_NAME:
+          type: float32
+          description: One column per protein (ADT) feature.
+
+  spatial:
+    description: >
+      Optional spatial coordinate table. Written when --include-spatial is
+      passed and adata.obsm[spatial_obsm_key] is present.
+    version: "1.0"
+    files:
+      - spatial  # stem; resolves to spatial.parquet in bundle root
+    fields:
+      coord_system:
+        type: map<string,any>
+        description: >
+          Coordinate system metadata from adata.uns["spatial_coord_system"].
+          May be empty; values are JSON-serializable primitives only.
+      library_image_paths:
+        type: map<string,string>
+        description: >
+          Library ID -> image path strings from adata.uns["spatial"]["library_id"].
+          Only path strings are stored (never image bytes).
+      n_spots:
+        type: int
+        description: Number of spatial spots/cells exported.
+      claim_guard:
+        type: string
+        value: "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    table:
+      path: "spatial.parquet"
+      index_column: cell
+      columns:
+        cell:
+          type: string
+        x:
+          type: float32
+          description: Spatial x coordinate.
+        y:
+          type: float32
+          description: Spatial y coordinate.
+        sample:
+          type: nullable<string>
+          optional: true
+          description: From adata.obs["spatial_sample"] when present.
+        library_id:
+          type: nullable<string>
+          optional: true
+          description: From adata.obs["spatial_library_id"] when present.
+
+  multimodal_obsm:
+    description: >
+      EXPERIMENTAL. Optional multi-modal embedding export. Written when
+      --include-multimodal-obsm is passed and at least one of the named
+      obsm keys is present on the AnnData.
+    version: "1.0"
+    files:
+      - multimodal_obsm_X_wnn   # example; actual stems depend on present keys
+      - multimodal_obsm_X_mofa  # example
+    fields:
+      embeddings:
+        type: list<object>
+        description: >
+          One entry per exported obsm key. Each entry has:
+            key (string): original obsm key (e.g. "X_wnn")
+            n_dims (int): number of dimensions
+            stem (string): file stem in manifest files map (e.g. "multimodal_obsm_X_wnn")
+      engine_used:
+        type: string
+        description: >
+          Integration engine recorded in adata.uns["multimodal_status"]["engine"].
+          "unknown" when not recorded.
+      experimental:
+        type: bool
+        value: true
+      claim_guard:
+        type: string
+        value: "not_for_de_or_new_quantitative_claims_without_full_object_validation"
+    table_per_key:
+      path_pattern: "multimodal_obsm_{key}.parquet"
+      index_column: cell
+      columns:
+        cell:
+          type: string
+        DIM_N:
+          type: float32
+          description: >
+            Columns named {key}_1, {key}_2, ... {key}_N for each embedding dimension.
+
+# ---------------------------------------------------------------------------
+# file_record — per-file provenance entry in manifest["files"]
+# ---------------------------------------------------------------------------
+file_record:
+  description: >
+    Every file written by the exporter gets a file_record entry under
+    manifest["files"][<stem>].
+  fields:
+    path:
+      type: string
+      description: Relative path within the bundle directory (POSIX).
+    bytes:
+      type: int
+      description: File size in bytes at write time.
+    sha256:
+      type: string
+      description: Lowercase hex SHA-256 digest of the file.
+    n_rows:
+      type: int
+      description: Number of data rows (cells) in the file.
+    n_cols:
+      type: int
+      description: Number of data columns in the file.
+    format:
+      type: string
+      optional: true
+      description: >
+        File format hint: "parquet", "mtx_gz", "tsv_gz", "json", "csv_gz".
+    sparse:
+      type: nullable<bool>
+      optional: true
+      description: True for mtx_gz files.
+    nnz:
+      type: nullable<int>
+      optional: true
+      description: Number of non-zero entries (mtx_gz only).
+    role:
+      type: nullable<string>
+      optional: true
+      description: >
+        Semantic role for sidecar files:
+        "marker_expr_row_index" (barcodes), "marker_expr_col_index" (genes).
