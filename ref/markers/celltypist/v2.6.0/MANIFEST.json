@@ -1,0 +1,9 @@
+{
+  "name": "CellTypist",
+  "version": "v2.6.0",
+  "license": "MIT",
+  "source_url": "https://www.celltypist.org/",
+  "snapshot_date": "2024-03-01",
+  "sha256": "placeholder_populate_before_ac1_evaluation",
+  "coverage": [["lung", "NSCLC"]]
+}

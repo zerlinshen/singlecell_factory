@@ -1,0 +1,15 @@
+tissue	condition	cell_type	marker_gene	marker_type
+lung	NSCLC	Epithelial cell	EPCAM	positive
+lung	NSCLC	Epithelial cell	CDH1	positive
+lung	NSCLC	T cell	CD3D	positive
+lung	NSCLC	Cytotoxic T cell	CD8A	positive
+lung	NSCLC	Cytotoxic T cell	GZMB	positive
+lung	NSCLC	Helper T cell	CD4	positive
+lung	NSCLC	Regulatory T cell	FOXP3	positive
+lung	NSCLC	B cell	CD19	positive
+lung	NSCLC	Plasma cell	MZB1	positive
+lung	NSCLC	Macrophage	CD68	positive
+lung	NSCLC	Monocyte	CD14	positive
+lung	NSCLC	Fibroblast	COL1A2	positive
+lung	NSCLC	Endothelial cell	CDH5	positive
+lung	NSCLC	NK cell	KLRD1	positive

@@ -1,0 +1,9 @@
+{
+  "name": "PanglaoDB",
+  "version": "v2021-03-18",
+  "license": "CC BY 4.0",
+  "source_url": "https://panglaodb.se/",
+  "snapshot_date": "2021-03-18",
+  "sha256": "placeholder_populate_before_ac1_evaluation",
+  "coverage": [["lung", "NSCLC"]]
+}

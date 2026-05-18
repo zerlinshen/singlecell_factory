@@ -1,0 +1,17 @@
+tissue	condition	cell_type	marker_gene	marker_type
+lung	NSCLC	Tumor cell	EPCAM	positive
+lung	NSCLC	Tumor cell	KRT19	positive
+lung	NSCLC	Tumor cell	KRT7	positive
+lung	NSCLC	T cell	CD3D	positive
+lung	NSCLC	T cell	CD3E	positive
+lung	NSCLC	T cell	CD8A	positive
+lung	NSCLC	B cell	CD79A	positive
+lung	NSCLC	B cell	MS4A1	positive
+lung	NSCLC	Myeloid cell	LYZ	positive
+lung	NSCLC	Myeloid cell	CD68	positive
+lung	NSCLC	Fibroblast	DCN	positive
+lung	NSCLC	Fibroblast	COL1A1	positive
+lung	NSCLC	Endothelial cell	PECAM1	positive
+lung	NSCLC	Endothelial cell	VWF	positive
+lung	NSCLC	NK cell	GNLY	positive
+lung	NSCLC	NK cell	NKG7	positive

@@ -1,0 +1,9 @@
+{
+  "name": "scTypeDB",
+  "version": "v1.0",
+  "license": "MIT",
+  "source_url": "https://github.com/IanevskiAleksandr/sc-type",
+  "snapshot_date": "2024-01-15",
+  "sha256": "placeholder_populate_before_ac1_evaluation",
+  "coverage": [["lung", "NSCLC"]]
+}

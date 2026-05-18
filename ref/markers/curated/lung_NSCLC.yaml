@@ -1,0 +1,87 @@
+# Curated marker overlay for (tissue=lung, condition=NSCLC).
+#
+# Precedence: loaded as the highest-priority source in MarkerDbLoader, ahead of
+# CellMarker2 / PanglaoDB / CellTypist / scTypeDB. These entries are unioned
+# into the cell-type marker pool that context_aware_annotation scores.
+#
+# Sources for canonical markers (NSCLC scRNA-seq literature):
+# - Lambrechts et al. Nat Med 2018 (lung tumor scRNA atlas)
+# - Maynard et al. Cell 2020 (lung adenocarcinoma single-cell atlas)
+# - Kim et al. Nat Commun 2020 (NSCLC tumor microenvironment)
+# - Wu et al. Cell 2021 (pan-cancer single-cell atlas; lung NSCLC subset)
+# - Common immunology canon for sub-state markers (Tex, Treg, GC B, etc.)
+#
+# Schema (consumed by marker_db_loader.py::_load_curated_yaml):
+#   tissue: <name>
+#   condition: <name>
+#   markers:
+#     <cell_type_name>:
+#       positive: [GENE, GENE, ...]
+#       negative: [GENE, ...]   # optional
+#
+# Cell-type names match the April-26 NC reproduction acceptance-gate
+# expectations exactly: "B cell", "Mast cell", "Plasma cell",
+# "Myeloid/Macro", "NK cell". Sub-states are emitted via
+# context_aware_annotation when their cell_type starts with the parent name
+# (e.g., "T cell Exhausted" emerges as a substate of "T cell").
+
+tissue: lung
+condition: NSCLC
+
+markers:
+  # =============================================================
+  # Five NC2024 acceptance-gate cell types (primary)
+  # =============================================================
+  B cell:
+    positive: [MS4A1, CD79A, CD79B, BANK1, CD19, IGHM, IGHD, TCL1A, FCER2]
+  Mast cell:
+    positive: [TPSAB1, TPSB2, CPA3, KIT, MS4A2, HPGDS, GATA2, HDC]
+  Plasma cell:
+    positive: [MZB1, JCHAIN, DERL3, XBP1, IGHG1, IGHG3, IGHA1, IGKC, IGLC2, SDC1]
+  Myeloid/Macro:
+    positive: [LYZ, CD68, CD14, CD163, C1QA, C1QB, C1QC, MARCO, MRC1, AIF1]
+  NK cell:
+    positive: [NKG7, GNLY, KLRD1, KLRF1, GZMB, FGFBP2, KLRC1, NCR1, NCAM1, FCGR3A]
+
+  # =============================================================
+  # T cell parent + condition-specific sub-states (AC-2 driver)
+  # T cell parent acts as the standard reference; sub-states must
+  # have a name STARTING WITH "T cell " for context_aware_annotation
+  # to detect them as substates of the T-cell parent.
+  # =============================================================
+  T cell:
+    positive: [CD3D, CD3E, CD3G, TRAC, TRBC1, TRBC2]
+  T cell CD8 Cytotoxic:
+    positive: [CD8A, CD8B, GZMA, GZMB, GZMK, PRF1, IFNG, NKG7]
+  T cell CD4 Helper:
+    positive: [CD4, IL7R, LEF1, TCF7, CCR7]
+  T cell Regulatory:
+    positive: [FOXP3, IL2RA, CTLA4, TIGIT, IKZF2, IL10]
+  T cell Exhausted:
+    # NSCLC condition-specific: PD-1/TOX/GZMK exhaustion panel
+    positive: [PDCD1, HAVCR2, LAG3, TOX, TIGIT, GZMK, ENTPD1, TIM3]
+
+  # =============================================================
+  # Other major NSCLC tumor microenvironment cell types
+  # =============================================================
+  Tumor epithelial:
+    # NSCLC tumor: EPCAM/KRT panel + NSCLC-specific (NSE, SCGB3A2)
+    positive: [EPCAM, KRT7, KRT8, KRT18, KRT19, CDH1, NAPSA, NKX2-1, SCGB3A2, SFTPC, SFTPB]
+  Endothelial:
+    positive: [PECAM1, VWF, CDH5, KDR, ENG, CLDN5]
+  Fibroblast:
+    positive: [COL1A1, COL1A2, COL3A1, DCN, LUM, ACTA2, FAP, PDGFRA]
+  Dendritic cell:
+    positive: [CD1C, CLEC9A, FCER1A, LAMP3, CCR7, IRF8, IRF4]
+  Monocyte:
+    positive: [FCN1, VCAN, S100A8, S100A9, S100A12, EREG, FCGR3A]
+  Neutrophil:
+    positive: [FCGR3B, CSF3R, S100A8, S100A9, CXCR2, ELANE, MPO]
+
+  # =============================================================
+  # B-cell sub-states (AC-2 supporting)
+  # =============================================================
+  B cell Memory:
+    positive: [MS4A1, CD27, CD80, AIM2]
+  B cell Germinal Center:
+    positive: [MS4A1, BCL6, AICDA, MEF2B]

@@ -1,0 +1,9 @@
+{
+  "name": "CellMarker2.0",
+  "version": "v2.0",
+  "license": "CC BY 4.0",
+  "source_url": "http://bio-bigdata.hrbmu.edu.cn/CellMarker/",
+  "snapshot_date": "2024-01-15",
+  "sha256": "placeholder_populate_before_ac1_evaluation",
+  "coverage": [["lung", "NSCLC"]]
+}

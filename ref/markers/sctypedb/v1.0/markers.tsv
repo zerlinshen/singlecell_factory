@@ -1,0 +1,19 @@
+tissue	condition	cell_type	marker_gene	marker_type
+lung	NSCLC	Cancer cell	EPCAM	positive
+lung	NSCLC	Cancer cell	KRT18	positive
+lung	NSCLC	Cancer cell	SCGB3A2	positive
+lung	NSCLC	T cell	CD3D	positive
+lung	NSCLC	CD8+ T cell	CD8A	positive
+lung	NSCLC	CD8+ T cell	PRF1	positive
+lung	NSCLC	CD4+ T cell	CD4	positive
+lung	NSCLC	Treg	FOXP3	positive
+lung	NSCLC	B cell	CD79A	positive
+lung	NSCLC	Macrophage	CD68	positive
+lung	NSCLC	cDC1	XCR1	positive
+lung	NSCLC	cDC2	CD1C	positive
+lung	NSCLC	pDC	LILRA4	positive
+lung	NSCLC	Mast cell	CPA3	positive
+lung	NSCLC	Fibroblast	COL1A1	positive
+lung	NSCLC	CAF	ACTA2	positive
+lung	NSCLC	Endothelial cell	PECAM1	positive
+lung	NSCLC	Pericyte	RGS5	positive
