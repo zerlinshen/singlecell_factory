@@ -1,0 +1,5 @@
+478dc9c renv + pre-commit: pinned R env lockfile + bootstrap + parity hook
+efbd5f9 tools + contracts: R env bootstrap + cross-repo parity + vendored bundle schema
+bfc8ac7 R_bundle + scripts: bundle cache + plot launchers + benchmark helper
+dcceb4e R modules: wave5 v5.1 updates + new modality consumers
+9bf5b05 governance: factory-project separation protocol + gitignore
