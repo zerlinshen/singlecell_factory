@@ -93,6 +93,20 @@ against a non-default Rscript:
 RSCRIPT_BIN=/path/to/Rscript pytest -q tests/test_python_r_parity.py
 ```
 
+### Focused Python verification without coverage false failures
+
+The root `pyproject.toml` intentionally enables coverage and a global
+`fail_under` for full-suite pytest runs. For narrow contract or smoke checks,
+append `--no-cov` so the focused lane fails only on the selected tests, not on
+unrelated whole-project coverage scope:
+
+```bash
+pytest -q tests/test_bundle_sha_python_r_parity.py tests/test_r_bundle_contract.py tests/test_cli_project_root_smoke.py --no-cov
+```
+
+Do not remove the global coverage addopts or lower `fail_under`; full coverage
+remains the separate broad regression gate via `pytest -q`.
+
 ---
 
 ## 0. Before Every Meaningful Remote Run

@@ -251,6 +251,10 @@ Before claiming completion, collect evidence appropriate to the task:
 
 - docs-only: root entrypoint grep/read checks and a concise diff summary
 - module/code change: focused tests, then broader tests when risk warrants
+- focused Python verification: use `pytest -q <focused tests> --no-cov` when
+  the goal is targeted pass/fail evidence; the repo-level `pytest` addopts keep
+  full coverage enforced separately and can otherwise cause unrelated
+  fail-under false failures on narrow test selections
 - run/recovery: `module_status.csv`, `run_manifest.json`, logs, and recovered
   artifact paths
 - bridge/R source change: verify bridge symlinks with
