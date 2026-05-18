@@ -107,6 +107,18 @@
     "title": "Simultaneous epitope and transcriptome measurement in single cells",
     "year": "2017"
   },
+  "10.1038/nmeth.4401": {
+    "authors": "Schep",
+    "journal": "Nature Methods",
+    "title": "chromVAR: inferring transcription-factor-associated accessibility from single-cell epigenomic data",
+    "year": "2017"
+  },
+  "10.1038/nmeth.4463": {
+    "authors": "Aibar",
+    "journal": "Nature Methods",
+    "title": "SCENIC: single-cell regulatory network inference and clustering",
+    "year": "2017"
+  },
   "10.1038/nmeth.4612": {
     "authors": "Soneson",
     "journal": "Nature Methods",
@@ -293,11 +305,23 @@
     "title": "PanglaoDB: a web server for exploration of mouse and human single-cell RNA sequencing data",
     "year": "2019"
   },
+  "10.1093/nar/gkac1010": {
+    "authors": "Sollis",
+    "journal": "Nucleic Acids Research",
+    "title": "The NHGRI-EBI GWAS Catalog: knowledgebase and deposition resource",
+    "year": "2022"
+  },
   "10.1093/nar/gkac947": {
     "authors": "Hu",
     "journal": "Nucleic Acids Research",
     "title": "CellMarker 2.0: an updated database of manually curated cell markers in human/mouse and web tools based on scRNA-seq data",
     "year": "2022"
+  },
+  "10.1093/nar/gkad1059": {
+    "authors": "Rauluseviciute",
+    "journal": "Nucleic Acids Research",
+    "title": "JASPAR 2024: 20th anniversary of the open-access database of transcription factor binding profiles",
+    "year": "2023"
   },
   "10.1101/gr.240663.118": {
     "authors": "Garcia-Alonso",

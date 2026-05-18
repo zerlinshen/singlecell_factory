@@ -8,6 +8,7 @@ markers = [
     "small_real: real-data tier ~100k cells (NC2024 subset; run via `pytest -m small_real`; requires fixtures from scripts/build_staircase_fixtures.py)",
     "medium_real: real-data tier ~500k cells (NC2024 subset; run via `pytest -m medium_real`)",
     "full_real: full NC2024 cohort 884k cells (publication-grade; run via `pytest -m full_real`)",
+    "wave5_blocking: Wave 5 cross-module integration gate — must pass before any real Trevino run (US-W5-4)",
 ]
 
 [tool.coverage.run]
@@ -15,9 +16,9 @@ source = ["workflow"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 20
+fail_under = 48
 show_missing = true
-omit = ["workflow/modular/*", "workflow/query_cbioportal.py"]
+omit = ["workflow/query_cbioportal.py"]
 
 [tool.black]
 line-length = 100
