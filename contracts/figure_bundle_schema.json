@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "figure_bundle_schema",
+  "title": "FigureBundle",
+  "description": "Schema for the plotting_factory figure bundle input. Canonical at singlecell_factory/contracts/figure_bundle_schema.json.",
+  "version": "1.0",
+  "type": "object",
+  "required": ["input_files", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "input_files": {
+      "type": "object",
+      "description": "Paths the plotting renderer reads.",
+      "required": ["obs_parquet", "obsm_parquet", "source_bundle_path"],
+      "additionalProperties": false,
+      "properties": {
+        "obs_parquet": {
+          "type": "string",
+          "description": "Path to the obs metadata parquet file (cell x obs-columns table)."
+        },
+        "obsm_parquet": {
+          "type": "string",
+          "description": "Path to the obsm embeddings parquet file (cell x embedding-dimensions)."
+        },
+        "markers_parquet": {
+          "type": ["string", "null"],
+          "description": "Path to per-cluster marker genes parquet file. Null when marker analysis did not run."
+        },
+        "color_config": {
+          "type": ["string", "null"],
+          "description": "Path to a YAML color/palette config file from theme/. Null to use renderer defaults."
+        },
+        "shape_config": {
+          "type": ["string", "null"],
+          "description": "Path to a YAML shape config file. Null to use renderer defaults."
+        },
+        "source_bundle_path": {
+          "type": "string",
+          "description": "Provenance pointer to the upstream R bundle directory."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Git SHAs of all three factory repos recorded at figure-render time.",
+      "required": ["singlecell_factory_sha", "r_multiomics_factory_sha", "plotting_factory_sha"],
+      "additionalProperties": false,
+      "properties": {
+        "singlecell_factory_sha": {
+          "type": "string",
+          "description": "Full git SHA of the singlecell_factory HEAD commit at render time."
+        },
+        "r_multiomics_factory_sha": {
+          "type": "string",
+          "description": "Full git SHA of the r_multiomics_factory HEAD commit at render time."
+        },
+        "plotting_factory_sha": {
+          "type": "string",
+          "description": "Full git SHA of the plotting_factory HEAD commit at render time."
+        },
+        "rendered_at_utc": {
+          "type": ["string", "null"],
+          "description": "ISO-8601 UTC timestamp of figure render (e.g. '2026-05-18T12:00:00+00:00')."
+        }
+      }
+    }
+  }
+}

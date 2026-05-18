@@ -1,0 +1,104 @@
+# figure_bundle_schema.yaml — Canonical schema for the plotting_factory figure bundle input.
+#
+# Version: 1.0
+# Canonical location: singlecell_factory/contracts/figure_bundle_schema.yaml
+# Vendored copies:    r_multiomics_factory/contracts/figure_bundle_schema.yaml
+#                     plotting_factory/contracts/figure_bundle_schema.yaml
+#
+# All three copies MUST be byte-identical. Use singlecell_factory/tools/sync-contracts.sh
+# to propagate changes from the canonical copy to the vendored copies.
+# A SHA256 parity check is enforced by sync-contracts.sh and the cross-factory CI gate.
+#
+# This schema defines what a plotting renderer (plotting_factory) requires as input.
+# It is separate from bundle_schema.yaml, which describes the R bundle format; a
+# figure_bundle is a renderer-facing view derived from (or alongside) an R bundle.
+#
+# Field types use a simplified notation:
+#   string, int, float, bool, list<T>, map<K,V>, nullable<T>
+# "optional" means the key may be absent.
+# "required" means readers MUST reject a figure_bundle that omits this key.
+
+version: "1.0"
+
+# ---------------------------------------------------------------------------
+# input_files — paths the plotting renderer reads
+# ---------------------------------------------------------------------------
+input_files:
+  obs_parquet:
+    type: string
+    required: true
+    description: >
+      Path to the obs metadata parquet file (cell x obs-columns table).
+      Must contain at minimum a cell barcode index column.
+    format: parquet
+    index_column: cell
+
+  obsm_parquet:
+    type: string
+    required: true
+    description: >
+      Path to the obsm embeddings parquet file (cell x embedding-dimensions).
+      Typically contains UMAP_1, UMAP_2, and/or PC_N columns.
+      Must share the same ordered cell barcode index as obs_parquet.
+    format: parquet
+    index_column: cell
+
+  markers_parquet:
+    type: nullable<string>
+    required: false
+    description: >
+      Path to per-cluster marker genes parquet file.
+      Present only when marker analysis ran upstream.
+      Format: one row per (cluster, gene) pair with score columns.
+    format: parquet
+
+  color_config:
+    type: nullable<string>
+    required: false
+    description: >
+      Path to a YAML color/palette config file from theme/.
+      When present, overrides default palette selection in the renderer.
+      Renderers MUST apply this config when provided; absence is valid.
+
+  shape_config:
+    type: nullable<string>
+    required: false
+    description: >
+      Path to a YAML shape config file.
+      When present, overrides default marker shape/size selection in the renderer.
+      Renderers MUST apply this config when provided; absence is valid.
+
+  source_bundle_path:
+    type: string
+    required: true
+    description: >
+      Provenance pointer to the upstream R bundle directory that was used
+      to produce the parquet inputs. Used for traceability; the renderer
+      does not read the bundle itself — only the derived parquet files above.
+
+# ---------------------------------------------------------------------------
+# provenance — SHA pins at render time
+# ---------------------------------------------------------------------------
+provenance:
+  type: object
+  required: true
+  description: >
+    Git SHAs of all three factory repos recorded at figure-render time.
+    Populated by the rendering script/tool; allows post-hoc traceability.
+  fields:
+    singlecell_factory_sha:
+      type: string
+      required: true
+      description: Full git SHA of the singlecell_factory HEAD commit at render time.
+    r_multiomics_factory_sha:
+      type: string
+      required: true
+      description: Full git SHA of the r_multiomics_factory HEAD commit at render time.
+    plotting_factory_sha:
+      type: string
+      required: true
+      description: Full git SHA of the plotting_factory HEAD commit at render time.
+    rendered_at_utc:
+      type: string
+      required: false
+      description: ISO-8601 UTC timestamp of figure render (e.g. "2026-05-18T12:00:00+00:00").
