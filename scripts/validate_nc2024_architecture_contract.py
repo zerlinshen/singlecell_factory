@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path("/home/zerlinshen/singlecell_factory")
-MULTIOMICS_ROOT = Path("/home/zerlinshen/multiomics_r_factory")
+MULTIOMICS_ROOT = Path("/home/zerlinshen/r_multiomics_factory")
 DEFAULT_RUNS = (
     "results/nc2024_tumor_20260426_v2",
     "results/nc2024_bh_20260426_v2",
@@ -105,7 +105,7 @@ def validate(verify_sha: bool) -> dict[str, object]:
     for link_name in ("R", "R_bundle"):
         link = _require(bridge / link_name, f"bridge symlink {link_name}")
         if not link.is_symlink():
-            raise SystemExit(f"{link} must remain a symlink into multiomics_r_factory")
+            raise SystemExit(f"{link} must remain a symlink into r_multiomics_factory")
 
     _require(MULTIOMICS_ROOT / "R_bundle" / "io_bundle.R", "multiomics bundle reader")
     _require(MULTIOMICS_ROOT / "scripts" / "plot_remote_bundle_large.R", "large bundle plotter")

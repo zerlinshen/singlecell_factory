@@ -1,8 +1,8 @@
 # Single-Cell RNA Sequencing Figure Drawing Pipeline
 
-> **R sources are symlinked from `multiomics_r_factory/`.
+> **R sources are symlinked from `r_multiomics_factory/`.
 > Do NOT edit files under `bridges/local_r_pipeline_macbook/R/` or `bridges/local_r_pipeline_macbook/R_bundle/` directly;
-> edit the upstream files in `multiomics_r_factory/R/` or `multiomics_r_factory/R_bundle/` and the symlinks will reflect changes automatically.**
+> edit the upstream files in `r_multiomics_factory/R/` or `r_multiomics_factory/R_bundle/` and the symlinks will reflect changes automatically.**
 
 ## Current Status: Remote R Pipeline
 
@@ -76,7 +76,7 @@ Key controls:
   bundle. The wrapper always keeps `X_umap` and `X_pca` so plotting and reuse
   validation keep their required stems.
 - `PLOT_SCRIPT`: R plotting script used after bundle validation. Default:
-  `/home/zerlinshen/multiomics_r_factory/scripts/plot_remote_bundle_large.R`,
+  `/home/zerlinshen/r_multiomics_factory/scripts/plot_remote_bundle_large.R`,
   which is the v1/v2-aware upstream plotting entry point.
 - `FORCE_R_BUNDLE_EXPORT=1`: force bundle regeneration even if the reuse guard
   passes.
@@ -250,7 +250,7 @@ If you run in demo mode (no `--input` argument), it will load `pbmc_small` and g
 ```
 The wrapper exports or reuses a compact bundle, validates either v1 CSV/TSV or
 v2 parquet/JSON manifests, and then delegates plotting to the upstream
-`multiomics_r_factory/scripts/plot_remote_bundle_large.R` entry point. Bundle
+`r_multiomics_factory/scripts/plot_remote_bundle_large.R` entry point. Bundle
 payloads copy metadata, embeddings, and selected marker genes only; they do not
 convert the full expression matrix to dense data. The R validator checks
 required file contracts, byte sizes, SHA256 hashes, schema, and expression

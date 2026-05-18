@@ -636,8 +636,8 @@ def _check_bridges() -> dict[str, Any]:
     results: dict[str, Any] = {}
     overall = "pass"
     for name, expected_target_substr in (
-        ("R", "multiomics_r_factory/R"),
-        ("R_bundle", "multiomics_r_factory/R_bundle"),
+        ("R", "r_multiomics_factory/R"),
+        ("R_bundle", "r_multiomics_factory/R_bundle"),
     ):
         link = bridge_dir / name
         info: dict[str, Any] = {"path": str(link)}

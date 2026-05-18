@@ -24,7 +24,7 @@ an immutable compute tool. All scientific artifacts must land under a project
 directory resolved from `--project-root`, never inside this repo's tree.
 
 - **Factory tools**: `/home/zerlinshen/singlecell_factory/` (this repo) and
-  `/home/zerlinshen/multiomics_r_factory/` — hold only code, fixtures, and contracts.
+  `/home/zerlinshen/r_multiomics_factory/` — hold only code, fixtures, and contracts.
 - **Projects directory**: `/home/zerlinshen/projects/<project-id>/` (default
   `PROJECTS_ROOT`). Each project is a self-contained directory with `project.yaml`,
   `inputs/`, `runs/`, `configs/`, and `notebooks/`.
@@ -52,7 +52,7 @@ in `manifest.json` for forensics.
 ### Contracts vendoring
 
 The Python-R bundle schema lives canonically at `contracts/bundle_schema.yaml`
-in this repo. The vendored copy in `multiomics_r_factory/contracts/` must be
+in this repo. The vendored copy in `r_multiomics_factory/contracts/` must be
 byte-identical. To update: edit the canonical file here, then run
 `tools/sync-contracts.sh` — **never edit the vendored copy directly**.
 
@@ -77,12 +77,12 @@ Warning and hard-error are mutually exclusive. Round-2 ADR flips the default to 
 
 Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
-Two provenance fields track `multiomics_r_factory` git SHA at two points:
+Two provenance fields track `r_multiomics_factory` git SHA at two points:
 
 - `r_factory_sha_at_manifest_write` — written to `run_manifest.json` at pipeline manifest-write time.
 - `r_factory_sha_at_export` — written to `<run-id>/python/bundle/provenance.json` at bundle export time.
 
-The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
+The R bundle loader (`r_multiomics_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
 
 ### Agent rule (MANDATORY)
 

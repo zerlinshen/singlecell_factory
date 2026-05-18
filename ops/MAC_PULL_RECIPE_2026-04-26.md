@@ -108,10 +108,10 @@ install.packages(c("Seurat", "arrow", "Matrix"))
 
 ```bash
 # Tumor
-Rscript multiomics_r_factory/main.R ~/scrna_remote_pulls/nc2024_tumor_20260426_v2/bundle.tgz
+Rscript r_multiomics_factory/main.R ~/scrna_remote_pulls/nc2024_tumor_20260426_v2/bundle.tgz
 
 # B/H
-Rscript multiomics_r_factory/main.R ~/scrna_remote_pulls/nc2024_bh_20260426_v2/bundle.tgz
+Rscript r_multiomics_factory/main.R ~/scrna_remote_pulls/nc2024_bh_20260426_v2/bundle.tgz
 ```
 
 Or extract first then point at the directory:
@@ -121,7 +121,7 @@ mkdir -p ~/scrna_remote_pulls/nc2024_tumor_20260426_v2/r_bundle
 tar -xzf ~/scrna_remote_pulls/nc2024_tumor_20260426_v2/bundle.tgz \
   -C ~/scrna_remote_pulls/nc2024_tumor_20260426_v2/r_bundle
 
-Rscript multiomics_r_factory/main.R \
+Rscript r_multiomics_factory/main.R \
   ~/scrna_remote_pulls/nc2024_tumor_20260426_v2/r_bundle
 ```
 
@@ -154,7 +154,7 @@ bundle is sized for R plotting/reporting, not full re-analysis. Use the remote
 
 Verified green at time of packaging:
 ```
-OK: bridges/local_r_pipeline_macbook/R -> ../../../multiomics_r_factory/R
-OK: bridges/local_r_pipeline_macbook/R_bundle -> ../../../multiomics_r_factory/R_bundle
+OK: bridges/local_r_pipeline_macbook/R -> ../../../r_multiomics_factory/R
+OK: bridges/local_r_pipeline_macbook/R_bundle -> ../../../r_multiomics_factory/R_bundle
 PASS: Bridge symlink check succeeded.
 ```

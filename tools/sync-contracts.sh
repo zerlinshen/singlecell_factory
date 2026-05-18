@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sync-contracts.sh — Propagate the canonical bundle_schema.yaml from
-# singlecell_factory/contracts/ to multiomics_r_factory/contracts/ and
+# singlecell_factory/contracts/ to r_multiomics_factory/contracts/ and
 # update both .expected_sha256 sentinel files.
 #
 # Usage:
@@ -14,7 +14,7 @@
 #     bash "$(git rev-parse --show-toplevel)/tools/sync-contracts.sh" || exit 1
 #
 # The script exits 0 on success and non-zero on any error, including:
-#   - missing sibling multiomics_r_factory repo
+#   - missing sibling r_multiomics_factory repo
 #   - sha256sum mismatch after copy (should never happen; guards against fs issues)
 #
 # CI parity check (no sibling required):
@@ -30,11 +30,11 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CANONICAL="${REPO_ROOT}/contracts/bundle_schema.yaml"
 CANONICAL_SHA_FILE="${REPO_ROOT}/contracts/.expected_sha256"
 
-# Locate the sibling multiomics_r_factory repo.
-SIBLING_ROOT="$(cd "${REPO_ROOT}/../multiomics_r_factory" 2>/dev/null && pwd)" || true
+# Locate the sibling r_multiomics_factory repo.
+SIBLING_ROOT="$(cd "${REPO_ROOT}/../r_multiomics_factory" 2>/dev/null && pwd)" || true
 if [[ -z "${SIBLING_ROOT}" || ! -d "${SIBLING_ROOT}" ]]; then
-  echo "ERROR: sibling repo not found at ${REPO_ROOT}/../multiomics_r_factory" >&2
-  echo "       Clone multiomics_r_factory alongside singlecell_factory and retry." >&2
+  echo "ERROR: sibling repo not found at ${REPO_ROOT}/../r_multiomics_factory" >&2
+  echo "       Clone r_multiomics_factory alongside singlecell_factory and retry." >&2
   exit 1
 fi
 

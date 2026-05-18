@@ -4,7 +4,7 @@
 Reads project state from disk (module catalog, recipes, README/docs index, test
 counts via ``pytest --collect-only``) and emits a deterministic Markdown +
 ReportLab PDF describing both ``singlecell_factory`` and
-``multiomics_r_factory``.
+``r_multiomics_factory``.
 
 Re-run with::
 
@@ -47,13 +47,13 @@ from reportlab.platypus import (
 # ---------------------------------------------------------------------------
 
 REPO_PY = Path("/home/zerlinshen/singlecell_factory")
-REPO_R = Path("/home/zerlinshen/multiomics_r_factory")
+REPO_R = Path("/home/zerlinshen/r_multiomics_factory")
 DOCS_DIR = REPO_PY / "docs"
 OUT_PDF = DOCS_DIR / "FACTORIES_OVERVIEW.pdf"
 OUT_MD = DOCS_DIR / "FACTORIES_OVERVIEW.md"
 
 DOC_TITLE = "Factories Overview"
-DOC_SUBTITLE = "singlecell_factory + multiomics_r_factory technical reference"
+DOC_SUBTITLE = "singlecell_factory + r_multiomics_factory technical reference"
 FOOTER_TITLE = "Factories Overview"
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
@@ -256,7 +256,7 @@ def list_doc_index() -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = []
     targets = [
         ("singlecell_factory", REPO_PY),
-        ("multiomics_r_factory", REPO_R),
+        ("r_multiomics_factory", REPO_R),
     ]
     for label, root in targets:
         # top-level *.md
@@ -359,7 +359,7 @@ def render_markdown(
     )
     o("")
     o(
-        "`multiomics_r_factory` is the R-side downstream visualization workspace. It consumes "
+        "`r_multiomics_factory` is the R-side downstream visualization workspace. It consumes "
         "the bundle v2.1 contract emitted by `scripts/export_singlecell_r_bundle.py`, reads it "
         "via `R_bundle/io_bundle.R`, and renders Seurat-based plots via the `R/*_module.R` files "
         "(QC, dim, expression, composition, marker, annotation, batch_integration, integration, "
@@ -394,7 +394,7 @@ def render_markdown(
         )
         o(f"- **{layer}** ({len(names)} modules, {bridge} bridge_ready): {', '.join(names)}")
     o("")
-    o("### R (multiomics_r_factory) modules")
+    o("### R (r_multiomics_factory) modules")
     o("")
     r_modules = sorted(p.stem for p in (REPO_R / "R").glob("*.R"))
     o(", ".join(r_modules))
@@ -506,7 +506,7 @@ def render_markdown(
     if claim_rows:
         total = sum(claim_counts.values())
         o(
-            f"Source: `multiomics_r_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`. "
+            f"Source: `r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`. "
             f"{total} claims parsed: "
             f"{claim_counts.get('direct', 0)} direct, "
             f"{claim_counts.get('partial', 0)} partial, "
@@ -520,7 +520,7 @@ def render_markdown(
     else:
         o(
             "Claim matrix not parsed; refer directly to "
-            "`multiomics_r_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`."
+            "`r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`."
         )
     o("")
 
@@ -752,7 +752,7 @@ def _architecture_flowables(module_rows: list[ModuleRow], styles) -> list:
         [
             [
                 Paragraph("<b>Python (singlecell_factory)</b>", styles["body"]),
-                Paragraph("<b>R (multiomics_r_factory)</b>", styles["body"]),
+                Paragraph("<b>R (r_multiomics_factory)</b>", styles["body"]),
             ],
             [py_table, r_table],
         ],
@@ -859,7 +859,7 @@ def _claims_flowables(claim_rows, claim_counts, styles) -> list:
         items.append(
             Paragraph(
                 "Claim matrix not parsed. Refer directly to "
-                "<font face='Courier'>multiomics_r_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md</font>.",
+                "<font face='Courier'>r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md</font>.",
                 styles["body"],
             )
         )
@@ -867,7 +867,7 @@ def _claims_flowables(claim_rows, claim_counts, styles) -> list:
     total = sum(claim_counts.values())
     items.append(
         Paragraph(
-            f"Source: <font face='Courier'>multiomics_r_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md</font>. "
+            f"Source: <font face='Courier'>r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md</font>. "
             f"<b>{total}</b> claims parsed: <b>{claim_counts.get('direct', 0)}</b> direct, "
             f"<b>{claim_counts.get('partial', 0)}</b> partial, "
             f"<b>{claim_counts.get('unsupported', 0)}</b> unsupported.",
@@ -993,7 +993,7 @@ def render_pdf(
     )
     story.append(
         Paragraph(
-            "<b>multiomics_r_factory</b> is the R-side downstream visualization workspace. It "
+            "<b>r_multiomics_factory</b> is the R-side downstream visualization workspace. It "
             "consumes the bundle v2.1 contract emitted by "
             "<font face='Courier'>scripts/export_singlecell_r_bundle.py</font>, reads it via "
             "<font face='Courier'>R_bundle/io_bundle.R</font>, and renders Seurat-based plots via "

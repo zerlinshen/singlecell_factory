@@ -28,7 +28,7 @@ import scipy.sparse as sp
 
 
 FACTORY_ROOT = Path(__file__).resolve().parent.parent
-R_FACTORY_ROOT = FACTORY_ROOT.parent / "multiomics_r_factory"
+R_FACTORY_ROOT = FACTORY_ROOT.parent / "r_multiomics_factory"
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ def test_schema_parity():
 # --------------------------------------------------------------------------
 
 def test_r_extension_registry_includes_marker_resolutions():
-    """multiomics_r_factory/R_bundle/io_bundle.R registers marker_resolutions."""
+    """r_multiomics_factory/R_bundle/io_bundle.R registers marker_resolutions."""
     io_bundle = R_FACTORY_ROOT / "R_bundle" / "io_bundle.R"
     assert io_bundle.exists(), f"missing {io_bundle}"
     src = io_bundle.read_text(encoding="utf-8")

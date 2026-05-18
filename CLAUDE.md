@@ -38,11 +38,11 @@ As of 2026-05, this factory is a pure compute tool — no scientific outputs lan
 inside this repo. Full plan: `/home/zerlinshen/.omc/plans/factory-project-separation.md`.
 
 Three-way split:
-- **Factory tools**: this repo + `/home/zerlinshen/multiomics_r_factory/`
+- **Factory tools**: this repo + `/home/zerlinshen/r_multiomics_factory/`
 - **Projects**: `/home/zerlinshen/projects/<project-id>/` (default `PROJECTS_ROOT`)
 - **Bootstrap**: `/home/zerlinshen/projects-bootstrap/omc-new-project`
 
-Sibling repo: `/home/zerlinshen/multiomics_r_factory/`
+Sibling repo: `/home/zerlinshen/r_multiomics_factory/`
 
 **Agent rule**: Never write outputs inside the factory tree. Always pass and
 resolve `--project-root`.
@@ -61,12 +61,12 @@ Warning and hard-error are mutually exclusive. Round-2 ADR will flip the default
 
 Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
-Two provenance fields track `multiomics_r_factory` git SHA at two points:
+Two provenance fields track `r_multiomics_factory` git SHA at two points:
 
 - `r_factory_sha_at_manifest_write` — written to `run_manifest.json` at pipeline manifest-write time.
 - `r_factory_sha_at_export` — written to `<run-id>/python/bundle/provenance.json` at bundle export time.
 
-The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
+The R bundle loader (`r_multiomics_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
 
 ## Core Commands
 - Run pipeline with project-root (preferred):
@@ -96,7 +96,7 @@ The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) logs a `WARNIN
   `module_status.csv`, `run_manifest.json`.
 
 ## Change Rules
-- **Bridge symlink rule**: `bridges/local_r_pipeline_macbook/R` and `bridges/local_r_pipeline_macbook/R_bundle` must always be symlinks pointing to `multiomics_r_factory/R` and `multiomics_r_factory/R_bundle` respectively. Never place real R files under these bridge paths. Edit R sources in `multiomics_r_factory/` only. Verify with `bash scripts/ci/check_bridge_symlink.sh`.
+- **Bridge symlink rule**: `bridges/local_r_pipeline_macbook/R` and `bridges/local_r_pipeline_macbook/R_bundle` must always be symlinks pointing to `r_multiomics_factory/R` and `r_multiomics_factory/R_bundle` respectively. Never place real R files under these bridge paths. Edit R sources in `r_multiomics_factory/` only. Verify with `bash scripts/ci/check_bridge_symlink.sh`.
 - When adding a module, update all required integration points:
   - `workflow/modular/modules/<module>.py`
   - `MODULE_DEPENDENCIES` and `_build_registry()` in `workflow/modular/pipeline.py`

@@ -156,7 +156,7 @@
     },
     "parity_report_r_python_path": {
       "type": "string",
-      "description": "Path to multiomics_r_factory/R_bundle/parity/parity_<run-id>.json per AC-V51-MV2-1."
+      "description": "Path to r_multiomics_factory/R_bundle/parity/parity_<run-id>.json per AC-V51-MV2-1."
     },
     "mv2_parity_status": {
       "type": "string",

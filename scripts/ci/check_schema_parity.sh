@@ -2,7 +2,7 @@
 # CI guard: assert that both bundle_schema.yaml copies are byte-identical.
 #
 # Canonical:    singlecell_factory/contracts/bundle_schema.yaml
-# Vendored copy: multiomics_r_factory/contracts/bundle_schema.yaml
+# Vendored copy: r_multiomics_factory/contracts/bundle_schema.yaml
 #
 # Run on every PR that touches either schema copy. Wire into the same CI lane
 # as check_bridge_symlink.sh.
@@ -13,7 +13,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CANONICAL="$REPO_ROOT/contracts/bundle_schema.yaml"
-VENDORED="$REPO_ROOT/../multiomics_r_factory/contracts/bundle_schema.yaml"
+VENDORED="$REPO_ROOT/../r_multiomics_factory/contracts/bundle_schema.yaml"
 
 if [ ! -f "$CANONICAL" ]; then
     echo "ERROR: canonical schema not found: $CANONICAL" >&2

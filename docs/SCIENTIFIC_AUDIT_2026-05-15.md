@@ -1,7 +1,7 @@
 # Scientific Audit — Module Citation & Methodology Verification
 
 **Date:** 2026-05-15
-**Scope:** All Python modules in `singlecell_factory/workflow/modular/modules/` and all R modules in `multiomics_r_factory/R/` and `R_bundle/`.
+**Scope:** All Python modules in `singlecell_factory/workflow/modular/modules/` and all R modules in `r_multiomics_factory/R/` and `R_bundle/`.
 **Goal:** Verify that each algorithm cited matches scientific consensus and that the module's usage of that algorithm is faithful to the source publication.
 
 ---
@@ -196,7 +196,7 @@
 
 ---
 
-## R-side audit (multiomics_r_factory)
+## R-side audit (r_multiomics_factory)
 
 | File | Purpose | Canonical citation |
 |---|---|---|

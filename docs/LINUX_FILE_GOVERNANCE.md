@@ -22,7 +22,7 @@ requests pipeline implementation work.
 │   │   └── run_ledger/              # factory-level execution ledger
 │   ├── results/                     # legacy/smoke only for governed projects
 │   └── output/                      # legacy/smoke only
-├── multiomics_r_factory/            # R factory: plotting/report implementation
+├── r_multiomics_factory/            # R factory: plotting/report implementation
 ├── projects-bootstrap/              # project creation helper
 └── projects/                        # project/data layer
     ├── README.md                    # projects root index
@@ -40,7 +40,7 @@ requests pipeline implementation work.
             └── <run-id>/
                 ├── manifest.json    # cross-factory run envelope
                 ├── python/          # singlecell_factory outputs
-                ├── r/               # multiomics_r_factory outputs
+                ├── r/               # r_multiomics_factory outputs
                 ├── logs/            # launch/runtime logs
                 └── evidence/        # optional human reports/figures/reviews
 ```
@@ -50,7 +50,7 @@ requests pipeline implementation work.
 | Path | Role | Rule |
 | --- | --- | --- |
 | `/home/zerlinshen/singlecell_factory` | Python factory | Code, contracts, validators, docs, tests, control-plane records |
-| `/home/zerlinshen/multiomics_r_factory` | R factory | R plotting/reporting implementation and R-side contracts |
+| `/home/zerlinshen/r_multiomics_factory` | R factory | R plotting/reporting implementation and R-side contracts |
 | `/home/zerlinshen/projects-bootstrap` | Bootstrap helper | Creates governed project roots |
 | `/home/zerlinshen/projects` | Scientific project layer | Inputs, configs, ledgers, runs, reports, figures, conclusions |
 | `/home/zerlinshen/singlecell_factory/ops/governance_records` | Control plane | Policy, cleanup, validation, and structure decisions |

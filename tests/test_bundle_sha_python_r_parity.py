@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle, _bundle_sha256_concat
 
 RSCRIPT_BIN = "/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript"
-BUNDLE_CACHE_R = ROOT.parent / "multiomics_r_factory" / "R_bundle" / "bundle_cache.R"
+BUNDLE_CACHE_R = ROOT.parent / "r_multiomics_factory" / "R_bundle" / "bundle_cache.R"
 
 
 # ---------------------------------------------------------------------------

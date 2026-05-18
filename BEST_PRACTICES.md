@@ -141,7 +141,7 @@ else:
 - Tests auto-skip when Rscript is absent or required R packages (`arrow`, `jsonlite`, `Matrix`) are not installed — they never fail hard due to missing R environment.
 - R output is parsed by scanning stdout for `KEY=VALUE` lines emitted via `sprintf` + `cat`. Never mix informational R output with these sentinel lines.
 - The `rscript_path` session fixture in `conftest.py` handles both binary detection and R package probing.
-- R source under test lives in `multiomics_r_factory/R_bundle/io_bundle.R` — never edit it from this repo (bridge symlink rule applies).
+- R source under test lives in `r_multiomics_factory/R_bundle/io_bundle.R` — never edit it from this repo (bridge symlink rule applies).
 
 ## 11) Staircase Testing Discipline (Phase 7C)
 

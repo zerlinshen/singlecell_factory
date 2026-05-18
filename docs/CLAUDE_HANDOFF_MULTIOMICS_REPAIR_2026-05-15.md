@@ -6,7 +6,7 @@ Audience: Claude or the next repository agent.
 
 Repos covered:
 - `/home/zerlinshen/singlecell_factory`
-- `/home/zerlinshen/multiomics_r_factory`
+- `/home/zerlinshen/r_multiomics_factory`
 
 ## Executive State
 
@@ -98,7 +98,7 @@ Docs and tests:
   - `tests/test_wave2b_hic_smoke.py`
   - `tests/test_densify_audit.py`
 
-### `multiomics_r_factory`
+### `r_multiomics_factory`
 
 Run-id parsing:
 - `R/cli_utils.R`
@@ -162,7 +162,7 @@ Result: `24 passed`.
 Cross-repo contract parity:
 
 ```bash
-cd /home/zerlinshen/multiomics_r_factory
+cd /home/zerlinshen/r_multiomics_factory
 bash tools/check_contracts_cross_repo.sh
 ```
 
@@ -191,7 +191,7 @@ Result: `10 passed`.
 R run-id validation:
 
 ```bash
-/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript -e "source('/home/zerlinshen/multiomics_r_factory/R/cli_utils.R'); stopifnot(validate_run_id('2026-05-14T0001Z-aaaaaaa')); stopifnot(!validate_run_id('../../bad')); cat('RUN_ID_VALIDATION_OK\n')"
+/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript -e "source('/home/zerlinshen/r_multiomics_factory/R/cli_utils.R'); stopifnot(validate_run_id('2026-05-14T0001Z-aaaaaaa')); stopifnot(!validate_run_id('../../bad')); cat('RUN_ID_VALIDATION_OK\n')"
 ```
 
 Result: `RUN_ID_VALIDATION_OK`.

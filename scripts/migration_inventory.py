@@ -16,7 +16,7 @@ from pathlib import Path
 
 SCAN_ROOTS = [
     Path("/home/zerlinshen/singlecell_factory/output"),
-    Path("/home/zerlinshen/multiomics_r_factory/output"),
+    Path("/home/zerlinshen/r_multiomics_factory/output"),
 ]
 OUTPUT_CSV = Path("/home/zerlinshen/.omc/state/migration_manifest.csv")
 PROJECTS_ROOT = Path("/home/zerlinshen/projects")

@@ -26,7 +26,7 @@ As of 2026-05, the working tree follows a three-way split. Full plan:
 
 - **`singlecell_factory`** (this repo): pure compute tool. No scientific outputs
   land inside this tree. All artifacts write to `<project-root>/runs/<run-id>/python/`.
-- **`multiomics_r_factory`** (`/home/zerlinshen/multiomics_r_factory/`): R-side
+- **`r_multiomics_factory`** (`/home/zerlinshen/r_multiomics_factory/`): R-side
   compute tool. Writes to `<project-root>/runs/<run-id>/r/`.
 - **`projects/`** (`/home/zerlinshen/projects/<project-id>/`): self-contained
   project directories. Create with `omc-new-project` from
@@ -42,7 +42,7 @@ As of 2026-05, the working tree follows a three-way split. Full plan:
 `manifest.json`.
 
 **Contracts**: canonical bundle schema at `contracts/bundle_schema.yaml` here;
-vendored byte-identically into `multiomics_r_factory/contracts/`. Update via
+vendored byte-identically into `r_multiomics_factory/contracts/`. Update via
 `tools/sync-contracts.sh` only — never edit the vendored copy directly.
 
 **Agent rule (MANDATORY)**: Never write outputs inside the factory tree. Always
@@ -68,7 +68,7 @@ Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
 - `r_factory_sha_at_manifest_write` in `run_manifest.json` — resolved at pipeline end.
 - `r_factory_sha_at_export` in `bundle/provenance.json` — resolved at bundle export.
-- R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) warns (not errors) on mismatch.
+- R bundle loader (`r_multiomics_factory/R_bundle/io_bundle.R`) warns (not errors) on mismatch.
 
 ### Remote Governance Control Plane
 
@@ -106,13 +106,13 @@ single-cell pipeline. It owns heavy compute, pipeline module execution,
 checkpoint/resume, run manifests, module status, source AnnData outputs, and
 remote R/reporting work when the object is too large for local handling.
 
-The adjacent `multiomics_r_factory` is the canonical R source for broader
+The adjacent `r_multiomics_factory` is the canonical R source for broader
 plotting/reporting helpers:
 
-- `multiomics_r_factory/R/` owns R analysis and plotting modules.
-- `multiomics_r_factory/R_bundle/` owns bundle-path helpers.
+- `r_multiomics_factory/R/` owns R analysis and plotting modules.
+- `r_multiomics_factory/R_bundle/` owns bundle-path helpers.
 - `bridges/local_r_pipeline_macbook/` in this repo must remain symlinks into
-  `multiomics_r_factory`; do not place real R files under the bridge.
+  `r_multiomics_factory`; do not place real R files under the bridge.
 - `workflow/modular/module_catalog.py` owns the single-cell module hierarchy:
   dependencies, architectural layers, modality tags, ownership, and bridge-ready
   flags. Pipeline compatibility constants are derived from this catalog.
@@ -122,7 +122,7 @@ plotting/reporting helpers:
 
 ## Cross-Repo Bridge (Bundle v2.1)
 
-The `singlecell_factory -> multiomics_r_factory` bundle bridge is now at schema
+The `singlecell_factory -> r_multiomics_factory` bundle bridge is now at schema
 `singlecell_r_bundle_v2.1` (additive, fully back-compatible with v2). The
 default emitter writes v2.1; force legacy with
 `scripts/export_singlecell_r_bundle.py --schema-version v2`. The R reader
@@ -130,9 +130,9 @@ accepts both via `ACCEPTED_V2_SCHEMAS`.
 
 | Extension | Producer (Python) | Reader (R) | Contract test |
 |---|---|---|---|
-| `protein` | `scripts/export_singlecell_r_bundle.py::maybe_export_protein` | `multiomics_r_factory/R/protein_module.R::load_protein_extension` | `tests/test_r_bundle_contract.py` |
-| `spatial` | `scripts/export_singlecell_r_bundle.py::maybe_export_spatial` | `multiomics_r_factory/R/spatial_module.R::load_spatial_extension` | `tests/test_r_bundle_contract.py` |
-| `multimodal_obsm` (EXPERIMENTAL) | `scripts/export_singlecell_r_bundle.py::maybe_export_multimodal_obsm` | `multiomics_r_factory/R/integration_module.R::load_multimodal_extension` | `tests/test_r_bundle_contract.py` |
+| `protein` | `scripts/export_singlecell_r_bundle.py::maybe_export_protein` | `r_multiomics_factory/R/protein_module.R::load_protein_extension` | `tests/test_r_bundle_contract.py` |
+| `spatial` | `scripts/export_singlecell_r_bundle.py::maybe_export_spatial` | `r_multiomics_factory/R/spatial_module.R::load_spatial_extension` | `tests/test_r_bundle_contract.py` |
+| `multimodal_obsm` (EXPERIMENTAL) | `scripts/export_singlecell_r_bundle.py::maybe_export_multimodal_obsm` | `r_multiomics_factory/R/integration_module.R::load_multimodal_extension` | `tests/test_r_bundle_contract.py` |
 
 WARNING: The `multimodal_obsm` extension is EXPERIMENTAL — the R loader emits
 `[multimodal_obsm extension] EXPERIMENTAL ...` at load. Embeddings published
@@ -232,7 +232,7 @@ legacy compatibility mirror for historical project-local skills.
 - If the task touches pipeline contracts, modules, AnnData structure, CLI flags,
   run recovery, or canonical outputs, start here.
 - If the task is only downstream R plotting/reporting or bundle visualization,
-  inspect upstream run truth here first, then work in `multiomics_r_factory`.
+  inspect upstream run truth here first, then work in `r_multiomics_factory`.
 - If the task spans both repos, establish source-of-truth artifacts here before
   editing downstream R consumers.
 - If the task changes user-facing behavior, update the relevant README/protocol
@@ -260,7 +260,7 @@ For pipeline changes, a statement without artifact paths is not evidence.
 - Do not treat Mac-local summaries as more authoritative than remote artifacts.
 - Do not write real R files into `bridges/local_r_pipeline_macbook/`.
 - Do not demote `PROTOCOL.md`; it is still the deep operational guide.
-- Do not route canonical upstream fixes into `multiomics_r_factory` first.
+- Do not route canonical upstream fixes into `r_multiomics_factory` first.
 
 ## Fast Links
 
@@ -271,4 +271,4 @@ For pipeline changes, a statement without artifact paths is not evidence.
 - `ops/before_every_run/LATEST.md` - current run memory.
 - `workflow/modular/` - modular pipeline code.
 - `scripts/` - launchers, audits, verification helpers.
-- `bridges/local_r_pipeline_macbook/` - symlink bridge into `multiomics_r_factory`.
+- `bridges/local_r_pipeline_macbook/` - symlink bridge into `r_multiomics_factory`.

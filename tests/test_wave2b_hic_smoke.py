@@ -6,7 +6,7 @@ Covers:
   - Both modules fail-soft when prerequisites absent
   - Schema keeps hic.status reserved until exporter+reader are complete
   - R-side KNOWN_BUNDLE_EXTENSIONS contains "hic"
-  - multiomics_r_factory/R/hic_module.R has the required functions
+  - r_multiomics_factory/R/hic_module.R has the required functions
   - Registry includes hic_ingest + hic_tad, no MUTATING, topo respects deps
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ import scipy.sparse as sp
 
 
 FACTORY_ROOT = Path(__file__).resolve().parent.parent
-R_FACTORY_ROOT = FACTORY_ROOT.parent / "multiomics_r_factory"
+R_FACTORY_ROOT = FACTORY_ROOT.parent / "r_multiomics_factory"
 
 
 @pytest.fixture

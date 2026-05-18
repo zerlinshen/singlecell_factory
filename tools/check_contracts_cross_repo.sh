@@ -7,7 +7,7 @@
 #   2  internal error (missing file, sha256sum unavailable)
 #
 # Canonical home: singlecell_factory/tools/
-# Vendored copy:  multiomics_r_factory/tools/
+# Vendored copy:  r_multiomics_factory/tools/
 # Both copies MUST remain byte-identical.
 
 set -euo pipefail
@@ -29,10 +29,10 @@ else
     if [[ "$THIS_REPO_NAME" == "singlecell_factory" ]]; then
         if [[ -d "$PARENT_DIR/r_multiomics_factory" ]]; then
             SIBLING="$PARENT_DIR/r_multiomics_factory"
-        elif [[ -d "$PARENT_DIR/multiomics_r_factory" ]]; then
-            SIBLING="$PARENT_DIR/multiomics_r_factory"  # legacy name, accepted during transition
+        elif [[ -d "$PARENT_DIR/multiomics_r_factory" ]]; then  # legacy name accepted during transition
+            SIBLING="$PARENT_DIR/multiomics_r_factory"  # legacy name accepted during transition
         fi
-    elif [[ "$THIS_REPO_NAME" == "r_multiomics_factory" ]] || [[ "$THIS_REPO_NAME" == "multiomics_r_factory" ]]; then
+    elif [[ "$THIS_REPO_NAME" == "r_multiomics_factory" ]] || [[ "$THIS_REPO_NAME" == "multiomics_r_factory" ]]; then  # legacy name accepted during transition
         SIBLING="$PARENT_DIR/singlecell_factory"
     else
         echo "WARNING: check_contracts_cross_repo.sh: cannot determine sibling repo from repo name '$THIS_REPO_NAME'; cross-repo parity check skipped" >&2

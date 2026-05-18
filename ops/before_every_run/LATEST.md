@@ -404,7 +404,7 @@
   v2-aware: it reuses `bundle_manifest.json` parquet bundles when source
   `final_adata.h5ad` size/mtime and requested markers/obs/obsm are compatible,
   then delegates plotting to
-  `/home/zerlinshen/multiomics_r_factory/scripts/plot_remote_bundle_large.R`.
+  `/home/zerlinshen/r_multiomics_factory/scripts/plot_remote_bundle_large.R`.
 - Remote report/figure outputs intended for Mac-side review must be pulled back
   as lightweight review copies under
   `/Users/zerlinshen/Downloads/1. Codex/2.Reproduction Trail/2026-04-23 - Nature Communications 2024 NSCLC single-cell reproduction/human_review/figures/YYYY-MM-DD-<slug>/`

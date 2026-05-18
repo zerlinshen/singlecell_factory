@@ -21,7 +21,7 @@ under "Architecture (2026-05+)": `### Environment Switches` (covering the
 `SC_REQUIRE_PROJECT_ROOT` fail-fast gate) and `### R-factory SHA fields`
 (covering dual-SHA provenance in `run_manifest.json` and `bundle/provenance.json`).
 See `/home/zerlinshen/.omc/plans/factories-optimization-round1.md` for the
-full Round-1a governance plan. The sibling repo `multiomics_r_factory` has
+full Round-1a governance plan. The sibling repo `r_multiomics_factory` has
 matching documentation for the R-side contracts (renv bootstrap, schema
 hard-error, SHA mismatch warning).
 
@@ -41,21 +41,21 @@ from producer-native Python/R/bundle provenance.
 
 ## Bridge Architecture
 
-The canonical R source of truth is `multiomics_r_factory/`:
+The canonical R source of truth is `r_multiomics_factory/`:
 
-- `multiomics_r_factory/R/` — Seurat-based high-level analysis modules (12 files)
-- `multiomics_r_factory/R_bundle/` — bundle-path-specific helpers (`remote_bundle_manifest.R`)
+- `r_multiomics_factory/R/` — Seurat-based high-level analysis modules (12 files)
+- `r_multiomics_factory/R_bundle/` — bundle-path-specific helpers (`remote_bundle_manifest.R`)
 
 The bridge at `bridges/local_r_pipeline_macbook/` references these via symlinks:
 
-- `bridges/local_r_pipeline_macbook/R` → `../../../multiomics_r_factory/R`
-- `bridges/local_r_pipeline_macbook/R_bundle` → `../../../multiomics_r_factory/R_bundle`
+- `bridges/local_r_pipeline_macbook/R` → `../../../r_multiomics_factory/R`
+- `bridges/local_r_pipeline_macbook/R_bundle` → `../../../r_multiomics_factory/R_bundle`
 
 **Rule**: `bridges/.../R` and `bridges/.../R_bundle` must always be symlinks, never real directories.
 Verify with: `bash scripts/ci/check_bridge_symlink.sh`
 
 Do NOT place real R files under `bridges/local_r_pipeline_macbook/R/` or `bridges/local_r_pipeline_macbook/R_bundle/`.
-Edit R sources in `multiomics_r_factory/` only.
+Edit R sources in `r_multiomics_factory/` only.
 
 ### Bundle export CLI (v2.1 + multi-modal flags)
 

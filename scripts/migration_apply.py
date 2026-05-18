@@ -29,7 +29,7 @@ from pathlib import Path
 INVENTORY_CSV = Path("/home/zerlinshen/.omc/state/migration_manifest.csv")
 PROJECTS_ROOT = Path(os.environ.get("PROJECTS_ROOT", "/home/zerlinshen/projects"))
 FACTORY_PYTHON = Path("/home/zerlinshen/singlecell_factory")
-FACTORY_R = Path("/home/zerlinshen/multiomics_r_factory")
+FACTORY_R = Path("/home/zerlinshen/r_multiomics_factory")
 CONTRACTS_SCHEMA_PY = FACTORY_PYTHON / "contracts" / "bundle_schema.yaml"
 CONTRACTS_SCHEMA_R = FACTORY_R / "contracts" / "bundle_schema.yaml"
 
@@ -195,7 +195,7 @@ def _run_preflights(rows: list[dict]) -> bool:
         if py_dirty:
             dirty_repos.append("singlecell_factory")
         if r_dirty:
-            dirty_repos.append("multiomics_r_factory")
+            dirty_repos.append("r_multiomics_factory")
         print(f"[preflight] dirty-tree: FAIL — {', '.join(dirty_repos)} has uncommitted changes")
         all_ok = False
     else:

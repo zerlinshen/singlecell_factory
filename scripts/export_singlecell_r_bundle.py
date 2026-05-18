@@ -65,7 +65,7 @@ EXPRESSION_VALUE_SCALE = "source_X_as_stored"
 EXPRESSION_EXPORT_DTYPE = "float32"
 INTENDED_USE = "plotting_and_visual_summary_only"
 # H2 / Phase B: This claim_guard string MUST be surfaced by the R reader
-# (see multiomics_r_factory/R_bundle/io_bundle.R::read_bundle_v2, which both
+# (see r_multiomics_factory/R_bundle/io_bundle.R::read_bundle_v2, which both
 # emits a message() and attaches it as attr(expr_sparse, "claim_guard")).
 # Do not change the literal value without updating the R-side validator and
 # the cross-language parity tests.
@@ -1112,7 +1112,7 @@ def write_v2_files(adata, cell_idx: np.ndarray, config: ExportConfig) -> tuple[d
 # Bundle provenance helper (PREC-1)
 # ---------------------------------------------------------------------------
 
-def _r_factory_sha_at_export(r_factory_path: str = "/home/zerlinshen/multiomics_r_factory") -> str:
+def _r_factory_sha_at_export(r_factory_path: str = "/home/zerlinshen/r_multiomics_factory") -> str:
     """Return the short HEAD SHA of the R factory repo at export time, or '' on failure."""
     try:
         return subprocess.check_output(

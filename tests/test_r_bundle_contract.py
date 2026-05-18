@@ -33,8 +33,8 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle
 
-IO_BUNDLE_R = "/home/zerlinshen/multiomics_r_factory/R_bundle/io_bundle.R"
-ATAC_MODULE_R = "/home/zerlinshen/multiomics_r_factory/R/atac_module.R"
+IO_BUNDLE_R = "/home/zerlinshen/r_multiomics_factory/R_bundle/io_bundle.R"
+ATAC_MODULE_R = "/home/zerlinshen/r_multiomics_factory/R/atac_module.R"
 
 # ---------------------------------------------------------------------------
 # Helpers

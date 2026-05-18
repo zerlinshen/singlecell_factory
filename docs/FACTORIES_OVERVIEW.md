@@ -1,6 +1,6 @@
 # Factories Overview
 
-_singlecell_factory + multiomics_r_factory technical reference_
+_singlecell_factory + r_multiomics_factory technical reference_
 
 generated_at: 2026-05-02T13:11:04+00:00
 
@@ -8,7 +8,7 @@ generated_at: 2026-05-02T13:11:04+00:00
 
 `singlecell_factory` is a Python/AnnData heavy-compute pipeline organized as 33 concrete module files across the layers `ingest`, `quality_control`, `latent_structure`, `markers`, `annotation`, `state_dynamics`, `biology`, `aggregation`, `reproduction`, `spatial`, `multimodal`, `genomic_optional`, `external_validation`, `covariates`, and `reporting`. The catalog declares 29 active module specs (3 mandatory + 26 optional) with explicit dependencies, modality tags, and `bridge_ready` flags. The CLI entrypoint is `scfactory run`.
 
-`multiomics_r_factory` is the R-side downstream visualization workspace. It consumes the bundle v2.1 contract emitted by `scripts/export_singlecell_r_bundle.py`, reads it via `R_bundle/io_bundle.R`, and renders Seurat-based plots via the `R/*_module.R` files (QC, dim, expression, composition, marker, annotation, batch_integration, integration, preprocessing, protein, spatial, theme_config). Together: 97 collected tests on the named contract surface, 4 starter recipes, 3 modality extensions (protein/spatial/multimodal_obsm), and an NC2024 paper-faithful reproduction lane.
+`r_multiomics_factory` is the R-side downstream visualization workspace. It consumes the bundle v2.1 contract emitted by `scripts/export_singlecell_r_bundle.py`, reads it via `R_bundle/io_bundle.R`, and renders Seurat-based plots via the `R/*_module.R` files (QC, dim, expression, composition, marker, annotation, batch_integration, integration, preprocessing, protein, spatial, theme_config). Together: 97 collected tests on the named contract surface, 4 starter recipes, 3 modality extensions (protein/spatial/multimodal_obsm), and an NC2024 paper-faithful reproduction lane.
 
 Use `scfactory run` for routine pipeline runs, the documented bundle v2.1 contract for agent-mediated handoff to R, and `--recipe nc2024_paper` for paper-faithful reproduction.
 
@@ -34,7 +34,7 @@ Two side-by-side stacks bridged by the bundle v2.1 contract. Python writes a tem
 - **spatial** (2 modules, 2 bridge_ready): spatial_ingest, spatial_neighborhoods
 - **multimodal** (1 modules, 1 bridge_ready): multimodal_integration
 
-### R (multiomics_r_factory) modules
+### R (r_multiomics_factory) modules
 
 annotation_module, batch_integration_module, cli_utils, composition_plots, dim_plots, expression_plots, integration_module, io_bridge, marker_module, pipeline_steps, preprocessing_module, protein_module, qc_plots, spatial_module, theme_config
 
@@ -283,7 +283,7 @@ options:
 
 ## 7. NC2024 claim coverage
 
-Source: `multiomics_r_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`. 15 claims parsed: 4 direct, 7 partial, 4 unsupported.
+Source: `r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`. 15 claims parsed: 4 direct, 7 partial, 4 unsupported.
 
 | claim_id | family | module_family | lane | status | evidence |
 |---|---|---|---|---|---|
@@ -331,20 +331,20 @@ Total collected on the named contract surface: **97** tests.
 
 | path | summary |
 |---|---|
-| `multiomics_r_factory/AGENTS.md` | Start with `AI_AGENT_PROTOCOL.md` for onboarding, architecture, and task |
-| `multiomics_r_factory/AI_AGENT_PROTOCOL.md` | Canonical onboarding index for AI agents entering |
-| `multiomics_r_factory/CLAUDE.md` | Claude Code must start with `AI_AGENT_PROTOCOL.md` before editing this |
-| `multiomics_r_factory/CODEX_PROFILE.md` | Codex must start with `AI_AGENT_PROTOCOL.md` for onboarding, architecture, and |
-| `multiomics_r_factory/MODULE_UPDATE_SKILL.md` | Use this checklist every time a new module is added or an existing module is changed. |
-| `multiomics_r_factory/README.md` | AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That |
-| `multiomics_r_factory/SKILL_PLAYBOOK.md` | Start with `AI_AGENT_PROTOCOL.md` before choosing a skill. This playbook routes |
-| `multiomics_r_factory/docs/ARTICLE_CLAIM_INVENTORY_NSCLC_NATCOMM_2024.md` | Baseline article: |
-| `multiomics_r_factory/docs/MODULE_CAPABILITY_MAP.md` | `singlecell_factory` is the compute and analysis engine. `multiomics_r_factory` is the downstream R/report wo... |
-| `multiomics_r_factory/docs/NC2024_NSCLC_BASELINE_REPRODUCTION_MEMO.md` | - Journal: `Nature Communications` |
-| `multiomics_r_factory/docs/NSCLC_BASELINE_REPRO_TASK_LIST.md` | This task list converts the baseline article into reproducible work items using the approved evidence schema. |
-| `multiomics_r_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md` | This matrix is the claim authority table for the current baseline article. |
-| `multiomics_r_factory/docs/NSCLC_REPRODUCTION_COMPARISON_MEMO.md` | This memo compares the three current NSCLC lanes and states what each lane proves. |
-| `multiomics_r_factory/docs/PYTHON_R_PROVENANCE_AND_FIDELITY.md` | This document defines how to interpret Python-generated figures and R-generated figures in this workspace, an... |
+| `r_multiomics_factory/AGENTS.md` | Start with `AI_AGENT_PROTOCOL.md` for onboarding, architecture, and task |
+| `r_multiomics_factory/AI_AGENT_PROTOCOL.md` | Canonical onboarding index for AI agents entering |
+| `r_multiomics_factory/CLAUDE.md` | Claude Code must start with `AI_AGENT_PROTOCOL.md` before editing this |
+| `r_multiomics_factory/CODEX_PROFILE.md` | Codex must start with `AI_AGENT_PROTOCOL.md` for onboarding, architecture, and |
+| `r_multiomics_factory/MODULE_UPDATE_SKILL.md` | Use this checklist every time a new module is added or an existing module is changed. |
+| `r_multiomics_factory/README.md` | AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That |
+| `r_multiomics_factory/SKILL_PLAYBOOK.md` | Start with `AI_AGENT_PROTOCOL.md` before choosing a skill. This playbook routes |
+| `r_multiomics_factory/docs/ARTICLE_CLAIM_INVENTORY_NSCLC_NATCOMM_2024.md` | Baseline article: |
+| `r_multiomics_factory/docs/MODULE_CAPABILITY_MAP.md` | `singlecell_factory` is the compute and analysis engine. `r_multiomics_factory` is the downstream R/report wo... |
+| `r_multiomics_factory/docs/NC2024_NSCLC_BASELINE_REPRODUCTION_MEMO.md` | - Journal: `Nature Communications` |
+| `r_multiomics_factory/docs/NSCLC_BASELINE_REPRO_TASK_LIST.md` | This task list converts the baseline article into reproducible work items using the approved evidence schema. |
+| `r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md` | This matrix is the claim authority table for the current baseline article. |
+| `r_multiomics_factory/docs/NSCLC_REPRODUCTION_COMPARISON_MEMO.md` | This memo compares the three current NSCLC lanes and states what each lane proves. |
+| `r_multiomics_factory/docs/PYTHON_R_PROVENANCE_AND_FIDELITY.md` | This document defines how to interpret Python-generated figures and R-generated figures in this workspace, an... |
 | `singlecell_factory/AGENTS.md` | This file applies to `/home/zerlinshen/singlecell_factory` and all subdirectories. |
 | `singlecell_factory/AI_AGENT_PROTOCOL.md` | Canonical onboarding index for AI agents entering |
 | `singlecell_factory/BEST_PRACTICES.md` | - Codex 项目规则：`AGENTS.md`（本项目根目录） |
@@ -352,7 +352,7 @@ Total collected on the named contract surface: **97** tests.
 | `singlecell_factory/CODEX.md` | Codex must start with `AI_AGENT_PROTOCOL.md` for onboarding, read order, and |
 | `singlecell_factory/PROTOCOL.md` | AI agents should start with `AI_AGENT_PROTOCOL.md` before using this file. This |
 | `singlecell_factory/README.md` | AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That |
-| `singlecell_factory/docs/FACTORIES_OVERVIEW.md` | _singlecell_factory + multiomics_r_factory technical reference_ |
+| `singlecell_factory/docs/FACTORIES_OVERVIEW.md` | _singlecell_factory + r_multiomics_factory technical reference_ |
 | `singlecell_factory/docs/MODULE_TECH_DOC_TEMPLATE.md` | - Module name: |
 | `singlecell_factory/docs/PUBLICATION_READY.md` | This file provides copy-paste-ready Methods section text and citation patterns for manuscripts using this pip... |
 

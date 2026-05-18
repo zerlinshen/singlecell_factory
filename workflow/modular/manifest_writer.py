@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -58,7 +59,7 @@ def write_manifest(
     bundle_sha256: Optional[str] = None,
     produced_on: str = "",
     factory_python_path: Path = Path("/home/zerlinshen/singlecell_factory"),
-    factory_r_path: Path = Path("/home/zerlinshen/multiomics_r_factory"),
+    factory_r_path: Path = Path("/home/zerlinshen/r_multiomics_factory"),
     extra: Optional[dict] = None,
 ) -> Path:
     """Write <run-dir>/manifest.json with the canonical schema. Returns the path.
@@ -71,6 +72,14 @@ def write_manifest(
       two steps). The R loader warns on mismatch between the two fields.
     """
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if "multiomics_r_factory" in str(factory_r_path):  # legacy name accepted during transition
+        warnings.warn(
+            "factory_r_path uses legacy name 'multiomics_r_factory';"  # legacy name accepted during transition
+            " use 'r_multiomics_factory' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     r_state = factory_git_state(Path(factory_r_path))
 

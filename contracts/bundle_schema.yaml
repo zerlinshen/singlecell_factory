@@ -2,7 +2,7 @@
 #
 # Version: 2.2
 # Canonical location: singlecell_factory/contracts/bundle_schema.yaml
-# Vendored copy:      multiomics_r_factory/contracts/bundle_schema.yaml
+# Vendored copy:      r_multiomics_factory/contracts/bundle_schema.yaml
 #
 # The two copies MUST be byte-identical. Use tools/sync-contracts.sh to
 # propagate changes from the canonical copy to the vendored copy.
@@ -99,7 +99,7 @@ manifest_fields:
     type: object
     required: false
     description: >
-      Provenance pin for the multiomics_r_factory R repo at export time.
+      Provenance pin for the r_multiomics_factory R repo at export time.
     fields:
       sha:
         type: string
@@ -429,7 +429,7 @@ extensions_v22:
     status: active
     description: >
       ATAC-seq vertical slice (Phase 2, P2.S11-S14): TF-IDF + LSI embedding
-      produced by atac_ingest. Consumed by multiomics_r_factory/R/atac_module.R
+      produced by atac_ingest. Consumed by r_multiomics_factory/R/atac_module.R
       for accessibility plots.
     columns:
       lsi:

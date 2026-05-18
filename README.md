@@ -62,7 +62,7 @@ project directory under `${PROJECTS_ROOT}` (default `/home/zerlinshen/projects/`
 /home/zerlinshen/
 ├── singlecell_factory/        # TOOL (Python). No output/ subtree after migration.
 │   └── contracts/             # CANONICAL: bundle_schema.yaml lives here
-├── multiomics_r_factory/      # TOOL (R). No output/ subtree after migration.
+├── r_multiomics_factory/      # TOOL (R). No output/ subtree after migration.
 │   └── contracts/             # VENDORED copy of bundle_schema.yaml (byte-identical)
 ├── projects-bootstrap/        # Standalone bootstrap tool (outside both factories)
 │   └── omc-new-project        # Creates new projects under PROJECTS_ROOT
@@ -73,7 +73,7 @@ project directory under `${PROJECTS_ROOT}` (default `/home/zerlinshen/projects/`
         ├── runs/
         │   └── <run-id>/
         │       ├── python/    # singlecell_factory outputs (h5ad, bundle/)
-        │       ├── r/         # multiomics_r_factory outputs (figures, reports)
+        │       ├── r/         # r_multiomics_factory outputs (figures, reports)
         │       ├── logs/
         │       └── manifest.json
         ├── configs/
@@ -117,14 +117,14 @@ in `manifest.json` for forensics.
 
 The Python-R bundle schema lives canonically at `contracts/bundle_schema.yaml`
 in this repo. It is vendored byte-identically into
-`multiomics_r_factory/contracts/bundle_schema.yaml`. To update:
+`r_multiomics_factory/contracts/bundle_schema.yaml`. To update:
 
 ```bash
 # Edit the canonical file, then sync:
 tools/sync-contracts.sh
 ```
 
-**Never edit the vendored copy in `multiomics_r_factory/` directly.**
+**Never edit the vendored copy in `r_multiomics_factory/` directly.**
 
 ### Migration status (2026-05)
 
@@ -134,7 +134,7 @@ user-approved step after dry-run review. Migration scripts live at
 `scripts/migration_inventory.py` and `scripts/migration_apply.py` (default
 dry-run; see `scripts/migration_README.md` for the operator runbook).
 
-Sibling repo: `/home/zerlinshen/multiomics_r_factory/`
+Sibling repo: `/home/zerlinshen/r_multiomics_factory/`
 
 ### Remote Governance Control Plane
 
@@ -269,19 +269,19 @@ The same gate is mirrored in `scripts/export_singlecell_r_bundle.py` and `script
 
 ### R-factory SHA fields
 
-Two provenance fields track the `multiomics_r_factory` git SHA at two points in time (plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`):
+Two provenance fields track the `r_multiomics_factory` git SHA at two points in time (plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`):
 
 | Field | Location | Resolved at |
 |---|---|---|
 | `r_factory_sha_at_manifest_write` | `run_manifest.json` (top level) | Pipeline manifest write (end of Python run) |
 | `r_factory_sha_at_export` | `<run-id>/python/bundle/provenance.json` | R bundle export time |
 
-The two SHAs may differ if a `git pull` occurred between the pipeline run and the bundle export. The R bundle loader (`multiomics_r_factory/R_bundle/io_bundle.R`) compares the two fields and logs a `WARNING` (not an error) on mismatch, surfacing both values. The figure footer helper (`R/theme_config.R::compose_provenance_footer`) prints both SHAs when they differ and one when they match.
+The two SHAs may differ if a `git pull` occurred between the pipeline run and the bundle export. The R bundle loader (`r_multiomics_factory/R_bundle/io_bundle.R`) compares the two fields and logs a `WARNING` (not an error) on mismatch, surfacing both values. The figure footer helper (`R/theme_config.R::compose_provenance_footer`) prints both SHAs when they differ and one when they match.
 
 ## Generated overview
 
 Self-contained technical PDF + Markdown source covering both `singlecell_factory`
-and `multiomics_r_factory`: see [docs/FACTORIES_OVERVIEW.pdf](docs/FACTORIES_OVERVIEW.pdf)
+and `r_multiomics_factory`: see [docs/FACTORIES_OVERVIEW.pdf](docs/FACTORIES_OVERVIEW.pdf)
 (rendered) and [docs/FACTORIES_OVERVIEW.md](docs/FACTORIES_OVERVIEW.md) (diff-friendly source).
 Regenerate with `python scripts/generate_factories_report.py`.
 
@@ -337,7 +337,7 @@ catalog edit plus the normal implementation/registry/tests instead of scattered
 README/CLI/DAG string updates.
 
 **Singlecell → multiomics bridge contract** — compact bundle exports keep
-`singlecell_factory` as the upstream truth and `multiomics_r_factory/R_bundle/`
+`singlecell_factory` as the upstream truth and `r_multiomics_factory/R_bundle/`
 as the downstream reader. v2 bundles now require manifest-backed file records
 for parquet payloads and, when marker expression is exported as `mtx.gz`, the
 barcode/gene sidecars are recorded with byte sizes and SHA256 values. This keeps
@@ -459,7 +459,7 @@ Use `--verify-sha` when you specifically want bundle file hashing.
     `R_BUNDLE_OBSM` requests match, and the R validator passes file SHA256
     checks.
   - plotting entry point: `PLOT_SCRIPT` defaults to
-    `/home/zerlinshen/multiomics_r_factory/scripts/plot_remote_bundle_large.R`,
+    `/home/zerlinshen/r_multiomics_factory/scripts/plot_remote_bundle_large.R`,
     the upstream v1/v2-aware plotting script.
   - parameter contract: `R_BUNDLE_OBS_COLS` and `R_BUNDLE_OBSM` are additive,
     not replacement controls. The wrapper always keeps selected `group_by`,
@@ -977,7 +977,7 @@ Practical guidance for a 96 GB workstation:
 - Several hundred thousand cells: strongly prefer sample-wise staging plus `--scale-mode massive`.
 - Near `1M` cells: do not treat as an ordinary single-object run; use clustering-first, reference mapping, and subset refinement.
 
-### Relationship to multiomics_r_factory
+### Relationship to r_multiomics_factory
 
 `singlecell_factory` is the upstream analysis engine.
 
@@ -987,18 +987,18 @@ It is responsible for:
 - module outputs and analysis artifacts
 - producing the result directories that downstream reporting consumes
 
-`multiomics_r_factory` is the downstream R/report workspace that depends on outputs generated here.
+`r_multiomics_factory` is the downstream R/report workspace that depends on outputs generated here.
 
 Repository links:
 - `singlecell_factory`: <https://github.com/zerlinshen/singlecell_factory>
-- `multiomics_r_factory`: <https://github.com/zerlinshen/multiomics_r_factory>
+- `r_multiomics_factory`: <https://github.com/zerlinshen/r_multiomics_factory>
 
 Practical dependency direction:
-- `singlecell_factory` -> `multiomics_r_factory`
+- `singlecell_factory` -> `r_multiomics_factory`
 
 That means:
 - large objects and primary analysis should originate here
-- downstream R plotting/report work is remote-side by default, either through the bridge mirror under `singlecell_factory` or the broader remote `multiomics_r_factory`
+- downstream R plotting/report work is remote-side by default, either through the bridge mirror under `singlecell_factory` or the broader remote `r_multiomics_factory`
 - the local Mac is a review/organization surface, not the maintained R plotting runtime for NC2024-scale work
 - the two remote workspaces should be treated as linked analysis/report layers rather than unrelated repositories
 
@@ -1008,16 +1008,16 @@ A remote R plotting/report workflow is kept in two forms:
 - Bridge mirror inside singlecell_factory:
   - `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/`
 - Recommended independent remote R workspace:
-  - `/home/zerlinshen/multiomics_r_factory/`
+  - `/home/zerlinshen/r_multiomics_factory/`
 
 Rationale:
 - `singlecell_factory` should remain the main compute/analysis engine for remote single-cell workflows.
 - The R layer is broader than scRNA-seq alone and may later cover spatial transcriptomics, polished publication graphics, multi-omics summaries, and other R-native plotting/report tasks.
-- Therefore the long-term cleaner architecture is: analysis engine (`singlecell_factory`) + independent R workspace (`multiomics_r_factory`) + explicit bridge between them.
+- Therefore the long-term cleaner architecture is: analysis engine (`singlecell_factory`) + independent R workspace (`r_multiomics_factory`) + explicit bridge between them.
 
 Intended use:
 - Use the bridge mirror inside `singlecell_factory` when tight co-location with pipeline outputs is convenient.
-- Use `/home/zerlinshen/multiomics_r_factory/` as the preferred long-term home for broader R analysis and figure workflows.
+- Use `/home/zerlinshen/r_multiomics_factory/` as the preferred long-term home for broader R analysis and figure workflows.
 - Use compact manifest-backed bundles rather than forcing direct `.h5ad` conversion in R for NC2024-scale cohorts.
 - Keep Mac-side work focused on reviewing and organizing the remote-generated figures/reports.
 
@@ -1033,11 +1033,11 @@ Known extension keys:
 
 | Extension key | Modality | Producer (Python) | Reader (R) |
 |---|---|---|---|
-| `protein` | CITE-seq / ADT | `maybe_export_protein(...)` | `multiomics_r_factory/R/protein_module.R::load_protein_extension(bundle)` |
-| `spatial` | spatial transcriptomics | `maybe_export_spatial(...)` | `multiomics_r_factory/R/spatial_module.R::load_spatial_extension(bundle)` |
-| `multimodal_obsm` | WNN / MOFA embeddings (EXPERIMENTAL) | `maybe_export_multimodal_obsm(...)` | `multiomics_r_factory/R/integration_module.R::load_multimodal_extension(bundle)` |
-| `marker_resolutions` | marker DB evidence table | `maybe_export_marker_resolutions(...)` | `multiomics_r_factory/R/marker_db_module.R` |
-| `atac` | scATAC LSI + peak metadata (v2.2) | `maybe_export_atac(...)` | `multiomics_r_factory/R/atac_module.R::load_atac_extension(bundle)` |
+| `protein` | CITE-seq / ADT | `maybe_export_protein(...)` | `r_multiomics_factory/R/protein_module.R::load_protein_extension(bundle)` |
+| `spatial` | spatial transcriptomics | `maybe_export_spatial(...)` | `r_multiomics_factory/R/spatial_module.R::load_spatial_extension(bundle)` |
+| `multimodal_obsm` | WNN / MOFA embeddings (EXPERIMENTAL) | `maybe_export_multimodal_obsm(...)` | `r_multiomics_factory/R/integration_module.R::load_multimodal_extension(bundle)` |
+| `marker_resolutions` | marker DB evidence table | `maybe_export_marker_resolutions(...)` | `r_multiomics_factory/R/marker_db_module.R` |
+| `atac` | scATAC LSI + peak metadata (v2.2) | `maybe_export_atac(...)` | `r_multiomics_factory/R/atac_module.R::load_atac_extension(bundle)` |
 
 v2.2 reserves `vdj`, `ribo`, and `hic` in `contracts/bundle_schema.yaml` but
 does not export those payloads yet; R loaders must return `NULL` for reserved

@@ -7,7 +7,7 @@ It is a control-plane document. It is not a scientific result and must not be ci
 ## Authority Boundary
 
 - `singlecell_factory` is a factory: it owns code, contracts, validators, schemas, docs, tests, and execution behavior.
-- `multiomics_r_factory` is a factory: it owns R-side code, reports, plotting helpers, and vendored bundle-contract consumers.
+- `r_multiomics_factory` is a factory: it owns R-side code, reports, plotting helpers, and vendored bundle-contract consumers.
 - `/home/zerlinshen/projects/<project-id>` is the project/data layer: it owns inputs, runs, figures, reports, manifests, evidence, and project-specific conclusions.
 - The local Mac Reproduction Trail is downstream review/sync. It is not the implementation target for phase 1 remote governance.
 

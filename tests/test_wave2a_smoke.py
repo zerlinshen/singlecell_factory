@@ -19,7 +19,7 @@ import scipy.sparse as sp
 
 
 FACTORY_ROOT = Path(__file__).resolve().parent.parent
-R_FACTORY_ROOT = FACTORY_ROOT.parent / "multiomics_r_factory"
+R_FACTORY_ROOT = FACTORY_ROOT.parent / "r_multiomics_factory"
 
 
 @pytest.fixture

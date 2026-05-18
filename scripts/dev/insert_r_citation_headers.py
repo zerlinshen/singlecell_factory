@@ -1,4 +1,4 @@
-"""Insert `# Citations:` header block into each R module in multiomics_r_factory.
+"""Insert `# Citations:` header block into each R module in r_multiomics_factory.
 
 Idempotent: a file that already contains a `# Citations:` line in its top 20
 lines is skipped.
@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-R_FACTORY = Path("/home/zerlinshen/multiomics_r_factory")
+R_FACTORY = Path("/home/zerlinshen/r_multiomics_factory")
 
 R_CITATIONS: dict[str, list[str]] = {
     "R/annotation_module.R": [
@@ -80,10 +80,10 @@ R_CITATIONS: dict[str, list[str]] = {
         "Wickham 2016. ggplot2: Elegant Graphics for Data Analysis. Springer. ISBN 978-3-319-24277-4",
     ],
     "R/cli_utils.R": [
-        "Project utility — see multiomics_r_factory/AGENTS.md for --project-root / --run-id contract.",
+        "Project utility — see r_multiomics_factory/AGENTS.md for --project-root / --run-id contract.",
     ],
     "R_bundle/io_bundle.R": [
-        "Project bundle schema — see singlecell_factory/contracts/bundle_schema.yaml (vendored copy at multiomics_r_factory/contracts/bundle_schema.yaml).",
+        "Project bundle schema — see singlecell_factory/contracts/bundle_schema.yaml (vendored copy at r_multiomics_factory/contracts/bundle_schema.yaml).",
         "Apache Arrow Project. doi:10.1145/3514221.3526057 (Arrow Parquet format used for v2/v2.1/v2.2 bundles).",
     ],
     "R_bundle/bundle_cache.R": [

@@ -6,7 +6,7 @@ Covers:
   - Registry includes vdj_ingest + vdj_metrics, no MUTATING entry, no cycle
   - Bundle schema keeps vdj.status reserved until exporter+reader are complete
   - R-side KNOWN_BUNDLE_EXTENSIONS contains "vdj"
-  - multiomics_r_factory/R/vdj_module.R has the required functions
+  - r_multiomics_factory/R/vdj_module.R has the required functions
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import scipy.sparse as sp
 
 
 FACTORY_ROOT = Path(__file__).resolve().parent.parent
-R_FACTORY_ROOT = FACTORY_ROOT.parent / "multiomics_r_factory"
+R_FACTORY_ROOT = FACTORY_ROOT.parent / "r_multiomics_factory"
 
 
 @pytest.fixture

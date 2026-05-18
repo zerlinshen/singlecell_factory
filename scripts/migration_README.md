@@ -3,7 +3,7 @@
 Parent plan: `/home/zerlinshen/.omc/plans/factory-project-separation.md` (§4, §4a)
 
 This document describes the two-phase workflow for migrating existing scientific
-data from `singlecell_factory/output/` and `multiomics_r_factory/output/` into
+data from `singlecell_factory/output/` and `r_multiomics_factory/output/` into
 the new `${PROJECTS_ROOT}/<project-id>/runs/<run-id>/` layout.
 
 **No data is moved by any script in this directory without explicit human approval

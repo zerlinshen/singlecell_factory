@@ -1,7 +1,7 @@
 # Multi-Omics Module Rationale
 
 Scope: this note documents the current Phase 2 multi-omics contract between
-`singlecell_factory` and `multiomics_r_factory`. ATAC is the active v2.2
+`singlecell_factory` and `r_multiomics_factory`. ATAC is the active v2.2
 vertical slice. VDJ, Ribo-seq, and Hi-C remain reserved bundle slots until their
 exporters have full Python-to-R round-trip tests.
 
@@ -62,9 +62,9 @@ Supporting contracts:
 - `scripts/export_singlecell_r_bundle.py::maybe_export_atac(...)` writes
   `extensions/atac/lsi.parquet` with a `cell` column and
   `extensions/atac/peaks.parquet` with `peak_id`, `chrom`, `start`, `end`.
-- `multiomics_r_factory/R_bundle/io_bundle.R` attaches
+- `r_multiomics_factory/R_bundle/io_bundle.R` attaches
   `bundle$extensions$atac$data`.
-- `multiomics_r_factory/R/atac_module.R` fails soft for absent/reserved slots.
+- `r_multiomics_factory/R/atac_module.R` fails soft for absent/reserved slots.
 
 ## VDJ reserved slot
 
