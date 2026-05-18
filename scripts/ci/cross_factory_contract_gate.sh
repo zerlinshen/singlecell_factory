@@ -11,7 +11,7 @@
 #   1  parity / bridge / grep failure
 #   2  missing required file or tool
 #
-# Advisory in Phase 2; promote to blocking in Phase 3 §3.4.
+# Promoted to blocking in Phase 3 §3.4 (2026-05-18).
 
 set -uo pipefail
 
@@ -57,10 +57,37 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Phase 3 placeholder: figure_bundle_schema.yaml parity
+# 2. figure_bundle_schema.yaml byte-identical across all three repos (Phase 3)
 # ---------------------------------------------------------------------------
-# Phase 3 placeholder: will verify figure_bundle_schema.yaml byte-identical
-# across all three repos (SC, r_multiomics_factory, plotting_factory).
+echo "[cross-factory] Checking figure_bundle_schema.yaml parity..."
+
+PLOT_REPO="$PARENT_DIR/plotting_factory"
+
+SC_FIG_SCHEMA="$SC_REPO/contracts/figure_bundle_schema.yaml"
+R_FIG_SCHEMA="$R_REPO/contracts/figure_bundle_schema.yaml"
+PLOT_FIG_SCHEMA="$PLOT_REPO/contracts/figure_bundle_schema.yaml"
+
+for schema_path in "$SC_FIG_SCHEMA" "$R_FIG_SCHEMA" "$PLOT_FIG_SCHEMA"; do
+    if [[ ! -f "$schema_path" ]]; then
+        echo "ERROR: missing $schema_path" >&2
+        exit 2
+    fi
+done
+
+SC_FIG_HASH="$(sha256sum "$SC_FIG_SCHEMA" | cut -d' ' -f1)"
+R_FIG_HASH="$(sha256sum "$R_FIG_SCHEMA" | cut -d' ' -f1)"
+PLOT_FIG_HASH="$(sha256sum "$PLOT_FIG_SCHEMA" | cut -d' ' -f1)"
+
+if [[ "$SC_FIG_HASH" != "$R_FIG_HASH" ]] || [[ "$SC_FIG_HASH" != "$PLOT_FIG_HASH" ]]; then
+    echo "FAIL: figure_bundle_schema.yaml hash mismatch across repos" >&2
+    echo "  SC:       $SC_FIG_HASH" >&2
+    echo "  R:        $R_FIG_HASH" >&2
+    echo "  plotting: $PLOT_FIG_HASH" >&2
+    echo "  Run: tools/sync-contracts.sh from singlecell_factory to resync vendored copies." >&2
+    FAIL=1
+else
+    echo "OK: figure_bundle_schema.yaml sha256=$SC_FIG_HASH (all 3 repos)"
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Bridge symlinks resolve via readlink -f

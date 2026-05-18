@@ -104,10 +104,17 @@ analysis is analysis." That confirmation drove the dual-language
 1. **Phase 2 (~3-5 days):** Extract plot halves from 6 modality modules in
    `r_multiomics_factory`; migrate Python plots into `plotting_factory/python/`;
    activate cross-factory CI gate; extend Wave5 v5.1 evidence gate boundary.
+   **DONE.**
 2. **Phase 3 (~2-3 days):** Define `figure_bundle` schema in
    `plotting_factory/schema/`; activate per-plot YAML config schemas; ship
    visual-regression smoke; flip cross-factory CI gate to blocking;
-   finalize governance update.
+   finalize governance update. **DONE (2026-05-18).**
+   - §3.1: `figure_bundle_schema.yaml` + JSON validator + sync-contracts extension — DONE
+   - §3.2: 5 per-plot YAML config schemas — DONE
+   - §3.3: Visual regression smoke (5 plot types, plotting_factory `8216331`) — DONE
+   - §3.4: `cross_factory_contract_gate.sh` promoted to blocking; extended to verify
+     `figure_bundle_schema.yaml` parity across all 3 repos (sha256 `a98ed120...`) — DONE
+   - §3.5: Governance finalization across all 3 repos (SC `4eafc8e`, R `d31c3c8`) — DONE
 3. **C1 codex review (parallel with Phases 1-2):** Five-cluster review of
    the 11 codex SC commits + 5 codex R commits.
 4. **C2 reproduction-methodology-upgrade (parallel with Phase 2):** Doc
