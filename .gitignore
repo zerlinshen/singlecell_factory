@@ -50,3 +50,11 @@ coverage.xml
 # Runtime-generated paper_repro spec dirs (regenerated per launch)
 ops/nc2024_sparse_exact/
 ops/nc2024_extended_real_run/
+
+# Bulk external reference data — regenerated from upstream sources
+data/external/gencode_grch38_genes_full.tsv
+data/external/gencode_grch38_tss*.bed
+data/external/gencode_grch38_tss*.tsv
+data/external/gwas_catalog/
+data/external/trevino_2021/
+data/external/trevino_2021_supp/
