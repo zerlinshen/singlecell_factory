@@ -1,0 +1,40 @@
+# sc_gpu_de_test — Component E (G-E1 isolation gate)
+#
+# Source-of-truth plan: /home/zerlinshen/.omc/plans/nc-cell-clustering-final-strategy-plan.md
+# (Component E, plus the E executor brief at ops/briefs/E-gpu-de-env-executor-brief.md).
+#
+# Goal: separate RAPIDS env where rapids-singlecell exposes
+# `tl.rank_genes_groups` (Wilcoxon DE on GPU). The existing `sc_gpu_stable`
+# env ships rapids-singlecell 0.13.4 which only has `rank_genes_groups_logreg`.
+#
+# Build strategy (recorded here for provenance; actual build is via clone +
+# pip upgrade, not `conda env create -f this_file`):
+#   1. conda create --clone sc_gpu_stable -n sc_gpu_de_test
+#   2. /home/zerlinshen/conda/envs/sc_gpu_de_test/bin/pip install --upgrade 'rapids-singlecell>=0.14'
+#   3. Smoke: import rapids_singlecell as rsc; assert callable(rsc.tl.rank_genes_groups)
+#
+# G-E1 (isolation invariant): sc_gpu_stable MUST NOT be mutated. Clone is
+# a separate env in a separate conda prefix; pip install --upgrade only
+# touches the clone.
+#
+# Reference: sc_gpu_stable inventory captured 2026-05-19:
+#   python 3.11.15  / cuML 25.10  / cuda-version 12.x
+#   anndata 0.12.14 / scanpy 1.11.5 / rapids-singlecell 0.13.4 (PYPI)
+
+name: sc_gpu_de_test
+channels:
+  - rapidsai
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - "rapids-singlecell>=0.14"
+
+# NOTE: this YAML is NOT used by `conda env create -f` because that would
+# re-solve the entire environment from scratch and take 30-60+ minutes.
+# Actual build path is `conda create --clone sc_gpu_stable -n sc_gpu_de_test`
+# followed by a targeted pip upgrade. This file is a provenance record of
+# the *intent* (which packages matter for G-E2 / G-E3) and a fallback recipe
+# if a clean-room rebuild is ever needed.
