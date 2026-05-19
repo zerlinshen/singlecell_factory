@@ -109,24 +109,43 @@ class DoubletDetectionModule:
     # GPU (rsc) paths
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _free_gpu_memory_pool() -> None:
+        # HIGH fix (2026-05-19): release CuPy GPU memory after each RAPIDS
+        # doublet call. Previously the GPU AnnData copy stayed resident until
+        # Python GC eventually collected it, which accumulated across modules
+        # (clustering, batch correction, DE) and pushed long pipelines toward
+        # GPU OOM. CuPy's default mempool is process-wide so explicit free is
+        # both safe and effective.
+        try:
+            import cupy as cp  # type: ignore
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.get_default_pinned_memory_pool().free_all_blocks()
+        except Exception:
+            pass
+
     def _run_rsc_scrublet_whole(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, float | None]:
         """Run rsc.pp.scrublet on the full dataset."""
         import rapids_singlecell as rsc
 
         adata_gpu = adata.copy()
-        rsc.get.anndata_to_GPU(adata_gpu)
-        rsc.pp.scrublet(
-            adata_gpu,
-            expected_doublet_rate=cfg.expected_doublet_rate,
-            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
-            random_state=ctx.random_state,
-            verbose=False,
-        )
-        scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
-        predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
-        threshold = adata_gpu.uns.get("scrublet", {}).get("threshold", None)
-        ctx.metadata["doublet_method"] = "scrublet_gpu"
-        return scores, predicted, threshold
+        try:
+            rsc.get.anndata_to_GPU(adata_gpu)
+            rsc.pp.scrublet(
+                adata_gpu,
+                expected_doublet_rate=cfg.expected_doublet_rate,
+                n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
+                random_state=ctx.random_state,
+                verbose=False,
+            )
+            scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
+            predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
+            threshold = adata_gpu.uns.get("scrublet", {}).get("threshold", None)
+            ctx.metadata["doublet_method"] = "scrublet_gpu"
+            return scores, predicted, threshold
+        finally:
+            del adata_gpu
+            self._free_gpu_memory_pool()
 
     def _run_rsc_scrublet_grouped(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, None]:
         """Run rsc.pp.scrublet with batch_key for per-sample doublet detection."""
@@ -137,20 +156,24 @@ class DoubletDetectionModule:
             raise ValueError("grouped scrublet requested without sample labels")
 
         adata_gpu = adata.copy()
-        rsc.get.anndata_to_GPU(adata_gpu)
-        rsc.pp.scrublet(
-            adata_gpu,
-            batch_key=sample_key,
-            expected_doublet_rate=cfg.expected_doublet_rate,
-            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
-            random_state=ctx.random_state,
-            verbose=False,
-        )
-        scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
-        predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
-        ctx.metadata["doublet_grouped_key"] = sample_key
-        ctx.metadata["doublet_method"] = "scrublet_gpu_grouped"
-        return scores, predicted, None
+        try:
+            rsc.get.anndata_to_GPU(adata_gpu)
+            rsc.pp.scrublet(
+                adata_gpu,
+                batch_key=sample_key,
+                expected_doublet_rate=cfg.expected_doublet_rate,
+                n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
+                random_state=ctx.random_state,
+                verbose=False,
+            )
+            scores = self._col_to_numpy(adata_gpu.obs["doublet_score"]).astype(np.float32)
+            predicted = self._col_to_numpy(adata_gpu.obs["predicted_doublet"]).astype(bool)
+            ctx.metadata["doublet_grouped_key"] = sample_key
+            ctx.metadata["doublet_method"] = "scrublet_gpu_grouped"
+            return scores, predicted, None
+        finally:
+            del adata_gpu
+            self._free_gpu_memory_pool()
 
     # ------------------------------------------------------------------
     # CPU fallback paths (used only when rsc is unavailable)

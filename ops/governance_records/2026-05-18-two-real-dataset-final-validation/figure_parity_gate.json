@@ -11,7 +11,7 @@
       ],
       "produced_sha256": "fa2610fcee47076340d6e36df9751cadf52dd4e0338256918f1de70b0c6df69a",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/cell_fraction.png",
       "status": "conditional"
     },
     {
@@ -25,7 +25,7 @@
       ],
       "produced_sha256": "6a63ac2682eaffb81cf0d030993019554dc677074d04468adda91fefd50256f7",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/marker_dot.png",
       "status": "conditional"
     },
     {
@@ -39,7 +39,7 @@
       ],
       "produced_sha256": "832626b7bc3611b525a671fb058be2f961377a205d7c327aa938b01cc762c4e3",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/marker_feature.png",
       "status": "conditional"
     },
     {
@@ -53,7 +53,7 @@
       ],
       "produced_sha256": "b6ef5503d36d0e27637feef5604792bc551b2d4bc5132b5791d89d858134bee7",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/qc_scatter.png",
       "status": "conditional"
     },
     {
@@ -67,7 +67,7 @@
       ],
       "produced_sha256": "e74c0209af2c7378a33f89335a9b9dccbf2571740beb3f81a675d81e45ede26d",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/qc_violin.png",
       "status": "conditional"
     },
     {
@@ -77,7 +77,7 @@
       "produced_bytes": 3976209,
       "produced_sha256": "df2b3b67b359fd5da7fa938a46693622c9197a87ebe3fe8916a65af5893eb222",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/r.pdf",
       "status": "conditional"
     },
     {
@@ -91,7 +91,7 @@
       ],
       "produced_sha256": "a392f81c2f50b90c76ad1c5bb0400dbaa6bc45b3cbecdb6a6761742515ff885e",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/umap_by_cluster.png",
       "status": "conditional"
     },
     {
@@ -105,7 +105,7 @@
       ],
       "produced_sha256": "c63075ec0d711f22b1f204dc178275631479831120d2e255a66358838c34a3a9",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/salcher_2024_nc_nsclc/figures/umap_by_group.png",
       "status": "conditional"
     },
     {
@@ -119,7 +119,7 @@
       ],
       "produced_sha256": "766b62adf23028e8cdc170a1da9b70444751b5c17c979c4a0f3c71045ab7be88",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/cell_fraction.png",
       "status": "conditional"
     },
     {
@@ -133,7 +133,7 @@
       ],
       "produced_sha256": "fb1b4aa28892a2816890a1be67e152ab22d6592064d06087d13648236a30fb1f",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/marker_dot.png",
       "status": "conditional"
     },
     {
@@ -147,7 +147,7 @@
       ],
       "produced_sha256": "c98d6004f785f8808c0b9afc9c84848fed8c171d6c4b49d85c518852207a90ef",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/marker_feature.png",
       "status": "conditional"
     },
     {
@@ -161,7 +161,7 @@
       ],
       "produced_sha256": "a4dc726e5fed1d21b47d064ae48ece52010cbbda8c84b4c039b5674b69eb57af",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/qc_scatter.png",
       "status": "conditional"
     },
     {
@@ -175,7 +175,7 @@
       ],
       "produced_sha256": "9af3809a312ed6215ada75540381071b89c3a101b944732970a25482103d0e88",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/qc_violin.png",
       "status": "conditional"
     },
     {
@@ -185,7 +185,7 @@
       "produced_bytes": 39953678,
       "produced_sha256": "fd7fd1d005b144b257111189e8a2b2c913260211c5b4fe0c90a204483345d184",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/r.pdf",
       "status": "conditional"
     },
     {
@@ -199,7 +199,7 @@
       ],
       "produced_sha256": "a0a1eca932d017d5ea8bb67ddf550e40e611df245254979a9a01b21351108843",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/umap_by_cluster.png",
       "status": "conditional"
     },
     {
@@ -213,11 +213,11 @@
       ],
       "produced_sha256": "a81d4334856e5b0c3f361329761633bd9901ebc592dc4576417f2bc8fa7d569c",
       "reason": "reference_missing",
-      "reference": null,
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/umap_by_group.png",
       "status": "conditional"
     }
   ],
-  "generated_at_utc": "2026-05-19T06:20:15.080506+00:00",
+  "generated_at_utc": "2026-05-19T06:38:48.575740+00:00",
   "schema_version": "figure_parity_gate_v1",
   "scientific_boundary": "Default manifest validates produced key R figures and records missing paper/process-data references as conditional until curated references are registered.",
   "status_counts": {

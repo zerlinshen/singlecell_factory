@@ -277,8 +277,26 @@ class BatchCorrectionModule:
             )
         # rsc.pp.harmony_integrate writes corrected embeddings to
         # adata.obsm["X_pca_harmony"] in place (US-B3, ARI=1.000 parity gate passed).
+        # MEDIUM-2 fix (2026-05-19): expose theta/sigma/max_iter so cross-run
+        # tuning is auditable instead of relying on library defaults silently.
+        cfg_batch = ctx.cfg.batch
         ctx.metadata["harmony_device"] = "gpu"
-        rsc.pp.harmony_integrate(adata, key=batch_key)
+        ctx.metadata["harmony_theta"] = cfg_batch.harmony_theta
+        ctx.metadata["harmony_sigma"] = cfg_batch.harmony_sigma
+        ctx.metadata["harmony_max_iter"] = cfg_batch.harmony_max_iter
+        try:
+            rsc.pp.harmony_integrate(
+                adata,
+                key=batch_key,
+                theta=cfg_batch.harmony_theta,
+                sigma=cfg_batch.harmony_sigma,
+                max_iter_harmony=cfg_batch.harmony_max_iter,
+            )
+        except TypeError:
+            # Older rsc versions may not accept all kwargs — record and use
+            # library defaults rather than dropping the call.
+            ctx.metadata["harmony_extra_args_unsupported"] = True
+            rsc.pp.harmony_integrate(adata, key=batch_key)
         # Ensure float32 for downstream consistency
         adata.obsm["X_pca_harmony"] = np.asarray(
             adata.obsm["X_pca_harmony"], dtype=np.float32

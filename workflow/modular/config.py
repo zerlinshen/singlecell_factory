@@ -61,6 +61,12 @@ class BatchConfig:
 
     batch_key: str = "sample"
     method: str = "harmony"  # harmony, bbknn, combat, scanorama, scvi, mnn, fastmnn
+    # Harmony parameters (Korsunsky et al. 2019, Nat Methods). The defaults
+    # are the upstream library defaults; expose them in the manifest so
+    # cross-run drift in Harmony tuning is auditable.
+    harmony_theta: float = 2.0
+    harmony_sigma: float = 0.1
+    harmony_max_iter: int = 10
     scvi_max_epochs: int = 200
     scvi_n_latent: int = 30
     scvi_early_stopping: bool = True

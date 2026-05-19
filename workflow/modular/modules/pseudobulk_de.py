@@ -464,12 +464,30 @@ class PseudobulkDEModule:
         ia = meta[meta[cond_col] == ca].index
         ib = meta[meta[cond_col] == cb].index
         ma, mb = counts.loc[ia].values, counts.loc[ib].values
+
+        # MEDIUM-4 fix (2026-05-19): the previous implementation computed
+        # lfc as log2((mean(a)+1)/(mean(b)+1)) on raw pseudobulk counts,
+        # which is biased against samples with deeper sequencing depth.
+        # Normalize each pseudobulk to a per-sample CPM (counts per million)
+        # before averaging so lfc is library-size-corrected. The rank test
+        # itself is unaffected by per-sample monotone transforms, so the
+        # p-value path stays equivalent.
+        eps = 1.0
+        def _cpm(matrix: np.ndarray) -> np.ndarray:
+            totals = matrix.sum(axis=1, keepdims=True)
+            totals = np.where(totals > 0, totals, 1.0)
+            return matrix * 1e6 / totals
+
+        ma_cpm = _cpm(ma.astype(np.float64))
+        mb_cpm = _cpm(mb.astype(np.float64))
+
         genes, pvals, lfcs = [], [], []
         for j, g in enumerate(counts.columns):
             if MemoryGuard.abort_requested():
                 raise MemoryAbortError("watchdog abort during pseudobulk DE gene loop")
             va, vb = ma[:, j], mb[:, j]
-            lfc = np.log2((va.mean() + 1) / (vb.mean() + 1))
+            va_cpm, vb_cpm = ma_cpm[:, j], mb_cpm[:, j]
+            lfc = np.log2((va_cpm.mean() + eps) / (vb_cpm.mean() + eps))
             try:
                 _, p = test_fn(va, vb, **kw)
             except ValueError:

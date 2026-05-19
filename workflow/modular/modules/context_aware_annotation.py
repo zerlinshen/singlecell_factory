@@ -25,17 +25,20 @@ __references__ = {
         "journal": "Nucleic Acids Research",
         "year": "2023",
         "doi": "10.1093/nar/gkac947",
-        "description": "Primary marker DB for context-aware annotation routing",
-    },
-    "scTypeDB": {
-        "title": "Fully-automated and ultra-fast cell-type identification using specific marker combinations from single-cell transcriptomic data",
-        "authors": "Ianevski et al.",
-        "journal": "Nature Communications",
-        "year": "2022",
-        "doi": "10.1038/s41467-022-28803-w",
-        "description": "scType DB used for condition-specific sub-state detection",
+        "description": "Primary marker DB consumed by marker_db_loader; used here only as a DB source, not as a scoring method.",
     },
 }
+
+# Implementation note (2026-05-19 scientific code review):
+# - Cluster -> cell-type scoring is `mean(cluster_X[:, marker_idx])` followed
+#   by argmax with a tolerance tie-break. This is an in-house cluster-voting
+#   heuristic in the spirit of Tirosh et al. 2016, NOT the scType
+#   specificity-weighted scoring (Ianevski 2022). The previous reference to
+#   scTypeDB was removed because the implementation does not match that
+#   method.
+# - Substate detection uses `startswith()` string matching against cell-type
+#   names — this is a pragmatic in-house convention with no published
+#   precedent. It is intentionally simple; treat results as exploratory.
 
 # Default threshold for context validation warnings (AC-4)
 _DEFAULT_MISMATCH_THRESHOLD = 0.3

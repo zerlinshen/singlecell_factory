@@ -58,12 +58,26 @@ def _file_kind(path: Path) -> str:
 
 
 def _byte_mismatch_ratio(left: Path, right: Path) -> float:
-    a = left.read_bytes()
-    b = right.read_bytes()
-    max_len = max(len(a), len(b), 1)
-    overlap = min(len(a), len(b))
-    mismatches = sum(1 for i in range(overlap) if a[i] != b[i]) + abs(len(a) - len(b))
-    return mismatches / max_len
+    # HIGH fix (2026-05-19): vectorize the byte comparison. The previous
+    # Python comprehension over multi-MB buffers was O(n) at Python speed
+    # and slowed the gate from milliseconds to seconds per figure pair.
+    try:
+        import numpy as np  # type: ignore
+        a_arr = np.frombuffer(left.read_bytes(), dtype=np.uint8)
+        b_arr = np.frombuffer(right.read_bytes(), dtype=np.uint8)
+        max_len = max(a_arr.size, b_arr.size, 1)
+        overlap = min(a_arr.size, b_arr.size)
+        mismatches = int((a_arr[:overlap] != b_arr[:overlap]).sum()) + abs(a_arr.size - b_arr.size)
+        return mismatches / max_len
+    except Exception:
+        # numpy unavailable in the executing environment; fall back to the
+        # original behaviour. Kept identical to preserve numeric output.
+        a = left.read_bytes()
+        b = right.read_bytes()
+        max_len = max(len(a), len(b), 1)
+        overlap = min(len(a), len(b))
+        mismatches = sum(1 for i in range(overlap) if a[i] != b[i]) + abs(len(a) - len(b))
+        return mismatches / max_len
 
 
 def _pillow_rms(left: Path, right: Path) -> float | None:
@@ -233,6 +247,71 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+class _RegistryError(SystemExit):
+    pass
+
+
+def _overlay_registry_references(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Overlay `reference` paths from the suite-root figure parity registry.
+
+    The registry at `governance/figure_parity_references_<date>.json` is the
+    user-facing per-figure plan for curated reference images. The default
+    manifest only fills `produced` paths; references stay null until this
+    overlay copies them in.
+
+    HIGH fix (2026-05-19): a malformed registry must NOT silently degrade
+    to "no overlay" — that would leave the gate reporting
+    `conditional: reference_missing` per figure, which can pass under
+    `--allow-conditional` and mask a broken registry. On parse error, fail
+    fast. Also validate that each `reference` path resolves under the
+    canonical reference storage root.
+    """
+    suite_root = Path(__file__).resolve().parents[2]
+    governance = suite_root / "governance"
+    if not governance.is_dir():
+        return manifest
+    candidates = sorted(governance.glob("figure_parity_references_*.json"))
+    if not candidates:
+        return manifest
+    registry_path = candidates[-1]
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise _RegistryError(f"figure parity registry unreadable: {registry_path}: {exc}")
+    except json.JSONDecodeError as exc:
+        raise _RegistryError(f"figure parity registry not valid JSON: {registry_path}: {exc}")
+
+    allowed_root = Path("/home/zerlinshen/data/external/published_figures").resolve()
+    overlay: dict[str, str] = {}
+    seen_ids: set[str] = set()
+    for item in registry.get("entries", []):
+        item_id = item.get("id")
+        if not item_id:
+            raise _RegistryError(f"{registry_path}: entry missing `id`")
+        if item_id in seen_ids:
+            raise _RegistryError(f"{registry_path}: duplicate id {item_id!r}")
+        seen_ids.add(item_id)
+        ref = item.get("reference")
+        if not ref:
+            continue
+        ref_resolved = Path(ref).resolve()
+        try:
+            ref_resolved.relative_to(allowed_root)
+        except ValueError:
+            raise _RegistryError(
+                f"{registry_path}: reference {ref!r} for {item_id!r} must "
+                f"resolve under {allowed_root}"
+            )
+        overlay[item_id] = ref
+    if not overlay:
+        return manifest
+    for figure in manifest.get("figures", []):
+        ref = overlay.get(figure.get("id"))
+        if ref:
+            figure["reference"] = ref
+    return manifest
+
+
 def main() -> int:
     args = build_parser().parse_args()
     if args.manifest:
@@ -240,6 +319,7 @@ def main() -> int:
         base = args.manifest.parent
     else:
         manifest = _default_manifest()
+        manifest = _overlay_registry_references(manifest)
         base = Path.cwd()
     report = validate_manifest(
         manifest,

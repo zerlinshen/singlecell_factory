@@ -40,6 +40,17 @@ __references__ = {
 
 
 
+# Curated marker catalogue used ONLY when neither ctx.cfg.markers nor the
+# marker_db_loader provided a marker map. The authoritative path for any
+# scientific run is to populate `adata.uns["marker_db_index"]` via
+# `marker_db_loader` (which pins CellMarker 2.0 / PanglaoDB / CellTypist /
+# scTypeDB version strings into the run manifest). This dict is a tumor /
+# immune / stromal starter set assembled by hand from common single-cell
+# atlas conventions; it is NOT a versioned DB.
+#
+# When tuning markers for a new tissue or condition, prefer (a) configuring
+# `marker_db_loader` for that (tissue, condition) pair or (b) passing
+# `--markers-json` to the CLI rather than editing this dict.
 DEFAULT_MARKERS = {
     "Tumor epithelial": ["EPCAM", "KRT7", "KRT8", "KRT18", "KRT19", "MUC1"],
     "T cell": ["CD3D", "CD3E", "TRAC", "CD4", "CD8A", "IL7R"],

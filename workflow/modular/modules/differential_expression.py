@@ -81,6 +81,11 @@ class DifferentialExpressionModule:
         if method == "wilcoxon":
             rank_kwargs["tie_correct"] = True
 
+        # HIGH-3 fix (2026-05-19): make the actual test used + correction method
+        # explicit on both backends and record them in metadata so the contract
+        # validator can detect a silent fallback to a different statistic.
+        configured_corr_method = getattr(ctx.cfg, "de_correction", None) or "benjamini-hochberg"
+        de_test_used = method  # the canonical Wilcoxon/t-test choice
         use_gpu = gpu_available(ctx.cfg.gpu_mode) and method in ("wilcoxon", "t-test", "t-test_overestim_var")
         if use_gpu:
             try:
@@ -90,6 +95,7 @@ class DifferentialExpressionModule:
                     adata,
                     groupby="leiden",
                     method=method,
+                    corr_method=configured_corr_method,
                     **rank_kwargs,
                 )
                 ctx.metadata["de_backend"] = "gpu"
@@ -101,26 +107,29 @@ class DifferentialExpressionModule:
                 use_gpu = False
 
         if not use_gpu:
-            corr_method = getattr(ctx.cfg, "de_correction", None)
             markers = self._run_cpu_rank_genes_groups(
                 adata=adata,
                 method=method,
                 rank_kwargs=rank_kwargs,
                 n_genes=n_genes,
-                corr_method=corr_method if corr_method != "benjamini-hochberg" else None,
+                corr_method=configured_corr_method,
             )
             ctx.metadata["de_backend"] = "cpu"
-            if corr_method:
-                ctx.metadata["de_correction"] = corr_method
         elif has_api(sc, "get.rank_genes_groups_df"):
             markers = sc.get.rank_genes_groups_df(adata, group=None)
         else:
             # GPU wrote ranking state but scanpy accessor is unavailable in this environment.
+            # The fallback uses Welch t-test + manual BH on its own — record the swap.
+            logger.warning("scanpy get.rank_genes_groups_df unavailable; using Welch t-test fallback (HIGH-3)")
+            de_test_used = "welch_t_test_fallback"
             markers = self._fallback_rank_genes_groups_df(
                 adata=adata,
                 groupby="leiden",
                 n_genes=n_genes,
             )
+
+        ctx.metadata["de_test_actually_used"] = de_test_used
+        ctx.metadata["de_correction"] = configured_corr_method
         if "pvals_adj" not in markers.columns:
             markers["pvals_adj"] = 1.0
         if "logfoldchanges" not in markers.columns:

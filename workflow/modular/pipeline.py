@@ -696,6 +696,24 @@ def _run_parallel_appending(
             # Warn about structural changes that cannot be merged back.
             _warn_dropped_changes(mod_name, branch_ctx.adata, ctx.adata)
             # Merge metadata and module directory registrations.
+            # MEDIUM fix (2026-05-19): merge deterministically and warn on
+            # cross-module metadata key conflicts so a silent overwrite in
+            # parallel-appending tiers cannot produce non-reproducible
+            # run_manifest.json values. The outer iteration already runs
+            # in fixed `modules` order, so the *last writer* is
+            # deterministic, but we still want triage visibility.
+            conflicts = sorted(
+                k for k in branch_ctx.metadata
+                if k in ctx.metadata and ctx.metadata[k] != branch_ctx.metadata[k]
+            )
+            if conflicts:
+                logger.warning(
+                    "parallel-appending metadata key conflict in module %s: %s "
+                    "(last writer in modules-order wins)",
+                    mod_name,
+                    conflicts[:5],
+                )
+                ctx.metadata.setdefault("_parallel_metadata_conflicts", {})[mod_name] = conflicts
             ctx.metadata.update(branch_ctx.metadata)
             ctx._module_dirs.update(branch_ctx._module_dirs)
             # Flush any figures the branch produced.

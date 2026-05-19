@@ -7,11 +7,50 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import subprocess
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# 2026-05-19 CRITICAL fix: run-id and output-dir arguments come from the
+# command line and are used to construct filesystem paths. Validate them
+# against a strict allowlist + containment check before use so a typo or a
+# pathological argument cannot escape the project tree.
+_SAFE_RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:T-]{1,128}$")
+
+
+def _safe_run_id(value: str) -> str:
+    if not _SAFE_RUN_ID_PATTERN.match(value):
+        raise argparse.ArgumentTypeError(
+            f"run id {value!r} is not in the allowed character class "
+            f"[A-Za-z0-9._:T-] (max 128 chars)"
+        )
+    return value
+
+
+def _safe_output_dir(value: str) -> Path:
+    path = Path(value).resolve()
+    suite_root = Path(__file__).resolve().parents[2]
+    project_roots = (
+        Path("/home/zerlinshen/projects").resolve(),
+        suite_root,
+        Path("/tmp").resolve(),
+    )
+    if not any(_is_relative_to(path, root) for root in project_roots):
+        raise argparse.ArgumentTypeError(
+            f"output dir {path} must live under projects/, suite root, or /tmp"
+        )
+    return path
+
+
+def _is_relative_to(child: Path, parent: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
 
 import validate_nc2024_architecture_contract as nc_validator
 
@@ -75,6 +114,10 @@ def _sha256(path: Path) -> str:
 
 
 def _untracked_inventory(repo: Path) -> dict[str, object]:
+    # 2026-05-19 MEDIUM fix: cap per-file hashing at 50 MB. Untracked
+    # multi-GB AnnData / Zarr blobs were being SHA-hashed unconditionally,
+    # turning a few seconds of git status into minutes of disk I/O.
+    sha_size_cap = 50 * 1024 * 1024
     raw = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=repo, text=True)
     entries: list[dict[str, object]] = []
     for line in raw.splitlines():
@@ -84,11 +127,14 @@ def _untracked_inventory(repo: Path) -> dict[str, object]:
         path = repo / rel
         if not path.is_file():
             continue
-        entries.append({
-            "path": rel,
-            "bytes": path.stat().st_size,
-            "sha256": _sha256(path),
-        })
+        size = path.stat().st_size
+        entry: dict[str, object] = {"path": rel, "bytes": size}
+        if size <= sha_size_cap:
+            entry["sha256"] = _sha256(path)
+        else:
+            entry["sha256"] = None
+            entry["sha256_skipped_reason"] = f"file_above_{sha_size_cap}_byte_cap"
+        entries.append(entry)
     payload = "\n".join(f"{entry['path']}\t{entry['bytes']}\t{entry['sha256']}" for entry in entries)
     return {
         "count": len(entries),
@@ -362,12 +408,12 @@ def validate(args: argparse.Namespace) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--nc-project-root", type=Path, default=nc_validator.DEFAULT_PROJECT_ROOT)
-    parser.add_argument("--nc-run-id", default=nc_validator.DEFAULT_RUN_ID)
+    parser.add_argument("--nc-run-id", type=_safe_run_id, default=nc_validator.DEFAULT_RUN_ID)
     parser.add_argument("--cell-project-root", type=Path, default=DEFAULT_CELL_PROJECT_ROOT)
-    parser.add_argument("--cell-pipeline-run-id", default=DEFAULT_CELL_PIPELINE_RUN_ID)
-    parser.add_argument("--cell-evidence-run-id", default=DEFAULT_CELL_EVIDENCE_RUN_ID)
+    parser.add_argument("--cell-pipeline-run-id", type=_safe_run_id, default=DEFAULT_CELL_PIPELINE_RUN_ID)
+    parser.add_argument("--cell-evidence-run-id", type=_safe_run_id, default=DEFAULT_CELL_EVIDENCE_RUN_ID)
     parser.add_argument("--verify-sha", action="store_true")
-    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--output-dir", type=_safe_output_dir, default=None)
     args = parser.parse_args()
     print(json.dumps(validate(args), indent=2, sort_keys=True))
     return 0
