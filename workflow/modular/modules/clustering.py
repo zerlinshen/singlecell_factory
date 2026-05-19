@@ -173,11 +173,28 @@ class ClusteringModule:
             self._run_css(adata, cfg, ctx)
             use_gpu = False
         else:
-            use_gpu = gpu_available(ctx.cfg.gpu_mode)
-            engine = (
+            # F-2 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 7):
+            # `--clustering-engine=sparse_exact` is now a dedicated dispatch arm with
+            # strict input validation (raises if input is not sparse) and forced
+            # `svd_solver="arpack"` (no silent fallback to randomized SVD).
+            # sparse_exact is the CPU credibility-reference lane for Component C's
+            # benchmark; it does NOT route to GPU even when GPU is available.
+            _engine_pre_gpu = (
                 os.environ.get("SC_CLUSTERING_ENGINE", "").strip().lower()
                 or getattr(ctx.cfg, "clustering_engine", "auto")
             )
+            if _engine_pre_gpu == "sparse_exact":
+                self._run_sparse_exact(adata, cfg, ctx)
+                use_gpu = False
+                self._plot_umap_clusters(adata, ctx)
+                ctx.adata = adata
+                ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
+                ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
+                ctx.metadata["clustering_random_state"] = ctx.random_state
+                ctx.metadata["clustering_backend"] = "cpu_sparse_exact"
+                return
+            use_gpu = gpu_available(ctx.cfg.gpu_mode)
+            engine = _engine_pre_gpu
             _cp_policy = (
                 os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
                 or getattr(ctx.cfg, "checkpoint_policy", "full")
@@ -453,6 +470,98 @@ class ClusteringModule:
             or getattr(ctx.cfg, "checkpoint_policy", "full")
         )
         return policy == "full"
+
+    def _run_sparse_exact(self, adata, cfg, ctx) -> None:
+        """F-2 dedicated sparse-exact CPU clustering lane (Principle 7).
+
+        Contract:
+        - Input MUST be sparse on entry. If not, raise RuntimeError loudly —
+          there is no silent dense fallback. The lane's name promises exactness
+          on sparse data; we honor it at the gate rather than degrade to
+          ``svd_solver="randomized"`` and pretend it is still "exact".
+        - PCA solver is forced to ``arpack`` (scipy ARPACK iterative
+          Lanczos-bidiagonalization eigensolver; the scanpy/scientific-Python
+          canonical sparse exact SVD method, peer-reviewed since Lehoucq et al.
+          1998). No randomized SVD on the principal stage.
+        - Neighbors use scanpy ``sc.pp.neighbors`` (true KNN via pynndescent /
+          UMAP), Leiden uses ``sc.tl.leiden(flavor="igraph", directed=False)``
+          on the true graph — Wolf 2018 + Traag 2019 reference path.
+        - Full provenance is recorded in ``ctx.metadata`` so the
+          ``lane_manifest.json`` contract (Plan G-C0) can attest the lane
+          identity without inspecting executor code.
+        """
+        is_sparse_in = sparse.issparse(adata.X)
+        if not is_sparse_in:
+            raise RuntimeError(
+                "_run_sparse_exact requires a sparse input matrix; received "
+                f"{type(adata.X).__name__}. Either pass a sparse AnnData or "
+                "select --clustering-engine=auto to use the standard dispatch. "
+                "Silent densification + randomized SVD is forbidden under "
+                "Plan F-2 / Principle 7 (no no-op functionality). "
+                "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
+            )
+
+        sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
+        sc.pp.log1p(adata)
+        if adata.raw is None and self._should_preserve_raw(ctx):
+            adata.raw = adata
+        # F-2: keep sparse — _materialize_matrix is sparse-safe for sparse inputs.
+        adata.X = self._materialize_matrix(adata.X)
+        if not sparse.issparse(adata.X):
+            raise RuntimeError(
+                "_run_sparse_exact lost sparsity after _materialize_matrix; "
+                "input was sparse on entry but is dense after materialization. "
+                "This indicates a contract regression in _materialize_matrix."
+            )
+        if cfg.scale_data:
+            # zero_center=False to preserve sparsity (scanpy.pp.scale contract).
+            sc.pp.scale(adata, max_value=10, zero_center=False)
+        sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
+        sc.tl.pca(
+            adata,
+            n_comps=cfg.n_pcs,
+            svd_solver="arpack",  # F-2: forced; no randomized fallback.
+            mask_var="highly_variable",
+            random_state=cfg.random_state,
+        )
+        self._plot_pca_variance(adata, ctx, cfg.n_pcs)
+        get_or_compute_neighbors(
+            adata,
+            backend_id="scanpy",
+            method="umap",
+            metric="euclidean",
+            n_pcs=cfg.n_pcs,
+            n_neighbors=cfg.n_neighbors,
+            use_rep="X_pca",
+            knn=True,
+            random_state=cfg.random_state,
+            compute_fn=lambda: sc.pp.neighbors(
+                adata,
+                n_neighbors=cfg.n_neighbors,
+                n_pcs=cfg.n_pcs,
+                use_rep="X_pca",
+                method="umap",
+            ),
+        )
+        sc.tl.umap(adata, random_state=cfg.random_state)
+        sc.tl.leiden(
+            adata,
+            resolution=cfg.leiden_resolution,
+            flavor="igraph",
+            directed=False,
+            random_state=cfg.random_state,
+        )
+
+        # F-2 provenance — lane_manifest.json (G-C0) reads these.
+        ctx.metadata["clustering_engine"] = "sparse_exact"
+        ctx.metadata["clustering_lane"] = "scanpy_cpu_sparse_exact"
+        ctx.metadata["pca_solver"] = "arpack"
+        ctx.metadata["pca_input_was_sparse"] = True
+        ctx.metadata["neighbors_backend"] = "scanpy_umap_true_knn"
+        ctx.metadata["leiden_backend"] = "igraph_cpu"
+        ctx.metadata["leiden_flavor"] = "igraph"
+        ctx.metadata["leiden_directed"] = False
+        ctx.metadata["sparse_exact_principle_8_compatible"] = True
 
     def _run_cpu(self, adata, cfg, ctx) -> None:
         """Standard scanpy CPU clustering pipeline."""

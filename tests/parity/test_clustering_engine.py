@@ -162,3 +162,138 @@ def test_clustering_default_large_uses_cpu_path(synthetic_clustered_adata, tmp_p
     module = ClusteringModule()
     use_css = module._should_use_css(ctx, adata)
     assert use_css is False
+
+
+# ----------------------------------------------------------------------------
+# F-2 contract tests (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md,
+# Principle 7): --clustering-engine=sparse_exact is now a dedicated CPU-only
+# dispatch arm with strict input validation + forced arpack SVD + provenance.
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
+def test_sparse_exact_raises_on_dense_input(synthetic_clustered_adata, tmp_path):
+    """F-2: _run_sparse_exact must reject dense input (no silent randomized SVD).
+
+    Pre-F-2 the flag fell through to _run_cpu which silently used
+    svd_solver="randomized" for dense input — a mild compromise that the
+    flag name "sparse_exact" did not advertise. Post-F-2 the dispatch arm
+    raises loudly so the flag honors its name (Principle 7).
+    """
+    import numpy as np
+    from anndata import AnnData
+    from workflow.modular.modules.clustering import ClusteringModule
+
+    # Dense input.
+    adata_dense = AnnData(np.asarray(synthetic_clustered_adata.X.todense()))
+    adata_dense.obs = synthetic_clustered_adata.obs.copy()
+    adata_dense.var = synthetic_clustered_adata.var.copy()
+
+    ctx = _make_minimal_ctx(adata_dense, scale_mode="standard", tmp_path=tmp_path)
+    module = ClusteringModule()
+    with pytest.raises(RuntimeError, match="sparse input matrix"):
+        module._run_sparse_exact(adata_dense, ctx.cfg.clustering, ctx)
+
+
+@pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
+def test_sparse_exact_records_provenance_metadata(synthetic_clustered_adata, tmp_path, monkeypatch):
+    """F-2: _run_sparse_exact must record full provenance for lane_manifest.json (G-C0).
+
+    Heavy scanpy numerical steps (HVG, PCA, neighbors, UMAP, Leiden) are
+    stubbed to no-ops because scanpy's HVG/Wilcoxon paths invoke numba JIT
+    that does not compile on this tiny synthetic fixture in some host
+    environments. The contract being tested is the F-2 provenance-recording
+    contract, not the numerical correctness of scanpy on a 6-cell fixture.
+    """
+    import numpy as np
+    import pandas as pd
+    import scanpy as sc
+    from workflow.modular.modules.clustering import ClusteringModule
+    from workflow.modular.modules import clustering as clustering_mod
+
+    adata = synthetic_clustered_adata.copy()
+    ctx = _make_minimal_ctx(adata, scale_mode="standard", tmp_path=tmp_path)
+    module = ClusteringModule()
+
+    # Stub the heavy scanpy / scipy steps to no-ops while preserving the
+    # contract that the test cares about: input validation + provenance.
+    monkeypatch.setattr(sc.pp, "normalize_total", lambda a, **kw: None)
+    monkeypatch.setattr(sc.pp, "log1p", lambda a, **kw: None)
+    monkeypatch.setattr(sc.pp, "scale", lambda a, **kw: None)
+    def _fake_hvg(a, **kw):
+        a.var["highly_variable"] = True
+    monkeypatch.setattr(sc.pp, "highly_variable_genes", _fake_hvg)
+    def _fake_pca(a, **kw):
+        a.obsm["X_pca"] = np.zeros((a.n_obs, kw.get("n_comps", 20)), dtype=np.float32)
+    monkeypatch.setattr(sc.tl, "pca", _fake_pca)
+    monkeypatch.setattr(module, "_plot_pca_variance", lambda a, c, n: None)
+    def _fake_get_or_compute(*a, **kw):
+        kw.get("compute_fn", lambda: None)()
+    monkeypatch.setattr(clustering_mod, "get_or_compute_neighbors", _fake_get_or_compute)
+    monkeypatch.setattr(sc.pp, "neighbors", lambda a, **kw: None)
+    monkeypatch.setattr(sc.tl, "umap", lambda a, **kw: None)
+    def _fake_leiden(a, **kw):
+        a.obs["leiden"] = pd.Categorical(["0"] * a.n_obs)
+    monkeypatch.setattr(sc.tl, "leiden", _fake_leiden)
+
+    module._run_sparse_exact(adata, ctx.cfg.clustering, ctx)
+
+    # F-2 provenance contract — lane_manifest.json reads these keys.
+    assert ctx.metadata.get("clustering_engine") == "sparse_exact"
+    assert ctx.metadata.get("clustering_lane") == "scanpy_cpu_sparse_exact"
+    assert ctx.metadata.get("pca_solver") == "arpack", (
+        "F-2 violation: pca_solver must be 'arpack' (forced); no randomized SVD silently."
+    )
+    assert ctx.metadata.get("pca_input_was_sparse") is True
+    assert ctx.metadata.get("neighbors_backend") == "scanpy_umap_true_knn"
+    assert ctx.metadata.get("leiden_backend") == "igraph_cpu"
+    assert ctx.metadata.get("leiden_flavor") == "igraph"
+    assert ctx.metadata.get("sparse_exact_principle_8_compatible") is True
+
+
+@pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
+def test_sparse_exact_dispatch_routes_through_run_impl(synthetic_clustered_adata, tmp_path, monkeypatch):
+    """F-2: SC_CLUSTERING_ENGINE=sparse_exact end-to-end dispatch routes to _run_sparse_exact.
+
+    Verifies the dispatch site in _run_impl correctly hands off to the new
+    sparse_exact arm (not _run_cpu) and that the early-return path populates
+    the standard downstream metadata (n_clusters, clustering_backend). The
+    sparse_exact arm itself is fully stubbed to avoid the numba JIT hit on
+    the synthetic fixture; what's tested here is the dispatch routing.
+    """
+    import pandas as pd
+    from workflow.modular.modules.clustering import ClusteringModule
+
+    monkeypatch.setenv("SC_CLUSTERING_ENGINE", "sparse_exact")
+    adata = synthetic_clustered_adata.copy()
+    ctx = _make_minimal_ctx(adata, scale_mode="standard", tmp_path=tmp_path)
+    ctx.random_state = 0
+
+    module = ClusteringModule()
+    call_log = []
+
+    def stub_sparse_exact(adata, cfg, ctx):
+        call_log.append("sparse_exact")
+        adata.obs["leiden"] = pd.Categorical(["0"] * adata.n_obs)
+        ctx.metadata["clustering_engine"] = "sparse_exact"
+
+    def stub_cpu(adata, cfg, ctx):
+        call_log.append("cpu")
+        adata.obs["leiden"] = pd.Categorical(["0"] * adata.n_obs)
+
+    def stub_gpu(adata, cfg, ctx):
+        call_log.append("gpu")
+        adata.obs["leiden"] = pd.Categorical(["0"] * adata.n_obs)
+
+    monkeypatch.setattr(module, "_run_sparse_exact", stub_sparse_exact)
+    monkeypatch.setattr(module, "_run_cpu", stub_cpu)
+    monkeypatch.setattr(module, "_run_gpu", stub_gpu)
+    monkeypatch.setattr(ClusteringModule, "_plot_umap_clusters", lambda self, a, c: None)
+
+    module._run_impl(ctx)
+
+    assert call_log == ["sparse_exact"], (
+        f"F-2 dispatch violation: call_log={call_log}. Expected sparse_exact, not CPU/GPU."
+    )
+    assert ctx.metadata.get("clustering_backend") == "cpu_sparse_exact"
+    assert ctx.metadata.get("clustering_engine") == "sparse_exact"
