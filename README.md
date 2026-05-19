@@ -6,6 +6,18 @@ AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That
 file is the onboarding index; `AGENTS.md` / `CLAUDE.md` remain runtime-specific
 authorities, and `PROTOCOL.md` remains the deep operational guide.
 
+## Bioinformatics Research Pipeline suite
+
+Physical suite layout: this repository now lives at `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/`. The historical path `/home/zerlinshen/singlecell_factory` is retired; validators, project manifests, and bridge contracts must use canonical suite paths or repo-relative discovery.
+
+**Bioinformatics Research Pipeline** is the umbrella suite name for the three
+governed repositories under `/home/zerlinshen/Bioinformatics Research Pipeline/`: `singlecell_factory`,
+`r_multiomics_factory`, and `plotting_factory`. This repo remains the default
+global control plane: Python-heavy upstream single-cell processing, AnnData
+truth, bundle export, cross-factory validation, and governance records. The
+suite name does not physically merge git histories; GitHub publication should
+keep each repository's history unless an explicit monorepo migration is planned.
+
 A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 22 optional analysis modules + automatic dependency resolution + GPU acceleration + categorized output**.
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells and the NC2024 NSCLC E-MTAB-13526 cohort at full 828k-cell scale.
@@ -60,15 +72,16 @@ project directory under `${PROJECTS_ROOT}` (default `/home/zerlinshen/projects/`
 
 ```
 /home/zerlinshen/
-├── singlecell_factory/        # TOOL (Python). No output/ subtree after migration.
-│   └── contracts/             # CANONICAL: bundle_schema.yaml + figure_bundle_schema.yaml live here
-├── r_multiomics_factory/      # TOOL (R-native analysis). Trifurcation rename applied 2026-05-18 (see RENAME_NOTE.md).
-│   └── contracts/             # VENDORED copies of canonical schemas (byte-identical)
-├── plotting_factory/          # TOOL (dual-language plotting). python/ + r/ subtrees; theme/schema/contracts.
-│   └── contracts/             # VENDORED copy of figure_bundle_schema.yaml (byte-identical)
-├── projects-bootstrap/        # Standalone bootstrap tool (outside all factories)
-│   └── omc-new-project        # Creates new projects under PROJECTS_ROOT
-└── projects/                  # ${PROJECTS_ROOT} — all scientific artifacts live here
+├── Bioinformatics Research Pipeline/    # canonical suite root; no legacy repo symlinks
+│   ├── singlecell_factory/              # TOOL (Python). No output/ subtree after migration.
+│   │   └── contracts/                   # CANONICAL: bundle_schema.yaml + figure_bundle_schema.yaml live here
+│   ├── r_multiomics_factory/            # TOOL (R-native/spatial/multi-omics analysis).
+│   │   └── contracts/                   # VENDORED copies of canonical schemas (byte-identical)
+│   └── plotting_factory/                # TOOL (dual-language plotting). python/ + r/ subtrees; theme/schema/contracts.
+│       └── contracts/                   # VENDORED copy of figure_bundle_schema.yaml (byte-identical)
+├── projects-bootstrap/                  # Standalone bootstrap tool (outside all factories)
+│   └── omc-new-project                  # Creates new projects under PROJECTS_ROOT
+└── projects/                            # ${PROJECTS_ROOT} — all scientific artifacts live here
     └── <project-id>/
         ├── project.yaml       # factory pins (sha, dirty, diff_sha256)
         ├── inputs/            # symlinks to /data/raw/ — do not copy large files
@@ -136,7 +149,61 @@ user-approved step after dry-run review. Migration scripts live at
 `scripts/migration_inventory.py` and `scripts/migration_apply.py` (default
 dry-run; see `scripts/migration_README.md` for the operator runbook).
 
-Sibling repo: `/home/zerlinshen/r_multiomics_factory/`
+Sibling repo: `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/`
+
+
+### Scratch run note (2026-05-19)
+
+`results/test_20260519_031254/` is an empty local smoke-test scratch directory
+and is not a governance evidence artifact. Current validated project-root
+evidence remains under `/home/zerlinshen/projects/...` and the governance record
+listed below.
+
+### Final two-real-dataset bridge validation (2026-05-18)
+
+The current end-to-end governance evidence for the three-factory split is:
+
+- Governance report: `ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md`
+- Machine-readable report: `ops/governance_records/2026-05-18-two-real-dataset-final-validation/two_real_dataset_final_validation.json`
+- NC2024 project run: `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/` (`5281 x 19504`, P15_T1 structure/module validation scope)
+- Cell/Trevino linked pipeline run: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/` (`55653 x 25519`, bridge-validation scope)
+- Cell/Trevino human-facing reproduction evidence run: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/` (`conditional` public-resource scientific gate)
+
+`python scripts/validate_two_realdata_final.py --verify-sha` is the current
+no-rerun control-plane gate for this two-real-dataset bridge validation. It
+validates Python run manifests/module status, project-root R bundles, R output
+directories, bridge symlinks, and the Cell/Trevino paper-evidence quality gate.
+Scientific boundaries remain explicit: NC2024 is not full article-scale cohort
+truth, and Cell/Trevino is not raw FASTQ/fragments/BPNet exact parity.
+
+### Owner-by-primary-output governance
+
+The three-factory governance rule is **owner-by-primary-output**.
+`singlecell_factory` remains the default global control plane for Python-heavy
+single-cell upstream work and cross-factory validation. `r_multiomics_factory`
+owns R-heavy/spatial primary scientific truth when R workflows produce the
+primary data objects, statistics, and biological interpretation.
+`plotting_factory` is a presentation-only plotting surface: it owns color,
+layout, theme, rendering helpers, and figure schema, but `plotting_factory` must
+not own biological conclusions. See
+`docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md`.
+
+### Final hardening gates (2026-05-18)
+
+Three post-validation gates now protect the pipeline before future merge/report claims:
+
+- **clean-room minimal real-data gate** — `python scripts/run_cleanroom_minimal_realdata.py` creates an isolated temporary workspace, links the current NC2024 and Cell/Trevino project roots as read-only inputs, and reruns the no-rerun validators from that workspace. This is a fresh control-plane rerun, not a raw FASTQ/fragments/BPNet recomputation.
+- **figure parity gate** — `python scripts/validate_figure_parity_gate.py --allow-conditional` verifies key produced R figures, compares PNG/PDF references when registered, and records missing paper/process-data references as explicit conditional gaps instead of silently passing.
+- **CI governance gate** — `python scripts/validate_ci_governance.py` checks schema/output/doc/workflow synchronization for bundle export, R plotting, validators, README, and protocol surfaces. The GitHub workflow `.github/workflows/factory-governance.yml` wires these checks to focused pytest coverage.
+
+Recommended local hardening command set:
+
+```bash
+python scripts/validate_ci_governance.py
+python scripts/validate_figure_parity_gate.py --allow-conditional
+python scripts/run_cleanroom_minimal_realdata.py
+pytest --no-cov -q tests/test_pipeline_hardening_gates.py tests/test_two_realdata_final_validator.py tests/test_nc2024_architecture_contract.py
+```
 
 ### Remote Governance Control Plane
 
@@ -348,15 +415,18 @@ large R plotting/reporting handoff separate from full-object computation and
 prevents sidecar drift.
 
 **NC2024 architecture validation** — run
-`python3 scripts/validate_nc2024_architecture_contract.py` for a no-rerun
-controller-validation smoke. It checks current v2 run directories, r_bundle
-manifests, run-ledger entries, and bridge symlinks without opening the 33G H5ADs.
-Use `--verify-sha` when you specifically want bundle file hashing.
+`python3 scripts/validate_nc2024_architecture_contract.py --verify-sha` for a
+no-rerun controller-validation smoke against the current project-root source of
+truth (`/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`).
+It checks the run-root manifest, producer-native Python manifest/module status,
+project-owned `python/bundle/`, project-owned `r/` outputs, and bridge symlinks
+without opening the large H5AD. Use `scripts/validate_two_realdata_final.py` when
+the Cell/Trevino bridge evidence must be checked in the same gate.
 
 ## Current Operational Defaults For NC2024-Style Full-Cohort Runs
 
 - Read run memory first:
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
 - Both operating modes are valid:
   - operate directly in this remote repo for compute, pipeline execution,
     run triage, and remote R/reporting work
@@ -369,48 +439,48 @@ Use `--verify-sha` when you specifically want bundle file hashing.
 - Use direct `massive` for debug and recovery work.
 - Use controller `large -> massive` only for orchestration validation.
 - The canonical prepared input is:
-  - `/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr`
 - Historical stage-1 direct/controller success runs from `2026-04-23` were
   superseded for storage governance and then deleted after metadata archival:
   - archive:
-    `/home/zerlinshen/singlecell_factory/ops/cleanup_records/nc2024_pre_extended_real_run_20260424T051809Z`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/cleanup_records/nc2024_pre_extended_real_run_20260424T051809Z`
   - deleted direct success:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO_20260423_031222`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_CLUSTER_FIX_AUTO_20260423_031222`
   - deleted controller-fallback success:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_AUTO_20260423_035552`
 - The retained fresh stage-1 evidence run is:
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329`
 - The current clean full-cohort rerun source of truth is:
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652`
   - launch log:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO.launch.log`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO.launch.log`
   - result summary: `810218 x 30374`, `33G` final H5AD, all requested
     modules `ok`, and pipeline-native `pseudobulk_de = ok/completed`
   - row-level reconciliation:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652/module_reconciliation.tsv`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652/module_reconciliation.tsv`
   - remote R report bundle:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652/r_plots/phase5_readable_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_RERUN_ALL_ELIGIBLE_AUTO_20260424_193652/r_plots/phase5_readable_20260424`
 - The earlier extended full-cohort real-run is retained as predecessor
   evidence, not the current source of truth:
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003`
   - launch log:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.launch.log`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO.launch.log`
   - final object:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/final_adata.h5ad`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/final_adata.h5ad`
   - result summary: `810218 x 30374`, `33G` final H5AD, `20 ok` modules plus
     one original `pseudobulk_de` failure row recovered post-run from
     `final_adata.h5ad`
   - recovery outputs:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/pseudobulk_de_recovery`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/pseudobulk_de_recovery`
   - remote R report bundle:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/r_plots/extended_real_run_main_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/r_plots/extended_real_run_main_20260424`
 - `2026-04-25` methodology / optimization status:
   - authoritative audit:
-    `/home/zerlinshen/singlecell_factory/ops/nc2024_methodology_audit/AUDIT_2026-04-25.md`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/nc2024_methodology_audit/AUDIT_2026-04-25.md`
   - paper-aligned launcher:
-    `/home/zerlinshen/singlecell_factory/scripts/run_nc2024_paper_aligned_20260425.sh`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/scripts/run_nc2024_paper_aligned_20260425.sh`
   - sparse-exact exploratory launcher:
-    `/home/zerlinshen/singlecell_factory/scripts/run_nc2024_full_cohort_sparse_exact_20260425.sh`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/scripts/run_nc2024_full_cohort_sparse_exact_20260425.sh`
   - important changes: `sparse_exact` clustering path, densify guards,
     paper-aligned Scrublet/Harmony/Leiden/DE defaults, tumor-vs-background /
     healthy `--cohort-subset`, R bundle v2 subprocess contract tests, and
@@ -438,13 +508,13 @@ Use `--verify-sha` when you specifically want bundle file hashing.
 - R plotting/reporting for large NC2024 outputs is remote-side:
   - R runtime: `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`
   - legacy R runtime retained for rollback: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
-  - bridge scripts: `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/scripts/`
+  - bridge scripts: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/bridges/local_r_pipeline_macbook/scripts/`
   - historical note: the bridge folder name still says `local_r_pipeline_macbook`, but current operation is remote-first.
   - preferred command:
     ```bash
     bash bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh \
-      /home/zerlinshen/singlecell_factory/results/<run> \
-      /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+      /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run> \
+      /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run>/r_plots/main \
       cell_type leiden
     ```
   - bridge controls for prettier/high-throughput remote plots:
@@ -452,8 +522,8 @@ Use `--verify-sha` when you specifically want bundle file hashing.
     R_PLOT_THREADS=8 \
     R_BUNDLE_MARKERS=ELF3,EPCAM,KRT8,KRT18,PTPRC,CD3E,LYZ,MS4A1,NKG7 \
     bash bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh \
-      /home/zerlinshen/singlecell_factory/results/<run> \
-      /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+      /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run> \
+      /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run>/r_plots/main \
       cell_type leiden 200000
     ```
   - reuse guard: the wrapper reuses a bundle only when source paths match,
@@ -462,7 +532,7 @@ Use `--verify-sha` when you specifically want bundle file hashing.
     `R_BUNDLE_OBSM` requests match, and the R validator passes file SHA256
     checks.
   - plotting entry point: `PLOT_SCRIPT` defaults to
-    `/home/zerlinshen/r_multiomics_factory/scripts/plot_remote_bundle_large.R`,
+    `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/scripts/plot_remote_bundle_large.R`,
     the upstream v1/v2-aware plotting script.
   - parameter contract: `R_BUNDLE_OBS_COLS` and `R_BUNDLE_OBSM` are additive,
     not replacement controls. The wrapper always keeps selected `group_by`,
@@ -486,7 +556,7 @@ Use `--verify-sha` when you specifically want bundle file hashing.
     `harmony`, `BiocManager`, `R.utils`, `zellkonverter`, `remotes`, and
     `arrow`
   - validation artifact:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/r_env_dependency_smoke_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/r_env_dependency_smoke_20260424`
   - validation used the existing manifest-backed `r_bundle`, sampled `100000`
     cells for raster UMAP, generated `pheatmap` and `ComplexHeatmap` outputs,
     and opened `final_adata.h5ad` via `hdf5r` without converting the full object
@@ -496,15 +566,15 @@ Use `--verify-sha` when you specifically want bundle file hashing.
     through old `spatstat` requirements. Use `zellkonverter`/`hdf5r` for small
     H5AD bridge checks and the compact bundle for NC2024-scale plotting.
   - bridge code-review hardening from `2026-04-24T04:10:07Z` produced:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_export_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_export_20260424`
     and verified reuse at:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_reuse_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_reuse_20260424`
   - Ralph follow-up at `2026-04-24T04:15:10Z` refreshed the canonical
     `r_bundle` itself with the stricter manifest keys and then verified default
     wrapper reuse:
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_refresh_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_refresh_20260424`
     and
-    `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_reuse_20260424`
+    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_reuse_20260424`
 - Artifact inventory cleanup from `2026-04-24T04:50:00Z` used
   `execution_mode=verification_cleanup`, not a pipeline rerun:
   - preserved canonical prepared input, prior successful direct/controller
@@ -564,10 +634,10 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 - One-command verification + regeneration wrapper:
   - `bash scripts/verify_nc2024_subtype_checkpoint_audit.sh`
 - Current canonical example inputs:
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/luad/cell_communication/cell_communication_liana.csv`
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/lusc/cell_communication/cell_communication_liana.csv`
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_adenocarcinoma_checkpoint_top20.csv`
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_squamous_cell_carcinoma_checkpoint_top20.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/luad/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/lusc/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_adenocarcinoma_checkpoint_top20.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_squamous_cell_carcinoma_checkpoint_top20.csv`
 - This lane is intended to answer a paper-facing summary question, not to replace the full baseline or to silently upgrade the checkpoint verdict to `matched`.
 
 
@@ -688,7 +758,7 @@ singlecell_factory/
 ## Installation
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 conda env create -f environment.yml
 conda activate sc10x
 export MPLCONFIGDIR=$PWD/.mplconfig
@@ -1009,9 +1079,9 @@ That means:
 
 A remote R plotting/report workflow is kept in two forms:
 - Bridge mirror inside singlecell_factory:
-  - `/home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook/`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/bridges/local_r_pipeline_macbook/`
 - Recommended independent remote R workspace:
-  - `/home/zerlinshen/r_multiomics_factory/`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/`
 
 Rationale:
 - `singlecell_factory` should remain the main compute/analysis engine for remote single-cell workflows.
@@ -1020,7 +1090,7 @@ Rationale:
 
 Intended use:
 - Use the bridge mirror inside `singlecell_factory` when tight co-location with pipeline outputs is convenient.
-- Use `/home/zerlinshen/r_multiomics_factory/` as the preferred long-term home for broader R analysis and figure workflows.
+- Use `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/` as the preferred long-term home for broader R analysis and figure workflows.
 - Use compact manifest-backed bundles rather than forcing direct `.h5ad` conversion in R for NC2024-scale cohorts.
 - Keep Mac-side work focused on reviewing and organizing the remote-generated figures/reports.
 
@@ -1219,9 +1289,15 @@ If `--transcriptome-dir` is set, `genes.gtf(.gz)` is auto-discovered from:
 `<transcriptome-dir>/genes/genes.gtf(.gz)` (or `<transcriptome-dir>/genes.gtf(.gz)`).
 You can still pass `--velocity-gtf` explicitly to override auto-discovery.
 
-## Output Structure
+## Legacy Output Structure (deprecated without `--project-root`)
 
-Each run creates an independent timestamped folder under `--output-dir` (CLI default: `/home/zerlinshen/singlecell_factory/results`):
+Current governed runs must use `--project-root` and write scientific artifacts to
+`/home/zerlinshen/projects/<project-id>/runs/<run-id>/`. The older `--output-dir`
+layout below is retained only for legacy compatibility and local scratch/smoke
+work; do not cite it as the canonical project-root layout.
+
+Each legacy run creates an independent timestamped folder under `--output-dir`
+(CLI default: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results`):
 
 ```
 <output-dir>/<project>_<timestamp>/
@@ -1258,7 +1334,7 @@ Current module output folders (as implemented):
 - `tumor_microenvironment`: `tme_scores_per_cell.csv`, `tme_scores_per_cluster.csv`, `checkpoint_expression.csv`, `tme_cyt_umap.png`, `tme_tis_umap.png`
 - `validate_cbioportal`: `cbioportal_mutation_summary.csv`, `cbioportal_validation_report.json`
 
-Each run is fully independent. Multiple runs accumulate under `results/`:
+In legacy mode only, each run is fully independent and multiple runs accumulate under `results/`:
 
 ```
 results/
@@ -1276,7 +1352,7 @@ results/
 | `--project` | Run name (used in output directory naming) |
 | `--sample-root` | Dataset root directory |
 | `--outs-dir` | Explicit path to Cell Ranger `filtered_feature_bc_matrix` (default: `<sample-root>/outs/filtered_feature_bc_matrix`) |
-| `--output-dir` | Output root (default: `/home/zerlinshen/singlecell_factory/results`) |
+| `--output-dir` | Output root (default: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results`) |
 | `--optional-modules` | Comma-separated module list (dependencies auto-included) |
 | `--paper-spec-json` | JSON spec for paper-driven provenance + figure reproduction checks |
 | `--paper-repro-strict` | Fail run when paper_repro has unresolved metadata/figure checks |

@@ -8,10 +8,10 @@ fi
 
 SCALE_MODE="$1"
 PROJECT_NAME="$2"
-RAW_ROOT="/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526"
+RAW_ROOT="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/nc2024_nsclc_emtab13526"
 SAMPLE_ROOT="${RAW_ROOT}/full_cohort"
-RESULTS="/home/zerlinshen/singlecell_factory/results"
-REPO_ROOT="/home/zerlinshen/singlecell_factory"
+RESULTS="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results"
+REPO_ROOT="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory"
 CONDA_RUN="/home/zerlinshen/conda/bin/conda run -n sc_gpu"
 PROJECT_LOG="${RESULTS}/${PROJECT_NAME}.launch.log"
 BEFORE_FILE="$(mktemp)"

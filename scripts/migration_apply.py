@@ -28,8 +28,8 @@ from pathlib import Path
 
 INVENTORY_CSV = Path("/home/zerlinshen/.omc/state/migration_manifest.csv")
 PROJECTS_ROOT = Path(os.environ.get("PROJECTS_ROOT", "/home/zerlinshen/projects"))
-FACTORY_PYTHON = Path("/home/zerlinshen/singlecell_factory")
-FACTORY_R = Path("/home/zerlinshen/r_multiomics_factory")
+FACTORY_PYTHON = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
+FACTORY_R = Path("/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory")
 CONTRACTS_SCHEMA_PY = FACTORY_PYTHON / "contracts" / "bundle_schema.yaml"
 CONTRACTS_SCHEMA_R = FACTORY_R / "contracts" / "bundle_schema.yaml"
 

@@ -24,7 +24,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO = Path("/home/zerlinshen/singlecell_factory")
+REPO = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
 MODULES_DIR = REPO / "workflow" / "modular" / "modules"
 SCHEMA_PATH = REPO / "ops" / "run_ledger" / "schema" / "wave5.schema.json"
 LEDGER_DIR = REPO / "ops" / "run_ledger"

@@ -9,7 +9,7 @@
 This folder name is historical. Despite `local_r_pipeline_macbook` in the path,
 the current maintained plotting/reporting workflow runs on the remote server.
 
-- Remote root: `/home/zerlinshen/singlecell_factory`
+- Remote root: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
 - Remote R runtime: `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`
 - Legacy rollback runtime: `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript`
 - Remote Python runtime for bundle export: `/home/zerlinshen/conda/bin/conda run -n sc_gpu`
@@ -40,7 +40,7 @@ verified packages include:
 
 Validation artifact:
 
-- `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/r_env_dependency_smoke_20260424`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/r_env_dependency_smoke_20260424`
 
 That smoke test used the existing manifest-backed NC2024 `r_bundle`, read all
 `810218` rows of metadata/UMAP/marker bundle data, plotted a `100000`-cell
@@ -76,7 +76,7 @@ Key controls:
   bundle. The wrapper always keeps `X_umap` and `X_pca` so plotting and reuse
   validation keep their required stems.
 - `PLOT_SCRIPT`: R plotting script used after bundle validation. Default:
-  `/home/zerlinshen/r_multiomics_factory/scripts/plot_remote_bundle_large.R`,
+  `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/scripts/plot_remote_bundle_large.R`,
   which is the v1/v2-aware upstream plotting entry point.
 - `FORCE_R_BUNDLE_EXPORT=1`: force bundle regeneration even if the reuse guard
   passes.
@@ -84,12 +84,12 @@ Key controls:
 Example:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/bridges/local_r_pipeline_macbook
 R_PLOT_THREADS=8 \
 R_BUNDLE_MARKERS=ELF3,EPCAM,KRT8,KRT18,PTPRC,CD3E,LYZ,MS4A1,NKG7 \
 bash scripts/run_remote_bundle_plot.sh \
-  /home/zerlinshen/singlecell_factory/results/<run> \
-  /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+  /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run> \
+  /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run>/r_plots/main \
   cell_type leiden 200000
 ```
 
@@ -116,13 +116,13 @@ Seurat conversion of the NC2024 object.
 Latest bridge hardening validation:
 
 - export + prettier plot smoke:
-  `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_export_20260424`
+  `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_export_20260424`
 - validated reuse smoke:
-  `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_reuse_20260424`
+  `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_pretty_reuse_20260424`
 - canonical default-bundle refresh:
-  `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_refresh_20260424`
+  `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_refresh_20260424`
 - canonical default-bundle reuse:
-  `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_reuse_20260424`
+  `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/r_plots/bridge_review_canonical_reuse_20260424`
 
 This repository contains a modular R pipeline designed to accelerate and standardize figure drawing for single-cell RNA sequencing (scRNA-seq) analysis. The pipeline is built on top of the popular `Seurat` and `ggplot2` ecosystems, providing a consistent, publication-ready aesthetic across all plots.
 
@@ -242,10 +242,10 @@ If you run in demo mode (no `--input` argument), it will load `pbmc_small` and g
  ```
 4. Recommended large-cohort handoff from `singlecell_factory`:
 ```bash
- cd /home/zerlinshen/singlecell_factory
+ cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
  bash bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh \
-   /home/zerlinshen/singlecell_factory/results/<run> \
-   /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+   /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run> \
+   /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run>/r_plots/main \
    cell_type leiden
 ```
 The wrapper exports or reuses a compact bundle, validates either v1 CSV/TSV or
@@ -261,10 +261,10 @@ validation.
 
 5. One-command remote plotting wrapper:
 ```bash
- cd /home/zerlinshen/singlecell_factory/bridges/local_r_pipeline_macbook
+ cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/bridges/local_r_pipeline_macbook
  bash scripts/run_remote_bundle_plot.sh \
-   /home/zerlinshen/singlecell_factory/results/<run> \
-   /home/zerlinshen/singlecell_factory/results/<run>/r_plots/main \
+   /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run> \
+   /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/<run>/r_plots/main \
    cell_type leiden
 ```
 This wrapper generates or refreshes the compact bundle and runs R on the remote

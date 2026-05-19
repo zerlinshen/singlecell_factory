@@ -94,7 +94,7 @@ def _compute_ari_marker(adata: anndata.AnnData) -> dict:
     var_idx = adata.var.index
     # adata.var.index is ENSG; markers in MARKER_PANEL are gene symbols. We need
     # the gene_id <-> name lookup from the same TSS table the driver used.
-    name_to_id_path = Path("/home/zerlinshen/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.tsv")
+    name_to_id_path = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.tsv")
     name_to_id = {}
     if name_to_id_path.exists():
         tss = pd.read_csv(name_to_id_path, sep="\t")
@@ -163,7 +163,7 @@ def _compute_peak_gene_overlap(
     our["peak_start"] = atac_var["start"].iloc[our["peak_idx"].astype(int)].values
     our["peak_end"]   = atac_var["end"].iloc[our["peak_idx"].astype(int)].values
     # gene column in our top1000 is var.index ENSG; map back to gene_name
-    name_to_id_path = Path("/home/zerlinshen/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.tsv")
+    name_to_id_path = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.tsv")
     tss = pd.read_csv(name_to_id_path, sep="\t")
     id_to_name = dict(zip(tss["gene_id"].astype(str), tss["gene_name"].astype(str)))
     our["gene_name"] = our["gene"].astype(str).map(id_to_name).fillna(our["gene"].astype(str))
@@ -244,10 +244,10 @@ def main() -> int:
     ap.add_argument("--out", default=None, type=Path,
                     help="metrics.json output path (default: <run-dir>/metrics.json + .omc/research/wave5/metrics.json)")
     ap.add_argument("--cluster-names",
-                    default=Path("/home/zerlinshen/singlecell_factory/data/raw/trevino_2021_brain/GSE162170_multiome_cluster_names.txt.gz"),
+                    default=Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/trevino_2021_brain/GSE162170_multiome_cluster_names.txt.gz"),
                     type=Path)
     ap.add_argument("--s2f-tsv",
-                    default=Path("/home/zerlinshen/singlecell_factory/data/external/trevino_2021_supp/S2F_peak_gene_links_with_coords.tsv"),
+                    default=Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/external/trevino_2021_supp/S2F_peak_gene_links_with_coords.tsv"),
                     type=Path)
     ap.add_argument("--fig4d-csv", default=None, type=Path,
                     help="Optional per-cell pseudotime CSV (Cell.ID,pseudotime) extracted from Trevino Fig 4D.")
@@ -295,7 +295,7 @@ def main() -> int:
     if args.out:
         out_paths.append(args.out)
     out_paths.append(args.run_dir / "metrics.json")
-    omc_path = Path("/home/zerlinshen/singlecell_factory/.omc/research/wave5/metrics.json")
+    omc_path = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/.omc/research/wave5/metrics.json")
     out_paths.append(omc_path)
     for p in out_paths:
         p.parent.mkdir(parents=True, exist_ok=True)

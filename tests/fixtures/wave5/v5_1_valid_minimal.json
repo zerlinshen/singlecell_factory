@@ -36,7 +36,7 @@
   "wnn_post_fix_ari": null,
   "parity_vs_v4_2_path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1200Z-abcdef12/python/parity/parity_vs_v4_2.json",
   "mv1_input_mode": "processed_counts",
-  "parity_report_r_python_path": "/home/zerlinshen/r_multiomics_factory/R_bundle/parity/parity_20260517T1200Z-abcdef12.json",
+  "parity_report_r_python_path": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle/parity/parity_20260517T1200Z-abcdef12.json",
   "mv2_parity_status": "PASS",
   "chromvar_lib_pinned": "pychromvar==0.1.0",
   "gwas_catalog_manifest_path": "data/external/gwas_catalog/MANIFEST.json",

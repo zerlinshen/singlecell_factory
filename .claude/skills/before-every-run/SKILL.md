@@ -17,11 +17,11 @@ This skill exists to stop the same failure from happening twice. The rule is sim
 ### Remote
 
 - root:
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run`
 - latest summary:
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
 - journal entries:
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/journal/`
 
 ### Local mirror
 
@@ -224,7 +224,7 @@ The post-run hook can create automatic first-pass drafts under:
 - local:
   - `/Users/zerlinshen/Downloads/1. Codex/2.Reproduction Trail/2026-04-23 - Nature Communications 2024 NSCLC single-cell reproduction/before-every-run/journal/drafts/`
 - remote:
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/drafts/`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/journal/drafts/`
 
 These are scaffolds, not final journal entries. Promote useful content into the real journal and `LATEST.md`.
 

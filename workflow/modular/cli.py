@@ -24,6 +24,7 @@ from .config import (
 from .module_catalog import DEFAULT_OPTIONAL_MODULES as DEFAULT_OPTIONAL_MODULE_NAMES
 from .module_catalog import module_help_list
 from .pipeline import MODULE_DEPENDENCIES, run_pipeline
+from ..factory_paths import SINGLECELL_FACTORY_ROOT
 
 
 DEFAULT_OPTIONAL_MODULES = ",".join(DEFAULT_OPTIONAL_MODULE_NAMES)
@@ -39,7 +40,7 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Path to Cell Ranger filtered_feature_bc_matrix. Defaults to <sample-root>/outs/filtered_feature_bc_matrix",
     )
-    parser.add_argument("--output-dir", default="/home/zerlinshen/singlecell_factory/results")
+    parser.add_argument("--output-dir", default=str(SINGLECELL_FACTORY_ROOT / "results"))
     parser.add_argument(
         "--optional-modules",
         default=DEFAULT_OPTIONAL_MODULES,

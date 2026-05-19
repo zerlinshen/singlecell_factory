@@ -60,7 +60,7 @@ def _find_small_real_adata() -> Optional[object]:
     import anndata as ad
 
     candidates = [
-        "/home/zerlinshen/singlecell_factory/tests/data/small_real.h5ad",
+        "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/tests/data/small_real.h5ad",
         "/home/zerlinshen/projects/fixtures/small_real.h5ad",
     ]
     for p in candidates:

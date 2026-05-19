@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=/home/zerlinshen/singlecell_factory
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA900K=$ROOT/data/raw/10x_nsclc_900k_flex
 DATA40K=$ROOT/data/raw/10x_nsclc_40k_dtc_7donors
 RESULTS=$ROOT/results

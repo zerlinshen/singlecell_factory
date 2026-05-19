@@ -17,7 +17,7 @@ from workflow.modular.manifest_writer import factory_git_state, write_manifest
 
 def test_factory_git_state_real_repo():
     """Happy path: singlecell_factory is a git repo — sha must be 7 hex chars."""
-    repo = Path("/home/zerlinshen/singlecell_factory")
+    repo = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
     state = factory_git_state(repo)
     assert isinstance(state["sha"], str)
     assert len(state["sha"]) == 7
@@ -96,7 +96,7 @@ def test_write_manifest_produces_valid_json(tmp_path):
         run_id="2026-05-14T1530Z-a3f4c2b",
         modules_run=["cellranger", "qc", "doublet_detection"],
         produced_on="ubuntu-tail",
-        factory_python_path=Path("/home/zerlinshen/singlecell_factory"),
+        factory_python_path=Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory"),
         factory_r_path=Path("/tmp/nonexistent_r_factory"),
     )
     assert out.exists()

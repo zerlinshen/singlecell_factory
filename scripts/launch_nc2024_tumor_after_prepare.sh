@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-RAW=/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526
-RESULTS=/home/zerlinshen/singlecell_factory/results
-LOG=$RESULTS/NC2024_NSCLC_TUMOR_PIPELINE.launch.log
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RAW="${REPO_ROOT}/data/raw/nc2024_nsclc_emtab13526"
+RESULTS="${REPO_ROOT}/results"
+LOG="${RESULTS}/NC2024_NSCLC_TUMOR_PIPELINE.launch.log"
 while true; do
   if [ -f "$RAW/tumor/prepared_input.ready" ]; then
     break
   fi
   sleep 30
 done
-cd /home/zerlinshen/singlecell_factory
+cd "${REPO_ROOT}"
 /home/zerlinshen/conda/bin/conda run -n sc_gpu python -m workflow.modular.cli \
   --project NC2024_NSCLC_TUMOR_REPRO_AUTO \
   --sample-root "$RAW/tumor" \

@@ -77,7 +77,7 @@ def main() -> None:
 
     print(f"Saved {out_path}")
     print(f"cells={adata.n_obs} genes={adata.n_vars}")
-    print(f"stages={sorted(obs[\"stage\"].value_counts().to_dict().items())}")
+    print(f"stages={sorted(obs['stage'].value_counts().to_dict().items())}")
 
 
 if __name__ == "__main__":

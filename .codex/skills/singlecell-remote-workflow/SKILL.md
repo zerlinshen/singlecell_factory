@@ -8,7 +8,7 @@ Use this skill for the end-to-end single-cell workflow on this machine.
 0. Before any remote execution, invoke `before-every-run`.
 - Read:
   - `/Users/zerlinshen/Downloads/1. Codex/2.Reproduction Trail/2026-04-23 - Nature Communications 2024 NSCLC single-cell reproduction/before-every-run/LATEST.md`
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
 - State the execution mode before running anything:
   - `execution_mode = debug_massive`
   - `execution_mode = controller_validation`
@@ -16,7 +16,7 @@ Use this skill for the end-to-end single-cell workflow on this machine.
 
 1. Treat the Ubuntu server as the analysis engine.
 - SSH alias: `ubuntu-tail`
-- Remote repo: `/home/zerlinshen/singlecell_factory`
+- Remote repo: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
 - Conda env: `sc_gpu`
 - Prefer `python -m workflow.modular.cli ... --checkpoint --gpu-mode auto`
 - If GPU compatibility is unstable, keep results and rerun fragile modules with CPU fallback.
@@ -28,11 +28,11 @@ Use this skill for the end-to-end single-cell workflow on this machine.
 
 3. For large official downloads.
 - Prefer resumable downloads and keep partial files for resume.
-- Store remote raw data under `/home/zerlinshen/singlecell_factory/data/raw/`
+- Store remote raw data under `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/`
 - For the current project, monitor the WCH run plus the 10x NSCLC download queues before starting duplicate work.
 
 4. For WCH / LUSC work.
-- Prepared WCH input lives at `/home/zerlinshen/singlecell_factory/data/raw/wch_lung_cancer_atlas/prepared_input.h5ad`
+- Prepared WCH input lives at `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/wch_lung_cancer_atlas/prepared_input.h5ad`
 - Best stable run so far: `WCH_LUSC_STAGE_IIII_CPU_STABLE_20260420_213646`
 - Read `run_manifest.json`, `module_status.csv`, and module subdirectories before deciding whether to rerun.
 
@@ -56,8 +56,8 @@ Use this skill for the end-to-end single-cell workflow on this machine.
 
 7. After a meaningful remote run, write back the outcome.
 - Update:
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/`
-  - `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/journal/`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
 - Refresh the local mirror under:
   - `/Users/zerlinshen/Downloads/1. Codex/2.Reproduction Trail/2026-04-23 - Nature Communications 2024 NSCLC single-cell reproduction/before-every-run/`
 - Classify artifacts explicitly:

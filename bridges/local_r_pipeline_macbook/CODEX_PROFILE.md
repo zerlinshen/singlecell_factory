@@ -41,7 +41,7 @@ Local project:
 - review/organization workspaces under `/Users/zerlinshen/Downloads/1. Codex/`
 
 Remote pipeline:
-- `/home/zerlinshen/singlecell_factory`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
 
 Remote R runtime:
 - `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`

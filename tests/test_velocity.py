@@ -6,7 +6,7 @@ from workflow.velocity import VelocityWorkflowConfig, run_velocity_workflow
 def test_run_velocity_workflow(monkeypatch, tmp_path):
     import workflow.velocity as mod
 
-    root = Path("/home/zerlinshen/singlecell_factory")
+    root = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
     scripts = root / "rna_velocity_pseudotime_analysis" / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
     (scripts / "generate_velocity_loom.sh").write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")

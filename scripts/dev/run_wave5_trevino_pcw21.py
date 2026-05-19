@@ -383,7 +383,7 @@ def _build_ctx(project_root: Path, project_name: str, run_id: str | None = None)
     # PeakToGeneModule reads these as attributes via getattr(); set after
     # construction so we don't need to extend PipelineConfig's signature.
     cfg.gene_tss_bed_path = Path(
-        "/home/zerlinshen/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.bed"
+        "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.bed"
     )
     cfg.peak_to_gene_window = 500_000  # Trevino 2021 Methods: ±500 kb window
     ctx = PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
@@ -468,7 +468,7 @@ def main() -> int:
     # Inject `chrom` + `tss` into adata.var so compute_peak_gene_linkages'
     # windowed mode activates (has_coords=True). var.index is bare ENSG;
     # match against the GENCODE TSS table built from the 10x GRCh38 GTF.
-    tss_tsv = "/home/zerlinshen/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.tsv"
+    tss_tsv = "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/external/gencode_grch38_tss_by_ensg.tsv"
     tss_df = pd.read_csv(tss_tsv, sep="\t").set_index("gene_id")
     chrom_map = tss_df["chrom"]
     tss_map = tss_df["tss"]

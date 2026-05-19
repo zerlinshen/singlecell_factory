@@ -73,7 +73,7 @@ def main() -> int:
     if "leiden" not in adata.obs.columns:
         logger.error("missing required key: obs[leiden]")
         return 2
-    sys.path.insert(0, "/home/zerlinshen/singlecell_factory")
+    sys.path.insert(0, "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
     from workflow.modular.modules.marker_db_loader import MarkerDbLoaderModule  # noqa: E402
     from workflow.modular.modules.context_aware_annotation import ContextAwareAnnotationModule  # noqa: E402
 

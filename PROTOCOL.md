@@ -112,8 +112,8 @@ remains the separate broad regression gate via `pytest -q`.
 ## 0. Before Every Meaningful Remote Run
 
 Read first:
-- `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
-- the newest relevant entry under `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
+- the newest relevant entry under `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/journal/`
 
 Operational rule for the NC2024 full cohort:
 - `execution_mode = debug_massive`
@@ -125,8 +125,8 @@ Operational rule for the NC2024 full cohort:
   - treat `large` as a capacity probe, not the main completion lane
 
 After a meaningful remote run finishes or fails:
-- update `/home/zerlinshen/singlecell_factory/ops/before_every_run/journal/`
-- update `/home/zerlinshen/singlecell_factory/ops/before_every_run/LATEST.md`
+- update `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/journal/`
+- update `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
 - keep one evidence-rich failed run if it explains the winning fix
 
 Targeted evidence lane for NC2024 subtype checkpoint closure:
@@ -138,10 +138,10 @@ Targeted evidence lane for NC2024 subtype checkpoint closure:
 - For the standard verification lane, prefer:
   - `bash scripts/verify_nc2024_subtype_checkpoint_audit.sh`
 - Canonical example inputs:
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/luad/cell_communication/cell_communication_liana.csv`
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/lusc/cell_communication/cell_communication_liana.csv`
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_adenocarcinoma_checkpoint_top20.csv`
-  - `/home/zerlinshen/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_squamous_cell_carcinoma_checkpoint_top20.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/luad/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_CELLCOMM_AUTO_20260423_073528/lusc/cell_communication/cell_communication_liana.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_adenocarcinoma_checkpoint_top20.csv`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_SUBTYPE_LR_FOCUS_AUTO_20260423_073900/lung_squamous_cell_carcinoma_checkpoint_top20.csv`
 - Use this lane to separate:
   - raw subtype LIANA pair presence
   - current paper-facing top20 visibility
@@ -172,7 +172,7 @@ Pipeline structure:
 ### 2.1 Software
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 conda env create -f environment.yml
 conda activate sc10x
 export MPLCONFIGDIR=$PWD/.mplconfig
@@ -299,7 +299,7 @@ Dependency handling is automatic: if you request a downstream module, upstream m
 ## 7. Where Results Go
 
 Default output root:
-- `/home/zerlinshen/singlecell_factory/results`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results`
 
 Run directory format:
 
@@ -398,7 +398,7 @@ For the current `E-MTAB-13526` reproduction lane, do not use the older tumor-onl
 Use this owned full-cohort path instead:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 bash scripts/run_emtab13526_full_cohort_with_fallback.sh
 ```
 

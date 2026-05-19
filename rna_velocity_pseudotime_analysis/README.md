@@ -46,8 +46,8 @@
 ## 从BAM生成loom（spliced/unspliced）
 ```bash
 bash rna_velocity_pseudotime_analysis/scripts/generate_velocity_loom.sh \
-  --samplefolder /home/zerlinshen/singlecell_factory/pbmc_1k_v3_count \
-  --gtf /home/zerlinshen/singlecell_factory/reference/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz \
+  --samplefolder /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/pbmc_1k_v3_count \
+  --gtf /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/reference/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz \
   --threads 4
 ```
 - 生成loom默认路径：`<samplefolder>/velocyto/<samplefolder_basename>.loom`
@@ -140,4 +140,4 @@ bash rna_velocity_pseudotime_analysis/scripts/cleanup_rna_velocity_pseudotime_ar
 请将 `rna_velocity_pseudotime_analysis/**` 设为流水线排除路径，参考 `ci/ci_exclude_paths.txt` 与 `ci/github_paths_ignore_example.yml`。
 
 ## Backward Compatibility
-兼容入口保留在 `phase1_optional/`，详见 [MIGRATION.md](file:///home/zerlinshen/singlecell_factory/rna_velocity_pseudotime_analysis/docs/MIGRATION.md)。
+兼容入口保留在 `phase1_optional/`，详见 [MIGRATION.md](file:///home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/rna_velocity_pseudotime_analysis/docs/MIGRATION.md)。

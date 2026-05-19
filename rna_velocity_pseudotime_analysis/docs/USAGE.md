@@ -27,8 +27,8 @@ bash rna_velocity_pseudotime_analysis/scripts/run_rna_velocity_pseudotime_analys
 ## 从BAM生成loom
 ```bash
 bash rna_velocity_pseudotime_analysis/scripts/generate_velocity_loom.sh \
-  --samplefolder /home/zerlinshen/singlecell_factory/pbmc_1k_v3_count \
-  --gtf /home/zerlinshen/singlecell_factory/reference/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz \
+  --samplefolder /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/pbmc_1k_v3_count \
+  --gtf /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/reference/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz \
   --threads 4
 ```
 生成后将loom路径写入配置的 `input.loom`。

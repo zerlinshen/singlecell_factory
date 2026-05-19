@@ -13,7 +13,7 @@ import pandas as pd
 import zarr
 from scipy import io
 
-ROOT = Path("/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526")
+ROOT = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/nc2024_nsclc_emtab13526")
 SDRF = ROOT / "E-MTAB-13526.sdrf.txt"
 FULL_ROOT = ROOT / "full_cohort"
 PARTS_ROOT = FULL_ROOT / "_prepared_parts_zarr"

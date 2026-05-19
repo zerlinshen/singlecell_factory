@@ -1,6 +1,6 @@
 # Kimi Entry Point: singlecell_factory
 
-Kimi agents entering `/home/zerlinshen/singlecell_factory` must start here:
+Kimi agents entering `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` must start here:
 
 1. Read `AI_AGENT_PROTOCOL.md`.
 2. Read `.kimi/skills/project-onboarding/SKILL.md`.

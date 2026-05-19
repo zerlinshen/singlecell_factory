@@ -1,7 +1,20 @@
 # AGENTS.md - singlecell_factory
 
-This file applies to `/home/zerlinshen/singlecell_factory` and all subdirectories.
+This file applies to `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` and all subdirectories.
 It overrides higher-level guidance where rules conflict.
+
+## Bioinformatics Research Pipeline suite
+
+Physical suite layout: this repository is stored at `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/`; do not recreate the retired `/home/zerlinshen/singlecell_factory` compatibility path.
+
+This repo is the Python/global-control-plane member of **Bioinformatics Research
+Pipeline**, the umbrella suite for `singlecell_factory`, `r_multiomics_factory`,
+and `plotting_factory`. Treat the suite name as public/project identity; do not
+merge repositories, rewrite git history, or move project data unless explicitly
+planned. Governance follows **owner-by-primary-output**: this repo owns Python
+upstream and global validation, `r_multiomics_factory` owns R-heavy/spatial primary scientific truth when R creates primary objects/statistics/interpretation,
+and `plotting_factory` is a presentation-only plotting surface that must not own
+biological conclusions.
 
 ## Authority / Read This First
 
@@ -23,9 +36,9 @@ As of 2026-05, the working tree follows a three-way split. See full plan at
 an immutable compute tool. All scientific artifacts must land under a project
 directory resolved from `--project-root`, never inside this repo's tree.
 
-- **Factory tools**: `/home/zerlinshen/singlecell_factory/` (this repo),
-  `/home/zerlinshen/r_multiomics_factory/`, and
-  `/home/zerlinshen/plotting_factory/` — hold only code, fixtures, and contracts.
+- **Factory tools**: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/` (this repo),
+  `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/`, and
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/` — hold only code, fixtures, and contracts.
 - **Projects directory**: `/home/zerlinshen/projects/<project-id>/` (default
   `PROJECTS_ROOT`). Each project is a self-contained directory with `project.yaml`,
   `inputs/`, `runs/`, `configs/`, and `notebooks/`.
@@ -153,7 +166,7 @@ Discipline: nano on every commit; small_real before any module behavior change r
 ## Operating Modes
 
 Both modes are valid:
-- Direct remote operation inside `/home/zerlinshen/singlecell_factory` for
+- Direct remote operation inside `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` for
   pipeline execution, run triage, remote R/reporting, and source-of-truth
   artifact inspection.
 - Mac-led SSH orchestration from the local reproduction workspace when the task

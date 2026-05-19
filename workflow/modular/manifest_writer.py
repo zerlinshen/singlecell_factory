@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from workflow.factory_paths import R_MULTIOMICS_FACTORY_ROOT, SINGLECELL_FACTORY_ROOT
+
 
 def factory_git_state(repo_path: Path) -> dict:
     """Return {sha, dirty, diff_sha256} for the git repo at repo_path.
@@ -58,8 +60,8 @@ def write_manifest(
     modules_run: list[str],
     bundle_sha256: Optional[str] = None,
     produced_on: str = "",
-    factory_python_path: Path = Path("/home/zerlinshen/singlecell_factory"),
-    factory_r_path: Path = Path("/home/zerlinshen/r_multiomics_factory"),
+    factory_python_path: Path = SINGLECELL_FACTORY_ROOT,
+    factory_r_path: Path = R_MULTIOMICS_FACTORY_ROOT,
     extra: Optional[dict] = None,
 ) -> Path:
     """Write <run-dir>/manifest.json with the canonical schema. Returns the path.
@@ -107,7 +109,7 @@ if __name__ == "__main__":
     import tempfile
     from pathlib import Path
 
-    state = factory_git_state(Path("/home/zerlinshen/singlecell_factory"))
+    state = factory_git_state(SINGLECELL_FACTORY_ROOT)
     print(f"factory_git_state: {state}")
 
     with tempfile.TemporaryDirectory() as tmp:

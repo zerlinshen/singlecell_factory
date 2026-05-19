@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="/home/zerlinshen/singlecell_factory"
+REPO_ROOT="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory"
 RAW_ROOT="${REPO_ROOT}/data/raw/nc2024_nsclc_emtab13526"
 SAMPLE_ROOT="${RAW_ROOT}/full_cohort"
 RESULTS="${REPO_ROOT}/results"

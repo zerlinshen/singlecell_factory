@@ -57,7 +57,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--curated-yaml",
-        default="/home/zerlinshen/singlecell_factory/ref/markers/curated/lung_NSCLC.yaml",
+        default="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ref/markers/curated/lung_NSCLC.yaml",
     )
     parser.add_argument("--fdr-threshold", type=float, default=0.05)
     args = parser.parse_args()

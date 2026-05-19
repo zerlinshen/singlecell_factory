@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import argparse
 
+from workflow.factory_paths import SINGLECELL_FACTORY_ROOT
+
 
 @dataclass(frozen=True)
 class VelocityWorkflowConfig:
@@ -44,7 +46,7 @@ def run_velocity_workflow(cfg: VelocityWorkflowConfig) -> Path:
         Path to the generated velocity run result directory.
     """
 
-    root = Path("/home/zerlinshen/singlecell_factory")
+    root = SINGLECELL_FACTORY_ROOT
     loom_script = root / "rna_velocity_pseudotime_analysis" / "scripts" / "generate_velocity_loom.sh"
     run_script = root / "rna_velocity_pseudotime_analysis" / "scripts" / "run_rna_velocity_pseudotime_analysis.sh"
     if not loom_script.exists():

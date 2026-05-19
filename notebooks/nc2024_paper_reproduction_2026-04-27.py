@@ -39,7 +39,7 @@ import seaborn as sns
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-REPO = Path("/home/zerlinshen/singlecell_factory")
+REPO = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
 TUMOR_H5 = REPO / "results/nc2024_tumor_20260426_v2/final_adata.h5ad"
 FIG_DIR = REPO / "results/nc2024_tumor_20260426_v2/figures/paper_reproduction"
 FIG_DIR.mkdir(parents=True, exist_ok=True)

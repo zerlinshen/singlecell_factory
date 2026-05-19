@@ -23,7 +23,7 @@ repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 schema_path = os.path.join(os.getcwd(), "ops/run_ledger/schema/wave5_v4_2.schema.json")
 if not os.path.isfile(schema_path):
     for candidate in (
-        "/home/zerlinshen/singlecell_factory/ops/run_ledger/schema/wave5_v4_2.schema.json",
+        "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/run_ledger/schema/wave5_v4_2.schema.json",
     ):
         if os.path.isfile(candidate):
             schema_path = candidate

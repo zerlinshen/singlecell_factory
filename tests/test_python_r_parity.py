@@ -44,7 +44,7 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle  # noqa: E402
 
-IO_BUNDLE_R = "/home/zerlinshen/r_multiomics_factory/R_bundle/io_bundle.R"
+IO_BUNDLE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle/io_bundle.R"
 
 
 # ---------------------------------------------------------------------------

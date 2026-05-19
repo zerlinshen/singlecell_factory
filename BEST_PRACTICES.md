@@ -6,7 +6,7 @@
 - 全局规则仍生效，但项目文件优先级更高。
 
 ## 1.5) 两种操作方式都可行
-- 直接在远端 `/home/zerlinshen/singlecell_factory` 操作：适合重计算、
+- 直接在远端 `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` 操作：适合重计算、
   pipeline execution、run triage、remote R/reporting。
 - 在 Mac 上通过 SSH 编排远端：适合协调、审阅、handoff、report packaging。
 

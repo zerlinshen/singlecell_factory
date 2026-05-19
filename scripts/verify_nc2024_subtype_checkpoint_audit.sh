@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="/home/zerlinshen/singlecell_factory"
+REPO_ROOT="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory"
 CONDA_RUN="/home/zerlinshen/conda/bin/conda run -n sc_gpu"
 RESULTS_DIR="${REPO_ROOT}/results"
 

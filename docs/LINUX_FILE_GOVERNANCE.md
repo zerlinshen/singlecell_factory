@@ -12,20 +12,21 @@ requests pipeline implementation work.
 
 ```text
 /home/zerlinshen/
-├── singlecell_factory/              # Python factory: code/contracts/docs/control plane
-│   ├── workflow/                    # pipeline implementation
-│   ├── contracts/                   # canonical schemas and run/project contracts
-│   ├── docs/                        # factory docs and governance maps
-│   ├── ops/
-│   │   ├── before_every_run/        # remote run memory
-│   │   ├── governance_records/      # policy, validation, cleanup records
-│   │   └── run_ledger/              # factory-level execution ledger
-│   ├── results/                     # legacy/smoke only for governed projects
-│   └── output/                      # legacy/smoke only
-├── r_multiomics_factory/            # R factory: R-native analysis modules
-├── plotting_factory/                # Plotting factory: cross-language plot helpers (python/ + r/ subtrees)
-├── projects-bootstrap/              # project creation helper
-└── projects/                        # project/data layer
+├── Bioinformatics Research Pipeline/    # canonical suite root; no legacy repo symlinks
+│   ├── singlecell_factory/              # Python factory: code/contracts/docs/control plane
+│   │   ├── workflow/                    # pipeline implementation
+│   │   ├── contracts/                   # canonical schemas and run/project contracts
+│   │   ├── docs/                        # factory docs and governance maps
+│   │   ├── ops/
+│   │   │   ├── before_every_run/        # remote run memory
+│   │   │   ├── governance_records/      # policy, validation, cleanup records
+│   │   │   └── run_ledger/              # factory-level execution ledger
+│   │   ├── results/                     # legacy/smoke only for governed projects
+│   │   └── output/                      # legacy/smoke only
+│   ├── r_multiomics_factory/            # R factory: R-native analysis modules
+│   └── plotting_factory/                # Plotting factory: cross-language plot helpers (python/ + r/ subtrees)
+├── projects-bootstrap/                  # project creation helper
+└── projects/                            # project/data layer
     ├── README.md                    # projects root index
     ├── FILE_GOVERNANCE.md           # project file policy
     └── <project-id>/
@@ -50,13 +51,13 @@ requests pipeline implementation work.
 
 | Path | Role | Rule |
 | --- | --- | --- |
-| `/home/zerlinshen/singlecell_factory` | Python factory | Code, contracts, validators, docs, tests, control-plane records |
-| `/home/zerlinshen/r_multiomics_factory` | R factory | R-native analysis modules (renamed 2026-05-18 from `multiomics_r_factory`) |
-| `/home/zerlinshen/plotting_factory` | Plotting factory | Cross-language plot helpers; `python/` + `r/` subtrees; theme/schema/contracts (added 2026-05-18) |
+| `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` | Python factory | Code, contracts, validators, docs, tests, control-plane records |
+| `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory` | R factory | R-native analysis modules (renamed 2026-05-18 from `multiomics_r_factory`) |
+| `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory` | Plotting factory | Cross-language plot helpers; `python/` + `r/` subtrees; theme/schema/contracts (added 2026-05-18) |
 | `/home/zerlinshen/projects-bootstrap` | Bootstrap helper | Creates governed project roots |
 | `/home/zerlinshen/projects` | Scientific project layer | Inputs, configs, ledgers, runs, reports, figures, conclusions |
-| `/home/zerlinshen/singlecell_factory/ops/governance_records` | Control plane | Policy, cleanup, validation, and structure decisions |
-| `/home/zerlinshen/singlecell_factory/results` | legacy/smoke | No new governed project science |
+| `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/governance_records` | Control plane | Policy, cleanup, validation, and structure decisions |
+| `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results` | legacy/smoke | No new governed project science |
 
 ## Human-Facing And Agent-Facing Split
 

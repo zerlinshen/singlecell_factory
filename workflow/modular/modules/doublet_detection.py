@@ -244,11 +244,47 @@ class DoubletDetectionModule:
                     if threshold is not None:
                         logger.info("rsc.pp.scrublet auto-threshold: %.4f", threshold)
                 except Exception as exc:
-                    logger.warning("rsc.pp.scrublet failed, falling back to all singlets: %s", exc)
-                    doublet_scores, predicted_doublets = self._fallback_all_singlets(
-                        adata.n_obs, reason=str(exc)
-                    )
-                    ctx.metadata["doublet_method"] = "fallback_all_singlets"
+                    # HIGH-1 fix (2026-05-19): retry CPU scrublet before
+                    # giving up. The previous behaviour silently dropped
+                    # doublet detection entirely whenever the RAPIDS path
+                    # raised (e.g. rsc.pp.scrublet sparse-dtype mismatch
+                    # against int counts), keeping ~2% of cells that should
+                    # have been removed. CPU scrublet is the canonical
+                    # reference implementation (Wolock et al. 2019, Cell
+                    # Systems) so retrying it is scientifically equivalent
+                    # to the GPU path's intent.
+                    logger.warning("rsc.pp.scrublet failed, retrying with CPU scrublet: %s", exc)
+                    try:
+                        import scrublet as scr  # type: ignore
+
+                        if use_grouped:
+                            doublet_scores, predicted_doublets, threshold = self._run_cpu_scrublet_grouped(
+                                adata, scr.Scrublet, cfg, ctx
+                            )
+                        else:
+                            scrub = scr.Scrublet(
+                                self._materialize_counts_matrix(adata.X),
+                                expected_doublet_rate=cfg.expected_doublet_rate,
+                                random_state=random_state,
+                            )
+                            scrublet_params = {
+                                "min_counts": 2,
+                                "min_cells": 3,
+                                "min_gene_variability_pctl": 85,
+                                "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
+                            }
+                            doublet_scores, predicted_doublets = scrub.scrub_doublets(**scrublet_params)
+                            threshold = getattr(scrub, "threshold_", None)
+                        ctx.metadata["doublet_method"] = "cpu_scrublet_fallback_from_rsc"
+                        ctx.metadata["doublet_rsc_failure_reason"] = str(exc)
+                    except Exception as cpu_exc:
+                        logger.warning("CPU scrublet retry also failed, falling back to all singlets: %s", cpu_exc)
+                        doublet_scores, predicted_doublets = self._fallback_all_singlets(
+                            adata.n_obs, reason=f"rsc={exc}; cpu_scrublet={cpu_exc}",
+                        )
+                        ctx.metadata["doublet_method"] = "fallback_all_singlets"
+                        ctx.metadata["doublet_rsc_failure_reason"] = str(exc)
+                        ctx.metadata["doublet_cpu_failure_reason"] = str(cpu_exc)
             else:
                 # --- CPU fallback path (rsc not installed) ---
                 import scrublet as scr

@@ -9,7 +9,7 @@ import scipy.sparse as sp
 
 print("Loading clustering checkpoint...", flush=True)
 adata = ad.read_zarr(
-    "/home/zerlinshen/singlecell_factory/results/nc2024_tumor_20260426/"
+    "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/nc2024_tumor_20260426/"
     "nc2024_tumor_20260426_121139/.checkpoints/after_clustering.zarr"
 )
 print(f"n_obs={adata.n_obs}, n_vars={adata.n_vars}, clusters={adata.obs['leiden'].nunique()}", flush=True)

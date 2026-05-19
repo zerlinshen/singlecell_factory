@@ -93,7 +93,7 @@ def _load_dataset(preferred_tenx_dir: Path) -> tuple[Path, str]:
     if preferred_tenx_dir.exists():
         return preferred_tenx_dir, "A549_5K_Multiplex"
     fallback = Path(
-        "/home/zerlinshen/singlecell_factory/data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix"
+        "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix"
     )
     if fallback.exists():
         return fallback, "lung_carcinoma_3k_fallback"
@@ -148,11 +148,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--a549-tenx-dir",
-        default="/home/zerlinshen/singlecell_factory/data/raw/SC3_v3_NextGem_DI_CRISPR_A549_5K_Multiplex_count/outs/filtered_feature_bc_matrix",
+        default="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/SC3_v3_NextGem_DI_CRISPR_A549_5K_Multiplex_count/outs/filtered_feature_bc_matrix",
     )
     parser.add_argument(
         "--output-dir",
-        default="/home/zerlinshen/singlecell_factory/output/performance_benchmark",
+        default="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/output/performance_benchmark",
     )
     parser.add_argument("--single-mode", choices=["baseline", "optimized"], default="")
     parser.add_argument("--metrics-path", default="")

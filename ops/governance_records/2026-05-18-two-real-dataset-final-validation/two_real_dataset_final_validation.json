@@ -1,0 +1,463 @@
+{
+  "datasets": {
+    "cell_trevino": {
+      "bundle": {
+        "bundle_dir": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/bundle",
+        "checked_file_count": 5,
+        "markers_present": [
+          "SOX2",
+          "PAX6",
+          "EOMES",
+          "NEUROD1",
+          "NEUROD6",
+          "SLC17A7",
+          "SATB2",
+          "DLX1",
+          "DLX2",
+          "GAD2",
+          "OLIG1",
+          "OLIG2",
+          "SOX10",
+          "HES1",
+          "VIM",
+          "MKI67"
+        ],
+        "n_cells_exported": 55653,
+        "n_vars_source": 25519,
+        "provenance": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/bundle/provenance.json",
+        "schema_version": "singlecell_r_bundle_v2.1"
+      },
+      "evidence_run_id": "20260517T1436Z-13c2c88",
+      "final_adata": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458/final_adata.h5ad",
+      "module_status": {
+        "counts": {
+          "ok": 7
+        },
+        "path": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458/module_status.csv",
+        "statuses": {
+          "annotation": "ok",
+          "cellranger": "ok",
+          "clustering": "ok",
+          "composition": "ok",
+          "differential_expression": "ok",
+          "doublet_detection": "ok",
+          "qc": "ok"
+        }
+      },
+      "pipeline_output_dir": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458",
+      "pipeline_run_id": "2026-05-17T2004Z-13c2c88",
+      "project_root": "/home/zerlinshen/projects/wave5-trevino",
+      "quality_gate": {
+        "decision": "conditional",
+        "direct_evidence_panel_count": 31,
+        "evidence_json_count": 17,
+        "expected_false_checks": [
+          "figure2cd_public_author_cre_gene_resources.json:figure2c_public_link_count_matches_paper_64878",
+          "figure3b_public_matrix_atac_pseudotime_transfer.json:all_marker_direction_checks_pass",
+          "figure7_public_asd_bpnet_evidence.json:s6d_caption_like_case_matches_262"
+        ],
+        "path": "/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/python/figure_reproduction_evidence/all_figures_final_quality_gate_review.json",
+        "unexpected_false_checks": []
+      },
+      "r_outputs": {
+        "expected_files": [
+          "cell_fraction.png",
+          "marker_dot.png",
+          "marker_feature.png",
+          "qc_scatter.png",
+          "qc_violin.png",
+          "r.pdf",
+          "umap_by_cluster.png",
+          "umap_by_group.png"
+        ],
+        "file_count": 8,
+        "files": [
+          "cell_fraction.png",
+          "marker_dot.png",
+          "marker_feature.png",
+          "qc_scatter.png",
+          "qc_violin.png",
+          "r.pdf",
+          "umap_by_cluster.png",
+          "umap_by_group.png"
+        ],
+        "r_dir": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/r"
+      },
+      "run_manifest": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458/run_manifest.json",
+      "scientific_boundary": "Conditional public-resource reproduction from GEO processed matrices, author public RDS/tables, and Cell supplement tables; not FASTQ/fragments/BPNet exact parity.",
+      "shape": {
+        "n_obs": 55653,
+        "n_vars": 25519
+      }
+    },
+    "nc2024": {
+      "bridge": {
+        "R": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R",
+        "R_bundle": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle",
+        "plotting_python": "/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/python",
+        "plotting_r": "/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r"
+      },
+      "checked_run": {
+        "bundle": {
+          "bundle_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/bundle",
+          "checked_files": [
+            "obsm/X_pca.parquet",
+            "obsm/X_umap.parquet",
+            "marker_expr.parquet",
+            "obs.parquet",
+            "uns_summary.json"
+          ],
+          "claim_guard": "not_for_de_or_new_quantitative_claims_without_full_object_validation",
+          "marker_format": "parquet",
+          "markers_present": [
+            "CD3E",
+            "CD4",
+            "CD8A",
+            "NKG7",
+            "MS4A1",
+            "CD79A",
+            "LYZ",
+            "S100A8",
+            "EPCAM",
+            "KRT19",
+            "MKI67"
+          ],
+          "n_cells_exported": 5281,
+          "n_vars_source": 19504,
+          "schema_version": "singlecell_r_bundle_v2.1"
+        },
+        "factory_python_sha": "13c2c88",
+        "factory_r_sha": "cba6162",
+        "latest_project_ledger": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/ops/run_ledger/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518T090048.json",
+        "project_root": "/home/zerlinshen/projects/nc-reproduction",
+        "python": {
+          "final_adata": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/final_adata.h5ad",
+          "final_adata_bytes": 253518480,
+          "metadata_subset": {
+            "batch_correction_status": "skipped_single_batch",
+            "clustering_backend": "gpu",
+            "context_validation_mismatches": 0,
+            "de_backend": "cpu",
+            "sample_id_filter_applied": [
+              "P15_T1"
+            ],
+            "sample_id_filter_n_after": 5547,
+            "sample_id_filter_n_before": 884050
+          },
+          "module_status": {
+            "counts": {
+              "ok": 8,
+              "skipped": 1
+            },
+            "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/module_status.csv",
+            "statuses": {
+              "annotation": "ok",
+              "batch_correction": "skipped",
+              "cellranger": "ok",
+              "clustering": "ok",
+              "context_aware_annotation": "ok",
+              "differential_expression": "ok",
+              "doublet_detection": "ok",
+              "marker_db_loader": "ok",
+              "qc": "ok"
+            }
+          },
+          "run_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/run_manifest.json",
+          "shape": {
+            "n_obs": 5281,
+            "n_vars": 19504
+          }
+        },
+        "r_outputs": {
+          "expected_files": [
+            "cell_fraction.png",
+            "marker_dot.png",
+            "marker_feature.png",
+            "qc_scatter.png",
+            "qc_violin.png",
+            "r.pdf",
+            "umap_by_cluster.png",
+            "umap_by_group.png"
+          ],
+          "file_count": 8,
+          "files": [
+            "cell_fraction.png",
+            "marker_dot.png",
+            "marker_feature.png",
+            "qc_scatter.png",
+            "qc_violin.png",
+            "r.pdf",
+            "umap_by_cluster.png",
+            "umap_by_group.png"
+          ],
+          "r_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/r"
+        },
+        "root_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/manifest.json",
+        "run_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88",
+        "run_id": "2026-05-18T0900Z-13c2c88"
+      },
+      "execution_mode": "controller_validation",
+      "scientific_boundary": "This validates the retained NC2024 P15_T1 project-root/module/bridge run; it is not a full article-scale multi-cohort annotation claim.",
+      "scope": "current_nc2024_project_root_run",
+      "status": "ok"
+    }
+  },
+  "generated_at_utc": "2026-05-19T05:17:53.771280+00:00",
+  "repo_states": {
+    "plotting_factory": {
+      "branch": "master",
+      "dirty": true,
+      "head": "03ed0d7",
+      "path": "/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory",
+      "status_short": [
+        "M AGENTS.md",
+        " M AI_AGENT_PROTOCOL.md",
+        " M CLAUDE.md",
+        " M CODEX_PROFILE.md",
+        " M README.md",
+        " M r/general/dim_plots.R",
+        " M r/general/expression_plots.R"
+      ],
+      "tracked_diff_sha256": "7079b99cafbc8768608e9171e843646123b2ee70fd99999fc4c0cd662e844a1f",
+      "untracked_inventory": {
+        "aggregate_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "count": 0,
+        "files": []
+      }
+    },
+    "r_multiomics_factory": {
+      "branch": "master",
+      "dirty": true,
+      "head": "4ede0ce",
+      "path": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory",
+      "status_short": [
+        "M .kimi/AGENTS.md",
+        " M .kimi/skills/README.md",
+        " M .kimi/skills/project-onboarding/SKILL.md",
+        " M AGENTS.md",
+        " M AI_AGENT_PROTOCOL.md",
+        " M CLAUDE.md",
+        " M CODEX_PROFILE.md",
+        " M R/cli_utils.R",
+        " M README.md",
+        " M R_bundle/io_bundle.R",
+        " M docs/NC2024_NSCLC_BASELINE_REPRODUCTION_MEMO.md",
+        " M docs/NSCLC_REPRODUCTION_COMPARISON_MEMO.md",
+        " M scripts/check_remote_large_runs.sh",
+        " M scripts/plot_remote_bundle.R"
+      ],
+      "tracked_diff_sha256": "47a2d87ff95b00c02e73f72ad82af1e2800a70a9b11f6ea41b4ad78cced3e835",
+      "untracked_inventory": {
+        "aggregate_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "count": 0,
+        "files": []
+      }
+    },
+    "singlecell_factory": {
+      "branch": "wave6-trevino-v5.1",
+      "dirty": true,
+      "head": "349ef96",
+      "path": "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory",
+      "status_short": [
+        "M .claude/skills/before-every-run/SKILL.md",
+        " M .claude/skills/before-every-run/scripts/sync_before_every_run.sh",
+        " M .claude/skills/singlecell-factory-module-delivery/SKILL.md",
+        " M .claude/skills/singlecell-remote-workflow/SKILL.md",
+        " M .codex/skills/before-every-run/SKILL.md",
+        " M .codex/skills/before-every-run/scripts/sync_before_every_run.sh",
+        " M .codex/skills/singlecell-factory-module-delivery/SKILL.md",
+        " M .codex/skills/singlecell-remote-workflow/SKILL.md",
+        " M .kimi/AGENTS.md",
+        " M .kimi/skills/README.md",
+        " M .kimi/skills/project-onboarding/SKILL.md",
+        " M AGENTS.md",
+        " M AI_AGENT_PROTOCOL.md",
+        " M BEST_PRACTICES.md",
+        " M CLAUDE.md",
+        " M PROTOCOL.md",
+        " M README.md",
+        " M bridges/local_r_pipeline_macbook/AGENTS.md",
+        " M bridges/local_r_pipeline_macbook/CODEX_PROFILE.md",
+        " M bridges/local_r_pipeline_macbook/README.md",
+        " M bridges/local_r_pipeline_macbook/scripts/check_remote_large_runs.sh",
+        " M bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh",
+        " M docs/CLAUDE_HANDOFF_MULTIOMICS_REPAIR_2026-05-15.md",
+        " M docs/FACTORIES_OVERVIEW.md",
+        " M docs/LINUX_FILE_GOVERNANCE.md",
+        " M notebooks/nc2024_paper_reproduction_2026-04-27.ipynb",
+        " M notebooks/nc2024_paper_reproduction_2026-04-27.py",
+        " M ops/before_every_run/LATEST.md",
+        " M rna_velocity_pseudotime_analysis/README.md",
+        " M rna_velocity_pseudotime_analysis/configs/rna_velocity_pseudotime.lung_loom.yaml",
+        " M rna_velocity_pseudotime_analysis/configs/rna_velocity_pseudotime.pbmc_loom.yaml",
+        " M rna_velocity_pseudotime_analysis/docs/USAGE.md",
+        " M rna_velocity_pseudotime_analysis/scripts/build_publication_comparison_figure.py",
+        " M scripts/bench_neighbors_cache.py",
+        " M scripts/benchmark_modular_performance.py",
+        " M scripts/check_gate_cluster_markers.py",
+        " M scripts/ci/wave5_v4_2_gate.sh",
+        " M scripts/dev/insert_r_citation_headers.py",
+        " M scripts/dev/run_wave5_trevino_pcw21.py",
+        " M scripts/dev/wave5_postrun_metrics.py",
+        " M scripts/dev/wave5_write_ledger.py",
+        " M scripts/eval/salvage_t7_context_aware.py",
+        " M scripts/eval/salvage_t7_substate_de.py",
+        " M scripts/export_singlecell_r_bundle.py",
+        " M scripts/generate_factories_report.py",
+        " M scripts/launch_nc2024_tumor_after_prepare.sh",
+        " M scripts/migration_apply.py",
+        " M scripts/migration_inventory.py",
+        " M scripts/nc2024_css_fidelity_audit.py",
+        " M scripts/prepare_10x_900k_layout.sh",
+        " M scripts/prepare_emtab13526_clean.py",
+        " M scripts/prepare_emtab13526_full_cohort_zarr.py",
+        " M scripts/prepare_emtab13526_input.py",
+        " M scripts/prepare_wch_lusc_h5ad.py",
+        " M scripts/print_large_data_status.sh",
+        " M scripts/remote_watch_900k_40k.sh",
+        " M scripts/run_emtab13526_full_cohort_stage1.sh",
+        " M scripts/run_emtab13526_full_cohort_with_fallback.sh",
+        " M scripts/run_emtab13526_tumor_repro.sh",
+        " M scripts/run_nc2024_extended_full_cohort_20260424.sh",
+        " M scripts/run_nc2024_full_cohort_rerun_all_eligible_20260424.sh",
+        " M scripts/run_nc2024_full_cohort_sparse_exact_20260425.sh",
+        " M scripts/validate_nc2024_architecture_contract.py",
+        " M scripts/validate_optimizations.py",
+        " M scripts/verify_nc2024_subtype_checkpoint_audit.sh",
+        " M scripts/wait_and_run_10x_900k_auto.sh",
+        " M tests/data/staircase/small_real.summary.json",
+        " M tests/fixtures/wave5/v5_1_valid_minimal.json",
+        " M tests/test_manifest_writer.py",
+        " M tests/test_python_r_parity.py",
+        " M tests/test_r_bundle_contract.py",
+        " M tests/test_singlecell_r_bundle_export.py",
+        " M tests/test_velocity.py",
+        " M workflow/benchmark.py",
+        " M workflow/modular/cli.py",
+        " M workflow/modular/manifest_writer.py",
+        " M workflow/standard.py",
+        " M workflow/velocity.py",
+        "?? .github/",
+        "?? docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md",
+        "?? ops/before_every_run/journal/2026-05-18-two-real-dataset-final-validation.md",
+        "?? ops/governance_records/2026-05-18-two-real-dataset-final-validation/",
+        "?? scripts/run_cleanroom_minimal_realdata.py",
+        "?? scripts/validate_ci_governance.py",
+        "?? scripts/validate_figure_parity_gate.py",
+        "?? scripts/validate_two_realdata_final.py",
+        "?? tests/test_nc2024_architecture_contract.py",
+        "?? tests/test_pipeline_hardening_gates.py",
+        "?? tests/test_two_realdata_final_validator.py",
+        "?? workflow/factory_paths.py"
+      ],
+      "tracked_diff_sha256": "24b21d6e47198522439a750ccc5a4e68ee5d6a74267d9cdc1fcc4ccf89e9f9d1",
+      "untracked_inventory": {
+        "aggregate_sha256": "f2d5cb3b9152f3b72a6de4b81216b43a6c52283e71cf5c8c7f7bc6ea42c5e566",
+        "count": 20,
+        "files": [
+          {
+            "bytes": 1655,
+            "path": ".github/workflows/factory-governance.yml",
+            "sha256": "c1c971d9fe094bfe8c258d677dc3a27f9c0baddc0c06ff189ab7ba6dcbb8d14a"
+          },
+          {
+            "bytes": 3496,
+            "path": "docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md",
+            "sha256": "498907ef60fbd0bfa30e05d466091f589a278747ffe6ec00a5bd2138ab2b8ec6"
+          },
+          {
+            "bytes": 7075,
+            "path": "ops/before_every_run/journal/2026-05-18-two-real-dataset-final-validation.md",
+            "sha256": "716c716d11657e4f776ca45f30227077c26c870f9a6bb5b03871a8b1ec15b035"
+          },
+          {
+            "bytes": 2315,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md",
+            "sha256": "d1ef7d2a738585bb252f4468035fe165cf7965fc744aec3ecf48e827d78f6595"
+          },
+          {
+            "bytes": 672,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/ci_governance_gate.json",
+            "sha256": "3486dc8f9a9ebd76297180592fea1b5480e2ce04e0c47b6d66ac5568e89b9fce"
+          },
+          {
+            "bytes": 672,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/ci_governance_gate_canonical.json",
+            "sha256": "d5f3b8202e73e310c504f285f3f6aba8a1fbde06f929e26db5b61092370e98b9"
+          },
+          {
+            "bytes": 14649,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/cleanroom_minimal_realdata.json",
+            "sha256": "6f9b03aec0551d47fb844116e69536a8247d5eb5298225dcff7dacb431bddc4e"
+          },
+          {
+            "bytes": 14641,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/cleanroom_minimal_realdata_canonical.json",
+            "sha256": "eb5caf94e6035fc189ea988f367406bdb9c8c4d6668b45525bd30994c033d94b"
+          },
+          {
+            "bytes": 7684,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/figure_parity_gate.json",
+            "sha256": "2fed26ad85f444f3279833d95e0e23e51307ced8113db0f72364ccf4aba95981"
+          },
+          {
+            "bytes": 7684,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/figure_parity_gate_canonical.json",
+            "sha256": "0e423eab8403100ff04bb17e7f32a3f9f91a1dff8b1220461b8b4c95c6893fab"
+          },
+          {
+            "bytes": 4065,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/nc2024_architecture_contract_canonical.json",
+            "sha256": "add3ee771ec174a3f733087542e92e1c043cf2f5b2f04c06ccc1b27b205c09a9"
+          },
+          {
+            "bytes": 19436,
+            "path": "ops/governance_records/2026-05-18-two-real-dataset-final-validation/two_real_dataset_final_validation.json",
+            "sha256": "a3b70cb30cbb9b37d18b93348a81bf9641d30c2f8c75085f488d4537a8b6c4b7"
+          },
+          {
+            "bytes": 11501,
+            "path": "scripts/run_cleanroom_minimal_realdata.py",
+            "sha256": "a17103d16cfe8a90b3f1ef6a28862027fff39bd097d306a5f5d8bd07ceaee71b"
+          },
+          {
+            "bytes": 9003,
+            "path": "scripts/validate_ci_governance.py",
+            "sha256": "536f289020a305cf01e0e40c431b702ca78c6544a0817b94362b4067c2e29c2c"
+          },
+          {
+            "bytes": 9527,
+            "path": "scripts/validate_figure_parity_gate.py",
+            "sha256": "8c3d1d6a8ca21f3ccdda91fbbdc4e0893f049c6088cdf475f662d22ad1fb7373"
+          },
+          {
+            "bytes": 17443,
+            "path": "scripts/validate_two_realdata_final.py",
+            "sha256": "56e3cbf63e298eda1c8e03162061928dc3350b8a6b698385340db592ecf7879f"
+          },
+          {
+            "bytes": 5844,
+            "path": "tests/test_nc2024_architecture_contract.py",
+            "sha256": "81872d13c0e8a393be9cd6536664b6052a91549350cc32752a14b5a17c89db79"
+          },
+          {
+            "bytes": 9256,
+            "path": "tests/test_pipeline_hardening_gates.py",
+            "sha256": "198357b237f76b5f0aa122d8faeaf952cc29874b8b6f3be505d9a13c40135d04"
+          },
+          {
+            "bytes": 6882,
+            "path": "tests/test_two_realdata_final_validator.py",
+            "sha256": "4096055804d50ac6d075d2e1a9c851caad2dc47aad29395cbdf07a97ee19a876"
+          },
+          {
+            "bytes": 828,
+            "path": "workflow/factory_paths.py",
+            "sha256": "cf287b84b4b949cb15bfc4196cc563ba7ac0da2acde05ecb1d765764f5f4ed91"
+          }
+        ]
+      }
+    }
+  },
+  "verdict": "PASS_TWO_REAL_DATASET_FACTORY_BRIDGE_VALIDATED"
+}

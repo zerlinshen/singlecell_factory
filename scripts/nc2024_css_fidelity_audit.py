@@ -21,11 +21,11 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
 
 DEFAULT_INPUT = Path(
-    "/home/zerlinshen/singlecell_factory/results/"
+    "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/"
     "NC2024_NSCLC_FULL_COHORT_STAGE1_MASSIVE_FRESH_RERUN_AUTO_20260424_020329/"
     "final_adata.h5ad"
 )
-DEFAULT_OUTPUT_ROOT = Path("/home/zerlinshen/singlecell_factory/results")
+DEFAULT_OUTPUT_ROOT = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results")
 
 
 @dataclass(frozen=True)

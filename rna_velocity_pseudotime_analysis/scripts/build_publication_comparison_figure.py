@@ -38,7 +38,7 @@ def p_to_star(p):
 
 
 def build():
-    root = Path("/home/zerlinshen/singlecell_factory")
+    root = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
     result_dir = root / "rna_velocity_pseudotime_analysis" / "runtime" / "results" / "lung_with_loom_v25"
     fig_dir = result_dir / "figures"
     table_dir = result_dir / "tables"

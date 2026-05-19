@@ -1,3 +1,16 @@
+# Latest two real-dataset final factory validation update — 2026-05-18
+
+- Final bridge/governance validation completed for two real datasets across `singlecell_factory -> r_multiomics_factory -> plotting_factory`.
+- Verdict: `PASS_TWO_REAL_DATASET_FACTORY_BRIDGE_VALIDATED`.
+- Governance report: `/home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md`.
+- Machine report: `/home/zerlinshen/singlecell_factory/ops/governance_records/2026-05-18-two-real-dataset-final-validation/two_real_dataset_final_validation.json`.
+- NC2024 evidence: `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88`, final AnnData `5281 x 19504`, 8 modules `ok`, `batch_correction` expected `skipped`, project-root bundle and R outputs present. Scope remains P15_T1 structure/module/bridge validation, not full article-scale cohort truth.
+- Cell/Trevino bridge evidence: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88`, final AnnData `55653 x 25519`, project-root bundle and R outputs present. Human-facing paper evidence remains `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88` with `conditional` public-resource quality gate.
+- Fixes captured: current-project NC validator, optional `--output` when `--project-root` is provided, dataset-aware R marker selection, project-root R manifest lookup, and ggplot2 `linewidth` border styling.
+- New journal: `before-every-run/journal/2026-05-18-two-real-dataset-final-validation.md`.
+
+---
+
 # Latest NC2024 legacy artifact cleanup update — 2026-05-18
 
 - Off-mainline cleanup completed after the module-flow validation was recorded as `evidence-only`.

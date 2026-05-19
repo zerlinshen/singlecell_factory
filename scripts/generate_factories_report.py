@@ -46,8 +46,8 @@ from reportlab.platypus import (
 # Paths and constants
 # ---------------------------------------------------------------------------
 
-REPO_PY = Path("/home/zerlinshen/singlecell_factory")
-REPO_R = Path("/home/zerlinshen/r_multiomics_factory")
+REPO_PY = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory")
+REPO_R = Path("/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory")
 DOCS_DIR = REPO_PY / "docs"
 OUT_PDF = DOCS_DIR / "FACTORIES_OVERVIEW.pdf"
 OUT_MD = DOCS_DIR / "FACTORIES_OVERVIEW.md"

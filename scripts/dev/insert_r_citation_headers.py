@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-R_FACTORY = Path("/home/zerlinshen/r_multiomics_factory")
+R_FACTORY = Path("/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory")
 
 R_CITATIONS: dict[str, list[str]] = {
     "R/annotation_module.R": [

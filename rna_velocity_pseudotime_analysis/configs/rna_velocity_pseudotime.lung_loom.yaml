@@ -3,8 +3,8 @@ mode: exploratory
 production_required: false
 dataset: lung_carcinoma_3k
 input:
-  tenx_dir: "/home/zerlinshen/singlecell_factory/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix"
-  loom: "/home/zerlinshen/singlecell_factory/lung_carcinoma_3k_count/velocyto/lung_carcinoma_3k_count.loom"
+  tenx_dir: "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix"
+  loom: "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/lung_carcinoma_3k_count/velocyto/lung_carcinoma_3k_count.loom"
 output:
   root: "rna_velocity_pseudotime_analysis/runtime"
   keep_days: 7

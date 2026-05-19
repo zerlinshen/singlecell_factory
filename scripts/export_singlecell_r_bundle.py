@@ -1112,8 +1112,10 @@ def write_v2_files(adata, cell_idx: np.ndarray, config: ExportConfig) -> tuple[d
 # Bundle provenance helper (PREC-1)
 # ---------------------------------------------------------------------------
 
-def _r_factory_sha_at_export(r_factory_path: str = "/home/zerlinshen/r_multiomics_factory") -> str:
+def _r_factory_sha_at_export(r_factory_path: str | None = None) -> str:
     """Return the short HEAD SHA of the R factory repo at export time, or '' on failure."""
+    if r_factory_path is None:
+        r_factory_path = str(Path(__file__).resolve().parents[1].parent / "r_multiomics_factory")
     try:
         return subprocess.check_output(
             ["git", "-C", r_factory_path, "rev-parse", "--short=7", "HEAD"],
@@ -1490,7 +1492,7 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="Source final_adata.h5ad")
-    parser.add_argument("--output", required=True, type=Path, help="Output bundle directory")
+    parser.add_argument("--output", default=None, type=Path, help="Output bundle directory (required only without --project-root)")
     parser.add_argument("--source-run-dir", type=Path, default=None, help="Source run directory")
     parser.add_argument(
         "--project-root",
@@ -1611,6 +1613,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "legacy --output layout will be removed",
             file=sys.stderr,
         )
+        if args.output is None:
+            print(
+                "ERROR: --output is required when --project-root is not provided.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
         effective_output = args.output
 
     config = ExportConfig(

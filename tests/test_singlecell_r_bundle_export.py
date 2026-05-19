@@ -177,3 +177,15 @@ def test_export_bundle_v2_mtx_records_sidecar_integrity(tmp_path: Path) -> None:
     assert manifest["files"]["marker_expr_genes"]["n_rows"] == 3
     assert (out_dir / "marker_expr.barcodes.tsv.gz").exists()
     assert (out_dir / "marker_expr.genes.tsv.gz").exists()
+
+
+def test_export_cli_output_not_required_with_project_root() -> None:
+    from scripts.export_singlecell_r_bundle import build_parser
+
+    args = build_parser().parse_args([
+        "--input", "/tmp/final_adata.h5ad",
+        "--project-root", "/tmp/project",
+        "--run-id", "2026-05-18T0900Z-13c2c88",
+    ])
+    assert args.output is None
+    assert str(args.project_root) == "/tmp/project"

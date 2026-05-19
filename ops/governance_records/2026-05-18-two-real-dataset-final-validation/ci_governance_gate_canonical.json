@@ -1,0 +1,20 @@
+{
+  "expected_r_output_files": [
+    "cell_fraction.png",
+    "marker_dot.png",
+    "marker_feature.png",
+    "qc_scatter.png",
+    "qc_violin.png",
+    "r.pdf",
+    "umap_by_cluster.png",
+    "umap_by_group.png"
+  ],
+  "findings": [],
+  "generated_at_utc": "2026-05-19T05:17:53.603124+00:00",
+  "plotting_factory": "/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory",
+  "r_multiomics_factory": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory",
+  "repo_root": "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory",
+  "severity_counts": {},
+  "suite_name": "Bioinformatics Research Pipeline",
+  "verdict": "pass"
+}

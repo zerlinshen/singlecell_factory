@@ -21,7 +21,7 @@ for deep operational steps.
 - Default research workflow: ingest user-provided papers first, then adapt open-source reference implementations, then integrate into existing/new modules with tests.
 
 ## Operating Modes
-- Direct remote operation inside `/home/zerlinshen/singlecell_factory` is valid
+- Direct remote operation inside `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` is valid
   for heavy compute, pipeline execution, run triage, and remote R/reporting.
 - Mac-led SSH orchestration is also valid when the task is coordination,
   review, handoff, or local report packaging.
@@ -38,14 +38,14 @@ As of 2026-05, this factory is a pure compute tool — no scientific outputs lan
 inside this repo. Full plan: `/home/zerlinshen/.omc/plans/factory-project-separation.md`.
 
 Three-way split:
-- **Factory tools**: this repo + `/home/zerlinshen/r_multiomics_factory/` +
-  `/home/zerlinshen/plotting_factory/`
+- **Factory tools**: this repo + `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/` +
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/`
 - **Projects**: `/home/zerlinshen/projects/<project-id>/` (default `PROJECTS_ROOT`)
 - **Bootstrap**: `/home/zerlinshen/projects-bootstrap/omc-new-project`
 
 Sibling repos:
-- `/home/zerlinshen/r_multiomics_factory/` — R-native analysis
-- `/home/zerlinshen/plotting_factory/` — dual-language visualization (`python/` + `r/`)
+- `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/` — R-native analysis
+- `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/` — dual-language visualization (`python/` + `r/`)
 
 **Agent rule**: Never write outputs inside the factory tree. Always pass and
 resolve `--project-root`.

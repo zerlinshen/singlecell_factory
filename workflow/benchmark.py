@@ -12,6 +12,7 @@ from scipy import sparse
 from sklearn.metrics import adjusted_rand_score
 
 from workflow.standard import StandardWorkflowConfig, run_standard_workflow
+from workflow.factory_paths import SINGLECELL_FACTORY_ROOT
 
 
 @dataclass(frozen=True)
@@ -84,7 +85,7 @@ def velocity_direction_consistency(reference_h5ad: Path, candidate_h5ad: Path) -
 def run_benchmark(root: Path | None = None) -> Path:
     """Run end-to-end benchmark on three datasets."""
 
-    root = root or Path("/home/zerlinshen/singlecell_factory")
+    root = root or SINGLECELL_FACTORY_ROOT
     out_root = root / "output" / "workflow_benchmark"
     out_root.mkdir(parents=True, exist_ok=True)
     def latest_baseline(prefix: str) -> Path:

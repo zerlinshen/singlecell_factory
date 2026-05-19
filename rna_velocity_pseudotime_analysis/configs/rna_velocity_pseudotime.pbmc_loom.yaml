@@ -3,9 +3,9 @@ mode: exploratory
 production_required: false
 dataset: pbmc_1k_v3
 input:
-  h5ad: "/home/zerlinshen/singlecell_factory/output/pbmc_1k_v3_scanpy/data/after_qc.h5ad"
+  h5ad: "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/output/pbmc_1k_v3_scanpy/data/after_qc.h5ad"
   tenx_dir: ""
-  loom: "/home/zerlinshen/singlecell_factory/pbmc_1k_v3_count/velocyto/pbmc_1k_v3_count.loom"
+  loom: "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/pbmc_1k_v3_count/velocyto/pbmc_1k_v3_count.loom"
   preferred_stage: "after_qc"
 output:
   root: "rna_velocity_pseudotime_analysis/runtime"

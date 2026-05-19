@@ -5,8 +5,8 @@ Generated: 2026-05-15T22:23:41Z
 Audience: Claude or the next repository agent.
 
 Repos covered:
-- `/home/zerlinshen/singlecell_factory`
-- `/home/zerlinshen/r_multiomics_factory`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory`
 
 ## Executive State
 
@@ -135,7 +135,7 @@ Fresh verification was rerun after the Stop-hook reminder and after the architec
 Python project-root and CLI smoke:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 python -m pytest -q tests/test_cli_project_root_smoke.py tests/test_project_paths_full.py --no-cov
 ```
 
@@ -144,7 +144,7 @@ Result: `19 passed`.
 Python-to-R ATAC contract:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 python -m pytest -q tests/test_r_bundle_contract.py::test_atac_extension_round_trip -m r_contract -o addopts=''
 ```
 
@@ -153,7 +153,7 @@ Result: `1 passed`.
 ATAC module and wave smoke:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 python -m pytest -q tests/test_wave2a_smoke.py tests/test_wave2b_atac_extensions_smoke.py tests/test_atac_lsi.py --no-cov
 ```
 
@@ -162,7 +162,7 @@ Result: `24 passed`.
 Cross-repo contract parity:
 
 ```bash
-cd /home/zerlinshen/r_multiomics_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory
 bash tools/check_contracts_cross_repo.sh
 ```
 
@@ -171,7 +171,7 @@ Result: contract parity OK at sha `6c40efe4a4df8ea8069bc1ab63761f51d96e58a024641
 Reserved extension smoke:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 python -m pytest -q tests/test_wave2b_vdj_smoke.py tests/test_wave2b_ribo_smoke.py tests/test_wave2b_hic_smoke.py --no-cov
 ```
 
@@ -182,7 +182,7 @@ Known note: two NumPy runtime warnings are emitted by the Hi-C fixture and were 
 Densify audit and policy:
 
 ```bash
-cd /home/zerlinshen/singlecell_factory
+cd /home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory
 python -m pytest -q tests/test_densify_audit.py tests/test_densify_policy.py --no-cov
 ```
 
@@ -191,7 +191,7 @@ Result: `10 passed`.
 R run-id validation:
 
 ```bash
-/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript -e "source('/home/zerlinshen/r_multiomics_factory/R/cli_utils.R'); stopifnot(validate_run_id('2026-05-14T0001Z-aaaaaaa')); stopifnot(!validate_run_id('../../bad')); cat('RUN_ID_VALIDATION_OK\n')"
+/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript -e "source('/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R/cli_utils.R'); stopifnot(validate_run_id('2026-05-14T0001Z-aaaaaaa')); stopifnot(!validate_run_id('../../bad')); cat('RUN_ID_VALIDATION_OK\n')"
 ```
 
 Result: `RUN_ID_VALIDATION_OK`.
@@ -199,7 +199,7 @@ Result: `RUN_ID_VALIDATION_OK`.
 Real local RNA bundle smoke:
 
 Input:
-- `/home/zerlinshen/singlecell_factory/rna_velocity_pseudotime_analysis/runtime/results/lung_with_loom_v14/integrated.h5ad`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/rna_velocity_pseudotime_analysis/runtime/results/lung_with_loom_v14/integrated.h5ad`
 
 Result:
 - `PY_SCHEMA=singlecell_r_bundle_v2.1`
@@ -228,7 +228,7 @@ Follow-up architect review reported:
 
 The main rationale document is:
 
-`/home/zerlinshen/singlecell_factory/docs/MULTIOMICS_MODULE_RATIONALE.md`
+`/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/docs/MULTIOMICS_MODULE_RATIONALE.md`
 
 It records the rationale for:
 - ATAC count storage as sparse peak-by-cell data.

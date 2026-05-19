@@ -358,9 +358,9 @@ def main():
     parser = argparse.ArgumentParser(description="Validate acceleration with LUSC real run.")
     parser.add_argument(
         "--lusc-path",
-        default="/home/zerlinshen/singlecell_factory/data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix",
+        default="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix",
     )
-    parser.add_argument("--out-dir", default="/home/zerlinshen/singlecell_factory/reports/validation")
+    parser.add_argument("--out-dir", default="/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/reports/validation")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmup-runs", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)

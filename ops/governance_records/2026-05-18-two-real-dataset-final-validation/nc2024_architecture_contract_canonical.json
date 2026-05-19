@@ -1,0 +1,111 @@
+{
+  "bridge": {
+    "R": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R",
+    "R_bundle": "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle",
+    "plotting_python": "/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/python",
+    "plotting_r": "/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r"
+  },
+  "checked_run": {
+    "bundle": {
+      "bundle_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/bundle",
+      "checked_files": [
+        "obsm/X_pca.parquet",
+        "obsm/X_umap.parquet",
+        "marker_expr.parquet",
+        "obs.parquet",
+        "uns_summary.json"
+      ],
+      "claim_guard": "not_for_de_or_new_quantitative_claims_without_full_object_validation",
+      "marker_format": "parquet",
+      "markers_present": [
+        "CD3E",
+        "CD4",
+        "CD8A",
+        "NKG7",
+        "MS4A1",
+        "CD79A",
+        "LYZ",
+        "S100A8",
+        "EPCAM",
+        "KRT19",
+        "MKI67"
+      ],
+      "n_cells_exported": 5281,
+      "n_vars_source": 19504,
+      "schema_version": "singlecell_r_bundle_v2.1"
+    },
+    "factory_python_sha": "13c2c88",
+    "factory_r_sha": "cba6162",
+    "latest_project_ledger": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/ops/run_ledger/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518T090048.json",
+    "project_root": "/home/zerlinshen/projects/nc-reproduction",
+    "python": {
+      "final_adata": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/final_adata.h5ad",
+      "final_adata_bytes": 253518480,
+      "metadata_subset": {
+        "batch_correction_status": "skipped_single_batch",
+        "clustering_backend": "gpu",
+        "context_validation_mismatches": 0,
+        "de_backend": "cpu",
+        "sample_id_filter_applied": [
+          "P15_T1"
+        ],
+        "sample_id_filter_n_after": 5547,
+        "sample_id_filter_n_before": 884050
+      },
+      "module_status": {
+        "counts": {
+          "ok": 8,
+          "skipped": 1
+        },
+        "path": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/module_status.csv",
+        "statuses": {
+          "annotation": "ok",
+          "batch_correction": "skipped",
+          "cellranger": "ok",
+          "clustering": "ok",
+          "context_aware_annotation": "ok",
+          "differential_expression": "ok",
+          "doublet_detection": "ok",
+          "marker_db_loader": "ok",
+          "qc": "ok"
+        }
+      },
+      "run_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/python/NC2024_WAVE3_SUBSAMPLE_P15_T1_20260518_170048/run_manifest.json",
+      "shape": {
+        "n_obs": 5281,
+        "n_vars": 19504
+      }
+    },
+    "r_outputs": {
+      "expected_files": [
+        "cell_fraction.png",
+        "marker_dot.png",
+        "marker_feature.png",
+        "qc_scatter.png",
+        "qc_violin.png",
+        "r.pdf",
+        "umap_by_cluster.png",
+        "umap_by_group.png"
+      ],
+      "file_count": 8,
+      "files": [
+        "cell_fraction.png",
+        "marker_dot.png",
+        "marker_feature.png",
+        "qc_scatter.png",
+        "qc_violin.png",
+        "r.pdf",
+        "umap_by_cluster.png",
+        "umap_by_group.png"
+      ],
+      "r_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/r"
+    },
+    "root_manifest": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/manifest.json",
+    "run_dir": "/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88",
+    "run_id": "2026-05-18T0900Z-13c2c88"
+  },
+  "execution_mode": "controller_validation",
+  "scientific_boundary": "This validates the retained NC2024 P15_T1 project-root/module/bridge run; it is not a full article-scale multi-cohort annotation claim.",
+  "scope": "current_nc2024_project_root_run",
+  "status": "ok"
+}

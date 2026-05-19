@@ -68,7 +68,7 @@ If the module is paper-driven, capture:
 
 Treat the remote repo as canonical:
 
-- `/home/zerlinshen/singlecell_factory`
+- `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
 
 Required integration surfaces usually include:
 

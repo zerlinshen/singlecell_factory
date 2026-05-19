@@ -6,7 +6,7 @@ description: Project-specific Kimi onboarding for the singlecell_factory upstrea
 # singlecell_factory Kimi Onboarding
 
 Use this project skill when Kimi starts inside
-`/home/zerlinshen/singlecell_factory` or handles upstream single-cell workflow
+`/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` or handles upstream single-cell workflow
 tasks.
 
 ## Required First Reads

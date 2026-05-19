@@ -18,7 +18,7 @@ The current active use case is:
 ## Current Working Defaults
 
 - Remote server alias: `ubuntu-tail`
-- Remote analysis repo: `/home/zerlinshen/singlecell_factory`
+- Remote analysis repo: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
 - Remote conda execution pattern: `/home/zerlinshen/conda/bin/conda run -n sc_gpu ...`
 - Local plotting project: `/Users/zerlinshen/Downloads/1. Antigravity/R pipeline for scRNA analysis`
 

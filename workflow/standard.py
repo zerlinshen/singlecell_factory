@@ -14,6 +14,8 @@ except Exception as exc:  # pragma: no cover - environment-dependent import issu
     sc = None
     _SCANPY_IMPORT_ERROR = exc
 
+from workflow.factory_paths import SINGLECELL_FACTORY_ROOT
+
 
 def _get_scanpy():
     """Lazily resolve scanpy with a clear error when unavailable."""
@@ -130,7 +132,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     parser.add_argument("--tenx-dir", required=True)
-    parser.add_argument("--output-dir", default="/home/zerlinshen/singlecell_factory/output/workflow_standard")
+    parser.add_argument("--output-dir", default=str(SINGLECELL_FACTORY_ROOT / "output" / "workflow_standard"))
     parser.add_argument("--mode", choices=["fast", "full"], default="full")
     parser.add_argument("--n-jobs", type=int, default=8)
     parser.add_argument("--no-cache", action="store_true")

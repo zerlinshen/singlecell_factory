@@ -10,7 +10,7 @@ generated_at: 2026-05-02T13:11:04+00:00 (Three-factory trifurcation: 2026-05-18;
 
 `r_multiomics_factory` is the R-side analysis workspace (trifurcation rename applied 2026-05-18; see RENAME_NOTE.md for previous_name). It consumes the bundle v2.1 contract emitted by `scripts/export_singlecell_r_bundle.py`, reads it via `R_bundle/io_bundle.R`, and routes Seurat objects to per-modality analysis modules (`R/*_module.R`: annotation, batch_integration, integration, preprocessing, protein, spatial, atac, hic, ribo, vdj, etc.). As of Phase 2 (2026-05-19), all plot helpers have been migrated out of this repo into `plotting_factory`.
 
-`plotting_factory` (introduced 2026-05-18 / Phase 1-3) is the dual-language visualization library at `/home/zerlinshen/plotting_factory/`. It owns `python/` + `r/` subtrees, shared `theme/` tokens, per-plot YAML config schemas in `schema/`, and the canonical `figure_bundle_schema.yaml` contract (vendored byte-identically into the other two repos). It contains: 5 general R plot helpers (composition_plots, dim_plots, expression_plots, qc_plots, theme_config), 6 R modality plot modules (atac_plots, hic_plots, protein_plots, ribo_plots, spatial_plots, vdj_plots), 20 Python wave5 figure renderers, and 5 visual-regression smoke tests.
+`plotting_factory` (introduced 2026-05-18 / Phase 1-3) is the dual-language visualization library at `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/`. It owns `python/` + `r/` subtrees, shared `theme/` tokens, per-plot YAML config schemas in `schema/`, and the canonical `figure_bundle_schema.yaml` contract (vendored byte-identically into the other two repos). It contains: 5 general R plot helpers (composition_plots, dim_plots, expression_plots, qc_plots, theme_config), 6 R modality plot modules (atac_plots, hic_plots, protein_plots, ribo_plots, spatial_plots, vdj_plots), 20 Python wave5 figure renderers, and 5 visual-regression smoke tests.
 
 Together: 97+ collected tests on the named contract surface, 4 starter recipes, 3 modality extensions (protein/spatial/multimodal_obsm), an NC2024 paper-faithful reproduction lane, plus the new C2 paper-reproduction-from-upstream pathway anchored by `docs/PAPER_REPRODUCTION_SOP.md`.
 
@@ -368,7 +368,7 @@ Total collected on the named contract surface: **97** tests.
 | `r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md` | This matrix is the claim authority table for the current baseline article. |
 | `r_multiomics_factory/docs/NSCLC_REPRODUCTION_COMPARISON_MEMO.md` | This memo compares the three current NSCLC lanes and states what each lane proves. |
 | `r_multiomics_factory/docs/PYTHON_R_PROVENANCE_AND_FIDELITY.md` | This document defines how to interpret Python-generated figures and R-generated figures in this workspace, an... |
-| `singlecell_factory/AGENTS.md` | This file applies to `/home/zerlinshen/singlecell_factory` and all subdirectories. |
+| `singlecell_factory/AGENTS.md` | This file applies to `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory` and all subdirectories. |
 | `singlecell_factory/AI_AGENT_PROTOCOL.md` | Canonical onboarding index for AI agents entering |
 | `singlecell_factory/BEST_PRACTICES.md` | - Codex 项目规则：`AGENTS.md`（本项目根目录） |
 | `singlecell_factory/CLAUDE.md` | Start with `AI_AGENT_PROTOCOL.md` for onboarding, read order, and task routing. |

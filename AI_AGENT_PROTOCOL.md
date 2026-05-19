@@ -1,7 +1,18 @@
 # AI_AGENT_PROTOCOL.md
 
 Canonical onboarding index for AI agents entering
-`/home/zerlinshen/singlecell_factory`.
+`/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`.
+
+## Bioinformatics Research Pipeline suite identity
+
+Physical suite layout: this repository is stored at `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/`. The retired legacy path `/home/zerlinshen/singlecell_factory` is not part of the current contract; migrate automation to this canonical suite path.
+
+This repository is the Python/global-control-plane member of **Bioinformatics
+Research Pipeline**, the umbrella suite covering `singlecell_factory`,
+`r_multiomics_factory`, and `plotting_factory`. Use this suite name in public
+GitHub-facing summaries, but keep the repository boundary intact: this repo owns
+Python-heavy upstream single-cell processing, AnnData truth, bundle export,
+cross-factory validation, and governance records.
 
 ## Authority / Read This First
 
@@ -27,9 +38,9 @@ As of 2026-05, the working tree follows a three-way split. Full plan:
 - **`singlecell_factory`** (this repo): pure Python compute tool. No scientific
   outputs land inside this tree. All artifacts write to
   `<project-root>/runs/<run-id>/python/`.
-- **`r_multiomics_factory`** (`/home/zerlinshen/r_multiomics_factory/`): R-side
+- **`r_multiomics_factory`** (`/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/`): R-side
   compute tool. Writes to `<project-root>/runs/<run-id>/r/`.
-- **`plotting_factory`** (`/home/zerlinshen/plotting_factory/`): dual-language
+- **`plotting_factory`** (`/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/`): dual-language
   visualization library (`python/` + `r/` subtrees). Figures write to
   `<project-root>/runs/<run-id>/figures/`. Theme tokens, per-plot schemas, and
   `figure_bundle_schema.yaml` contracts live here (Phase 3+).
@@ -122,8 +133,10 @@ plotting/reporting helpers:
   dependencies, architectural layers, modality tags, ownership, and bridge-ready
   flags. Pipeline compatibility constants are derived from this catalog.
 - `scripts/validate_nc2024_architecture_contract.py` is the no-rerun
-  controller-validation smoke for current NC2024 v2 artifacts and the
-  singlecell-to-multiomics bridge contract.
+  controller-validation smoke for the current NC2024 project-root source of
+  truth and the singlecell-to-multiomics-to-plotting bridge contract.
+- `scripts/validate_two_realdata_final.py` is the no-rerun two-real-dataset
+  gate for NC2024 plus Cell/Trevino bridge evidence.
 
 ## Cross-Repo Bridge (Bundle v2.1)
 
@@ -158,7 +171,35 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
-## Current State (2026-05-16)
+## Current State (2026-05-18)
+
+The latest three-factory validation gate is
+`ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md`
+with machine JSON beside it. It validates two real datasets across
+`singlecell_factory -> r_multiomics_factory -> plotting_factory` without rerunning
+heavy compute:
+
+- NC2024: `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`, final AnnData shape `5281 x 19504`, 8 modules `ok`, `batch_correction` expected `skipped`, project-root bundle and R outputs present. Scope is retained P15_T1 project/module/bridge validation, not full article-scale multi-cohort annotation.
+- Cell/Trevino: linked pipeline run `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/`, final shape `55653 x 25519`, project-root bundle and R outputs present. Human-facing paper reproduction evidence remains `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/` with `conditional` public-resource quality gate.
+
+For current bridge validation, run `python scripts/validate_two_realdata_final.py --verify-sha`.
+For NC2024-only architecture smoke, run `python scripts/validate_nc2024_architecture_contract.py --verify-sha`.
+
+Ownership governance: use **owner-by-primary-output**.
+`singlecell_factory` is the default global control plane for Python-heavy
+single-cell upstream and cross-factory validation. `r_multiomics_factory` owns
+R-heavy/spatial primary scientific truth when R creates primary objects,
+statistics, and biological interpretation. `plotting_factory` is a
+presentation-only plotting surface and `plotting_factory` must not own
+biological conclusions. Canonical policy: `docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md`.
+
+Final hardening gates before new merge/report claims:
+
+- **clean-room minimal real-data gate**: `python scripts/run_cleanroom_minimal_realdata.py` runs the current two-real-data validators from an isolated temporary workspace with read-only project-root inputs.
+- **figure parity gate**: `python scripts/validate_figure_parity_gate.py --allow-conditional` checks produced figures and records missing curated references as explicit conditional gaps.
+- **CI governance gate**: `python scripts/validate_ci_governance.py` enforces schema, expected R output files, docs/protocol mentions, workflow wiring, and downstream repo handoff wording.
+
+## Historical State (2026-05-16)
 
 **Wave-5 Trevino PCW21 biology-aware validation pivot (plan v4.2)** is the most recent canonical work. Run dir: `/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/`. Binding ledger: `ops/run_ledger/wave5_trevino_20260516T0931Z-d192836f1bb0.v4.2.json` (plan_revision=v4.2, validation_posture=biology-aware; schema `ops/run_ledger/schema/wave5_v4_2.schema.json`). Plan + spec live under `.omc/plans/wave5-completion-consensus-2026-05-16-v4.2.md` and `.omc/specs/deep-interview-wave5-completion.md` (both gitignored agent state). CI gate `scripts/ci/wave5_v4_2_gate.sh` exits 1 (CLOSED-PARTIAL overall: AC-VAL-3a CLOSED, AC-VAL-3b PARTIAL per §3.4, AC-CI-1 CLOSED, AC-VAL-PLOT-1/2/3 + AC-LEDGER-1 + AC-VAL-3c CLOSED). Methodology: same v3 peak-gene linkage data, comparison reference shifted from Trevino S2F string tuples (contaminated by sparse-detection artifacts MS4A12/FCRLA/SFTPC) to a SHA-pinned literature-curated PCW21 cortical marker panel at `ops/run_ledger/panels/wave5_cortical_panel_v1.json`. The session journal at `ops/before_every_run/journal/2026-05-16_wave5_trevino_pcw21_completion.md` documents the full execution arc (v3 → v4.2).
 

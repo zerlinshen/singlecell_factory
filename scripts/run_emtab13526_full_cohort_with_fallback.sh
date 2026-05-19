@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RAW_ROOT="/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RAW_ROOT="${REPO_ROOT}/data/raw/nc2024_nsclc_emtab13526"
 FULL_ROOT="${RAW_ROOT}/full_cohort"
-RESULTS="/home/zerlinshen/singlecell_factory/results"
-PREP_SCRIPT="/home/zerlinshen/singlecell_factory/scripts/prepare_emtab13526_full_cohort_zarr.py"
-STAGE1_LAUNCHER="/home/zerlinshen/singlecell_factory/scripts/run_emtab13526_full_cohort_stage1.sh"
+RESULTS="${REPO_ROOT}/results"
+PREP_SCRIPT="${REPO_ROOT}/scripts/prepare_emtab13526_full_cohort_zarr.py"
+STAGE1_LAUNCHER="${REPO_ROOT}/scripts/run_emtab13526_full_cohort_stage1.sh"
 PREPARED_ZARR="${FULL_ROOT}/prepared_input.zarr"
 READY_SENTINEL="${FULL_ROOT}/prepared_input.ready"
 PREP_LOG="${RESULTS}/NC2024_NSCLC_FULL_COHORT_PREPARE.launch.log"
@@ -40,7 +41,7 @@ capture_preflight_inventory() {
     find /tmp -maxdepth 1 \( -name 'prepare_emtab13526*' -o -name 'find_bad_emtab*' -o -name 'test_lazy_to_memory*' \) | sort
     echo
     echo "## SCRIPTS"
-    find /home/zerlinshen/singlecell_factory/scripts -maxdepth 1 \( -name '*emtab13526*' -o -name '*nc2024*' \) | sort
+    find "${REPO_ROOT}/scripts" -maxdepth 1 \( -name '*emtab13526*' -o -name '*nc2024*' \) | sort
   } > "${inventory}"
   log "WROTE_PREFLIGHT_INVENTORY=${inventory}"
 }

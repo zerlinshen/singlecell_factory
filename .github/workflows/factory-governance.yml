@@ -1,0 +1,43 @@
+name: Factory governance gates
+
+on:
+  pull_request:
+    paths:
+      - "scripts/export_singlecell_r_bundle.py"
+      - "scripts/validate_*.py"
+      - "scripts/run_cleanroom_minimal_realdata.py"
+      - "tests/test_*validator.py"
+      - "tests/test_nc2024_architecture_contract.py"
+      - "tests/test_singlecell_r_bundle_export.py"
+      - "tests/test_pipeline_hardening_gates.py"
+      - "README.md"
+      - "AI_AGENT_PROTOCOL.md"
+      - "AGENTS.md"
+      - "docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md"
+      - "contracts/**"
+      - ".github/workflows/factory-governance.yml"
+  workflow_dispatch:
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip pytest
+      - name: CI governance check
+        run: python scripts/validate_ci_governance.py --repo-root . --r-repo . --plotting-repo .
+      - name: Figure parity gate unit coverage
+        run: python scripts/validate_figure_parity_gate.py --allow-conditional --allow-missing-produced --output /tmp/figure_parity_gate.json
+      - name: Clean-room harness unit coverage
+        run: python scripts/run_cleanroom_minimal_realdata.py --no-run-validators --allow-missing-inputs --output /tmp/cleanroom_minimal_realdata.json
+      - name: Focused hardening tests
+        run: |
+          pytest --no-cov -q \
+            tests/test_pipeline_hardening_gates.py \
+            tests/test_two_realdata_final_validator.py \
+            tests/test_nc2024_architecture_contract.py

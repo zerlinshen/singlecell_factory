@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy import io
 
-ROOT = Path('/home/zerlinshen/singlecell_factory/data/raw/nc2024_nsclc_emtab13526')
+ROOT = Path('/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/nc2024_nsclc_emtab13526')
 SDRF = ROOT / 'E-MTAB-13526.sdrf.txt'
 PARTS_ROOT = ROOT / '_prepared_parts'
 
