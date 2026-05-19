@@ -276,47 +276,43 @@ class ClusteringModule:
             ctx.metadata["clustering_backend"] = "gpu" if use_gpu else "cpu"
 
     def _should_use_css(self, ctx, adata) -> bool:
+        # F-1 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
+        # CSS clustering is removed from the production science path. This gate
+        # never returns True. Explicit CSS requests raise loudly; the prior
+        # scale_mode=massive auto-activation branch is gone (config.py F-4 remap
+        # makes massive route to clustering_engine=auto, but defense-in-depth here).
         engine = (
             os.environ.get("SC_CLUSTERING_ENGINE", "").strip().lower()
             or getattr(ctx.cfg, "clustering_engine", "auto")
         )
-        if engine == "sparse_exact":
-            ctx.metadata["css_status"] = "disabled_sparse_exact_engine"
-            ctx.metadata["clustering_engine"] = "sparse_exact"
-            return False
         if engine == "css":
-            # Explicit CSS requested — validate that sample labels exist.
-            if "sample" not in adata.obs.columns:
-                ctx.metadata["css_status"] = "unavailable_no_sample_labels"
-                return False
-            n_samples = int(pd.Series(adata.obs["sample"]).nunique())
-            if n_samples < 2:
-                ctx.metadata["css_status"] = "unavailable_single_sample"
-                return False
-            ctx.metadata["css_status"] = "enabled"
-            ctx.metadata["css_n_samples"] = n_samples
-            ctx.metadata["clustering_engine"] = "css"
-            return True
-        if engine == "gpu":
-            # Explicit GPU engine — CSS not applicable.
-            return False
-        # engine == "auto": fall through to the scale_mode heuristic so that
-        # scale_mode=massive (which sets clustering_engine=css via preset) still
-        # routes to CSS, and scale_mode=standard/large does not.
-        if ctx.cfg.scale_mode != "massive":
-            return False
-        if "sample" not in adata.obs.columns:
-            ctx.metadata["css_status"] = "unavailable_no_sample_labels"
-            return False
-        n_samples = int(pd.Series(adata.obs["sample"]).nunique())
-        if n_samples < 2:
-            ctx.metadata["css_status"] = "unavailable_single_sample"
-            return False
-        ctx.metadata["css_status"] = "enabled"
-        ctx.metadata["css_n_samples"] = n_samples
-        return True
+            raise RuntimeError(
+                "CSS clustering is removed from the production science path "
+                "(Plan F-1, Principle 2). To benchmark CSS for historical "
+                "comparison, check out a pre-2026-05-19 commit. "
+                "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
+            )
+        ctx.metadata["css_status"] = "removed_per_plan_F1"
+        if engine == "sparse_exact":
+            ctx.metadata["clustering_engine"] = "sparse_exact"
+        return False
 
     def _run_css(self, adata, cfg, ctx) -> None:
+        # F-1 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
+        # CSS is removed from the production science path. If a caller reaches
+        # this function it indicates a dispatcher regression; fail loudly.
+        raise RuntimeError(
+            "_run_css is unreachable: CSS clustering is removed from the "
+            "production science path (Plan F-1, Principle 2). "
+            "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
+        )
+        # ----- Legacy implementation preserved below for historical reference. -----
+        # Unreachable per the raise above; kept as a comment-block so removing the
+        # raise alone is not enough to silently resurrect the path — F-2 must
+        # replace this with a real sparse_exact implementation, not unblock CSS.
+        # _legacy_run_css(self, adata, cfg, ctx)  # noqa: F-1 dead code marker
+
+    def _legacy_run_css_unused(self, adata, cfg, ctx) -> None:  # noqa: F-1 quarantined
         sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
         sc.pp.log1p(adata)
         adata.X = self._materialize_matrix(adata.X)

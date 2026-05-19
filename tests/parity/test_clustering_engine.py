@@ -1,15 +1,17 @@
-"""Clustering science gate: SC_CLUSTERING_ENGINE=sparse_exact vs CSS (massive mode).
+"""Clustering science gate (updated 2026-05-19 for F-1 CSS removal).
 
-Unlike numerical parity gates, this is a SCIENCE gate: sparse_exact is expected
-to be MORE accurate than CSS (which is a Cluster Similarity Spectrum approximation
-that trades precision for memory). We verify that:
-  1. The flag actually disables CSS routing
-  2. sparse_exact produces a clustering that recovers planted ground-truth groups
-     better than chance (>= 0.5 ARI vs ground truth)
-  3. The engine produces same-or-better cluster purity than CSS on the same data
+Per Plan F-1 (~/.omc/plans/nc-cell-clustering-final-strategy-plan.md,
+Principle 2), CSS clustering is removed from the production science path.
+This file's tests verify the F-1 removal contract:
+  1. SC_CLUSTERING_ENGINE=sparse_exact disables CSS (still passes — sparse_exact
+     remains a valid request and CSS never runs anyway post-F-1).
+  2. Explicit SC_CLUSTERING_ENGINE=css raises RuntimeError loudly.
+  3. scale_mode=massive no longer auto-activates CSS (F-4 remap + F-1 gate).
+  4. scale_mode=large/standard still never activates CSS.
 
-We do NOT compare cluster IDs between sparse_exact and CSS directly — they are
-different algorithms and IDs are not comparable. We compare against ground truth.
+Historical: pre-2026-05-19 this file also tested CSS science correctness on
+synthetic data; those tests are removed because the codepath is removed.
+F-2 will add real-sparse_exact science gates here when that lane is implemented.
 """
 from __future__ import annotations
 
@@ -90,7 +92,12 @@ def _make_minimal_ctx(adata, scale_mode, tmp_path):
 
 @pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
 def test_clustering_engine_flag_disables_css(synthetic_clustered_adata, tmp_path, monkeypatch):
-    """SC_CLUSTERING_ENGINE=sparse_exact must override massive-mode CSS routing."""
+    """SC_CLUSTERING_ENGINE=sparse_exact returns False from _should_use_css.
+
+    Post-F-1: this still passes because _should_use_css now returns False for
+    ALL inputs (CSS is removed). The sparse_exact-specific metadata
+    annotation is preserved.
+    """
     from workflow.modular.modules.clustering import ClusteringModule
 
     monkeypatch.setenv("SC_CLUSTERING_ENGINE", "sparse_exact")
@@ -99,13 +106,37 @@ def test_clustering_engine_flag_disables_css(synthetic_clustered_adata, tmp_path
     module = ClusteringModule()
     use_css = module._should_use_css(ctx, adata)
     assert use_css is False
-    assert ctx.metadata.get("css_status") == "disabled_sparse_exact_engine"
+    assert ctx.metadata.get("css_status") == "removed_per_plan_F1"
     assert ctx.metadata.get("clustering_engine") == "sparse_exact"
 
 
 @pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
-def test_clustering_default_massive_uses_css(synthetic_clustered_adata, tmp_path, monkeypatch):
-    """Default (no env flag) in massive mode still routes to CSS."""
+def test_explicit_css_request_raises(synthetic_clustered_adata, tmp_path, monkeypatch):
+    """F-1 invariant: SC_CLUSTERING_ENGINE=css must raise RuntimeError loudly.
+
+    Pre-2026-05-19 this would activate CSS clustering. Post-F-1 (Plan
+    ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2),
+    CSS is removed from the production science path; an explicit request
+    must fail at the gate rather than silently routing elsewhere.
+    """
+    from workflow.modular.modules.clustering import ClusteringModule
+
+    monkeypatch.setenv("SC_CLUSTERING_ENGINE", "css")
+    adata = synthetic_clustered_adata.copy()
+    ctx = _make_minimal_ctx(adata, scale_mode="massive", tmp_path=tmp_path)
+    module = ClusteringModule()
+    with pytest.raises(RuntimeError, match="CSS clustering is removed"):
+        module._should_use_css(ctx, adata)
+
+
+@pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
+def test_clustering_default_massive_no_longer_uses_css(synthetic_clustered_adata, tmp_path, monkeypatch):
+    """F-1 + F-4 invariant: scale_mode=massive without explicit CSS request must NOT route to CSS.
+
+    Pre-2026-05-19 this returned True (silent CSS activation via the massive
+    preset). Post-F-1/F-4 the preset's clustering_engine slot is remapped to
+    "auto" and the dispatcher's auto branch no longer activates CSS.
+    """
     from workflow.modular.modules.clustering import ClusteringModule
 
     monkeypatch.delenv("SC_CLUSTERING_ENGINE", raising=False)
@@ -113,13 +144,16 @@ def test_clustering_default_massive_uses_css(synthetic_clustered_adata, tmp_path
     ctx = _make_minimal_ctx(adata, scale_mode="massive", tmp_path=tmp_path)
     module = ClusteringModule()
     use_css = module._should_use_css(ctx, adata)
-    assert use_css is True
-    assert ctx.metadata.get("css_status") == "enabled"
+    assert use_css is False, (
+        "F-1 / F-4 / Principle 2 violation: scale_mode=massive activated CSS without "
+        "explicit request. CSS is removed from the production science path."
+    )
+    assert ctx.metadata.get("css_status") == "removed_per_plan_F1"
 
 
 @pytest.mark.skipif(not _try_import_sparse_engine(), reason="phase 2 not enabled")
 def test_clustering_default_large_uses_cpu_path(synthetic_clustered_adata, tmp_path, monkeypatch):
-    """Default in large/standard mode never uses CSS (CSS is massive-only)."""
+    """Default in large/standard mode never uses CSS (this was always true, F-1 strengthens it)."""
     from workflow.modular.modules.clustering import ClusteringModule
 
     monkeypatch.delenv("SC_CLUSTERING_ENGINE", raising=False)

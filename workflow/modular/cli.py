@@ -475,9 +475,28 @@ def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
     """Expand scale_mode preset into capability flags, then apply numeric tuning.
 
     Explicit capability flags (non-empty) always win over the preset bundle.
-    This preserves the contract that --scale-mode massive produces identical
-    behavior to the NC2024 launch script while allowing per-flag overrides.
     """
+    # F-4 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md):
+    # `--scale-mode massive` previously routed clustering_engine -> "css"
+    # (a hard scientific compromise per Principle 2). The preset is now remapped
+    # to clustering_engine -> "auto"; the operational flags (lazy_read=true,
+    # doublet_strategy=grouped) are preserved. Old NC launch scripts that relied
+    # on the implicit CSS activation will silently get auto routing instead —
+    # warn loudly so the change in semantics is visible.
+    if args.scale_mode == "massive":
+        import warnings as _warnings
+        _warnings.warn(
+            "--scale-mode=massive: semantics changed as of 2026-05-19. The "
+            "clustering_engine slot of this preset was remapped from 'css' "
+            "(removed from production per Plan F-1, Principle 2) to 'auto'. "
+            "I/O and dispatch flags (lazy_read=true, doublet_strategy=grouped, "
+            "checkpoint_policy=full) are preserved. If you were relying on "
+            "CSS clustering, the run will instead use the standard "
+            "scanpy/rapids-singlecell auto path. See "
+            "~/.omc/plans/nc-cell-clustering-final-strategy-plan.md",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     # Expand the preset bundle first; explicit flags override below.
     preset = scale_mode_to_capabilities(args.scale_mode)
     if not args.lazy_read:

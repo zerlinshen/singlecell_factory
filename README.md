@@ -61,6 +61,32 @@ Verified hardware: NVIDIA GeForce RTX 5090 D v2 (Blackwell sm_120, 24 GB VRAM).
 
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
+### Large-run DE and checkpoint behavior (2026-05-19)
+
+RAPIDS acceleration is module-specific. In the current `sc_gpu_stable`
+environment, GPU clustering and GPU batch post-processing are available, but
+marker differential expression is not: `rapids-singlecell 0.13.4` does not
+provide `rapids_singlecell.tl.rank_genes_groups`. The DE module therefore checks
+the runtime RAPIDS API before calling it, records
+`de_rapids_singlecell_version` and `de_gpu_fallback_reason`, and falls back to
+CPU when `--gpu-mode auto` is used. `--gpu-mode force` still raises if GPU DE is
+not available.
+
+For `--scale-mode massive` with sparse matrices, CPU DE uses the sparse Welch
+fallback instead of forcing Scanpy's dense path. It records
+`de_backend=cpu_sparse`, `de_test_actually_used=sparse_welch_fallback`, and
+`de_correction_actually_used`. The fallback honors both supported correction
+methods: `benjamini-hochberg` and `bonferroni`.
+
+Checkpoint policy is controlled by `--checkpoint-policy` and can be overridden
+by `SC_CHECKPOINT_POLICY`; the legacy `SCF_MASSIVE_CHECKPOINT_POLICY` is still
+accepted. `metadata`, `metadata_only`, `metadata-only`, `sidecar`, `json`,
+`json-only`, `none`, and `skip-adata` mean "write JSON sidecar/provenance only,
+do not write AnnData". Sidecar-only checkpoints are evidence records, not
+resumable AnnData checkpoints. If AnnData refuses to write a lazy `Dataset2D`
+object, the pipeline removes any partial `.zarr`/`.h5ad`, records a
+`checkpoint_warnings` metadata entry, and still writes the JSON sidecar.
+
 ## Architecture (2026-05+): Factory-Project Separation
 
 As of 2026-05, the working tree follows a three-way split. Full plan:
@@ -223,6 +249,26 @@ envelope from producer-native Python/R/bundle provenance such as
 Legacy or partial runs may produce warnings without blocking governance
 acceptance when substitute provenance exists. Local Reproduction Trail sync is
 downstream and out of scope for remote phase-1 governance.
+
+### Human Conclusion Log Requirement
+
+When a run discussion changes scientific interpretation, final-run strategy,
+claim support, benchmark lane choice, source-of-truth status, or human-facing
+next actions, write a human-readable conclusion log in addition to operational
+manifests and `ops/before_every_run/` notes.
+
+Required locations:
+
+- `/home/zerlinshen/projects/<project-id>/ledger/human_review/<date>-<topic>.md`
+- `/home/zerlinshen/projects/<project-id>/runs/<run-id>/evidence/<topic>.md`
+  when tied to a concrete run
+- `ops/before_every_run/LATEST.md` plus a matching
+  `ops/before_every_run/journal/<date>-<topic>.md` entry
+
+The log must state observed facts, interpretation, decisions, rejected or
+downgraded routes, next actions, and artifact classification (`canonical`,
+`evidence-only`, `superseded`, or `failed exploratory`). Do not leave
+scientific decisions only in chat history.
 
 ### Project Run Retention And Final Backup Policy
 

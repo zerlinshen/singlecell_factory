@@ -240,10 +240,16 @@ _SCALE_MODE_PRESETS: dict[str, dict[str, str]] = {
         "clustering_engine": "auto",
         "checkpoint_policy": "full",
     },
+    # F-4 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
+    # `massive` preset previously routed clustering_engine -> "css". CSS is now
+    # removed from the production science path; the preset is REMAPPED to
+    # route clustering_engine -> "auto" instead. The operational flags
+    # (lazy_read=true, doublet_strategy=grouped, checkpoint_policy=full) are
+    # preserved — they are I/O / dispatch options, not scientific compromises.
     "massive": {
         "lazy_read": "true",
         "doublet_strategy": "grouped",
-        "clustering_engine": "css",
+        "clustering_engine": "auto",
         "checkpoint_policy": "full",
     },
 }

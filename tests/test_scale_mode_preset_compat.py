@@ -1,7 +1,12 @@
 """Tests that scale_mode preset bundles expand to exact capability flag values.
 
-Guarantees that --scale-mode massive still produces identical behavior after
-the scale_mode → capability-flag decomposition (Phase 7A.1).
+Guarantees that scale_mode preset → capability flag bundles match the
+documented contract. Updated 2026-05-19 for F-4 (Plan
+~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2): the
+`massive` preset's clustering_engine slot was remapped from "css" (removed
+from production science path per F-1) to "auto". The operational flags
+(lazy_read=true, doublet_strategy=grouped, checkpoint_policy=full) are
+preserved.
 
 Run with:
     pytest -q --no-cov tests/test_scale_mode_preset_compat.py
@@ -46,12 +51,35 @@ def _minimal_args(**overrides):
 # ---------------------------------------------------------------------------
 
 def test_massive_preset_bundle_exact():
-    """scale_mode_to_capabilities('massive') must equal the documented preset."""
+    """scale_mode_to_capabilities('massive') must match the F-4-remapped preset.
+
+    F-4 (2026-05-19, Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md,
+    Principle 2): clustering_engine slot was remapped from "css" → "auto".
+    Operational flags (lazy_read, doublet_strategy, checkpoint_policy) are
+    preserved.
+    """
     caps = scale_mode_to_capabilities("massive")
     assert caps["lazy_read"] == "true"
     assert caps["doublet_strategy"] == "grouped"
-    assert caps["clustering_engine"] == "css"
+    assert caps["clustering_engine"] == "auto", (
+        "F-4: massive preset clustering_engine must be 'auto' (was 'css' pre-2026-05-19). "
+        "CSS removal is irreversible per Principle 2."
+    )
     assert caps["checkpoint_policy"] == "full"
+
+
+# ---------------------------------------------------------------------------
+# Test 1b: massive preset must NEVER route to CSS post-F-4
+# ---------------------------------------------------------------------------
+
+def test_massive_preset_does_not_route_to_css():
+    """F-1 + F-4 invariant: scale_mode=massive must not activate CSS by any route."""
+    caps = scale_mode_to_capabilities("massive")
+    assert caps["clustering_engine"] != "css", (
+        "F-1 / F-4 / Principle 2 violation: scale_mode=massive routed to CSS. "
+        "CSS is removed from the production science path. "
+        "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -59,13 +87,41 @@ def test_massive_preset_bundle_exact():
 # ---------------------------------------------------------------------------
 
 def test_apply_scale_mode_massive_expands_flags():
-    """_apply_scale_mode with massive must set all 4 capability flags."""
+    """_apply_scale_mode with massive must set all 4 capability flags per F-4 remap."""
     args = _minimal_args(scale_mode="massive")
-    result = _apply_scale_mode(args)
+    # F-4 emits a DeprecationWarning when --scale-mode=massive is used.
+    import warnings as _warnings
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore", DeprecationWarning)
+        result = _apply_scale_mode(args)
     assert result.lazy_read == "true"
     assert result.doublet_strategy == "grouped"
-    assert result.clustering_engine == "css"
+    assert result.clustering_engine == "auto", (
+        "F-4 (2026-05-19): massive preset clustering_engine is 'auto', was 'css'."
+    )
     assert result.checkpoint_policy == "full"
+
+
+# ---------------------------------------------------------------------------
+# Test 2b: --scale-mode=massive emits a DeprecationWarning (F-4)
+# ---------------------------------------------------------------------------
+
+def test_apply_scale_mode_massive_emits_deprecation_warning():
+    """F-4: --scale-mode=massive must emit a DeprecationWarning explaining the css → auto remap."""
+    import warnings as _warnings
+    args = _minimal_args(scale_mode="massive")
+    with _warnings.catch_warnings(record=True) as w:
+        _warnings.simplefilter("always")
+        _apply_scale_mode(args)
+        dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+        assert dep_warnings, (
+            "F-4: scale_mode=massive must emit DeprecationWarning explaining "
+            "the css → auto remap. None emitted."
+        )
+        assert any("css" in str(x.message).lower() or "F-1" in str(x.message)
+                   for x in dep_warnings), (
+            "F-4: DeprecationWarning must explain the css removal context."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -76,9 +132,12 @@ def test_explicit_flag_overrides_preset():
     """An explicit capability flag must win over the scale_mode preset."""
     # Override clustering_engine while keeping massive for everything else.
     args = _minimal_args(scale_mode="massive", clustering_engine="sparse_exact")
-    result = _apply_scale_mode(args)
+    import warnings as _warnings
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore", DeprecationWarning)
+        result = _apply_scale_mode(args)
     assert result.clustering_engine == "sparse_exact", (
-        "explicit --clustering-engine sparse_exact must override massive preset css"
+        "explicit --clustering-engine sparse_exact must override massive preset."
     )
     # Other flags should still come from the massive preset.
     assert result.lazy_read == "true"

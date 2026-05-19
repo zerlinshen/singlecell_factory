@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from importlib import metadata as importlib_metadata
 import logging
+import os
 import matplotlib
 
 matplotlib.use("Agg")
@@ -56,7 +58,6 @@ class DifferentialExpressionModule:
     provides_keys = {"uns": ["rank_genes_groups"]}
 
     def run(self, ctx: PipelineContext) -> None:
-        import os
         if os.environ.get("SC_MEM_GUARD", "").lower() == "on":
             from .._mem_guard import MemoryGuard, MemoryGuardError
             try:
@@ -68,6 +69,7 @@ class DifferentialExpressionModule:
                 ctx.metadata.setdefault("mem_warnings", []).append(
                     {"module": self.name, "error": str(exc)}
                 )
+                raise
         return self._run_impl(ctx)
 
     def _run_impl(self, ctx: PipelineContext) -> None:
@@ -90,15 +92,29 @@ class DifferentialExpressionModule:
         if use_gpu:
             try:
                 import rapids_singlecell as rsc
-                logger.info("GPU DE: using rapids-singlecell rank_genes_groups (%s)", method)
-                rsc.tl.rank_genes_groups(
-                    adata,
-                    groupby="leiden",
-                    method=method,
-                    corr_method=configured_corr_method,
-                    **rank_kwargs,
-                )
-                ctx.metadata["de_backend"] = "gpu"
+                rsc_version = self._rapids_singlecell_version()
+                gpu_rank_genes = getattr(getattr(rsc, "tl", None), "rank_genes_groups", None)
+                ctx.metadata["de_rapids_singlecell_version"] = rsc_version
+                if gpu_rank_genes is None:
+                    reason = (
+                        f"rapids-singlecell {rsc_version} does not expose "
+                        f"tl.rank_genes_groups for method {method}"
+                    )
+                    if ctx.cfg.gpu_mode == "force":
+                        raise RuntimeError(reason)
+                    logger.warning("GPU DE unavailable: %s; falling back to CPU", reason)
+                    ctx.metadata["de_gpu_fallback_reason"] = reason
+                    use_gpu = False
+                else:
+                    logger.info("GPU DE: using rapids-singlecell rank_genes_groups (%s)", method)
+                    gpu_rank_genes(
+                        adata,
+                        groupby="leiden",
+                        method=method,
+                        corr_method=configured_corr_method,
+                        **rank_kwargs,
+                    )
+                    ctx.metadata["de_backend"] = "gpu"
             except Exception as exc:
                 if ctx.cfg.gpu_mode == "force":
                     raise RuntimeError(f"GPU DE failed in force mode: {exc}") from exc
@@ -107,29 +123,64 @@ class DifferentialExpressionModule:
                 use_gpu = False
 
         if not use_gpu:
-            markers = self._run_cpu_rank_genes_groups(
-                adata=adata,
-                method=method,
-                rank_kwargs=rank_kwargs,
-                n_genes=n_genes,
-                corr_method=configured_corr_method,
-            )
-            ctx.metadata["de_backend"] = "cpu"
+            if self._should_use_sparse_cpu_de(ctx, adata):
+                logger.info("CPU DE: using sparse Welch fallback for massive/sparse input")
+                markers = self._fallback_sparse_welch_df(
+                    adata=adata,
+                    groupby="leiden",
+                    n_genes=n_genes,
+                    corr_method=configured_corr_method,
+                )
+                de_test_used = "sparse_welch_fallback"
+                ctx.metadata["de_backend"] = "cpu_sparse"
+                ctx.metadata["de_cpu_fallback_reason"] = "massive_or_requested_sparse_cpu_de"
+            else:
+                markers = self._run_cpu_rank_genes_groups(
+                    adata=adata,
+                    method=method,
+                    rank_kwargs=rank_kwargs,
+                    n_genes=n_genes,
+                    corr_method=configured_corr_method,
+                )
+                ctx.metadata["de_backend"] = "cpu"
         elif has_api(sc, "get.rank_genes_groups_df"):
             markers = sc.get.rank_genes_groups_df(adata, group=None)
         else:
-            # GPU wrote ranking state but scanpy accessor is unavailable in this environment.
-            # The fallback uses Welch t-test + manual BH on its own — record the swap.
-            logger.warning("scanpy get.rank_genes_groups_df unavailable; using Welch t-test fallback (HIGH-3)")
-            de_test_used = "welch_t_test_fallback"
+            # F-3 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md,
+            # Principle 6): GPU wrote ranking state but scanpy accessor is
+            # unavailable. The legacy fallback silently routed to Welch
+            # t-test + manual BH — a hard scientific compromise. The route is
+            # now banned unless SC_ALLOW_WELCH_FALLBACK=1 is set explicitly.
+            if os.environ.get("SC_ALLOW_WELCH_FALLBACK", "").strip() != "1":
+                raise RuntimeError(
+                    "scanpy get.rank_genes_groups_df is unavailable in this "
+                    "environment and the silent Welch fallback is banned for "
+                    "final-claim runs (Plan F-3, Principle 6). Install / "
+                    "upgrade scanpy to expose get.rank_genes_groups_df, or set "
+                    "SC_ALLOW_WELCH_FALLBACK=1 to opt in to Welch explicitly "
+                    "(loud warning + metadata flag). "
+                    "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
+                )
+            logger.error(
+                "Welch DE fallback OPT-IN via SC_ALLOW_WELCH_FALLBACK=1: "
+                "scanpy get.rank_genes_groups_df is unavailable; running "
+                "Welch t-test + manual BH. This is forbidden in final-claim "
+                "runs (Plan F-3, Principle 6)."
+            )
+            de_test_used = "welch_t_test_fallback_OPT_IN"
+            ctx.metadata["de_welch_opt_in_acknowledged"] = True
             markers = self._fallback_rank_genes_groups_df(
                 adata=adata,
                 groupby="leiden",
                 n_genes=n_genes,
+                corr_method=configured_corr_method,
             )
 
         ctx.metadata["de_test_actually_used"] = de_test_used
         ctx.metadata["de_correction"] = configured_corr_method
+        ctx.metadata["de_correction_actually_used"] = self._normalise_correction_method(
+            configured_corr_method
+        )
         if "pvals_adj" not in markers.columns:
             markers["pvals_adj"] = 1.0
         if "logfoldchanges" not in markers.columns:
@@ -194,6 +245,52 @@ class DifferentialExpressionModule:
         self._volcano_plot(sig_markers, ctx)
 
     @staticmethod
+    def _rapids_singlecell_version() -> str:
+        for dist_name in ("rapids-singlecell", "rapids_singlecell"):
+            try:
+                return importlib_metadata.version(dist_name)
+            except importlib_metadata.PackageNotFoundError:
+                continue
+        return "unknown"
+
+    @staticmethod
+    def _should_use_sparse_cpu_de(ctx: PipelineContext, adata) -> bool:
+        # F-3 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md,
+        # Principle 6): the sparse Welch t-test CPU fallback is a silent
+        # algorithmic substitution (parametric Welch t-test for the
+        # non-parametric Wilcoxon rank-sum gold standard per Soneson &
+        # Robinson 2018). Both the prior auto-route on scale_mode=massive
+        # AND the SC_DE_ENGINE=sparse direct request are now gated behind an
+        # explicit opt-in env var SC_ALLOW_WELCH_FALLBACK=1. Default: return
+        # False so the standard Wilcoxon CPU path runs.
+        if not sparse.issparse(adata.X):
+            return False
+        engine = os.environ.get("SC_DE_ENGINE", "").strip().lower()
+        if engine in {"scanpy", "dense", "cpu-scanpy"}:
+            return False
+        if engine == "sparse":
+            if os.environ.get("SC_ALLOW_WELCH_FALLBACK", "").strip() != "1":
+                raise RuntimeError(
+                    "SC_DE_ENGINE=sparse requests the sparse Welch t-test "
+                    "fallback, which is banned for final-claim runs "
+                    "(Plan F-3, Principle 6). Set SC_ALLOW_WELCH_FALLBACK=1 "
+                    "to opt in explicitly (loud warning + metadata flag), "
+                    "or unset SC_DE_ENGINE to use the standard Wilcoxon CPU "
+                    "path. See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
+                )
+            logger.error(
+                "Welch DE fallback OPT-IN via SC_ALLOW_WELCH_FALLBACK=1; "
+                "this is forbidden in final-claim runs (Plan F-3, Principle 6). "
+                "de_test_actually_used will record 'sparse_welch_fallback_OPT_IN'."
+            )
+            ctx.metadata["de_welch_opt_in_acknowledged"] = True
+            return True
+        # F-3: prior behavior auto-routed scale_mode=massive to Welch silently;
+        # that route is removed. The standard Wilcoxon CPU path now runs even
+        # on massive / sparse inputs.
+        return False
+
+    @staticmethod
     def _run_cpu_rank_genes_groups(
         adata,
         method: str,
@@ -223,10 +320,16 @@ class DifferentialExpressionModule:
             adata=adata,
             groupby="leiden",
             n_genes=n_genes,
+            corr_method=corr_method,
         )
 
     @staticmethod
-    def _fallback_rank_genes_groups_df(adata, groupby: str, n_genes: int) -> pd.DataFrame:
+    def _fallback_rank_genes_groups_df(
+        adata,
+        groupby: str,
+        n_genes: int,
+        corr_method: str | None = None,
+    ) -> pd.DataFrame:
         if groupby not in adata.obs:
             adata.uns["rank_genes_groups"] = {"fallback": True, "groupby": groupby}
             return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
@@ -236,7 +339,10 @@ class DifferentialExpressionModule:
         X_raw = adata.X
         if engine == "sparse" and sparse.issparse(X_raw):
             return DifferentialExpressionModule._fallback_sparse_welch_df(
-                adata=adata, groupby=groupby, n_genes=n_genes,
+                adata=adata,
+                groupby=groupby,
+                n_genes=n_genes,
+                corr_method=corr_method,
             )
 
         X = X_raw
@@ -288,7 +394,7 @@ class DifferentialExpressionModule:
             except Exception:
                 pvals = np.ones(X.shape[1], dtype=float)
             pvals = np.nan_to_num(np.asarray(pvals, dtype=float), nan=1.0, posinf=1.0, neginf=1.0)
-            pvals_adj = DifferentialExpressionModule._benjamini_hochberg(pvals)
+            pvals_adj = DifferentialExpressionModule._adjust_pvals(pvals, corr_method)
             order = np.lexsort((-np.abs(logfc), pvals_adj))
             keep = order[: max(1, min(n_genes, len(order)))]
             per_group_names[str(group)] = genes[keep].tolist()
@@ -306,6 +412,7 @@ class DifferentialExpressionModule:
         adata.uns["rank_genes_groups"] = {
             "fallback": True,
             "groupby": groupby,
+            "corr_method": DifferentialExpressionModule._normalise_correction_method(corr_method),
             "names": per_group_names,
         }
         if not rows:
@@ -313,7 +420,12 @@ class DifferentialExpressionModule:
         return pd.DataFrame(rows)
 
     @staticmethod
-    def _fallback_sparse_welch_df(adata, groupby: str, n_genes: int) -> pd.DataFrame:
+    def _fallback_sparse_welch_df(
+        adata,
+        groupby: str,
+        n_genes: int,
+        corr_method: str | None = None,
+    ) -> pd.DataFrame:
         from .._sparse_utils import sparse_welch_t
 
         X = adata.X
@@ -340,7 +452,7 @@ class DifferentialExpressionModule:
             mean_out = np.asarray(mean_out, dtype=float) + 1e-9
             logfc = np.log2(mean_in / mean_out)
             pvals = np.nan_to_num(np.asarray(pvals_raw, dtype=float), nan=1.0, posinf=1.0, neginf=1.0)
-            pvals_adj = DifferentialExpressionModule._benjamini_hochberg(pvals)
+            pvals_adj = DifferentialExpressionModule._adjust_pvals(pvals, corr_method)
             order = np.lexsort((-np.abs(logfc), pvals_adj))
             keep = order[: max(1, min(n_genes, len(order)))]
             per_group_names[str(group)] = genes[keep].tolist()
@@ -359,11 +471,27 @@ class DifferentialExpressionModule:
             "fallback": True,
             "groupby": groupby,
             "engine": "sparse_welch",
+            "corr_method": DifferentialExpressionModule._normalise_correction_method(corr_method),
             "names": per_group_names,
         }
         if not rows:
             return pd.DataFrame(columns=["group", "names", "scores", "pvals_adj", "logfoldchanges"])
         return pd.DataFrame(rows)
+
+    @staticmethod
+    def _normalise_correction_method(corr_method: str | None) -> str:
+        token = str(corr_method or "benjamini-hochberg").strip().lower()
+        if token in {"bonferroni", "bonf"}:
+            return "bonferroni"
+        return "benjamini-hochberg"
+
+    @staticmethod
+    def _adjust_pvals(pvals: np.ndarray, corr_method: str | None) -> np.ndarray:
+        method = DifferentialExpressionModule._normalise_correction_method(corr_method)
+        p = np.clip(np.asarray(pvals, dtype=float), 0.0, 1.0)
+        if method == "bonferroni":
+            return np.clip(p * p.size, 0.0, 1.0)
+        return DifferentialExpressionModule._benjamini_hochberg(p)
 
     @staticmethod
     def _benjamini_hochberg(pvals: np.ndarray) -> np.ndarray:
@@ -467,11 +595,15 @@ class DifferentialExpressionModule:
                     reason="context-aware substate DE parent group for Mann-Whitney test",
                 )
                 if DensifyDecision.ABORT in (sub_decision, par_decision):
-                    from .._mem_guard import MemoryGuardError
-                    raise MemoryGuardError(
+                    reason = (
                         "differential_expression substate DE: sparse subset too large "
                         f"to densify safely (substate={sub_shape}, parent={par_shape})"
                     )
+                    logger.warning("%s — skipping substate '%s'", reason, substate_str)
+                    ctx.metadata.setdefault("de_substate_skip_reasons", []).append(
+                        {"substate": substate_str, "reason": reason}
+                    )
+                    continue
                 if DensifyDecision.CHUNK in (sub_decision, par_decision):
                     logger.warning(
                         "differential_expression substate DE densify in CHUNK range "
@@ -499,7 +631,10 @@ class DifferentialExpressionModule:
             except Exception:
                 pvals = np.ones(X_sub.shape[1], dtype=float)
 
-            fdr = DifferentialExpressionModule._benjamini_hochberg(pvals)
+            fdr = DifferentialExpressionModule._adjust_pvals(
+                pvals,
+                getattr(ctx.cfg, "de_correction", None),
+            )
 
             genes = np.asarray(adata.var_names.astype(str))
             result = pd.DataFrame({

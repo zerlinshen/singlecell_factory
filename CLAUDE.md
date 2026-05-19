@@ -71,6 +71,23 @@ Two provenance fields track `r_multiomics_factory` git SHA at two points:
 
 The R bundle loader (`r_multiomics_factory/R_bundle/io_bundle.R`) logs a `WARNING` (not error) when these differ, surfacing both SHAs.
 
+## Removed / Hardened Paths (2026-05-19, Plan F-1/F-3/F-4)
+
+Source-of-truth plan: `/home/zerlinshen/.omc/plans/nc-cell-clustering-final-strategy-plan.md` (APPROVED 2026-05-19).
+
+Future agents: do not attempt to re-enable, re-implement, or work around these guards without explicit human approval and a plan revision. They are research-rigor invariants, not bugs.
+
+| Constraint | Where | Status |
+|---|---|---|
+| **CSS clustering removed from production science path** | `workflow/modular/modules/clustering.py`: `_should_use_css` raises `RuntimeError` on `engine == "css"` and returns False on all other paths; `_run_css` is unreachable via `RuntimeError` at function entry; metadata records `css_status="removed_per_plan_F1"`. | F-1 done |
+| **`scale_mode=massive` preset's `clustering_engine` slot remapped** | `workflow/modular/config.py`: `_SCALE_MODE_PRESETS["massive"]` now sets `clustering_engine: "auto"` (was `"css"`). Operational flags (`lazy_read=true`, `doublet_strategy=grouped`, `checkpoint_policy=full`) are preserved. CLI emits `DeprecationWarning` when `--scale-mode=massive` is used. | F-4 done |
+| **Silent Welch DE fallback banned** | `workflow/modular/modules/differential_expression.py`: `_should_use_sparse_cpu_de` returns False by default; `SC_DE_ENGINE=sparse` raises `RuntimeError` unless `SC_ALLOW_WELCH_FALLBACK=1` opt-in; GPU-accessor-missing branch raises unless opt-in. Opt-in path emits ERROR-level log and sets `ctx.metadata["de_welch_opt_in_acknowledged"]=True`. | F-3 done |
+| **`--clustering-engine=sparse_exact` is still a no-op (PENDING F-2)** | The flag currently disables CSS but does not yet implement a real sparse-safe exact lane. F-2 is the next factory-hardening item; do not claim sparse_exact functionality is available until F-2 is complete. | F-2 pending |
+| **GPU clustering must preserve scanpy semantics (Principle 8)** | Any GPU lane must use `rapids-singlecell` drop-in calls (`rsc.pp.neighbors`, `rsc.tl.leiden`) that mirror `sc.pp.neighbors` / `sc.tl.leiden`. Pure `cuML` / `cuGraph-native` clustering is inadmissible for final-claim runs. | invariant |
+
+Opt-in env vars (use with explicit human approval only):
+- `SC_ALLOW_WELCH_FALLBACK=1` — allow legacy Welch t-test DE fallback (loud warning + metadata flag; banned in final-claim runs).
+
 ## Core Commands
 - Run pipeline with project-root (preferred):
   `python -m workflow.modular.cli --project-root /home/zerlinshen/projects/<id> --project <name> --sample-root <path> --optional-modules <modules>`

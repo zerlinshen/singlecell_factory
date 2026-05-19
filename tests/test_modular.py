@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 from anndata import AnnData
 
 from workflow.modular.config import BatchConfig, CellRangerConfig, PipelineConfig
@@ -669,6 +670,328 @@ def test_de_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
     assert ctx.metadata["de_significant_genes"] >= 0
     assert (tab_dir / "marker_genes_all.csv").exists()
     monkeypatch.setattr(gutils, "_gpu_ok", None)
+
+
+def test_de_gpu_fallback_when_rapids_lacks_rank_genes_groups(monkeypatch, tmp_path):
+    """Old rapids-singlecell exposes clustering APIs but not GPU DE."""
+    import sys
+    import types
+    import pandas as pd
+    import workflow.modular.modules.differential_expression as de_mod
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    monkeypatch.setattr(de_mod, "gpu_available", lambda mode: True)
+    mock_tl = types.SimpleNamespace(rank_genes_groups_logreg=lambda *args, **kwargs: None)
+    monkeypatch.setitem(sys.modules, "rapids_singlecell", types.SimpleNamespace(tl=mock_tl))
+
+    adata = AnnData(np.random.default_rng(42).random((12, 6)).astype(np.float32))
+    adata.obs["leiden"] = (np.arange(12) % 2).astype(str)
+    adata.var_names = [f"G{i}" for i in range(6)]
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+    )
+    run_dir = tmp_path / "run"
+    fig_dir = run_dir / "differential_expression"
+    tab_dir = run_dir / "differential_expression"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=fig_dir,
+        table_dir=tab_dir,
+        adata=adata,
+    )
+
+    mod = DifferentialExpressionModule()
+
+    def _fake_cpu_rank(adata, method, rank_kwargs, n_genes, corr_method=None):
+        return pd.DataFrame(
+            [
+                {
+                    "group": "0",
+                    "names": "G0",
+                    "scores": 1.0,
+                    "pvals_adj": 0.01,
+                    "logfoldchanges": 1.2,
+                }
+            ]
+        )
+
+    monkeypatch.setattr(mod, "_run_cpu_rank_genes_groups", _fake_cpu_rank)
+    mod.run(ctx)
+
+    assert ctx.metadata["de_backend"] == "cpu"
+    assert "does not expose tl.rank_genes_groups" in ctx.metadata["de_gpu_fallback_reason"]
+    assert (tab_dir / "marker_genes_all.csv").exists()
+
+
+def test_de_massive_sparse_cpu_uses_wilcoxon_by_default(monkeypatch, tmp_path):
+    """F-3 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 6):
+
+    Previously this test asserted that scale_mode=massive with sparse input
+    silently routed DE to the sparse Welch t-test fallback. That silent
+    substitution is now banned. Under F-3, the dispatch layer must NOT
+    auto-route to the sparse Welch fallback even on massive + sparse input.
+
+    We verify this at the dispatch-decision layer (`_should_use_sparse_cpu_de`)
+    rather than running the full Wilcoxon numerical path end-to-end on a
+    6-cell synthetic — scanpy's Wilcoxon implementation depends on numba JIT
+    that does not compile cleanly on this tiny fixture in some environments,
+    and the contract being tested is the *routing*, not the numerics.
+    """
+    import scipy.sparse as sp
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    monkeypatch.delenv("SC_DE_ENGINE", raising=False)
+    monkeypatch.delenv("SC_ALLOW_WELCH_FALLBACK", raising=False)
+
+    X = sp.csr_matrix(
+        np.array(
+            [
+                [5.0, 0.0, 1.0],
+                [4.0, 0.0, 1.0],
+                [0.0, 4.0, 1.0],
+                [0.0, 5.0, 1.0],
+                [5.0, 0.0, 1.0],
+                [0.0, 5.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    adata = AnnData(X)
+    adata.obs["leiden"] = ["0", "0", "1", "1", "0", "1"]
+    adata.var_names = ["G0", "G1", "G2"]
+
+    from types import SimpleNamespace
+    ctx = SimpleNamespace(cfg=SimpleNamespace(scale_mode="massive"), metadata={})
+
+    # F-3 contract: _should_use_sparse_cpu_de must NOT return True by default
+    # on massive + sparse input. (Pre-F-3 it returned True; post-F-3 it
+    # returns False and the standard Wilcoxon path runs.)
+    use_sparse_welch = DifferentialExpressionModule._should_use_sparse_cpu_de(ctx, adata)
+    assert use_sparse_welch is False, (
+        "F-3 violation: _should_use_sparse_cpu_de returned True on massive + sparse "
+        "input without SC_DE_ENGINE=sparse opt-in. The silent Welch fallback is banned. "
+        "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md Principle 6."
+    )
+
+
+def test_de_sparse_engine_without_opt_in_raises(monkeypatch, tmp_path):
+    """F-3: SC_DE_ENGINE=sparse without SC_ALLOW_WELCH_FALLBACK=1 must raise loudly.
+
+    The sparse Welch fallback is a banned algorithmic substitution. Direct
+    requests via SC_DE_ENGINE=sparse must error at the gate unless the user
+    explicitly opts in with SC_ALLOW_WELCH_FALLBACK=1.
+    """
+    import scipy.sparse as sp
+    import workflow.modular.modules.differential_expression as de_mod
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    monkeypatch.setattr(de_mod, "gpu_available", lambda mode: False)
+    monkeypatch.setenv("SC_DE_ENGINE", "sparse")
+    monkeypatch.delenv("SC_ALLOW_WELCH_FALLBACK", raising=False)
+
+    X = sp.csr_matrix(
+        np.array(
+            [[5.0, 0.0, 1.0], [4.0, 0.0, 1.0], [0.0, 4.0, 1.0],
+             [0.0, 5.0, 1.0], [5.0, 0.0, 1.0], [0.0, 5.0, 1.0]],
+            dtype=np.float32,
+        )
+    )
+    adata = AnnData(X)
+    adata.obs["leiden"] = ["0", "0", "1", "1", "0", "1"]
+    adata.var_names = ["G0", "G1", "G2"]
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        scale_mode="standard",
+    )
+    run_dir = tmp_path / "run"
+    fig_dir = run_dir / "differential_expression"
+    tab_dir = run_dir / "differential_expression"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=fig_dir,
+        table_dir=tab_dir,
+        adata=adata,
+    )
+
+    mod = DifferentialExpressionModule()
+    with pytest.raises(RuntimeError, match="banned for final-claim runs"):
+        mod.run(ctx)
+
+
+def test_de_sparse_engine_with_opt_in_runs_with_loud_warning(monkeypatch, tmp_path, caplog):
+    """F-3: SC_DE_ENGINE=sparse with SC_ALLOW_WELCH_FALLBACK=1 runs, but loudly.
+
+    Opt-in must (a) execute the sparse Welch fallback, (b) emit an ERROR-level
+    log, (c) mark de_welch_opt_in_acknowledged in ctx.metadata so the manifest
+    can detect the explicit override.
+    """
+    import logging
+    import scipy.sparse as sp
+    import workflow.modular.modules.differential_expression as de_mod
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    monkeypatch.setattr(de_mod, "gpu_available", lambda mode: False)
+    monkeypatch.setenv("SC_DE_ENGINE", "sparse")
+    monkeypatch.setenv("SC_ALLOW_WELCH_FALLBACK", "1")
+
+    X = sp.csr_matrix(
+        np.array(
+            [[5.0, 0.0, 1.0], [4.0, 0.0, 1.0], [0.0, 4.0, 1.0],
+             [0.0, 5.0, 1.0], [5.0, 0.0, 1.0], [0.0, 5.0, 1.0]],
+            dtype=np.float32,
+        )
+    )
+    adata = AnnData(X)
+    adata.obs["leiden"] = ["0", "0", "1", "1", "0", "1"]
+    adata.var_names = ["G0", "G1", "G2"]
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        scale_mode="standard",
+    )
+    run_dir = tmp_path / "run"
+    fig_dir = run_dir / "differential_expression"
+    tab_dir = run_dir / "differential_expression"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=fig_dir,
+        table_dir=tab_dir,
+        adata=adata,
+    )
+
+    mod = DifferentialExpressionModule()
+    with caplog.at_level(logging.ERROR):
+        mod.run(ctx)
+
+    assert ctx.metadata.get("de_welch_opt_in_acknowledged") is True, (
+        "F-3 opt-in must set de_welch_opt_in_acknowledged in metadata."
+    )
+    assert ctx.metadata["de_test_actually_used"] == "sparse_welch_fallback"
+    assert ctx.adata.uns["rank_genes_groups"]["engine"] == "sparse_welch"
+    welch_logs = [r for r in caplog.records if r.levelno >= logging.ERROR
+                  and "SC_ALLOW_WELCH_FALLBACK" in r.getMessage()]
+    assert welch_logs, "F-3 opt-in must emit a loud (>= ERROR-level) log message."
+
+
+def test_de_fallback_correction_honors_bonferroni():
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    pvals = np.array([0.01, 0.2, 0.6], dtype=float)
+    corrected = DifferentialExpressionModule._adjust_pvals(pvals, "bonferroni")
+
+    assert np.allclose(corrected, np.array([0.03, 0.6, 1.0]))
+    assert DifferentialExpressionModule._normalise_correction_method("bonf") == "bonferroni"
+
+
+def test_de_memory_guard_error_does_not_retry(monkeypatch, tmp_path):
+    """MemoryGuard failures are recorded once and are not silently marked successful."""
+    import pytest
+    from workflow.modular._mem_guard import MemoryGuardError
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    monkeypatch.setenv("SC_MEM_GUARD", "on")
+
+    adata = AnnData(np.random.default_rng(42).random((6, 3)).astype(np.float32))
+    adata.obs["leiden"] = (np.arange(6) % 2).astype(str)
+    adata.var_names = [f"G{i}" for i in range(3)]
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+    )
+    run_dir = tmp_path / "run"
+    de_dir = run_dir / "differential_expression"
+    de_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=de_dir,
+        table_dir=de_dir,
+        adata=adata,
+    )
+
+    mod = DifferentialExpressionModule()
+    calls = 0
+
+    def _raise_memory_guard(_ctx):
+        nonlocal calls
+        calls += 1
+        raise MemoryGuardError("simulated substage abort")
+
+    monkeypatch.setattr(mod, "_run_impl", _raise_memory_guard)
+
+    with pytest.raises(MemoryGuardError, match="simulated substage abort"):
+        mod.run(ctx)
+
+    assert calls == 1
+    assert ctx.metadata["mem_warnings"] == [
+        {"module": "differential_expression", "error": "simulated substage abort"}
+    ]
+
+
+def test_de_substate_too_large_skips_without_retry(monkeypatch, tmp_path):
+    """Oversized sparse substate DE should be recorded and skipped."""
+    import pandas as pd
+    import scipy.sparse as sp
+    import workflow.modular.modules.differential_expression as de_mod
+    from workflow.modular._densify_policy import DensifyDecision
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    monkeypatch.setattr(de_mod, "plan_densify", lambda *args, **kwargs: DensifyDecision.ABORT)
+
+    adata = AnnData(sp.csr_matrix(np.ones((8, 4), dtype=np.float32)))
+    adata.obs["context_aware_substate"] = ["large"] * 4 + ["other"] * 4
+    adata.var_names = [f"G{i}" for i in range(4)]
+
+    from workflow.modular.context import PipelineContext
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+    )
+    run_dir = tmp_path / "run"
+    de_dir = run_dir / "differential_expression"
+    de_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=de_dir,
+        table_dir=de_dir,
+        adata=adata,
+    )
+
+    DifferentialExpressionModule._write_substate_de(
+        adata=adata,
+        markers=pd.DataFrame(),
+        ctx=ctx,
+    )
+
+    assert ctx.metadata["de_substates_count"] == 0
+    assert len(ctx.metadata["de_substate_skip_reasons"]) == 2
 
 
 def test_batch_correction_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
