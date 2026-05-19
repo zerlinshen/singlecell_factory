@@ -4,12 +4,9 @@ import gc
 import logging
 import os
 import matplotlib
-from collections import defaultdict
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from sklearn.cluster import MiniBatchKMeans
-from sklearn.decomposition import TruncatedSVD
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -30,14 +27,6 @@ __references__ = {
         "year": "2018",
         "doi": "10.1186/s13059-017-1382-0",
         "description": "scanpy pp.pca / pp.neighbors / tl.umap / tl.leiden stack.",
-    },
-    "Halko_TruncatedSVD_2011": {
-        "title": "Finding Structure with Randomness: Probabilistic Algorithms for Constructing Approximate Matrix Decompositions",
-        "authors": "Halko, Martinsson, Tropp",
-        "journal": "SIAM Review",
-        "year": "2011",
-        "doi": "10.1137/090771806",
-        "description": "Truncated SVD method underlying sklearn.decomposition.TruncatedSVD used in CSS path.",
     },
     "McInnes_UMAP_2018": {
         "title": "UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction",
@@ -143,7 +132,7 @@ class ClusteringModule:
     """
 
     name = "clustering"
-    provides_keys = {"obs": ["leiden"], "obsm": ["X_pca", "X_umap", "X_css"]}
+    provides_keys = {"obs": ["leiden"], "obsm": ["X_pca", "X_umap"]}
 
     def run(self, ctx: PipelineContext) -> None:
         if os.environ.get("SC_MEM_GUARD", "").lower() == "on":
@@ -168,121 +157,120 @@ class ClusteringModule:
         cfg.random_state = ctx.random_state
         sc.settings.n_jobs = max(1, os.cpu_count() or 1)
 
-        if self._should_use_css(ctx, adata):
-            logger.info("Massive scale-mode with sample labels detected — using CSS-style clustering representation")
-            self._run_css(adata, cfg, ctx)
+        # F-1: CSS removed from production path. Invoke _should_use_css for its
+        # side effects (raises on engine=="css", sets css_status/clustering_engine
+        # metadata). Return value is always False; the prior dispatch branch is gone.
+        self._should_use_css(ctx, adata)
+        # F-2 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 7):
+        # `--clustering-engine=sparse_exact` is now a dedicated dispatch arm with
+        # strict input validation (raises if input is not sparse) and forced
+        # `svd_solver="arpack"` (no silent fallback to randomized SVD).
+        # sparse_exact is the CPU credibility-reference lane for Component C's
+        # benchmark; it does NOT route to GPU even when GPU is available.
+        _engine_pre_gpu = (
+            os.environ.get("SC_CLUSTERING_ENGINE", "").strip().lower()
+            or getattr(ctx.cfg, "clustering_engine", "auto")
+        )
+        if _engine_pre_gpu == "sparse_exact":
+            self._run_sparse_exact(adata, cfg, ctx)
             use_gpu = False
-        else:
-            # F-2 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 7):
-            # `--clustering-engine=sparse_exact` is now a dedicated dispatch arm with
-            # strict input validation (raises if input is not sparse) and forced
-            # `svd_solver="arpack"` (no silent fallback to randomized SVD).
-            # sparse_exact is the CPU credibility-reference lane for Component C's
-            # benchmark; it does NOT route to GPU even when GPU is available.
-            _engine_pre_gpu = (
-                os.environ.get("SC_CLUSTERING_ENGINE", "").strip().lower()
-                or getattr(ctx.cfg, "clustering_engine", "auto")
+            self._plot_umap_clusters(adata, ctx)
+            ctx.adata = adata
+            ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
+            ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
+            ctx.metadata["clustering_random_state"] = ctx.random_state
+            ctx.metadata["clustering_backend"] = "cpu_sparse_exact"
+            return
+        use_gpu = gpu_available(ctx.cfg.gpu_mode)
+        engine = _engine_pre_gpu
+        _cp_policy = (
+            os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
+            or getattr(ctx.cfg, "checkpoint_policy", "full")
+        )
+        if engine not in {"gpu"} and ctx.cfg.gpu_mode == "auto" and _cp_policy != "full":
+            logger.info("Non-full checkpoint policy: prefer CPU clustering to avoid GPU copy overhead")
+            ctx.metadata["clustering_gpu_disabled_reason"] = "checkpoint_policy_non_full"
+            use_gpu = False
+        if use_gpu:
+            logger.info("GPU detected — using rapids-singlecell for PCA/neighbors/UMAP/Leiden")
+            # Wave 3 / US-W3-1 — M2 mechanism (selected over M1 in US-W3-0 spike
+            # due to RTX 5090 D v2 + cuSOLVER incompatibility on rsc.pp.pca; see
+            # docs/HOTSPOT1_DIAGNOSIS.md). Site-1 elimination: skip the host-side
+            # _clone_for_gpu_lite and run _run_gpu directly on the original adata.
+            # Mandate adata.raw preservation so the GPU-failure fallback can
+            # restore counts via adata.raw.to_adata() — safe even though
+            # log1p/scale mutate adata.X in place (scanpy/_simple.py:364,
+            # scanpy/_scale.py:200), because raw holds an immutable reference
+            # to the pre-mutation counts.
+            from .._contract_violation import (
+                ClusteringContractViolation,
+                poison_adata,
+                resolve_gpu_failure_policy,
             )
-            if _engine_pre_gpu == "sparse_exact":
-                self._run_sparse_exact(adata, cfg, ctx)
-                use_gpu = False
-                self._plot_umap_clusters(adata, ctx)
-                ctx.adata = adata
-                ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
-                ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
-                ctx.metadata["clustering_random_state"] = ctx.random_state
-                ctx.metadata["clustering_backend"] = "cpu_sparse_exact"
-                return
-            use_gpu = gpu_available(ctx.cfg.gpu_mode)
-            engine = _engine_pre_gpu
-            _cp_policy = (
-                os.environ.get("SC_CHECKPOINT_POLICY", "").strip().lower()
-                or getattr(ctx.cfg, "checkpoint_policy", "full")
-            )
-            if engine not in {"gpu"} and ctx.cfg.gpu_mode == "auto" and _cp_policy != "full":
-                logger.info("Non-full checkpoint policy: prefer CPU clustering to avoid GPU copy overhead")
-                ctx.metadata["clustering_gpu_disabled_reason"] = "checkpoint_policy_non_full"
-                use_gpu = False
-            if use_gpu:
-                logger.info("GPU detected — using rapids-singlecell for PCA/neighbors/UMAP/Leiden")
-                # Wave 3 / US-W3-1 — M2 mechanism (selected over M1 in US-W3-0 spike
-                # due to RTX 5090 D v2 + cuSOLVER incompatibility on rsc.pp.pca; see
-                # docs/HOTSPOT1_DIAGNOSIS.md). Site-1 elimination: skip the host-side
-                # _clone_for_gpu_lite and run _run_gpu directly on the original adata.
-                # Mandate adata.raw preservation so the GPU-failure fallback can
-                # restore counts via adata.raw.to_adata() — safe even though
-                # log1p/scale mutate adata.X in place (scanpy/_simple.py:364,
-                # scanpy/_scale.py:200), because raw holds an immutable reference
-                # to the pre-mutation counts.
-                from .._contract_violation import (
-                    ClusteringContractViolation,
-                    poison_adata,
-                    resolve_gpu_failure_policy,
-                )
-                gpu_failure_policy = resolve_gpu_failure_policy(ctx.cfg)
-                ctx.metadata["clustering_clone_strategy"] = "m2_inplace_raw_mandate"
-                ctx.metadata["gpu_failure_policy"] = gpu_failure_policy
-                self._log_rss(ctx, "hotspot1:before_inplace_gpu")
-                # M2 invariant — raw MUST be preserved for the GPU path to enable
-                # restore-on-fallback. Override the checkpoint-policy gate.
-                if adata.raw is None:
-                    adata.raw = adata.copy()
-                    ctx.metadata["m2_raw_preserved"] = True
-                self._log_rss(ctx, "hotspot1:after_raw_preserve")
-                try:
-                    self._run_gpu(adata, cfg, ctx)
-                    self._log_rss(ctx, "hotspot1:after_inplace_gpu_success")
-                    gc.collect()
-                except Exception as exc:
-                    if ctx.cfg.gpu_mode == "force":
-                        raise RuntimeError(f"GPU clustering failed in force mode: {exc}") from exc
-                    logger.warning("GPU clustering failed (%s); applying policy=%s", exc, gpu_failure_policy)
-                    ctx.metadata["clustering_gpu_fallback_reason"] = str(exc)
-                    if gpu_failure_policy == "raise":
-                        poison_adata(adata, f"GPU clustering failure: {exc}")
+            gpu_failure_policy = resolve_gpu_failure_policy(ctx.cfg)
+            ctx.metadata["clustering_clone_strategy"] = "m2_inplace_raw_mandate"
+            ctx.metadata["gpu_failure_policy"] = gpu_failure_policy
+            self._log_rss(ctx, "hotspot1:before_inplace_gpu")
+            # M2 invariant — raw MUST be preserved for the GPU path to enable
+            # restore-on-fallback. Override the checkpoint-policy gate.
+            if adata.raw is None:
+                adata.raw = adata.copy()
+                ctx.metadata["m2_raw_preserved"] = True
+            self._log_rss(ctx, "hotspot1:after_raw_preserve")
+            try:
+                self._run_gpu(adata, cfg, ctx)
+                self._log_rss(ctx, "hotspot1:after_inplace_gpu_success")
+                gc.collect()
+            except Exception as exc:
+                if ctx.cfg.gpu_mode == "force":
+                    raise RuntimeError(f"GPU clustering failed in force mode: {exc}") from exc
+                logger.warning("GPU clustering failed (%s); applying policy=%s", exc, gpu_failure_policy)
+                ctx.metadata["clustering_gpu_fallback_reason"] = str(exc)
+                if gpu_failure_policy == "raise":
+                    poison_adata(adata, f"GPU clustering failure: {exc}")
+                    raise ClusteringContractViolation(
+                        f"GPU clustering failed and SC_GPU_FAILURE_POLICY=raise; "
+                        f"adata poisoned. Original error: {exc}"
+                    ) from exc
+                if gpu_failure_policy == "restore-cpu":
+                    if adata.raw is None:
+                        poison_adata(adata, "GPU failed + raw missing under restore-cpu")
                         raise ClusteringContractViolation(
-                            f"GPU clustering failed and SC_GPU_FAILURE_POLICY=raise; "
-                            f"adata poisoned. Original error: {exc}"
+                            "GPU clustering failed under policy=restore-cpu but adata.raw "
+                            "is None — cannot restore counts. adata poisoned."
                         ) from exc
-                    if gpu_failure_policy == "restore-cpu":
-                        if adata.raw is None:
-                            poison_adata(adata, "GPU failed + raw missing under restore-cpu")
-                            raise ClusteringContractViolation(
-                                "GPU clustering failed under policy=restore-cpu but adata.raw "
-                                "is None — cannot restore counts. adata poisoned."
-                            ) from exc
-                        logger.info("Restoring adata from preserved raw before CPU fallback")
-                        adata = adata.raw.to_adata()
-                        ctx.adata = adata
-                        ctx.metadata["clustering_restored_from_raw"] = True
-                        use_gpu = False
-                        if self._run_hybrid_gpu_graph(adata, cfg, ctx):
-                            ctx.metadata["clustering_backend"] = "hybrid"
-                        else:
-                            self._run_cpu(adata, cfg, ctx)
-                    elif gpu_failure_policy == "reload-checkpoint":
-                        checkpoint_path = getattr(ctx, "last_checkpoint_path", None)
-                        if checkpoint_path is None or not checkpoint_path.exists():
-                            poison_adata(adata, "GPU failed + no checkpoint under reload-checkpoint")
-                            raise ClusteringContractViolation(
-                                "GPU clustering failed under policy=reload-checkpoint but no "
-                                "pre-clustering checkpoint exists. Re-run with --checkpoint. "
-                                "adata poisoned."
-                            ) from exc
-                        import anndata as ad
-                        logger.info("Reloading adata from %s before CPU fallback", checkpoint_path)
-                        adata = ad.read_h5ad(str(checkpoint_path))
-                        ctx.adata = adata
-                        ctx.metadata["clustering_reloaded_from_checkpoint"] = str(checkpoint_path)
-                        use_gpu = False
-                        if self._run_hybrid_gpu_graph(adata, cfg, ctx):
-                            ctx.metadata["clustering_backend"] = "hybrid"
-                        else:
-                            self._run_cpu(adata, cfg, ctx)
-                finally:
-                    gc.collect()
-            else:
-                self._run_cpu(adata, cfg, ctx)
+                    logger.info("Restoring adata from preserved raw before CPU fallback")
+                    adata = adata.raw.to_adata()
+                    ctx.adata = adata
+                    ctx.metadata["clustering_restored_from_raw"] = True
+                    use_gpu = False
+                    if self._run_hybrid_gpu_graph(adata, cfg, ctx):
+                        ctx.metadata["clustering_backend"] = "hybrid"
+                    else:
+                        self._run_cpu(adata, cfg, ctx)
+                elif gpu_failure_policy == "reload-checkpoint":
+                    checkpoint_path = getattr(ctx, "last_checkpoint_path", None)
+                    if checkpoint_path is None or not checkpoint_path.exists():
+                        poison_adata(adata, "GPU failed + no checkpoint under reload-checkpoint")
+                        raise ClusteringContractViolation(
+                            "GPU clustering failed under policy=reload-checkpoint but no "
+                            "pre-clustering checkpoint exists. Re-run with --checkpoint. "
+                            "adata poisoned."
+                        ) from exc
+                    import anndata as ad
+                    logger.info("Reloading adata from %s before CPU fallback", checkpoint_path)
+                    adata = ad.read_h5ad(str(checkpoint_path))
+                    ctx.adata = adata
+                    ctx.metadata["clustering_reloaded_from_checkpoint"] = str(checkpoint_path)
+                    use_gpu = False
+                    if self._run_hybrid_gpu_graph(adata, cfg, ctx):
+                        ctx.metadata["clustering_backend"] = "hybrid"
+                    else:
+                        self._run_cpu(adata, cfg, ctx)
+            finally:
+                gc.collect()
+        else:
+            self._run_cpu(adata, cfg, ctx)
 
         self._plot_umap_clusters(adata, ctx)
         ctx.adata = adata
@@ -315,104 +303,17 @@ class ClusteringModule:
         return False
 
     def _run_css(self, adata, cfg, ctx) -> None:
-        # F-1 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
-        # CSS is removed from the production science path. If a caller reaches
-        # this function it indicates a dispatcher regression; fail loudly.
+        # F-1 tombstone (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
+        # CSS is removed from the production science path. The legacy implementation
+        # body was physically deleted on 2026-05-20. This stub remains as a
+        # documented gravestone — if any callsite still routes here (dispatcher
+        # regression, copy-pasted old patch, etc.) it raises loudly instead of
+        # silently no-op'ing or AttributeError'ing.
         raise RuntimeError(
             "_run_css is unreachable: CSS clustering is removed from the "
             "production science path (Plan F-1, Principle 2). "
             "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
         )
-        # ----- Legacy implementation preserved below for historical reference. -----
-        # Unreachable per the raise above; kept as a comment-block so removing the
-        # raise alone is not enough to silently resurrect the path — F-2 must
-        # replace this with a real sparse_exact implementation, not unblock CSS.
-        # _legacy_run_css(self, adata, cfg, ctx)  # noqa: F-1 dead code marker
-
-    def _legacy_run_css_unused(self, adata, cfg, ctx) -> None:  # noqa: F-1 quarantined
-        sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
-        sc.pp.log1p(adata)
-        adata.X = self._materialize_matrix(adata.X)
-        sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
-        hvg_mask = np.asarray(adata.var["highly_variable"]).astype(bool)
-        X = adata[:, hvg_mask].X
-        if sparse.issparse(X):
-            X = X.tocsr().astype(np.float32)
-            svd_dim = min(max(2, cfg.n_pcs), 64, max(2, X.shape[1] - 1))
-            svd = TruncatedSVD(n_components=svd_dim, random_state=cfg.random_state)
-            X_latent = svd.fit_transform(X).astype(np.float32, copy=False)
-            ctx.metadata["css_latent_method"] = "truncated_svd"
-            ctx.metadata["css_latent_dim"] = int(X_latent.shape[1])
-        else:
-            X_latent = np.asarray(X, dtype=np.float32)
-            ctx.metadata["css_latent_method"] = "dense_hvg"
-            ctx.metadata["css_latent_dim"] = int(X_latent.shape[1])
-        del X
-
-        sample_labels = pd.Series(adata.obs["sample"].astype(str), index=adata.obs_names)
-        sample_to_clusters = defaultdict(list)
-        centroid_blocks = []
-
-        for sample in sample_labels.unique():
-            idx = np.where(sample_labels.values == sample)[0]
-            if len(idx) == 0:
-                continue
-            Xi_latent = X_latent[idx]
-            n_clusters = max(2, min(12, len(idx) // 5000 if len(idx) >= 5000 else 2))
-            if len(idx) < n_clusters:
-                n_clusters = max(1, len(idx))
-            km = MiniBatchKMeans(n_clusters=n_clusters, random_state=cfg.random_state, batch_size=min(10000, max(1024, len(idx))))
-            labels = km.fit_predict(Xi_latent)
-            centroids = km.cluster_centers_.astype(np.float32, copy=False)
-            for c in range(centroids.shape[0]):
-                sample_to_clusters[sample].append(len(centroid_blocks) + c)
-            centroid_blocks.append(centroids)
-
-        centroids = np.vstack(centroid_blocks).astype(np.float32, copy=False)
-        centroid_norm = np.linalg.norm(centroids, axis=1, keepdims=True) + 1e-8
-        centroids = centroids / centroid_norm
-
-        from .._mem_guard import MemoryGuard, MemoryAbortError
-        chunk_size = 10000 if adata.n_obs > 500000 else 20000
-        css = np.empty((adata.n_obs, centroids.shape[0]), dtype=np.float32)
-        for start in range(0, adata.n_obs, chunk_size):
-            if MemoryGuard.abort_requested():
-                raise MemoryAbortError("watchdog abort during CSS chunk loop")
-            stop = min(start + chunk_size, adata.n_obs)
-            chunk = np.asarray(X_latent[start:stop], dtype=np.float32)
-            chunk_norm = np.linalg.norm(chunk, axis=1, keepdims=True) + 1e-8
-            chunk = chunk / chunk_norm
-            sims = (chunk @ centroids.T).astype(np.float32, copy=False)
-            for sample, cols in sample_to_clusters.items():
-                block = sims[:, cols]
-                if block.shape[1] == 1:
-                    block[:] = 0.0
-                else:
-                    mu = block.mean(axis=1, keepdims=True)
-                    sd = block.std(axis=1, keepdims=True) + 1e-6
-                    block[:] = (block - mu) / sd
-            css[start:stop, :] = sims
-            del chunk, sims
-            gc.collect()
-
-        adata.obsm["X_css"] = css
-        css_n_pcs = min(cfg.n_pcs, X_latent.shape[1], 50)
-        adata.obsm["X_pca"] = X_latent[:, :css_n_pcs].copy() if X_latent.shape[1] >= css_n_pcs else X_latent.copy()
-        get_or_compute_neighbors(
-            adata,
-            backend_id="scanpy",
-            method="umap",
-            metric="euclidean",
-            n_pcs=None,
-            n_neighbors=cfg.n_neighbors,
-            use_rep="X_css",
-            knn=True,
-            random_state=cfg.random_state,
-            compute_fn=lambda: sc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, use_rep="X_css", method="umap"),
-        )
-        sc.tl.umap(adata, random_state=cfg.random_state)
-        sc.tl.leiden(adata, resolution=cfg.leiden_resolution, flavor="igraph", directed=False, random_state=cfg.random_state)
-        ctx.metadata["css_n_reference_clusters"] = int(css.shape[1])
 
     def _run_hybrid_gpu_graph(self, adata, cfg, ctx) -> bool:
         """Use CPU PCA with GPU neighbors/UMAP/Leiden when GPU PCA is unstable."""
