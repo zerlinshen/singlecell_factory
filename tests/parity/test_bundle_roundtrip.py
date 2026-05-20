@@ -64,19 +64,23 @@ def bundle_adata_and_dir(tmp_path_factory):
 # ---------------------------------------------------------------------------
 
 def test_bundle_files_exist(bundle_adata_and_dir):
+    """v2.1 bundle layout: obs/marker_expr/obsm/* as Parquet + manifest tsv/json."""
     _, out_dir, _, _ = bundle_adata_and_dir
-    assert (out_dir / "obs.csv").exists()
-    assert (out_dir / "marker_expr.csv").exists()
-    assert (out_dir / "X_umap.csv").exists()
-    assert (out_dir / "X_pca.csv").exists()
+    assert (out_dir / "obs.parquet").exists()
+    assert (out_dir / "marker_expr.parquet").exists()
+    assert (out_dir / "obsm" / "X_umap.parquet").exists()
+    assert (out_dir / "obsm" / "X_pca.parquet").exists()
     assert (out_dir / "bundle_manifest.tsv").exists()
+    assert (out_dir / "bundle_manifest.json").exists()
 
 
 def test_bundle_roundtrip_max_abs_diff(bundle_adata_and_dir):
     """Max abs diff between exported marker_expr and original X[:,markers] <= 1e-6."""
     adata, out_dir, markers, X_dense = bundle_adata_and_dir
 
-    exported = pd.read_csv(out_dir / "marker_expr.csv", index_col=0)
+    exported = pd.read_parquet(out_dir / "marker_expr.parquet")
+    if "cell" in exported.columns:
+        exported = exported.set_index("cell")
     # align columns to marker order
     exported = exported[markers]
 
@@ -90,15 +94,19 @@ def test_bundle_roundtrip_max_abs_diff(bundle_adata_and_dir):
 
 def test_bundle_roundtrip_cell_alignment(bundle_adata_and_dir):
     """Cell order in marker_expr must match obs order from the exported obs file."""
-    adata, out_dir, markers, _ = bundle_adata_and_dir
-    obs_df = pd.read_csv(out_dir / "obs.csv", index_col=0)
-    expr_df = pd.read_csv(out_dir / "marker_expr.csv", index_col=0)
+    _, out_dir, _, _ = bundle_adata_and_dir
+    obs_df = pd.read_parquet(out_dir / "obs.parquet")
+    expr_df = pd.read_parquet(out_dir / "marker_expr.parquet")
+    if "cell" in obs_df.columns:
+        obs_df = obs_df.set_index("cell")
+    if "cell" in expr_df.columns:
+        expr_df = expr_df.set_index("cell")
     assert list(obs_df.index) == list(expr_df.index), "Cell order mismatch between obs and marker_expr"
 
 
 def test_bundle_manifest_schema_version(bundle_adata_and_dir):
-    """Bundle manifest must record schema_version = singlecell_r_bundle_v1."""
+    """v2.1 bundle manifest records schema_version = singlecell_r_bundle_v2.1."""
     _, out_dir, _, _ = bundle_adata_and_dir
     manifest = pd.read_csv(out_dir / "bundle_manifest.tsv", sep="\t", index_col=0)
     version = manifest.loc["schema_version", "value"]
-    assert version == "singlecell_r_bundle_v1"
+    assert version == "singlecell_r_bundle_v2.1"
