@@ -72,6 +72,103 @@ def test_checkpoint_roundtrip_restores_module_dirs(monkeypatch, tmp_path):
     assert ctx2.module_output_dir("differential_expression") == de_dir
 
 
+def test_checkpoint_skips_lazy_dataset2d_notimplemented(monkeypatch, tmp_path):
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        checkpoint=True,
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=run_dir,
+        table_dir=run_dir,
+        adata=AnnData(np.ones((2, 2), dtype=np.float32)),
+    )
+
+    monkeypatch.setattr(PipelineContext, "_use_zarr_checkpoints", lambda self: True)
+
+    def _raise_dataset2d(self, path):
+        raise NotImplementedError(
+            "Writing AnnData objects with a Dataset2D not supported yet"
+        )
+
+    def _fail_h5ad(self, path):
+        raise AssertionError("h5ad fallback should not run for Dataset2D zarr failures")
+
+    monkeypatch.setattr(AnnData, "write_zarr", _raise_dataset2d)
+    monkeypatch.setattr(AnnData, "write", _fail_h5ad)
+
+    ctx.save_checkpoint("qc")
+
+    cp_dir = run_dir / ".checkpoints"
+    assert (cp_dir / "after_qc.json").exists()
+    assert not (cp_dir / "after_qc.h5ad").exists()
+    assert not (cp_dir / "after_qc.zarr").exists()
+    assert ctx.metadata["checkpoint_warnings"][0]["module"] == "qc"
+
+
+def test_checkpoint_metadata_only_env_skips_adata_write(monkeypatch, tmp_path):
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        checkpoint=True,
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=run_dir,
+        table_dir=run_dir,
+        adata=AnnData(np.ones((2, 2), dtype=np.float32)),
+    )
+
+    called = []
+    monkeypatch.setenv("SCF_MASSIVE_CHECKPOINT_POLICY", "metadata_only")
+    monkeypatch.setattr(
+        PipelineContext,
+        "_write_adata_checkpoint",
+        lambda *args, **kwargs: called.append(True),
+    )
+
+    ctx.save_checkpoint("qc")
+
+    cp_dir = run_dir / ".checkpoints"
+    assert (cp_dir / "after_qc.json").exists()
+    assert not called
+    assert ctx.metadata["checkpoint_warnings"][0]["reason"] == (
+        "adata checkpoint policy is metadata_only"
+    )
+
+
+def test_checkpoint_policy_env_precedence(monkeypatch, tmp_path):
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        checkpoint=True,
+        checkpoint_policy="full",
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=AnnData(np.ones((2, 2), dtype=np.float32)),
+    )
+
+    monkeypatch.setenv("SCF_MASSIVE_CHECKPOINT_POLICY", "full")
+    monkeypatch.setenv("SC_CHECKPOINT_POLICY", "metadata-only")
+
+    assert ctx._adata_checkpoint_policy() == "metadata-only"
+    assert not ctx._should_save_adata_checkpoint("qc")
+
+
 @pytest.mark.xfail(
     reason="anndata 0.10+ enforces a strict type whitelist on AnnData.layers — "
     "custom FakeLazyMatrix class is rejected at .layers['counts']=... assignment "

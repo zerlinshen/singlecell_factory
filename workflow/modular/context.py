@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import shutil
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -83,11 +84,81 @@ class PipelineContext:
         except ImportError:
             return False
 
+    def _adata_checkpoint_policy(self) -> str:
+        return str(
+            os.environ.get("SC_CHECKPOINT_POLICY")
+            or os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY")
+            or getattr(self.cfg, "checkpoint_policy", "full")
+            or "full"
+        ).lower()
+
     def _should_save_adata_checkpoint(self, module_name: str) -> bool:
-        # After B.4b, only `full` policy remains, so adata is always saved when
-        # cfg.checkpoint is True. Method retained as a hook for future per-module
-        # opt-out, but currently constant.
-        return True
+        policy = self._adata_checkpoint_policy()
+        return policy not in {
+            "metadata",
+            "metadata-only",
+            "metadata_only",
+            "sidecar",
+            "json",
+            "json-only",
+            "json_only",
+            "none",
+            "skip-adata",
+            "skip_adata",
+        }
+
+    @staticmethod
+    def _is_unsupported_lazy_checkpoint_error(exc: BaseException) -> bool:
+        message = str(exc)
+        if isinstance(exc, NotImplementedError) and "Dataset2D" in message:
+            return True
+        return "Writing AnnData objects with a Dataset2D not supported" in message
+
+    def _record_skipped_adata_checkpoint(self, module_name: str, reason: str) -> None:
+        logger.warning("Skipping AnnData checkpoint after %s: %s", module_name, reason)
+        self.metadata.setdefault("checkpoint_warnings", []).append(
+            {"module": module_name, "reason": reason}
+        )
+
+    @staticmethod
+    def _remove_partial_checkpoint(path: Path) -> None:
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        elif path.exists():
+            path.unlink()
+
+    def _write_adata_checkpoint(self, module_name: str, cp_dir: Path) -> None:
+        if self.adata is None:
+            return
+
+        h5ad_path = cp_dir / f"after_{module_name}.h5ad"
+
+        def _write_h5ad() -> None:
+            try:
+                self.adata.write(h5ad_path)
+            except (NotImplementedError, ValueError, TypeError) as exc:
+                if self._is_unsupported_lazy_checkpoint_error(exc):
+                    self._remove_partial_checkpoint(h5ad_path)
+                    self._record_skipped_adata_checkpoint(module_name, str(exc))
+                    return
+                raise
+
+        if not self._use_zarr_checkpoints():
+            _write_h5ad()
+            return
+
+        zarr_path = cp_dir / f"after_{module_name}.zarr"
+        try:
+            self.adata.write_zarr(zarr_path)
+        except NotImplementedError as exc:
+            if self._is_unsupported_lazy_checkpoint_error(exc):
+                self._remove_partial_checkpoint(zarr_path)
+                self._record_skipped_adata_checkpoint(module_name, str(exc))
+                return
+            raise
+        except (ValueError, TypeError):
+            # Zarr rejects keys with forward slashes; fall back to h5ad.
+            _write_h5ad()
 
     def _compact_adata_for_checkpoint(self) -> None:
         if self.adata is None:
@@ -130,21 +201,16 @@ class PipelineContext:
         cp_dir.mkdir(parents=True, exist_ok=True)
         if self.adata is not None and self._should_save_adata_checkpoint(module_name):
             self._compact_adata_for_checkpoint()
-            if self._use_zarr_checkpoints():
-                try:
-                    zarr_path = cp_dir / f"after_{module_name}.zarr"
-                    self.adata.write_zarr(zarr_path)
-                except (ValueError, TypeError):
-                    # Zarr rejects keys with forward slashes; fall back to h5ad
-                    self.adata.write(cp_dir / f"after_{module_name}.h5ad")
-            else:
-                self.adata.write(cp_dir / f"after_{module_name}.h5ad")
+            self._write_adata_checkpoint(module_name, cp_dir)
         elif self.adata is not None:
-            logger.info("Skipping full AnnData checkpoint after %s in massive mode to reduce memory/IO pressure", module_name)
+            self._record_skipped_adata_checkpoint(
+                module_name,
+                f"adata checkpoint policy is {self._adata_checkpoint_policy()}",
+            )
         sidecar = {
             "schema_version": SC_CHECKPOINT_SCHEMA_VERSION,
             "module": module_name,
-            "adata_checkpoint_policy": os.environ.get("SCF_MASSIVE_CHECKPOINT_POLICY", ""),
+            "adata_checkpoint_policy": self._adata_checkpoint_policy(),
             "metadata": self.metadata,
             "module_status": self.module_status,
             "module_dirs": {k: str(v) for k, v in self._module_dirs.items()},

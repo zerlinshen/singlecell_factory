@@ -60,16 +60,23 @@ class DifferentialExpressionModule:
     def run(self, ctx: PipelineContext) -> None:
         if os.environ.get("SC_MEM_GUARD", "").lower() == "on":
             from .._mem_guard import MemoryGuard, MemoryGuardError
+            entered_impl = False
             try:
                 with MemoryGuard(ctx, self.name) as mg:
                     mg.check("entry")
+                    entered_impl = True
                     return self._run_impl(ctx)
             except MemoryGuardError as exc:
                 logger.warning("MemoryGuard: %s", exc)
                 ctx.metadata.setdefault("mem_warnings", []).append(
                     {"module": self.name, "error": str(exc)}
                 )
-                raise
+                if entered_impl:
+                    # MemoryGuardError was raised from inside _run_impl
+                    # (substage abort): propagate as-is, no retry.
+                    raise
+                # else: raised by mg.check() (entry guard signal) ->
+                # fall through to degraded _run_impl call below.
         return self._run_impl(ctx)
 
     def _run_impl(self, ctx: PipelineContext) -> None:
