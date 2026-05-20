@@ -395,6 +395,12 @@
     "title": "MOFA+: a statistical framework for comprehensive integration of multi-modal single-cell data",
     "year": "2020"
   },
+  "10.1186/s13059-020-1950-6": {
+    "authors": "Yang",
+    "journal": "Genome Biology",
+    "title": "Decontamination of ambient RNA in single-cell RNA-seq with DecontX",
+    "year": "2020"
+  },
   "10.1371/journal.pcbi.1003285": {
     "authors": "Sandve",
     "journal": "PLoS Computational Biology",
