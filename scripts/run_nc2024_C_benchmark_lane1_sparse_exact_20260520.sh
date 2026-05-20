@@ -44,7 +44,7 @@ ${CONDA_RUN} python -m workflow.modular.cli \
   --batch-key sample \
   --batch-method harmony \
   --cohort-subset condition=tumor \
-  --gpu-mode disabled \
+  --gpu-mode off \
   --scale-mode large \
   --n-pcs 40 \
   --n-neighbors 15 \
