@@ -217,7 +217,7 @@
       "status": "conditional"
     }
   ],
-  "generated_at_utc": "2026-05-19T06:38:48.575740+00:00",
+  "generated_at_utc": "2026-05-19T06:40:15.425019+00:00",
   "schema_version": "figure_parity_gate_v1",
   "scientific_boundary": "Default manifest validates produced key R figures and records missing paper/process-data references as conditional until curated references are registered.",
   "status_counts": {
