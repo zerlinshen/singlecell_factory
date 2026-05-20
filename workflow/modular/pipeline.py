@@ -177,6 +177,7 @@ def _build_registry() -> dict[str, object]:
     Importing inside this function avoids pulling heavy dependencies
     (scrublet, scvelo, liana, etc.) at package-level import time.
     """
+    from .modules.ambient_correction import AmbientCorrectionModule
     from .modules.annotation import AnnotationModule
     from .modules.batch_correction import BatchCorrectionModule
     from .modules.evolution import EvolutionModule
@@ -223,6 +224,7 @@ def _build_registry() -> dict[str, object]:
     return {
         "cellranger": CellRangerModule(),
         "qc": QCModule(),
+        "ambient_correction": AmbientCorrectionModule(),
         "doublet_detection": DoubletDetectionModule(),
         "clustering": ClusteringModule(),
         "cell_cycle": CellCycleModule(),

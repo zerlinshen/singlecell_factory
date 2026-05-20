@@ -19,7 +19,17 @@ def test_module_catalog_is_pipeline_dependency_source() -> None:
 
 
 def test_mandatory_chain_and_default_optional_modules_are_stable() -> None:
-    assert MANDATORY_MODULES == ("cellranger", "qc", "doublet_detection")
+    # 2026-05-20: ambient_correction added between qc and doublet_detection
+    # (Phase 2 of ambient_correction_policy.md). It is MANDATORY because the
+    # conditional skip is data-driven inside the module, not a DAG-level
+    # opt-out -- doublet_detection therefore depends on ambient_correction
+    # being present in the DAG.
+    assert MANDATORY_MODULES == (
+        "cellranger",
+        "qc",
+        "ambient_correction",
+        "doublet_detection",
+    )
     assert DEFAULT_OPTIONAL_MODULES == (
         "clustering",
         "differential_expression",
@@ -31,11 +41,16 @@ def test_mandatory_chain_and_default_optional_modules_are_stable() -> None:
 
 
 def test_cli_help_uses_optional_modules_only() -> None:
-    help_text = module_help_list()
-    assert "cellranger" not in help_text
-    assert "qc" not in help_text
-    assert "paper_repro" in help_text
-    assert "pseudobulk_de" in help_text
+    # Check at module-name token level, not substring, because the optional
+    # module set legitimately includes names that *contain* mandatory tokens
+    # (e.g. ``atac_qc``, ``cross_modality_qc`` contain ``qc``).
+    help_tokens = [name.strip() for name in module_help_list().split(",")]
+    assert "cellranger" not in help_tokens
+    assert "qc" not in help_tokens
+    assert "ambient_correction" not in help_tokens
+    assert "doublet_detection" not in help_tokens
+    assert "paper_repro" in help_tokens
+    assert "pseudobulk_de" in help_tokens
 
 
 def test_layers_cover_bridge_ready_outputs() -> None:

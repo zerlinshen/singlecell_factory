@@ -43,6 +43,39 @@ class DoubletConfig:
 
 
 @dataclass
+class AmbientCorrectionConfig:
+    """Configuration for conditional DecontX ambient RNA correction.
+
+    Policy: ops/policy/ambient_correction_policy.md (Phase 2 decided 2026-05-20).
+    Tool: DecontX (Yang et al. 2020, Genome Biology). R driver invoked from the
+    r_multiomics conda env. Defaults below match policy factory thresholds.
+    """
+
+    # Activation switches
+    disable_triggers: bool = False  # SC_AMBIENT_TRIGGERS_DISABLE=1 also forces skip
+    dry_run_triggers_only: bool = False  # evaluate triggers only, no R call
+
+    # Trigger thresholds (per ambient_correction_policy.md Phase 2).
+    # NOTE: pct_counts_in_top_50 and pct_counts_mt follow scanpy convention
+    # (PERCENT scale 0-100), not fraction. Defaults below are PERCENT.
+    # T3 (doublet-excess) removed 2026-05-20 because the DAG places
+    # ambient_correction BEFORE doublet_detection, leaving the doublet rate
+    # unevaluable at trigger time.
+    trigger_top50: float = 50.0              # T1: median pct_counts_in_top_50 > X% (scanpy percent)
+    trigger_mt: float = 15.0                 # T2: median pct_counts_mt > X% (scanpy percent)
+    trigger_count_correlation: float = 0.85  # T4: Spearman(total, n_genes) < X (fraction)
+    trigger_cross_sample_cv: float = 0.50    # T5: cohort housekeeping CV > X (fraction)
+
+    # R subprocess plumbing
+    r_conda_env: str = "r_multiomics"
+    decontx_max_iter: int = 200
+    decontx_seed: int = 42
+    subprocess_timeout: int = 1800           # 30 min per sample worst-case
+    batch_obs_column: str | None = None      # if set, decontX --batch <col>
+    keep_temp_on_failure: bool = True        # preserve temp dir if R fails
+
+
+@dataclass
 class ClusteringConfig:
     """Configuration for dimension reduction and clustering."""
 
@@ -175,6 +208,7 @@ class PipelineConfig:
     cellranger: CellRangerConfig
     qc: QCConfig = field(default_factory=QCConfig)
     doublet: DoubletConfig = field(default_factory=DoubletConfig)
+    ambient: AmbientCorrectionConfig = field(default_factory=AmbientCorrectionConfig)
     clustering: ClusteringConfig = field(default_factory=ClusteringConfig)
     batch: BatchConfig = field(default_factory=BatchConfig)
     cnv: CNVConfig = field(default_factory=CNVConfig)

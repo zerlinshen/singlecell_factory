@@ -24,6 +24,7 @@ class ModuleSpec:
 MANDATORY_MODULES: tuple[str, ...] = (
     "cellranger",
     "qc",
+    "ambient_correction",
     "doublet_detection",
 )
 
@@ -48,11 +49,27 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
         layer="quality_control",
         description="Cell/gene QC filtering and QC figures.",
     ),
-    "doublet_detection": ModuleSpec(
-        name="doublet_detection",
+    "ambient_correction": ModuleSpec(
+        name="ambient_correction",
         depends_on=("qc",),
         layer="quality_control",
-        description="Scrublet-style doublet scoring/removal.",
+        description=(
+            "Conditional DecontX ambient RNA correction (Yang 2020 Genome Biology). "
+            "Per-sample trigger evaluation against 5 QC rules (top50, mt%, doublet rate, "
+            "total/n_genes correlation, cross-sample housekeeping CV); self-skips when "
+            "no trigger fires. R driver runs in r_multiomics conda env via subprocess. "
+            "Policy: ops/policy/ambient_correction_policy.md Phase 2 (2026-05-20). "
+            "Opt-out: SC_AMBIENT_TRIGGERS_DISABLE=1 or --ambient-disable-triggers."
+        ),
+    ),
+    "doublet_detection": ModuleSpec(
+        name="doublet_detection",
+        depends_on=("qc", "ambient_correction"),
+        layer="quality_control",
+        description=(
+            "Scrublet-style doublet scoring/removal. Runs on counts AFTER ambient "
+            "correction (when triggered) so doublet calls use cleaned signal."
+        ),
     ),
     "clustering": ModuleSpec(
         name="clustering",

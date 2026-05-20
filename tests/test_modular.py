@@ -67,7 +67,7 @@ def test_modular_cli_parse(monkeypatch):
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
-    # Verify all modules are registered (3 mandatory + 39 optional = 42).
+    # Verify all modules are registered (4 mandatory + 39 optional = 43).
     # Phase B (v2.1) added protein_adt; spatial lane (spatial_ingest +
     # spatial_neighborhoods); multimodal_integration (EXPERIMENTAL).
     # Phase 1A added marker_db_loader (P1A.S2) + context_aware_annotation (P1A.S3).
@@ -75,7 +75,11 @@ def test_new_modules_in_dag():
     # atac_qc, peak_to_gene), hic lane (hic_ingest, hic_tad), vdj lane
     # (vdj_ingest, vdj_metrics), ribo_ingest, modality_registry,
     # cross_modality_qc.
-    assert len(MODULE_DEPENDENCIES) == 42
+    # 2026-05-20: added ambient_correction (conditional DecontX, MANDATORY).
+    assert len(MODULE_DEPENDENCIES) == 43
+    assert "ambient_correction" in MODULE_DEPENDENCIES
+    assert MODULE_DEPENDENCIES["ambient_correction"] == {"qc"}
+    assert "ambient_correction" in MODULE_DEPENDENCIES["doublet_detection"]
 
     # Verify new modules exist with correct dependencies
     assert "immune_phenotyping" in MODULE_DEPENDENCIES
@@ -406,7 +410,7 @@ def test_gpu_utils_returns_bool(monkeypatch):
 
 
 def test_clustering_gpu_fallback(monkeypatch, tmp_path):
-    """If GPU clustering raises, module falls back to CPU and records metadata."""
+    """If GPU clustering raises under policy=restore-cpu, module falls back to CPU."""
     from workflow.modular.modules.clustering import ClusteringModule
     import workflow.modular.modules._gpu_utils as gutils
 
@@ -426,6 +430,9 @@ def test_clustering_gpu_fallback(monkeypatch, tmp_path):
     monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
     monkeypatch.setattr(ClusteringModule, "_run_cpu", mock_run_cpu)
     monkeypatch.setattr(ClusteringModule, "_plot_umap_clusters", lambda self, a, c: None)
+    # Force hybrid path off so the test exercises pure CPU fallback.
+    monkeypatch.setattr(ClusteringModule, "_run_hybrid_gpu_graph",
+                        lambda self, a, c, ctx: False)
 
     from workflow.modular.context import PipelineContext
 
@@ -433,6 +440,7 @@ def test_clustering_gpu_fallback(monkeypatch, tmp_path):
         project="p",
         output_dir=tmp_path / "out",
         cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        gpu_failure_policy="restore-cpu",
     )
     ctx = PipelineContext(
         cfg=cfg,
@@ -451,7 +459,7 @@ def test_clustering_gpu_fallback(monkeypatch, tmp_path):
 
 
 def test_clustering_gpu_fallback_does_not_reuse_mutated_gpu_adata(monkeypatch, tmp_path):
-    """GPU failure should not leak partially mutated state into CPU fallback."""
+    """GPU failure should not leak partially mutated state into CPU fallback (restore-cpu policy)."""
     from workflow.modular.modules.clustering import ClusteringModule
     import workflow.modular.modules._gpu_utils as gutils
 
@@ -464,14 +472,20 @@ def test_clustering_gpu_fallback_does_not_reuse_mutated_gpu_adata(monkeypatch, t
         raise RuntimeError("GPU failure after mutation")
 
     def mock_run_cpu(self, adata, cfg, ctx):
-        # CPU fallback must run on the original (unmutated) object.
-        assert "gpu_only" not in adata.obs
+        # CPU fallback runs on adata restored from .raw -- the GPU-mutated
+        # counts (zeros) MUST be reverted to the original non-zero counts.
+        # NOTE: anndata's raw.to_adata() preserves the parent's current obs
+        # (so columns added during the GPU run remain), but it restores .X
+        # from the snapshot taken before the GPU path entered. The contract
+        # that matters here is .X restoration, not obs cleanup.
         assert float(np.asarray(adata.X).sum()) > 0.0
         adata.obs["leiden"] = "0"
 
     monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
     monkeypatch.setattr(ClusteringModule, "_run_cpu", mock_run_cpu)
     monkeypatch.setattr(ClusteringModule, "_plot_umap_clusters", lambda self, a, c: None)
+    monkeypatch.setattr(ClusteringModule, "_run_hybrid_gpu_graph",
+                        lambda self, a, c, ctx: False)
 
     from workflow.modular.context import PipelineContext
 
@@ -479,6 +493,7 @@ def test_clustering_gpu_fallback_does_not_reuse_mutated_gpu_adata(monkeypatch, t
         project="p",
         output_dir=tmp_path / "out",
         cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        gpu_failure_policy="restore-cpu",
     )
     ctx = PipelineContext(
         cfg=cfg,
@@ -490,7 +505,10 @@ def test_clustering_gpu_fallback_does_not_reuse_mutated_gpu_adata(monkeypatch, t
     mod.run(ctx)
 
     assert ctx.metadata["clustering_backend"] == "cpu"
-    assert "gpu_only" not in ctx.adata.obs
+    # Final adata is from raw.to_adata() -> X restored to non-zero; obs
+    # carries the leiden labels written by mock_run_cpu.
+    assert float(np.asarray(ctx.adata.X).sum()) > 0.0
+    assert "leiden" in ctx.adata.obs
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 
 
@@ -539,7 +557,7 @@ def test_de_backend_metadata(monkeypatch, tmp_path):
 
 
 def test_clustering_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
-    """Clustering catches CUDA-specific OOM (not just RuntimeError) and falls back to CPU."""
+    """Clustering catches CUDA-specific OOM under policy=restore-cpu and falls back to CPU."""
     from workflow.modular.modules.clustering import ClusteringModule
     import workflow.modular.modules._gpu_utils as gutils
 
@@ -561,6 +579,8 @@ def test_clustering_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
     monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
     monkeypatch.setattr(ClusteringModule, "_run_cpu", mock_run_cpu)
     monkeypatch.setattr(ClusteringModule, "_plot_umap_clusters", lambda self, a, c: None)
+    monkeypatch.setattr(ClusteringModule, "_run_hybrid_gpu_graph",
+                        lambda self, a, c, ctx: False)
 
     from workflow.modular.context import PipelineContext
 
@@ -568,6 +588,7 @@ def test_clustering_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
         project="p",
         output_dir=tmp_path / "out",
         cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        gpu_failure_policy="restore-cpu",
     )
     ctx = PipelineContext(
         cfg=cfg,
@@ -583,18 +604,24 @@ def test_clustering_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 
 
-def test_clustering_gpu_copy_creates_separate_object(monkeypatch, tmp_path):
-    """GPU path receives an adata.copy(), not the original object."""
+def test_clustering_gpu_m2_inplace_preserves_raw(monkeypatch, tmp_path):
+    """M2 inplace contract (Plan W3 / Hotspot1): GPU path runs on the
+    original adata object (no host-side copy, ``_clone_for_gpu_lite`` was
+    eliminated in US-W3-1) and adata.raw is preserved BEFORE _run_gpu so
+    that restore-cpu policy can roll back on GPU failure."""
     from workflow.modular.modules.clustering import ClusteringModule
     import workflow.modular.modules._gpu_utils as gutils
 
     monkeypatch.setattr(gutils, "_gpu_ok", True)
 
     mod = ClusteringModule()
-    recorded_ids = []
+    recorded_ids: list[int] = []
+    raw_present_at_gpu_entry: list[bool] = []
 
     def mock_run_gpu(self, adata, cfg, ctx):
         recorded_ids.append(id(adata))
+        # M2 invariant: raw must be preserved before _run_gpu enters.
+        raw_present_at_gpu_entry.append(adata.raw is not None)
         adata.obs["leiden"] = "0"
 
     monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
@@ -620,7 +647,12 @@ def test_clustering_gpu_copy_creates_separate_object(monkeypatch, tmp_path):
     mod.run(ctx)
 
     assert len(recorded_ids) == 1
-    assert recorded_ids[0] != original_id
+    # M2 contract: GPU receives the SAME object (no host copy), not a clone.
+    assert recorded_ids[0] == original_id
+    # M2 contract: adata.raw is set before _run_gpu enters so restore-cpu works.
+    assert raw_present_at_gpu_entry == [True]
+    assert ctx.metadata.get("m2_raw_preserved") is True
+    assert ctx.metadata["clustering_clone_strategy"] == "m2_inplace_raw_mandate"
     assert ctx.metadata["clustering_backend"] == "gpu"
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 

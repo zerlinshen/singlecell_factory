@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import (
+    AmbientCorrectionConfig,
     BatchConfig,
     CbioPortalConfig,
     CellRangerConfig,
@@ -76,6 +77,61 @@ def parse_args() -> argparse.Namespace:
     # Doublet detection
     parser.add_argument("--expected-doublet-rate", type=float, default=0.06)
     parser.add_argument("--no-remove-doublets", action="store_true", help="Keep doublets (mark but don't remove)")
+
+    # Ambient RNA correction (DecontX, conditional per-sample triggers)
+    # Policy: ops/policy/ambient_correction_policy.md (Phase 2 decided 2026-05-20)
+    parser.add_argument(
+        "--ambient-disable-triggers",
+        action="store_true",
+        help=(
+            "Skip ambient correction entirely (paper-faithful mode where the source "
+            "paper did not do ambient RNA correction). Equivalent to SC_AMBIENT_TRIGGERS_DISABLE=1."
+        ),
+    )
+    parser.add_argument(
+        "--ambient-dry-run-triggers-only",
+        action="store_true",
+        help="Evaluate ambient triggers and record decision but skip the R DecontX call (introspection mode).",
+    )
+    parser.add_argument(
+        "--ambient-trigger-top50",
+        type=float,
+        default=50.0,
+        help="T1 trigger: median pct_counts_in_top_50 (scanpy percent 0-100) > this fires DecontX (default 50.0).",
+    )
+    parser.add_argument(
+        "--ambient-trigger-mt",
+        type=float,
+        default=15.0,
+        help="T2 trigger: median pct_counts_mt (scanpy percent 0-100) > this fires DecontX (default 15.0).",
+    )
+    # T3 (doublet-excess) removed 2026-05-20: DAG ordering puts ambient_correction
+    # before doublet_detection, so predicted_doublet is never present when triggers
+    # are evaluated. Doublet-driven ambient re-trigger is deferred to a potential
+    # future Phase 3. See ops/policy/ambient_correction_policy.md Phase 2 notes.
+    parser.add_argument(
+        "--ambient-trigger-count-corr",
+        type=float,
+        default=0.85,
+        help="T4 trigger: Spearman(total_counts, n_genes_by_counts) < this fires DecontX (default 0.85).",
+    )
+    parser.add_argument(
+        "--ambient-trigger-cohort-cv",
+        type=float,
+        default=0.50,
+        help="T5 trigger: cohort housekeeping-gene CV > this fires DecontX on all samples (default 0.50).",
+    )
+    parser.add_argument(
+        "--ambient-decontx-max-iter",
+        type=int,
+        default=200,
+        help="DecontX max EM iterations (default 200; Yang 2020 Genome Biology).",
+    )
+    parser.add_argument(
+        "--ambient-batch-column",
+        default="",
+        help="obs column to pass to DecontX as --batch (per-sample contamination modelling). Empty = no batch.",
+    )
 
     # Clustering
     parser.add_argument("--n-top-genes", type=int, default=3000)
@@ -717,6 +773,16 @@ def main() -> None:
         doublet=DoubletConfig(
             expected_doublet_rate=args.expected_doublet_rate,
             remove_doublets=not args.no_remove_doublets,
+        ),
+        ambient=AmbientCorrectionConfig(
+            disable_triggers=args.ambient_disable_triggers,
+            dry_run_triggers_only=args.ambient_dry_run_triggers_only,
+            trigger_top50=args.ambient_trigger_top50,
+            trigger_mt=args.ambient_trigger_mt,
+            trigger_count_correlation=args.ambient_trigger_count_corr,
+            trigger_cross_sample_cv=args.ambient_trigger_cohort_cv,
+            decontx_max_iter=args.ambient_decontx_max_iter,
+            batch_obs_column=args.ambient_batch_column or None,
         ),
         clustering=ClusteringConfig(
             n_top_genes=args.n_top_genes,

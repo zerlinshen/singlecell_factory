@@ -2277,7 +2277,7 @@ Recommended: use `python -m workflow.modular.cli` for all new analysis.
 The most recent canonical work is the **wave5 Trevino PCW21** biology-aware validation pivot (plan v4.2 — gitignored under `.omc/plans/`):
 
 - **Latest ledger:** `ops/run_ledger/wave5_trevino_20260516T0931Z-d192836f1bb0.v4.2.json` (Wave-5 schema `ops/run_ledger/schema/wave5_v4_2.schema.json`; the legacy v3 ledger `wave5_trevino_20260516T0931Z-d192836f1bb0.json` is preserved alongside as a pre-v4 fixture source).
-- **Latest test run dir:** `results/test_20260516_061534/` (smoke/test scratch — not a scientific deliverable; canonical Wave-5 outputs land under `/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/` per the factory-project separation rule).
+- **Latest test run dir:** `test_20260520_223441` (smoke/test scratch from ambient_correction unit tests 2026-05-20 — not a scientific deliverable; canonical Wave-5 outputs land under `/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/` per the factory-project separation rule).
 - **Latest audit / handoff doc:** `docs/CLAUDE_HANDOFF_MULTIOMICS_REPAIR_2026-05-15.md` (handoff packet for the wave5 multiomics-repair scope that fed into the v4.2 execution).
 - **CI gate for Wave-5 v4.2:** `scripts/ci/wave5_v4_2_gate.sh` (per-AC verdicts; exit 0/1/2 = CLOSED/PARTIAL/FAIL).
 - **NC2024 NSCLC v2 outputs** carry over from 2026-04-26 as canonical for the NSCLC reproduction track; see `AGENTS.md` and `AI_AGENT_PROTOCOL.md` "Current State (2026-05-16)" for the joint NC2024 + wave5 state summary.
