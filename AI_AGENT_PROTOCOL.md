@@ -1,5 +1,12 @@
 # AI_AGENT_PROTOCOL.md
 
+> **HISTORICAL NOTE (2026-05-20):** NC2024 (De Zuani 2024, E-MTAB-13526)
+> reproduction was ABORTED 2026-05-20 (+58% cell-calling divergence; 157 GB
+> purged). References to NC2024 validation scripts, test files, and audit
+> directories in this file are historical. Current focus is NG2025 LUAD+LUSC
+> 3D-genome reproduction. See:
+> `.claude/projects/-home-zerlinshen/memory/project_nc_de_zuani_2024_aborted_2026-05-20.md`
+
 Canonical onboarding index for AI agents entering
 `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`.
 
@@ -132,11 +139,6 @@ plotting/reporting helpers:
 - `workflow/modular/module_catalog.py` owns the single-cell module hierarchy:
   dependencies, architectural layers, modality tags, ownership, and bridge-ready
   flags. Pipeline compatibility constants are derived from this catalog.
-- `scripts/validate_nc2024_architecture_contract.py` is the no-rerun
-  controller-validation smoke for the current NC2024 project-root source of
-  truth and the singlecell-to-multiomics-to-plotting bridge contract.
-- `scripts/validate_two_realdata_final.py` is the no-rerun two-real-dataset
-  gate for NC2024 plus Cell/Trevino bridge evidence.
 
 ## Cross-Repo Bridge (Bundle v2.1)
 
@@ -171,19 +173,25 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
-## Current State (2026-05-18)
+## Current State (2026-05-20)
 
-The latest three-factory validation gate is
+> **NC2024 ABORTED (2026-05-20).** The two-real-dataset bridge validation gate
+> (`validate_two_realdata_final.py`, `validate_nc2024_architecture_contract.py`,
+> `run_cleanroom_minimal_realdata.py`, `validate_figure_parity_gate.py`,
+> `validate_ci_governance.py`) and associated tests
+> (`test_pipeline_hardening_gates.py`, `test_two_realdata_final_validator.py`,
+> `test_nc2024_architecture_contract.py`) were deleted 2026-05-20 as part of the
+> NC2024 abort cleanup. The `results/nc2024_*_v2/` directories and
+> `ops/nc2024_methodology_audit/` were also deleted. Run ledger archives remain
+> under `ops/run_ledger/nc2024_*_v2_*.json`.
+>
+> **Current focus: NG2025 LUAD+LUSC 3D-genome reproduction**
+> (`/home/zerlinshen/projects/ng2025-3d-genome/`).
+
+The Cell/Trevino validation remains in the governance record:
 `ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md`
-with machine JSON beside it. It validates two real datasets across
-`singlecell_factory -> r_multiomics_factory -> plotting_factory` without rerunning
-heavy compute:
 
-- NC2024: `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`, final AnnData shape `5281 x 19504`, 8 modules `ok`, `batch_correction` expected `skipped`, project-root bundle and R outputs present. Scope is retained P15_T1 project/module/bridge validation, not full article-scale multi-cohort annotation.
-- Cell/Trevino: linked pipeline run `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/`, final shape `55653 x 25519`, project-root bundle and R outputs present. Human-facing paper reproduction evidence remains `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/` with `conditional` public-resource quality gate.
-
-For current bridge validation, run `python scripts/validate_two_realdata_final.py --verify-sha`.
-For NC2024-only architecture smoke, run `python scripts/validate_nc2024_architecture_contract.py --verify-sha`.
+- Cell/Trevino: linked pipeline run `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/`, final shape `55653 x 25519`, project-root bundle and R outputs present. Human-facing paper reproduction evidence: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/` (`conditional` public-resource quality gate).
 
 Ownership governance: use **owner-by-primary-output**.
 `singlecell_factory` is the default global control plane for Python-heavy
@@ -193,29 +201,17 @@ statistics, and biological interpretation. `plotting_factory` is a
 presentation-only plotting surface and `plotting_factory` must not own
 biological conclusions. Canonical policy: `docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md`.
 
-Final hardening gates before new merge/report claims:
-
-- **clean-room minimal real-data gate**: `python scripts/run_cleanroom_minimal_realdata.py` runs the current two-real-data validators from an isolated temporary workspace with read-only project-root inputs.
-- **figure parity gate**: `python scripts/validate_figure_parity_gate.py --allow-conditional` checks produced figures and records missing curated references as explicit conditional gaps.
-- **CI governance gate**: `python scripts/validate_ci_governance.py` enforces schema, expected R output files, docs/protocol mentions, workflow wiring, and downstream repo handoff wording.
-
 ## Historical State (2026-05-16)
 
 **Wave-5 Trevino PCW21 biology-aware validation pivot (plan v4.2)** is the most recent canonical work. Run dir: `/home/zerlinshen/projects/wave5-trevino/runs/20260516T0931Z-d192836f1bb0/`. Binding ledger: `ops/run_ledger/wave5_trevino_20260516T0931Z-d192836f1bb0.v4.2.json` (plan_revision=v4.2, validation_posture=biology-aware; schema `ops/run_ledger/schema/wave5_v4_2.schema.json`). Plan + spec live under `.omc/plans/wave5-completion-consensus-2026-05-16-v4.2.md` and `.omc/specs/deep-interview-wave5-completion.md` (both gitignored agent state). CI gate `scripts/ci/wave5_v4_2_gate.sh` exits 1 (CLOSED-PARTIAL overall: AC-VAL-3a CLOSED, AC-VAL-3b PARTIAL per §3.4, AC-CI-1 CLOSED, AC-VAL-PLOT-1/2/3 + AC-LEDGER-1 + AC-VAL-3c CLOSED). Methodology: same v3 peak-gene linkage data, comparison reference shifted from Trevino S2F string tuples (contaminated by sparse-detection artifacts MS4A12/FCRLA/SFTPC) to a SHA-pinned literature-curated PCW21 cortical marker panel at `ops/run_ledger/panels/wave5_cortical_panel_v1.json`. The session journal at `ops/before_every_run/journal/2026-05-16_wave5_trevino_pcw21_completion.md` documents the full execution arc (v3 → v4.2).
 
-The carry-over canonical NC2024 NSCLC outputs from 2026-04-26 remain valid. The **v2** runs are at
-`results/nc2024_tumor_20260426_v2/` and `results/nc2024_bh_20260426_v2/`.
-Latest ledger entries live in `ops/run_ledger/nc2024_*_v2_*.json`. The matching
-v1 directories (without the `_v2` suffix) shipped with a known annotation
-labeling bug and must not be cited as scientific evidence.
+The NC2024 NSCLC v2 run directories (`results/nc2024_tumor_20260426_v2/`,
+`results/nc2024_bh_20260426_v2/`) and the methodology audit directory
+(`ops/nc2024_methodology_audit/`) were deleted 2026-05-20 as part of the
+NC2024 abort cleanup (157 GB purged). Run ledger archives remain at
+`ops/run_ledger/nc2024_*_v2_*.json`.
 
-For methodology, parameter rationale, paper alignment, and segfault fix
-context, read the audit suite under `ops/nc2024_methodology_audit/`
-(`AUDIT_2026-04-26_v2.md`, `ALIGNMENT_REPORT_v2_2026-04-26.md`,
-`SMALL_REAL_VALIDATION_2026-04-26.md`, `SEGFAULT_TRACE_2026-04-26.md`) and the
-publication template at `docs/PUBLICATION_READY.md`.
-
-For Mac transmission of v2 bundles, see `ops/MAC_PULL_RECIPE_2026-04-26.md`.
+For Mac transmission recipe context, see `ops/MAC_PULL_RECIPE_2026-04-26.md`.
 
 ## Source Of Truth
 
@@ -237,7 +233,7 @@ For every project, use the project-owned latest-run retention and final-backup r
 - never delete raw data, prepared canonical inputs, launch scripts, source code, environment definitions, governance records, or currently cited report assets;
 - do not recreate or cite `singlecell_factory/results/<project>` as a canonical scientific output location. Scientific outputs belong under `/home/zerlinshen/projects/<project-id>/runs/`.
 
-For NC2024/cancer work, the current structure-validation source of truth is `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`; cleanup and run evidence are recorded under `ops/governance_records/` and `ops/before_every_run/`.
+NC2024/cancer work was ABORTED 2026-05-20. The former structure-validation run at `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/` is no longer the current source of truth. Current focus: NG2025 LUAD+LUSC 3D-genome reproduction (`/home/zerlinshen/projects/ng2025-3d-genome/`).
 
 
 ## Paper Reproduction Ladder
@@ -300,9 +296,8 @@ Before claiming completion, collect evidence appropriate to the task:
   artifact paths
 - bridge/R source change: verify bridge symlinks with
   `bash scripts/ci/check_bridge_symlink.sh`
-- module hierarchy or bridge contract change: run
-  `python3 scripts/validate_nc2024_architecture_contract.py` and focused catalog
-  / bundle tests before considering the change stable
+- module hierarchy or bridge contract change: run focused catalog and bundle
+  tests before considering the change stable
 
 For pipeline changes, a statement without artifact paths is not evidence.
 

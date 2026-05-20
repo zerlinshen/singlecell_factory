@@ -1,5 +1,12 @@
 # singlecell_factory v5.0 — Modular scRNA-seq Pipeline
 
+> **NC2024 ABORTED (2026-05-20).** De Zuani 2024 (E-MTAB-13526) reproduction
+> was aborted after a +58% cell-calling divergence; 157 GB purged. NC2024
+> sections below are historical. Current focus: NG2025 LUAD+LUSC 3D-genome
+> reproduction — Yost et al. Nature Genetics 2025
+> (`/home/zerlinshen/projects/ng2025-3d-genome/`).
+> See: `.claude/projects/-home-zerlinshen/memory/project_nc_de_zuani_2024_aborted_2026-05-20.md`
+
 ## Authority / Read This First
 
 AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That
@@ -178,29 +185,22 @@ dry-run; see `scripts/migration_README.md` for the operator runbook).
 Sibling repo: `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/`
 
 
-### Scratch run note (2026-05-19)
+### Scratch run note (2026-05-20)
 
-`results/test_20260519_031254/` is an empty local smoke-test scratch directory
-and is not a governance evidence artifact. Current validated project-root
-evidence remains under `/home/zerlinshen/projects/...` and the governance record
-listed below.
+`results/test_20260520_223221/` and `results/test_20260519_031254/` are empty
+local smoke-test scratch directories and are not governance evidence artifacts.
+Current validated project-root evidence remains under
+`/home/zerlinshen/projects/...` and the governance record listed below.
 
-### Final two-real-dataset bridge validation (2026-05-18)
+### Two-real-dataset bridge validation (historical, 2026-05-18)
 
-The current end-to-end governance evidence for the three-factory split is:
+> NC2024 portion ABORTED 2026-05-20. The validator script
+> `validate_two_realdata_final.py` was deleted. The governance record remains
+> for Cell/Trevino evidence only.
 
 - Governance report: `ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md`
-- Machine-readable report: `ops/governance_records/2026-05-18-two-real-dataset-final-validation/two_real_dataset_final_validation.json`
-- NC2024 project run: `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/` (`5281 x 19504`, P15_T1 structure/module validation scope)
 - Cell/Trevino linked pipeline run: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/` (`55653 x 25519`, bridge-validation scope)
 - Cell/Trevino human-facing reproduction evidence run: `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88/` (`conditional` public-resource scientific gate)
-
-`python scripts/validate_two_realdata_final.py --verify-sha` is the current
-no-rerun control-plane gate for this two-real-dataset bridge validation. It
-validates Python run manifests/module status, project-root R bundles, R output
-directories, bridge symlinks, and the Cell/Trevino paper-evidence quality gate.
-Scientific boundaries remain explicit: NC2024 is not full article-scale cohort
-truth, and Cell/Trevino is not raw FASTQ/fragments/BPNet exact parity.
 
 ### Owner-by-primary-output governance
 
@@ -214,21 +214,19 @@ layout, theme, rendering helpers, and figure schema, but `plotting_factory` must
 not own biological conclusions. See
 `docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md`.
 
-### Final hardening gates (2026-05-18)
+### Hardening gates (current)
 
-Three post-validation gates now protect the pipeline before future merge/report claims:
+> NOTE (2026-05-20): The NC2024-specific hardening gates
+> (`validate_ci_governance.py`, `validate_figure_parity_gate.py`,
+> `run_cleanroom_minimal_realdata.py`, `test_pipeline_hardening_gates.py`,
+> `test_two_realdata_final_validator.py`, `test_nc2024_architecture_contract.py`)
+> were deleted as part of the NC2024 abort cleanup. The suite gate harness
+> (`scripts/run_all_gates.sh`) has been updated accordingly.
 
-- **clean-room minimal real-data gate** — `python scripts/run_cleanroom_minimal_realdata.py` creates an isolated temporary workspace, links the current NC2024 and Cell/Trevino project roots as read-only inputs, and reruns the no-rerun validators from that workspace. This is a fresh control-plane rerun, not a raw FASTQ/fragments/BPNet recomputation.
-- **figure parity gate** — `python scripts/validate_figure_parity_gate.py --allow-conditional` verifies key produced R figures, compares PNG/PDF references when registered, and records missing paper/process-data references as explicit conditional gaps instead of silently passing.
-- **CI governance gate** — `python scripts/validate_ci_governance.py` checks schema/output/doc/workflow synchronization for bundle export, R plotting, validators, README, and protocol surfaces. The GitHub workflow `.github/workflows/factory-governance.yml` wires these checks to focused pytest coverage.
-
-Recommended local hardening command set:
+Current focused verification:
 
 ```bash
-python scripts/validate_ci_governance.py
-python scripts/validate_figure_parity_gate.py --allow-conditional
-python scripts/run_cleanroom_minimal_realdata.py
-pytest --no-cov -q tests/test_pipeline_hardening_gates.py tests/test_two_realdata_final_validator.py tests/test_nc2024_architecture_contract.py
+bash /home/zerlinshen/Bioinformatics\ Research\ Pipeline/scripts/run_all_gates.sh
 ```
 
 ### Remote Governance Control Plane
@@ -400,20 +398,19 @@ and `r_multiomics_factory`: see [docs/FACTORIES_OVERVIEW.pdf](docs/FACTORIES_OVE
 (rendered) and [docs/FACTORIES_OVERVIEW.md](docs/FACTORIES_OVERVIEW.md) (diff-friendly source).
 Regenerate with `python scripts/generate_factories_report.py`.
 
-## Publication & Reproducibility Documentation (NC2024)
+## Publication & Reproducibility Documentation
+
+> **NC2024 ABORTED (2026-05-20).** The `ops/nc2024_methodology_audit/` directory
+> and `results/nc2024_*_v2/` run directories were deleted. Run ledger archives
+> remain at `ops/run_ledger/nc2024_*_v2_*.json`. The NC2024 docs table has been
+> removed. See memory file:
+> `.claude/projects/-home-zerlinshen/memory/project_nc_de_zuani_2024_aborted_2026-05-20.md`
 
 | Document | Purpose |
 |---|---|
-| [ops/nc2024_methodology_audit/AUDIT_2026-04-26_v2.md](ops/nc2024_methodology_audit/AUDIT_2026-04-26_v2.md) | Parameter table, paper alignment, deliberate differences, reproducibility manifest |
-| [ops/nc2024_methodology_audit/ALIGNMENT_REPORT_v2_2026-04-26.md](ops/nc2024_methodology_audit/ALIGNMENT_REPORT_v2_2026-04-26.md) | Cell type proportions vs Sanchez-Mejias 2024; v1 (broken) → v2 (fixed) cluster annotations |
-| [ops/nc2024_methodology_audit/SMALL_REAL_VALIDATION_2026-04-26.md](ops/nc2024_methodology_audit/SMALL_REAL_VALIDATION_2026-04-26.md) | 100k staircase validation gate for the cluster_voting annotation fix |
-| [ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md](ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md) | Root-cause + fix for the post-completion C-extension teardown segfault |
-| [ops/nc2024_methodology_audit/PAPER_REPRO_REPORT_2026-04-27.md](ops/nc2024_methodology_audit/PAPER_REPRO_REPORT_2026-04-27.md) | Biology-level reproduction of the four core Sanchez-Mejias 2024 findings on the v2 cohort (verdict: 3 PASS / 1 PARTIAL) |
 | [ops/MAC_PULL_RECIPE_2026-04-26.md](ops/MAC_PULL_RECIPE_2026-04-26.md) | Tailscale scp command + R load command for downstream plotting on Mac |
 | [docs/PAPER_REPRODUCTION_SOP.md](docs/PAPER_REPRODUCTION_SOP.md) | Standard operating procedure for paper reproduction: faithful-first ladder, gate criteria, and agent protocol |
 | [docs/PUBLICATION_READY.md](docs/PUBLICATION_READY.md) | Methods section template and citation patterns for manuscript drafting |
-
-Canonical NC2024 outputs are the **v2** runs at `results/nc2024_tumor_20260426_v2/` and `results/nc2024_bh_20260426_v2/`. The matching v1 directories (without `_v2`) shipped with a known annotation labeling bug and must not be cited.
 
 ### Engineering Disciplines (Phase 7+)
 
@@ -430,9 +427,9 @@ Canonical NC2024 outputs are the **v2** runs at `results/nc2024_tumor_20260426_v
 | Tier | Dataset | Cells (approx) | Marker |
 |---|---|---|---|
 | nano | synthetic CSR (conftest fixture) | ~5k | `pytest -m nano` |
-| small_real | NC2024 subset (10 samples) | ~100k | `pytest -m small_real` |
-| medium_real | NC2024 subset (50 samples) | ~500k | `pytest -m medium_real` |
-| full_real | NC2024 full cohort | ~884k | `pytest -m full_real` |
+| small_real | real data subset (10 samples) | ~100k | `pytest -m small_real` |
+| medium_real | real data subset (50 samples) | ~500k | `pytest -m medium_real` |
+| full_real | real data full cohort | ~884k | `pytest -m full_real` |
 
 A change that passes only nano/small_real is not cleared for full_real runs. Build fixtures with `scripts/build_staircase_fixtures.py`.
 
@@ -440,7 +437,7 @@ A change that passes only nano/small_real is not cleared for full_real runs. Bui
 
 **MemoryEnforcer cooperative abort** — `workflow/modular/_mem_guard.py` replaces the earlier observational MemoryGuard. A pre-flight RSS budget check + watchdog Event signals modules to abort at the next chunk boundary (raising `SkipModule`), rather than letting the kernel SIGKILL Python at the OOM threshold. Enable with `SC_MEM_GUARD=on SC_MEM_WATCHDOG=on`. Modules must not catch this exception.
 
-**Shutdown cleanup** — `workflow/modular/_shutdown.py` runs explicit cupy / torch / zarr cleanup at interpreter exit, eliminating the post-completion C-extension teardown segfault that previously affected exit codes (run outputs were intact but `set -e` propagated exit 139 and skipped downstream stages). See `ops/nc2024_methodology_audit/SEGFAULT_TRACE_2026-04-26.md`.
+**Shutdown cleanup** — `workflow/modular/_shutdown.py` runs explicit cupy / torch / zarr cleanup at interpreter exit, eliminating the post-completion C-extension teardown segfault that previously affected exit codes (run outputs were intact but `set -e` propagated exit 139 and skipped downstream stages).
 
 **Pre-commit doc-sync gate** — `.githooks/pre-commit` (activated via `git config core.hooksPath .githooks`) runs two stages before every commit: (1) the existing reference manager that keeps the README citation list in sync with module-level `__references__` blocks, then (2) the global `repo-doc-sync` drift detector that validates README + `AGENTS.md` + `AI_AGENT_PROTOCOL.md` against the current canonical state (latest run dir, latest ledger, latest audit doc, missing DOIs, stale `Current State (YYYY-MM-DD)` blocks, missing v1 do-not-cite when v2 exists). The hook blocks commits when drift is found. The detector is installed globally at `~/.claude/skills/repo-doc-sync/` (also symlinked into `~/.codex/skills/` and `~/.kimi/skills/`). Bypass with `git commit --no-verify` only when drift is intentional and documented.
 
@@ -460,16 +457,16 @@ barcode/gene sidecars are recorded with byte sizes and SHA256 values. This keeps
 large R plotting/reporting handoff separate from full-object computation and
 prevents sidecar drift.
 
-**NC2024 architecture validation** — run
-`python3 scripts/validate_nc2024_architecture_contract.py --verify-sha` for a
-no-rerun controller-validation smoke against the current project-root source of
-truth (`/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`).
-It checks the run-root manifest, producer-native Python manifest/module status,
-project-owned `python/bundle/`, project-owned `r/` outputs, and bridge symlinks
-without opening the large H5AD. Use `scripts/validate_two_realdata_final.py` when
-the Cell/Trevino bridge evidence must be checked in the same gate.
+**Architecture validation** — for module hierarchy or bridge contract changes,
+run focused catalog and bundle tests. The NC2024-specific architecture contract
+validator (`validate_nc2024_architecture_contract.py`) was deleted 2026-05-20
+as part of the NC2024 abort cleanup.
 
-## Current Operational Defaults For NC2024-Style Full-Cohort Runs
+## Historical: NC2024-Style Full-Cohort Run Defaults (ABORTED 2026-05-20)
+
+> NC2024 reproduction was ABORTED 2026-05-20. This section is retained as
+> historical context for pipeline capacity/scale guidance. NC2024-specific
+> paths and scale-mode guidance no longer apply to active work.
 
 - Read run memory first:
   - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
@@ -481,11 +478,6 @@ the Cell/Trevino bridge evidence must be checked in the same gate.
 - In both modes, this remote repo remains the run-truth surface. Prefer
   `run_manifest.json`, `module_status.csv`, `ops/before_every_run/LATEST.md`,
   and `ops/run_ledger/` over local summaries when deciding canonical state.
-- For the NC2024 full cohort, treat `large` as a capacity probe rather than the main completion lane.
-- Use direct `massive` for debug and recovery work.
-- Use controller `large -> massive` only for orchestration validation.
-- The canonical prepared input is:
-  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/nc2024_nsclc_emtab13526/full_cohort/prepared_input.zarr`
 - Historical stage-1 direct/controller success runs from `2026-04-23` were
   superseded for storage governance and then deleted after metadata archival:
   - archive:
@@ -521,8 +513,8 @@ the Cell/Trevino bridge evidence must be checked in the same gate.
   - remote R report bundle:
     `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results/NC2024_NSCLC_FULL_COHORT_EXTENDED_MASSIVE_REAL_AUTO_20260424_132003/r_plots/extended_real_run_main_20260424`
 - `2026-04-25` methodology / optimization status:
-  - authoritative audit:
-    `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/nc2024_methodology_audit/AUDIT_2026-04-25.md`
+  - authoritative audit: `ops/nc2024_methodology_audit/AUDIT_2026-04-25.md`
+    (deleted 2026-05-20 with NC2024 abort cleanup)
   - paper-aligned launcher:
     `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/scripts/run_nc2024_paper_aligned_20260425.sh`
   - sparse-exact exploratory launcher:
