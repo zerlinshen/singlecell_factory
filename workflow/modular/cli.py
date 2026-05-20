@@ -195,6 +195,40 @@ def parse_args() -> argparse.Namespace:
         choices=["harmony", "bbknn", "combat", "scanorama", "scvi", "mnn", "fastmnn"],
     )
     parser.add_argument(
+        "--harmony-backend",
+        default="auto",
+        choices=["auto", "cpu", "gpu"],
+        help=(
+            "Harmony backend selection (Plan F-Harmony, G-C0 v3). 'auto' uses "
+            "rapids-singlecell GPU if importable else harmonypy CPU. 'cpu' "
+            "forces harmonypy via scanpy_external. 'gpu' forces rsc (raises "
+            "if unavailable). Non-convergence raises unless "
+            "SC_ALLOW_HARMONY_NON_CONVERGENCE=1 opt-in."
+        ),
+    )
+    parser.add_argument(
+        "--harmony-max-iter",
+        type=int,
+        default=50,
+        help=(
+            "Maximum Harmony iterations (Korsunsky 2019). Default bumped to "
+            "50 in 2026-05-20 — empirical: 10 does not converge on 75-batch "
+            "tumor cohorts."
+        ),
+    )
+    parser.add_argument(
+        "--harmony-theta",
+        type=float,
+        default=2.0,
+        help="Harmony theta diversity parameter (Korsunsky 2019).",
+    )
+    parser.add_argument(
+        "--harmony-sigma",
+        type=float,
+        default=0.1,
+        help="Harmony sigma kernel width parameter (Korsunsky 2019).",
+    )
+    parser.add_argument(
         "--scvi-max-epochs",
         type=int,
         default=200,
@@ -694,6 +728,10 @@ def main() -> None:
         batch=BatchConfig(
             batch_key=args.batch_key,
             method=args.batch_method,
+            harmony_theta=args.harmony_theta,
+            harmony_sigma=args.harmony_sigma,
+            harmony_max_iter=args.harmony_max_iter,
+            harmony_backend=args.harmony_backend,
             scvi_max_epochs=args.scvi_max_epochs,
             scvi_n_latent=args.scvi_n_latent,
             scvi_early_stopping=not args.no_scvi_early_stopping,

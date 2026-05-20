@@ -66,7 +66,19 @@ class BatchConfig:
     # cross-run drift in Harmony tuning is auditable.
     harmony_theta: float = 2.0
     harmony_sigma: float = 0.1
-    harmony_max_iter: int = 10
+    # Plan F-Harmony / Principle 9 (2026-05-20): default bumped 10 -> 50.
+    # Empirical: NC2024 877k tumor cohort with 75 batches does not converge at
+    # 10 iters (G-C0 v2 launch run 2026-05-20 emitted "Harmony did not converge"
+    # warning). Korsunsky 2019 recommends <= 100 max; 50 is the safe default
+    # for large multi-batch cohorts and matches the harmonypy convergence
+    # studies cited in the original paper.
+    harmony_max_iter: int = 50
+    # Plan F-Harmony / Principle 8: harmony backend selection. "auto" = GPU
+    # via rapids-singlecell if available, else CPU harmonypy. "cpu" = explicit
+    # scanpy_external.pp.harmony_integrate. "gpu" = explicit rsc (raises if
+    # unavailable). G-C0 v3 contract requires the chosen backend(s) to
+    # converge; non-convergence raises unless SC_ALLOW_HARMONY_NON_CONVERGENCE=1.
+    harmony_backend: str = "auto"
     scvi_max_epochs: int = 200
     scvi_n_latent: int = 30
     scvi_early_stopping: bool = True

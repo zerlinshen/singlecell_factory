@@ -48,18 +48,33 @@ def main():
     ap.add_argument("--lane", required=True, choices=["1", "2"], help="Lane identifier")
     ap.add_argument(
         "--contract-sha",
-        default="b3ff5ba7110f45eacda786b11a169518c3396c9bb9a458c5c24b87324bb64240",
-        help="G-C0 v2 contract SHA256 (default: 2026-05-20 locked value)",
+        default="3c3e4bdc4ed850028513da7110e3192c91776fcc7b4a1ba9b87077dbe6c58799",
+        help="G-C0 v3 contract SHA256 (default: 2026-05-20 afternoon v3 value)",
     )
     ap.add_argument(
         "--clustering-sha",
         default="200c31793be53eebcc9762beb67dd2c11e30ad4f625790fa37e885259deee4a2",
-        help="clustering.py SHA256 at G-C0 lock-in (default: 2026-05-20 locked value)",
+        help="clustering.py SHA256 at G-C0 lock-in (unchanged from v2)",
+    )
+    ap.add_argument(
+        "--batch-correction-sha",
+        default="edf8b04b7d35afac075ad529de730f69dc7ca288858c1e90154d70cef7b76e57",
+        help="batch_correction.py SHA256 (new in v3 anchor set)",
+    )
+    ap.add_argument(
+        "--config-sha",
+        default="afaac53db6a867e9ca58bdb40f90a96c5c04cb79675f3fac84a4fe1096ce0eeb",
+        help="config.py SHA256 (new in v3 anchor set; harmony_max_iter 10->50)",
+    )
+    ap.add_argument(
+        "--cli-sha",
+        default="3f8ea72339d2259aab83327a6d5025de63e4b14654ab70e1b5e9b8c0a934311e",
+        help="cli.py SHA256 (new in v3 anchor set; harmony CLI flags)",
     )
     ap.add_argument(
         "--approval-timestamp",
-        default="2026-05-20T00:00:00Z",
-        help="G-C0 approval timestamp (default: 2026-05-20)",
+        default="2026-05-20T12:00:00Z",
+        help="G-C0 v3 approval timestamp (default: 2026-05-20 afternoon)",
     )
     args = ap.parse_args()
 
@@ -92,12 +107,27 @@ def main():
     )
     input_zarr_sha = sha256_zarr_dir(zarr_path) if zarr_path.exists() else None
 
-    # 5. clustering.py SHA256 — recompute to detect post-approval drift
-    clustering_py_path = Path(
-        "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/workflow/modular/modules/clustering.py"
+    # 5. Factory artifact SHA256 set — recompute to detect post-approval drift
+    factory_root = Path(
+        "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/workflow/modular"
     )
-    clustering_py_sha_actual = sha256_file(clustering_py_path)
-    drift_detected = clustering_py_sha_actual != args.clustering_sha
+    actual_shas = {
+        "clustering.py": sha256_file(factory_root / "modules/clustering.py"),
+        "batch_correction.py": sha256_file(factory_root / "modules/batch_correction.py"),
+        "config.py": sha256_file(factory_root / "config.py"),
+        "cli.py": sha256_file(factory_root / "cli.py"),
+    }
+    pinned_shas = {
+        "clustering.py": args.clustering_sha,
+        "batch_correction.py": args.batch_correction_sha,
+        "config.py": args.config_sha,
+        "cli.py": args.cli_sha,
+    }
+    drift_per_artifact = {
+        name: (actual_shas[name] != pinned_shas[name]) for name in pinned_shas
+    }
+    drift_detected = any(drift_per_artifact.values())
+    clustering_py_sha_actual = actual_shas["clustering.py"]
 
     # Extract clustering module metadata from run_manifest if present
     ctx_metadata = run_manifest.get("metadata", {}) or {}
@@ -106,13 +136,29 @@ def main():
     # Compose the lane manifest
     manifest = {
         "g_c0_contract_sha256": args.contract_sha,
+        "g_c0_contract_version": "v3",
         "g_c0_approved_at": args.approval_timestamp,
+        "factory_artifact_pinned_sha256": pinned_shas,
+        "factory_artifact_actual_sha256": actual_shas,
+        "factory_artifact_drift_per_artifact": drift_per_artifact,
+        "factory_artifact_any_drift": drift_detected,
         "clustering_py_sha256": args.clustering_sha,
         "clustering_py_sha256_actual_at_run": clustering_py_sha_actual,
-        "clustering_py_drift_detected": drift_detected,
+        "clustering_py_drift_detected": drift_per_artifact["clustering.py"],
         "lane": int(args.lane),
         "lane_role": (
             "scanpy_cpu_sparse_exact_arpack" if args.lane == "1" else "rapids_singlecell_gpu_drop_in"
+        ),
+        # A5 v3 harmony convergence anchoring — REQUIRED fields
+        "harmony_backend": ctx_metadata.get("harmony_backend"),
+        "harmony_device": ctx_metadata.get("harmony_device"),
+        "harmony_converged": ctx_metadata.get("harmony_converged"),
+        "harmony_max_iter": ctx_metadata.get("harmony_max_iter"),
+        "harmony_theta": ctx_metadata.get("harmony_theta"),
+        "harmony_sigma": ctx_metadata.get("harmony_sigma"),
+        "harmony_non_convergence_signals": ctx_metadata.get("harmony_non_convergence_signals"),
+        "harmony_non_convergence_opt_in_acknowledged": ctx_metadata.get(
+            "harmony_non_convergence_opt_in_acknowledged", False
         ),
         # A1 — input
         "input_zarr_path": str(zarr_path),

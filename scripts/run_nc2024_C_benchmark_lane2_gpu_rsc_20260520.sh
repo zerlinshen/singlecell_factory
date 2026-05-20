@@ -44,6 +44,10 @@ ${CONDA_RUN} python -m workflow.modular.cli \
   --optional-modules "${MODULES}" \
   --batch-key sample \
   --batch-method harmony \
+  --harmony-backend gpu \
+  --harmony-max-iter 50 \
+  --harmony-theta 2.0 \
+  --harmony-sigma 0.1 \
   --cohort-subset condition=tumor \
   --gpu-mode force \
   --scale-mode large \

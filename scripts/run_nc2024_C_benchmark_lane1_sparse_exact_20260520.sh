@@ -18,8 +18,10 @@ SAMPLE_ROOT="${RAW_ROOT}/full_cohort"
 PROJECT_NAME="NC2024_C_LANE1_SPARSE_EXACT_20260520"
 PROBE_LOG="${PROJECT_ROOT}/runs/${PROJECT_NAME}.launch.log"
 
-# Lane-1 uses CPU; sc10x env has scanpy 1.11.5 + scanpy_external + harmonypy
-CONDA_RUN="/home/zerlinshen/conda/bin/conda run -n sc10x"
+# Both lanes use sc_gpu_stable env to remove env-asymmetry as a confounder.
+# Lane-1 forces CPU via SC_CLUSTERING_ENGINE=sparse_exact (dispatched at
+# clustering.py:175 BEFORE GPU detection) and --harmony-backend cpu.
+CONDA_RUN="/home/zerlinshen/conda/bin/conda run -n sc_gpu_stable"
 
 # C benchmark: clustering + batch_correction ONLY (downstream modules are Component D's work, not C's)
 MODULES="batch_correction,clustering"
@@ -43,6 +45,10 @@ ${CONDA_RUN} python -m workflow.modular.cli \
   --optional-modules "${MODULES}" \
   --batch-key sample \
   --batch-method harmony \
+  --harmony-backend cpu \
+  --harmony-max-iter 50 \
+  --harmony-theta 2.0 \
+  --harmony-sigma 0.1 \
   --cohort-subset condition=tumor \
   --gpu-mode off \
   --scale-mode large \

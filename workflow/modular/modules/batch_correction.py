@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import warnings
 import matplotlib
 import numpy as np
 
@@ -23,7 +25,13 @@ __references__ = {
         "journal": "Nature Methods",
         "year": "2019",
         "doi": "10.1038/s41592-019-0619-0",
-        "description": "Default backend (rsc.pp.harmony_integrate GPU port, US-B3 parity ARI=1.000).",
+        "description": (
+            "Reference algorithm. Two backends: CPU harmonypy via "
+            "scanpy_external.pp.harmony_integrate, GPU rapids-singlecell via "
+            "rsc.pp.harmony_integrate. Initial parity verified on a 50k/4-batch "
+            "synthetic fixture (US-B3, ARI >= 0.95). Production-scale parity "
+            "verification is part of the C benchmark (G-C0 v3)."
+        ),
     },
     "Polanski_BBKNN_2020": {
         "title": "BBKNN: fast batch alignment of single cell transcriptomes",
@@ -265,38 +273,140 @@ class BatchCorrectionModule:
         plt.close()
 
     @staticmethod
+    def _resolve_harmony_backend(ctx) -> str:
+        """Resolve the Harmony backend.
+
+        Selection precedence (highest first):
+        1. `SC_HARMONY_BACKEND` env var (`cpu` | `gpu` | `auto`)
+        2. `ctx.cfg.batch.harmony_backend` (`cpu` | `gpu` | `auto`)
+        3. Module default: `auto`
+
+        `auto` resolves to `gpu` if `rapids_singlecell` imports successfully,
+        otherwise `cpu`. Explicit `gpu` raises if rsc is unavailable; explicit
+        `cpu` always uses harmonypy via scanpy_external.
+        """
+        choice = (
+            os.environ.get("SC_HARMONY_BACKEND", "").strip().lower()
+            or getattr(ctx.cfg.batch, "harmony_backend", "").strip().lower()
+            or "auto"
+        )
+        if choice not in {"auto", "cpu", "gpu"}:
+            raise ValueError(
+                f"Invalid harmony_backend={choice!r}; expected one of "
+                f"{{'auto', 'cpu', 'gpu'}}."
+            )
+        if choice == "auto":
+            try:
+                import rapids_singlecell  # noqa: F401
+                choice = "gpu"
+            except ImportError:
+                choice = "cpu"
+        if choice == "gpu":
+            try:
+                import rapids_singlecell  # noqa: F401
+            except ImportError as exc:
+                raise ImportError(
+                    "harmony_backend=gpu requires rapids_singlecell. "
+                    "Install rsc or switch to harmony_backend=cpu/auto."
+                ) from exc
+        return choice
+
+    @staticmethod
+    def _detect_non_convergence(caught_warnings) -> tuple[bool, list[str]]:
+        """Scan captured warnings for Harmony non-convergence signals.
+
+        Both rsc and harmonypy emit a Python warning when the iterative loop
+        exits without convergence. Returns (converged, signals). `converged`
+        is False iff at least one warning matches a non-convergence token.
+        """
+        tokens = ("did not converge", "maximum iter", "max iter", "reached max")
+        signals = [
+            str(w.message) for w in caught_warnings
+            if any(t in str(w.message).lower() for t in tokens)
+        ]
+        return (len(signals) == 0, signals)
+
+    @staticmethod
     def _run_harmony(adata, batch_key: str, ctx) -> None:
+        """Run Harmony batch correction.
+
+        Honors Principle 9 (No silent non-convergence) — if Harmony exits the
+        iterative loop without converging at `harmony_max_iter`, the module
+        raises `RuntimeError` unless the operator explicitly opts in via
+        `SC_ALLOW_HARMONY_NON_CONVERGENCE=1`. Mirrors F-3's Welch opt-in.
+
+        Backend selection: see `_resolve_harmony_backend`. The factory's
+        default is `auto` (GPU if rapids_singlecell is importable, else CPU
+        harmonypy). G-C0 v3 contract requires both lanes to converge —
+        backend is allowed to differ across lanes provided both converge,
+        because US-B3 + production C benchmark establish parity at
+        convergence.
+        """
         if "X_pca" not in adata.obsm:
             raise ValueError("Harmony requires PCA (run clustering first).")
-        try:
-            import rapids_singlecell as rsc
-        except ImportError:
-            raise ImportError(
-                "rapids_singlecell is required for Harmony batch correction. "
-                "Activate the sc_gpu_stable conda environment."
-            )
-        # rsc.pp.harmony_integrate writes corrected embeddings to
-        # adata.obsm["X_pca_harmony"] in place (US-B3, ARI=1.000 parity gate passed).
-        # MEDIUM-2 fix (2026-05-19): expose theta/sigma/max_iter so cross-run
-        # tuning is auditable instead of relying on library defaults silently.
         cfg_batch = ctx.cfg.batch
-        ctx.metadata["harmony_device"] = "gpu"
+        backend = BatchCorrectionModule._resolve_harmony_backend(ctx)
+        ctx.metadata["harmony_backend"] = backend
+        ctx.metadata["harmony_device"] = "gpu" if backend == "gpu" else "cpu"
         ctx.metadata["harmony_theta"] = cfg_batch.harmony_theta
         ctx.metadata["harmony_sigma"] = cfg_batch.harmony_sigma
         ctx.metadata["harmony_max_iter"] = cfg_batch.harmony_max_iter
-        try:
-            rsc.pp.harmony_integrate(
-                adata,
-                key=batch_key,
-                theta=cfg_batch.harmony_theta,
-                sigma=cfg_batch.harmony_sigma,
-                max_iter_harmony=cfg_batch.harmony_max_iter,
-            )
-        except TypeError:
-            # Older rsc versions may not accept all kwargs — record and use
-            # library defaults rather than dropping the call.
-            ctx.metadata["harmony_extra_args_unsupported"] = True
-            rsc.pp.harmony_integrate(adata, key=batch_key)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            if backend == "gpu":
+                import rapids_singlecell as rsc
+                try:
+                    rsc.pp.harmony_integrate(
+                        adata,
+                        key=batch_key,
+                        theta=cfg_batch.harmony_theta,
+                        sigma=cfg_batch.harmony_sigma,
+                        max_iter_harmony=cfg_batch.harmony_max_iter,
+                    )
+                except TypeError:
+                    ctx.metadata["harmony_extra_args_unsupported"] = True
+                    rsc.pp.harmony_integrate(adata, key=batch_key)
+            else:  # backend == "cpu"
+                # Use scanpy_external (harmonypy) — same param surface,
+                # canonical CPU reference per Korsunsky 2019.
+                import scanpy.external as sce
+                try:
+                    sce.pp.harmony_integrate(
+                        adata,
+                        key=batch_key,
+                        theta=cfg_batch.harmony_theta,
+                        sigma=cfg_batch.harmony_sigma,
+                        max_iter_harmony=cfg_batch.harmony_max_iter,
+                    )
+                except TypeError:
+                    ctx.metadata["harmony_extra_args_unsupported"] = True
+                    sce.pp.harmony_integrate(adata, key=batch_key)
+
+        converged, signals = BatchCorrectionModule._detect_non_convergence(caught)
+        ctx.metadata["harmony_converged"] = converged
+        if signals:
+            ctx.metadata["harmony_non_convergence_signals"] = signals[:5]
+        if not converged:
+            opt_in = os.environ.get("SC_ALLOW_HARMONY_NON_CONVERGENCE", "").strip() == "1"
+            if opt_in:
+                logger.error(
+                    "Harmony did not converge at max_iter=%d (backend=%s) — "
+                    "SC_ALLOW_HARMONY_NON_CONVERGENCE=1 opt-in acknowledged; "
+                    "downstream results may be iteration-trajectory-dependent. "
+                    "Signals: %s",
+                    cfg_batch.harmony_max_iter, backend, signals[:3],
+                )
+                ctx.metadata["harmony_non_convergence_opt_in_acknowledged"] = True
+            else:
+                raise RuntimeError(
+                    f"Harmony did not converge at max_iter={cfg_batch.harmony_max_iter} "
+                    f"(backend={backend}). Principle 9: no silent non-convergence. "
+                    f"Raise --harmony-max-iter (recommended >= 50 for 75-batch tumor "
+                    f"cohorts) or set SC_ALLOW_HARMONY_NON_CONVERGENCE=1 to override "
+                    f"with audit-logged opt-in. Captured signals: {signals[:3]}"
+                )
+
         # Ensure float32 for downstream consistency
         adata.obsm["X_pca_harmony"] = np.asarray(
             adata.obsm["X_pca_harmony"], dtype=np.float32
