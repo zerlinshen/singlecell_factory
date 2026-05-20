@@ -1,3 +1,79 @@
+# Latest governance update: human conclusion logs required - 2026-05-19
+
+- Confirmed existing `before-every-run` rule already required remote run journaling, but did not explicitly require human-facing scientific decision logs.
+- Added canonical rule: when a discussion changes scientific interpretation, final-run strategy, claim support, benchmark lane choice, source-of-truth status, or human-facing next actions, write a human-readable conclusion log.
+- Required locations now documented:
+  - `/home/zerlinshen/projects/<project-id>/ledger/human_review/<date>-<topic>.md`
+  - `/home/zerlinshen/projects/<project-id>/runs/<run-id>/evidence/<topic>.md` when tied to a run
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md` plus journal entry
+- Updated suite and repo governance surfaces:
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/README.md`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/governance/README.md`
+  - `singlecell_factory/README.md`
+  - `singlecell_factory/docs/REMOTE_FACTORY_PROJECT_GOVERNANCE.md`
+  - `r_multiomics_factory/README.md`
+  - `plotting_factory/README.md`
+  - remote and local `before-every-run` skill files
+- Verification: `git diff --check` passed for changed child-repo markdown/skill files.
+- New journal: `before-every-run/journal/2026-05-19-governance-human-conclusion-log-rule.md`.
+
+---
+
+# Latest human conclusion log update - 2026-05-19
+
+- Added human-readable conclusion log for the NC2024/Cell controller-validation discussion and final clustering strategy.
+- Key decision: NC current CSS route is evidence-only/controller-validation; final real-data claims should use sparse-exact or validated hybrid clustering, with CSS retained only as smoke/control.
+- Key Cell conclusion: low ARI is likely driven by reproduction-boundary and missing original annotation/parameter/multi-omic context; biological signal is not absent and needs a parity/gap report.
+- Human conclusion artifacts:
+  - `/home/zerlinshen/projects/nc-reproduction/ledger/human_review/2026-05-19-clustering-final-strategy-human-conclusion.md`
+  - `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-19T1010Z-82f1964/evidence/human_conclusion_clustering_final_strategy_20260519.md`
+  - `/home/zerlinshen/projects/wave5-trevino/ledger/human_review/2026-05-19-clustering-final-strategy-human-conclusion.md`
+  - `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T1005Z-82f1964/evidence/human_conclusions/human_conclusion_clustering_final_strategy_20260519.md`
+- New journal: `before-every-run/journal/2026-05-19-human-conclusion-clustering-final-strategy.md`.
+
+---
+
+# Latest two-dataset full simulation and DE/checkpoint patch update - 2026-05-19
+
+- Cell/Trevino full public RNA controller-validation completed: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T1005Z-82f1964`.
+- NC2024 full tumor run reached main DE evidence, then was intentionally stopped at status 143 to avoid a redundant old-code DE retry: `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-19T1010Z-82f1964`.
+- RAPIDS DE cause confirmed: installed `rapids-singlecell 0.13.4` does not expose `rapids_singlecell.tl.rank_genes_groups`; GPU clustering remains valid and separate.
+- Main NC DE output existed before stop: `marker_genes_all.csv` 1901 lines, `marker_genes.csv` 1893 lines, `marker_top5_by_cluster.csv` 96 lines.
+- Patch applied in `workflow/modular/context.py`, `workflow/modular/modules/differential_expression.py`, tests, and `README.md`: RAPIDS DE API/version gate, massive sparse CPU DE routing, correction-aware fallback, no MemoryGuard retry/false-ok, oversized substate DE skip, Dataset2D checkpoint sidecar fallback, and operator docs for sidecar-only checkpoints.
+- Verification: `py_compile` passed; `git diff --check` passed; targeted pytest `9 passed`; real environment smoke confirmed `de_backend=cpu_sparse`, `de_test_actually_used=sparse_welch_fallback`, `de_correction_actually_used=bonferroni`, `de_rapids_singlecell_version=0.13.4`.
+- New journal: `before-every-run/journal/2026-05-19-two-dataset-full-simulation-and-de-patch.md`.
+
+---
+# Latest Cell/Trevino module-smoke update - 2026-05-19
+
+- Remote Cell/Trevino module smoke completed successfully from local Codex over `ssh ubuntu-tail`.
+- Project root: `/home/zerlinshen/projects/wave5-trevino`.
+- Evidence-only module-smoke run: `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0956Z-82f1964`.
+- Derived smoke input: `/home/zerlinshen/projects/wave5-trevino/inputs/module_smoke_20260519_cell_rna_3000/prepared_input.h5ad`, a 3,000-cell subset of the public Trevino RNA prepared matrix with all genes retained.
+- Configs used: `/home/zerlinshen/projects/wave5-trevino/configs/module_smoke_20260519/cell_brain_development_markers.json` and `cell_brain_development_signatures.json`.
+- Modules all `ok`: `cellranger`, `qc`, `doublet_detection`, `clustering`, `annotation`, `cell_cycle`, `differential_expression`, `gene_signature_scoring`, `metacell`, `trajectory`, `composition`, `pathway_analysis`, `pseudobulk_de`, `cell_fate`.
+- Key metrics: raw `3000 x 33355`; after QC `3000 x 22556`; after doublet removal `2997` cells; `19` clusters; annotation unknown pct `0.0`; `2279` DE genes; `15` signatures scored; `50` metacells; `8` sample groups in composition; exploratory pseudobulk completed; `5` terminal states in cell-fate fallback.
+- Expected fallbacks observed: CPU scrublet fallback after RAPIDS dtype rejection, MiniBatchKMeans fallback for missing `SEACells`, composition fallback for missing `pertpy`, pathway fallback for missing `gseapy/decoupler`, pseudobulk Mann-Whitney fallback for missing `pydeseq2`, manual cell-fate fallback for missing `CellRank`.
+- Governance validation after the run: overall `pass`; warnings are existing advisory/legacy Cell project fields and legacy run layout warnings, with no findings on the new module-smoke run.
+- Retention: do not delete existing Cell/Trevino runs in this task. Treat the new run and derived input as `evidence-only` module-interface smoke artifacts, not the Cell/Trevino human-facing source of truth.
+- Current Cell/Trevino scientific source of truth remains `/home/zerlinshen/projects/wave5-trevino/runs/20260517T1436Z-13c2c88`; current linked pipeline run remains `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88`.
+- New journal: `before-every-run/journal/2026-05-19-cell-trevino-module-smoke.md`.
+
+---
+
+# Latest raw FASTQ/FASTA-reference local-to-remote smoke update - 2026-05-19
+
+- Local Mac session successfully launched remote `singlecell_factory` over `ssh ubuntu-tail`.
+- Project root: `/home/zerlinshen/projects/raw-fasta-smoke`.
+- Canonical latest/best smoke run: `/home/zerlinshen/projects/raw-fasta-smoke/runs/2026-05-19T0931Z-82f1964`.
+- Input boundary: real 10x tiny FASTQ plus Cell Ranger GRCh38 reference containing `fasta/genome.fa`; operational raw/reference smoke only, not article-level scientific truth.
+- Clean run modules: `cellranger`, `qc`, `doublet_detection`, `clustering` all `ok`; raw cells `1142`, raw genes `38606`, after QC `1142 x 377`, clusters `9`.
+- First attempt `2026-05-19T0928Z-82f1964` proved raw/QC/clustering but optional annotation failed due insufficient marker-gene coverage; parameter/log/manifest evidence archived under `/home/zerlinshen/projects/raw-fasta-smoke/ledger/run_records/2026-05-19T0928Z-82f1964`.
+- Retention action applied: deleted superseded bulky first-run output while preserving per-run logs/params; protected raw FASTQ source and reference/FASTA.
+- New journal: `before-every-run/journal/2026-05-19-raw-fasta-smoke-local-remote.md`.
+
+---
+
 # Latest two real-dataset final factory validation update — 2026-05-18
 
 - Final bridge/governance validation completed for two real datasets across `singlecell_factory -> r_multiomics_factory -> plotting_factory`.

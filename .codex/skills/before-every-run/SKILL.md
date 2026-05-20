@@ -97,6 +97,28 @@ Also identify obvious cleanup candidates conservatively:
 
 Then update `LATEST.md` so the next run can start with the newest truth quickly.
 
+## 3a. Human conclusion and decision logs
+
+When a run discussion changes scientific interpretation, final-run strategy,
+claim support, benchmark lane choice, source-of-truth status, or human-facing
+next actions, write a human-readable conclusion log in addition to the
+operational journal.
+
+Required locations for governed projects:
+
+- project ledger:
+  `/home/zerlinshen/projects/<project-id>/ledger/human_review/<date>-<topic>.md`
+- run evidence when tied to a concrete run:
+  `/home/zerlinshen/projects/<project-id>/runs/<run-id>/evidence/<topic>.md`
+- factory run memory index:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/ops/before_every_run/LATEST.md`
+  and a matching journal entry under `ops/before_every_run/journal/`
+
+The conclusion log must separate observed facts, interpretation, decisions,
+rejected or downgraded routes, and next actions. It must also state whether the
+run is `canonical`, `evidence-only`, `superseded`, or `failed exploratory`.
+Do not leave scientific decisions only in chat history.
+
 ## 4. If the run repeated an old problem
 
 Say so explicitly.

@@ -49,6 +49,28 @@ Agent-facing surfaces should answer: how was it run, can it be resumed, and can 
 
 Phase 1 defines this split in the factory contract and validator. It does not rename legacy runs or move existing project artifacts.
 
+### Human Conclusion Log Requirement
+
+When a run discussion changes scientific interpretation, final-run strategy,
+claim support, benchmark lane choice, source-of-truth status, or human-facing
+next actions, preserve it as a human-readable conclusion log. Do this even when
+no new pipeline command is launched.
+
+Required locations:
+
+- project ledger:
+  `/home/zerlinshen/projects/<project-id>/ledger/human_review/<date>-<topic>.md`
+- run evidence when tied to a concrete run:
+  `/home/zerlinshen/projects/<project-id>/runs/<run-id>/evidence/<topic>.md`
+- factory run memory:
+  `ops/before_every_run/LATEST.md` and a matching entry under
+  `ops/before_every_run/journal/`
+
+The log must separate observed facts, interpretation, decisions, rejected or
+downgraded routes, and next actions. It must explicitly classify the affected
+run or artifact as `canonical`, `evidence-only`, `superseded`, or
+`failed exploratory`. Scientific decisions must not live only in chat history.
+
 ## Manifest Layers
 
 Do not collapse manifest layers into one file.
