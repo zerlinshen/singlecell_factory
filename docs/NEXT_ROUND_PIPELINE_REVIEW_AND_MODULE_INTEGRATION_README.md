@@ -42,6 +42,13 @@ Current Round9 project evidence:
 - Figure bundle: `/home/zerlinshen/projects/round9-singlecell-comparison/reports/figures/round9_lusc_closure`
 - Human conclusion: `/home/zerlinshen/projects/round9-singlecell-comparison/ledger/human_review/2026-05-22-round9-lusc-closure-human-conclusion.md`
 
+Temporary paper-grounded references for 3D genome work:
+
+- Liu 2025 TP63/MYC loops raw mirror: `/home/zerlinshen/data/raw/liu_2025_natcomm_tp63_myc_loops`
+- Liu 2025 TP63/MYC loops published figures: `/home/zerlinshen/data/external/published_figures/liu_2025_natcomm_tp63_myc_loops`
+- Liu 2025 KRAS single-cell 3D genome raw mirror: `/home/zerlinshen/data/raw/liu_2025_natgenet_kras_single_cell_3d_genome`
+- Liu 2025 KRAS single-cell 3D genome published figures: `/home/zerlinshen/data/external/published_figures/liu_2025_natgenet_kras_single_cell_3d_genome`
+
 ## Owner By Primary Output
 
 Use this rule before moving code:
@@ -80,6 +87,58 @@ Do not use `install_github` inside production pipeline execution. Pin and audit
 external source locations first, then call local clones or installed env
 packages through explicit paths and fail-loud checks.
 
+## 3D Genome Paper-Repo Intake Strategy
+
+The single-cell pipeline has already had many rounds of repair. The next
+highest-value gap is the 3D genome side. Treat it differently from ordinary
+single-cell module tuning: many 3D genome methods are tightly coupled to a
+specific paper repository, genome build, contact-matrix format, normalization,
+resolution, and figure recipe. The right first move is often to find the
+paper's own repository or a widely adopted implementation, reproduce the
+paper-level output, and only then decide what belongs in our reusable pipeline.
+
+Use a paper-repo-first ladder:
+
+1. Pick one 3D genome paper target and define the exact temporary ground truth:
+   published loop/TAD/compartment calls, cell-state pattern, enhancer-promoter
+   linkage, 3D genome-associated gene program, or figure panel.
+2. Locate the paper repository, release tag or commit SHA, license, data
+   accession, genome build, restriction enzyme / assay type, matrix format
+   (`.hic`, `.cool`, `.mcool`, sparse TSV), bin resolution, and normalization
+   method.
+3. Reproduce the upstream repository outside our factories first. Keep logs,
+   dependency versions, command lines, and a minimal successful output bundle.
+4. Compare reproduced outputs against the published figure or supplementary
+   table before writing pipeline wrappers. The paper output is a temporary
+   ground truth for method evaluation, not an absolute biological truth.
+5. Only after reproduction succeeds, split ownership:
+   - primary contact-map processing, loop/TAD/compartment calling, statistical
+     calls, or 3D genome interpretation belong in the scientific factory;
+   - single-cell links and AnnData handoff belong in `singlecell_factory`;
+   - figure rendering belongs in `plotting_factory`.
+6. Wrap the method with explicit contracts and fail-loud dependency checks.
+   Do not paste a whole paper script into production or silently change
+   normalization, resolution, genome build, or filtering defaults.
+7. Run an end-to-end smoke lane after the 3D genome method is wrapped, because
+   the whole workflow matters: 3D genome evidence must still connect cleanly to
+   single-cell state, downstream biological interpretation, and final figures.
+
+Likely pitfalls to guard against:
+
+- Paper repositories may be stale, untagged, partially manual, or missing
+  private intermediate files.
+- Published figures may use preprocessed matrices rather than raw FASTQ-level
+  processing; record which level is being reproduced.
+- Loop/TAD/compartment results are sensitive to genome build, bin size,
+  normalization, blacklists, mappability, and sparse-matrix filtering.
+- `.hic` and `.cool/.mcool` workflows are not interchangeable unless conversion
+  and balancing are validated.
+- Different tools optimize different endpoints: loop callers, TAD callers,
+  compartment callers, single-cell 3D embedding, and enhancer-gene linkage
+  should not be ranked by one metric.
+- A pretty reproduced panel is not enough. Require a numeric comparison table
+  plus manuscript-grade figure QA.
+
 ## Evaluation Matrix
 
 Every candidate method should be judged on four layers:
@@ -102,7 +161,15 @@ Every candidate method should be judged on four layers:
    - require a second different-shape dataset or a data-shape conditional
    - document both winners and losers; methods have different valid domains
 
-4. Figure and publication quality:
+4. 3D genome paper-grounded validity:
+   - reproduction distance from published loops, TADs, compartments, or
+     enhancer-gene links
+   - preservation of the paper's main cell-state or regulatory conclusion
+   - sensitivity to genome build, bin resolution, normalization, and input
+     matrix format
+   - handoff quality into single-cell interpretation and final figure panels
+
+5. Figure and publication quality:
    - vector SVG/PDF outputs for manuscript panels
    - no debug PNGs as final panels
    - labels readable at manuscript scale
@@ -127,6 +194,8 @@ Already integrated or partially integrated:
 Still needs a deliberate next-session gap matrix:
 
 - Milty Omix / broader multi-omics modules not yet wired into the modular CLI.
+- 3D genome paper-repo intake: choose the strongest paper repositories and
+  reproduce them before converting anything into reusable modules.
 - NicheNet regulatory layer versus existing LIANA ligand-receptor layer.
 - SoupX versus DecontX under raw-barcode and filtered-only input shapes.
 - Batch integration backends: Harmony/RPCA/CCA versus fastMNN/MNN/ComBat.
@@ -145,19 +214,26 @@ Still needs a deliberate next-session gap matrix:
    - LUSC/tumor tissue atlas shape from Round9.
    - A different-shape benchmark, preferably hgmm or a public brain/development
      dataset where the expected doublet and ambient profiles differ.
+   - For 3D genome work, add one paper-grounded dataset from the Liu 2025
+     references above and score reproduction against its published figures or
+     supplementary tables.
 
 3. Run paired lanes through the same downstream module set:
    - baseline
    - candidate backend
    - consensus or conditional router
 
-4. Generate one comparison report per method family, not only one upstream
+4. For 3D genome candidates, first reproduce the paper repository in isolation,
+   then wrap only the stable method boundary. Keep the upstream clone, command
+   log, dependency record, and reproduced figure/table comparison as evidence.
+
+5. Generate one comparison report per method family, not only one upstream
    metric table.
 
-5. Generate a figure bundle for every accepted comparison using vector outputs
+6. Generate a figure bundle for every accepted comparison using vector outputs
    plus a manual visual-review checklist.
 
-6. Only then decide whether a method becomes:
+7. Only then decide whether a method becomes:
    - default
    - data-shape conditional
    - optional second-opinion lane
