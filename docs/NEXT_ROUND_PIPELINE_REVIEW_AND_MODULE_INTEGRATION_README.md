@@ -177,6 +177,30 @@ Every candidate method should be judged on four layers:
    - color palettes distinguish methods and remain print-safe
    - figure conclusion matches the comparison report
 
+## Figure Policy
+
+The final principle is simple: choose the path that produces the most beautiful,
+truthful, publication-grade figure. Do not choose a plotting path mechanically.
+
+- Use `$nature-figure` whenever it can improve the final manuscript-style
+  figure, including multi-panel design, published-figure comparison, visual QA,
+  palette/layout polishing, SVG/PDF export review, and manuscript-scale label
+  checks.
+- Do not rewrite a validated R analysis path only to force it through a skill.
+  Some R-based analyses naturally emit their own ggplot2, patchwork,
+  ComplexHeatmap, or method-native plots. Keep those native outputs when they
+  are part of the analysis contract, then polish or QA them when feasible.
+- If `$nature-figure` is invoked, choose the backend by context: use R for
+  plotting_factory-style final figures and R-native outputs; use Python only
+  when continuing existing Python comparison scripts or matplotlib/seaborn
+  figure code.
+- Debug PNGs are never final manuscript panels. A final panel must be reviewed
+  for readability, overlap, color, vector/raster export quality, and whether
+  it supports the biological conclusion.
+- The stop criterion for figures is not "a plot exists." Stop only when the
+  figure is the best available presentation of the evidence under the current
+  data, method, and journal-style constraints.
+
 ## Current Modules To Continue Reviewing
 
 Already integrated or partially integrated:
@@ -231,7 +255,9 @@ Still needs a deliberate next-session gap matrix:
    metric table.
 
 6. Generate a figure bundle for every accepted comparison using vector outputs
-   plus a manual visual-review checklist.
+   plus a manual visual-review checklist. Use `$nature-figure` whenever it can
+   improve the final appearance or QA, but keep R-native analysis plots in R
+   when that is the correct method contract.
 
 7. Only then decide whether a method becomes:
    - default
