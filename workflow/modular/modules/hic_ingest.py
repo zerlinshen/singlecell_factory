@@ -144,6 +144,15 @@ class HiCIngestModule:
         resolution = int(getattr(ctx.cfg, "hic_resolution_bp", 25_000))
         chromsizes_path = getattr(ctx.cfg, "hic_chromsizes_path", None)
 
+        if str(contacts_path).endswith(".hic"):
+            ctx.status(
+                self.name,
+                "skipped",
+                ".hic ingest is not interchangeable with .cool/.mcool/TSV; convert or supply a validated processed table",
+            )
+            ctx.metadata["hic_ingest_status"] = "skipped_hic_unsupported"
+            return
+
         # Cool/.mcool support requires `cooler`; fall back to TSV
         if str(contacts_path).endswith((".cool", ".mcool")):
             try:
@@ -157,6 +166,7 @@ class HiCIngestModule:
             bins_df = c.bins()[:].reset_index().rename(columns={"index": "bin_id"})
             n_bins = mat.shape[0]
             total_contacts = float(mat.sum())
+            input_format = "cooler_unbalanced"
         else:
             # TSV path: load contacts + build bins
             chromsizes = _load_chromsizes(Path(chromsizes_path) if chromsizes_path else None)
@@ -174,6 +184,7 @@ class HiCIngestModule:
             mat = _binize_contacts(contacts, bins_df, resolution)
             n_bins = mat.shape[0]
             total_contacts = float(contacts["count"].sum())
+            input_format = "tsv_contact_pairs"
 
         adata.uns["hic_contact_matrix"] = mat
         adata.uns["hic_bins"] = bins_df
@@ -183,6 +194,9 @@ class HiCIngestModule:
             "n_bins": int(n_bins),
             "total_contacts": float(total_contacts),
             "sparsity": float(sparsity),
+            "matrix_format": "csr_sparse",
+            "input_format": input_format,
+            "normalization": "raw_counts_or_unbalanced",
         }
         out_dir = ctx.run_dir / "hic_ingest"
         out_dir.mkdir(parents=True, exist_ok=True)

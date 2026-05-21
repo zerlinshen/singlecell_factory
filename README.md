@@ -1177,8 +1177,10 @@ Intended use:
 The default emitter in `scripts/export_singlecell_r_bundle.py` writes
 `schema_version = "singlecell_r_bundle_v2.1"`. v2.1 is fully backwards-compatible
 with v2: the only addition is an `extensions: dict[str, dict]` manifest field.
-Force legacy emission with `--schema-version v2`. v2.2 is opt-in for the first
-ATAC vertical slice and is emitted with `--schema-version v2.2 --include-atac`.
+Force legacy emission with `--schema-version v2`. v2.2 is opt-in for ATAC and
+Hi-C/3D genome vertical slices and is emitted with
+`--schema-version v2.2 --include-atac` and/or
+`--schema-version v2.2 --include-hic`.
 
 Known extension keys:
 
@@ -1189,11 +1191,16 @@ Known extension keys:
 | `multimodal_obsm` | WNN / MOFA embeddings (EXPERIMENTAL) | `maybe_export_multimodal_obsm(...)` | `r_multiomics_factory/R/integration_module.R::load_multimodal_extension(bundle)` |
 | `marker_resolutions` | marker DB evidence table | `maybe_export_marker_resolutions(...)` | `r_multiomics_factory/R/marker_db_module.R` |
 | `atac` | scATAC LSI + peak metadata (v2.2) | `maybe_export_atac(...)` | `r_multiomics_factory/R/atac_module.R::load_atac_extension(bundle)` |
+| `hic` | Hi-C/scHi-C bins, sparse contacts, TAD boundaries, compartments (v2.2) | `maybe_export_hic(...)` | `r_multiomics_factory/R/hic_module.R::load_hic_extension(bundle)` |
 
-v2.2 reserves `vdj`, `ribo`, and `hic` in `contracts/bundle_schema.yaml` but
-does not export those payloads yet; R loaders must return `NULL` for reserved
-slots. Module rationale and literature support for the active ATAC slice and
-reserved multi-omics slots are recorded in
+v2.2 still reserves `vdj` and `ribo` in `contracts/bundle_schema.yaml`. HIC is
+active only when the source AnnData carries `hic_contact_matrix` + `hic_bins`
+from `hic_ingest`, and optional `hic_tad_boundaries` / `hic_compartments` from
+`hic_tad`. `.hic`, `.cool/.mcool`, and sparse TSV formats are not treated as
+interchangeable: the production ingest reads `.cool/.mcool` via optional
+`cooler` or validated TSV contact-pairs, while `.hic` must be converted or
+handled in an isolated paper-reproduction lane first. Module rationale and
+literature support for active and reserved multi-omics slots are recorded in
 [docs/MULTIOMICS_MODULE_RATIONALE.md](docs/MULTIOMICS_MODULE_RATIONALE.md).
 
 Public Python API for registering an extension:
@@ -1242,6 +1249,8 @@ the modality level until per-modality validation exists.
 | `--include-atac` | off | Emit v2.2 `atac` extension when `X_lsi` and peak metadata are present |
 | `--atac-lsi-obsm-key` | `X_lsi` | obsm key holding the ATAC LSI embedding |
 | `--atac-peaks-uns-key` | `atac_peaks` | uns key holding peak metadata (`chrom`, `start`, `end`) |
+| `--include-hic` | off | Emit v2.2 `hic` extension when HIC AnnData uns payloads are present |
+| `--hic-max-contacts` | `1000000` | Fail-loud cap for serialized non-zero HIC contacts |
 
 #### Cross-language parity sentinels
 

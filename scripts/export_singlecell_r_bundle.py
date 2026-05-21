@@ -153,6 +153,10 @@ class ExportConfig:
     include_atac: bool = False
     atac_lsi_obsm_key: str = "X_lsi"
     atac_peaks_uns_key: str = "atac_peaks"
+    # v2.2 Hi-C / single-cell 3D genome extension: opt-in, active only when
+    # hic_ingest/hic_tad wrote the canonical uns payloads.
+    include_hic: bool = False
+    hic_max_contacts: int = 1_000_000
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +166,7 @@ class ExportConfig:
 # Known extension keys. Readers ignore unknown keys with a "skipping unknown
 # extension" message; producers may freely register additional keys. Keep this
 # list in sync with the R reader's known-extensions handling.
-KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm", "marker_resolutions", "atac")
+KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm", "marker_resolutions", "atac", "hic")
 
 
 def add_extension(manifest, name, *, version, files, claim_guard=CLAIM_GUARD, **fields):
@@ -604,6 +608,15 @@ def maybe_export_marker_resolutions(
     )
 
 
+def _write_table_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write a non-cell-indexed extension table without adding a `cell` column."""
+    if not _HAVE_PYARROW:
+        df.to_parquet(path, engine="fastparquet", index=False)
+        return
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(table, path, compression="snappy")
+
+
 def maybe_export_atac(
     manifest: dict,
     output_dir: Path,
@@ -669,11 +682,7 @@ def maybe_export_atac(
     lsi_path = ext_dir / "lsi.parquet"
     peaks_path = ext_dir / "peaks.parquet"
     _write_parquet(lsi_df, lsi_path)
-    if not _HAVE_PYARROW:
-        peaks_df.to_parquet(peaks_path, engine="fastparquet", index=False)
-    else:
-        table = pa.Table.from_pandas(peaks_df, preserve_index=False)
-        pq.write_table(table, peaks_path, compression="snappy")
+    _write_table_parquet(peaks_df, peaks_path)
 
     manifest_files = manifest.setdefault("files", {})
     manifest_files["atac_lsi"] = file_record(
@@ -700,6 +709,226 @@ def maybe_export_atac(
         n_components=int(n_components),
         n_peaks=int(peaks_df.shape[0]),
         method="tfidf_lsi",
+    )
+
+
+def _normalize_hic_bins(raw_bins) -> pd.DataFrame:
+    if raw_bins is None:
+        raise ValueError("Hi-C export requires adata.uns['hic_bins']")
+    bins_df = raw_bins.copy() if isinstance(raw_bins, pd.DataFrame) else pd.DataFrame(raw_bins)
+    if "bin_id" not in bins_df.columns:
+        bins_df = bins_df.reset_index(drop=True)
+        bins_df.insert(0, "bin_id", np.arange(bins_df.shape[0], dtype=np.int64))
+    required = {"bin_id", "chrom", "start", "end"}
+    missing = required - set(bins_df.columns)
+    if missing:
+        raise ValueError(f"Hi-C bins table missing required columns: {sorted(missing)}")
+    bins_df = bins_df[["bin_id", "chrom", "start", "end"]].copy()
+    bins_df["bin_id"] = pd.to_numeric(bins_df["bin_id"], errors="raise").astype("int64")
+    bins_df["chrom"] = bins_df["chrom"].astype(str)
+    bins_df["start"] = pd.to_numeric(bins_df["start"], errors="raise").astype("int64")
+    bins_df["end"] = pd.to_numeric(bins_df["end"], errors="raise").astype("int64")
+    if bins_df["bin_id"].duplicated().any():
+        raise ValueError("Hi-C bins table contains duplicate bin_id values")
+    if not ((bins_df["end"] > bins_df["start"]).all()):
+        raise ValueError("Hi-C bins table requires end > start for every bin")
+    return bins_df.sort_values("bin_id").reset_index(drop=True)
+
+
+def _hic_position_from_bins(df: pd.DataFrame, bins_df: pd.DataFrame) -> pd.Series:
+    if "start" in df.columns and "end" in df.columns:
+        start = pd.to_numeric(df["start"], errors="raise").astype("int64")
+        end = pd.to_numeric(df["end"], errors="raise").astype("int64")
+        return ((start + end) // 2).astype("int64")
+    joined = df[["bin_id"]].merge(
+        bins_df[["bin_id", "start", "end"]],
+        on="bin_id",
+        how="left",
+        validate="many_to_one",
+    )
+    if joined[["start", "end"]].isna().any().any():
+        raise ValueError("Hi-C table has bin_id values absent from hic_bins")
+    return ((joined["start"].astype("int64") + joined["end"].astype("int64")) // 2).astype("int64")
+
+
+def _normalize_hic_optional_table(raw_table, bins_df: pd.DataFrame, kind: str) -> pd.DataFrame:
+    if kind == "boundaries":
+        columns = ["bin_id", "chrom", "position", "insulation", "is_boundary"]
+        empty = pd.DataFrame({
+            "bin_id": pd.Series(dtype="int64"),
+            "chrom": pd.Series(dtype="object"),
+            "position": pd.Series(dtype="int64"),
+            "insulation": pd.Series(dtype="float32"),
+            "is_boundary": pd.Series(dtype="bool"),
+        })
+    elif kind == "compartments":
+        columns = ["bin_id", "chrom", "position", "eigenvector_1", "compartment"]
+        empty = pd.DataFrame({
+            "bin_id": pd.Series(dtype="int64"),
+            "chrom": pd.Series(dtype="object"),
+            "position": pd.Series(dtype="int64"),
+            "eigenvector_1": pd.Series(dtype="float32"),
+            "compartment": pd.Series(dtype="object"),
+        })
+    else:  # pragma: no cover
+        raise ValueError(f"Unknown Hi-C optional table kind: {kind}")
+
+    if raw_table is None:
+        return empty
+
+    df = raw_table.copy() if isinstance(raw_table, pd.DataFrame) else pd.DataFrame(raw_table)
+    if df.empty:
+        return empty
+    if "bin_id" not in df.columns:
+        df = df.reset_index(drop=True)
+        if df.shape[0] != bins_df.shape[0]:
+            raise ValueError(f"Hi-C {kind} table lacks bin_id and row count does not match hic_bins")
+        df.insert(0, "bin_id", bins_df["bin_id"].to_numpy())
+
+    df = df.copy()
+    df["bin_id"] = pd.to_numeric(df["bin_id"], errors="raise").astype("int64")
+    unknown_bins = set(df["bin_id"]) - set(bins_df["bin_id"])
+    if unknown_bins:
+        raise ValueError(f"Hi-C {kind} table has bin_id values absent from hic_bins: {sorted(unknown_bins)[:5]}")
+    if "chrom" not in df.columns:
+        df = df.merge(bins_df[["bin_id", "chrom"]], on="bin_id", how="left", validate="many_to_one")
+    if df["chrom"].isna().any():
+        raise ValueError(f"Hi-C {kind} table has bin_id values absent from hic_bins")
+    df["chrom"] = df["chrom"].astype(str)
+    if "position" not in df.columns:
+        df["position"] = _hic_position_from_bins(df, bins_df)
+    df["position"] = pd.to_numeric(df["position"], errors="raise").astype("int64")
+
+    if kind == "boundaries":
+        required = {"insulation", "is_boundary"}
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(f"Hi-C boundaries table missing required columns: {sorted(missing)}")
+        df["insulation"] = pd.to_numeric(df["insulation"], errors="coerce").astype("float32")
+        df["is_boundary"] = df["is_boundary"].astype(bool)
+    else:
+        if "eigenvector_1" not in df.columns:
+            raise ValueError("Hi-C compartments table missing required column: eigenvector_1")
+        df["eigenvector_1"] = pd.to_numeric(df["eigenvector_1"], errors="coerce").astype("float32")
+        if "compartment" not in df.columns:
+            df["compartment"] = np.where(df["eigenvector_1"] >= 0, "A", "B")
+        df["compartment"] = df["compartment"].astype(str)
+        bad = set(df["compartment"].dropna().unique()) - {"A", "B"}
+        if bad:
+            raise ValueError(f"Hi-C compartments must be A/B labels; observed {sorted(bad)}")
+
+    return df[columns].sort_values("bin_id").reset_index(drop=True)
+
+
+def maybe_export_hic(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+    *,
+    max_contacts: int = 1_000_000,
+) -> dict | None:
+    """Write the v2.2 Hi-C/scHi-C extension from canonical AnnData uns payloads."""
+    uns = getattr(adata, "uns", {})
+    if "hic_contact_matrix" not in uns and "hic_bins" not in uns:
+        return None
+    if "hic_contact_matrix" not in uns or "hic_bins" not in uns:
+        raise ValueError("Hi-C export requires both hic_contact_matrix and hic_bins")
+    if max_contacts <= 0:
+        raise ValueError("--hic-max-contacts must be positive")
+
+    bins_df = _normalize_hic_bins(uns["hic_bins"])
+    mat = uns["hic_contact_matrix"]
+    if hasattr(mat, "to_memory"):
+        mat = mat.to_memory()
+    if sparse.issparse(mat):
+        coo = mat.tocoo()
+    else:
+        arr = np.asarray(mat)
+        if arr.ndim != 2:
+            raise ValueError(f"Hi-C contact matrix must be 2D, got shape {arr.shape}")
+        coo = sparse.coo_matrix(arr)
+    if coo.shape[0] != bins_df.shape[0] or coo.shape[1] != bins_df.shape[0]:
+        raise ValueError(
+            "Hi-C contact matrix shape does not match hic_bins: "
+            f"matrix={coo.shape}, bins={bins_df.shape[0]}"
+        )
+    if int(coo.nnz) > int(max_contacts):
+        raise ValueError(
+            f"Hi-C contact matrix has {coo.nnz} non-zero entries, above "
+            f"--hic-max-contacts={max_contacts}. Export a coarser/bin-filtered matrix."
+        )
+    contacts_df = pd.DataFrame({
+        "row": coo.row.astype(np.int64, copy=False),
+        "col": coo.col.astype(np.int64, copy=False),
+        "count": coo.data.astype(np.float32, copy=False),
+    })
+
+    boundaries_df = _normalize_hic_optional_table(
+        uns.get("hic_tad_boundaries"), bins_df, "boundaries"
+    )
+    compartments_df = _normalize_hic_optional_table(
+        uns.get("hic_compartments"), bins_df, "compartments"
+    )
+
+    ext_dir = output_dir / "extensions" / "hic"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "hic_bins": ext_dir / "bins.parquet",
+        "hic_contacts": ext_dir / "contacts.parquet",
+        "hic_boundaries": ext_dir / "boundaries.parquet",
+        "hic_compartments": ext_dir / "compartments.parquet",
+    }
+    _write_table_parquet(bins_df, paths["hic_bins"])
+    _write_table_parquet(contacts_df, paths["hic_contacts"])
+    _write_table_parquet(boundaries_df, paths["hic_boundaries"])
+    _write_table_parquet(compartments_df, paths["hic_compartments"])
+
+    manifest_files = manifest.setdefault("files", {})
+    tables = {
+        "hic_bins": bins_df,
+        "hic_contacts": contacts_df,
+        "hic_boundaries": boundaries_df,
+        "hic_compartments": compartments_df,
+    }
+    for stem, df in tables.items():
+        manifest_files[stem] = file_record(
+            paths[stem],
+            output_dir,
+            df.shape[0],
+            df.shape[1],
+            {"format": "parquet"},
+        )
+
+    ingest_meta = uns.get("hic_ingest_metadata")
+    if not isinstance(ingest_meta, dict):
+        ingest_meta = {}
+
+    return add_extension(
+        manifest,
+        "hic",
+        version="1.0",
+        files=["hic_bins", "hic_contacts", "hic_boundaries", "hic_compartments"],
+        status="active",
+        table={
+            "bins_path": "extensions/hic/bins.parquet",
+            "contacts_path": "extensions/hic/contacts.parquet",
+            "boundaries_path": "extensions/hic/boundaries.parquet",
+            "compartments_path": "extensions/hic/compartments.parquet",
+            "index_column": "bin_id",
+            "contact_row_column": "row",
+            "contact_col_column": "col",
+            "contact_count_column": "count",
+        },
+        n_bins=int(bins_df.shape[0]),
+        n_contacts=int(contacts_df.shape[0]),
+        n_boundaries=int(boundaries_df.shape[0]),
+        n_boundary_bins=int(boundaries_df["is_boundary"].sum()) if "is_boundary" in boundaries_df else 0,
+        n_compartments=int(compartments_df.shape[0]),
+        resolution_bp=int(ingest_meta["resolution_bp"]) if "resolution_bp" in ingest_meta else None,
+        method="sparse_contact_tad_compartment",
+        normalization=str(ingest_meta.get("normalization", "raw_counts_or_unbalanced")),
+        matrix_format=str(ingest_meta.get("matrix_format", "csr_sparse")),
+        max_contacts=int(max_contacts),
     )
 
 
@@ -1173,6 +1402,8 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
         raise ValueError("--schema-version must be 'v1', 'v2', 'v2.1', or 'v2.2'.")
     if config.include_atac and config.schema_version != "v2.2":
         raise ValueError("--include-atac requires --schema-version v2.2")
+    if config.include_hic and config.schema_version != "v2.2":
+        raise ValueError("--include-hic requires --schema-version v2.2")
     if config.format not in ("auto", "csv", "parquet", "mtx"):
         raise ValueError("--format must be 'auto', 'csv', 'parquet', or 'mtx'.")
 
@@ -1461,6 +1692,14 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
                 peaks_uns_key=config.atac_peaks_uns_key,
             )
             manifest["bundle"]["required_files"] = sorted(manifest["files"])
+        if getattr(config, "include_hic", False):
+            maybe_export_hic(
+                manifest,
+                config.output_dir,
+                adata,
+                max_contacts=config.hic_max_contacts,
+            )
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
     # PREC-1: write provenance.json after all parquet/mtx files are in place so
     # the bundle_sha256 it records covers the complete file set.
     _write_bundle_provenance(config.output_dir)
@@ -1567,6 +1806,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="adata.obsm key holding the ATAC LSI embedding.")
     parser.add_argument("--atac-peaks-uns-key", default="atac_peaks",
                         help="adata.uns key holding ATAC peak metadata.")
+    parser.add_argument("--include-hic", action="store_true",
+                        help=("v2.2 only: write extensions/hic/{bins,contacts,boundaries,compartments}.parquet "
+                              "from hic_ingest/hic_tad AnnData uns payloads and register the `hic` extension."))
+    parser.add_argument("--hic-max-contacts", type=int, default=1_000_000,
+                        help=("Maximum non-zero contacts to serialize into the compact HIC extension "
+                              "(default: 1,000,000). Use coarser bins or filtering for larger matrices."))
     return parser
 
 
@@ -1646,6 +1891,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         include_atac=bool(args.include_atac),
         atac_lsi_obsm_key=args.atac_lsi_obsm_key,
         atac_peaks_uns_key=args.atac_peaks_uns_key,
+        include_hic=bool(args.include_hic),
+        hic_max_contacts=int(args.hic_max_contacts),
     )
     manifest = export_bundle(config)
     print(json.dumps({"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}))

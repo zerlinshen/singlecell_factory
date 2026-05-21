@@ -4,7 +4,7 @@ Covers:
   - hic_ingest reads a synthetic TSV contact-pair file → bin × bin sparse matrix
   - hic_tad computes insulation score + boundaries + A/B compartments
   - Both modules fail-soft when prerequisites absent
-  - Schema keeps hic.status reserved until exporter+reader are complete
+  - Schema marks hic.status active after exporter+reader integration
   - R-side KNOWN_BUNDLE_EXTENSIONS contains "hic"
   - r_multiomics_factory/R/hic_module.R has the required functions
   - Registry includes hic_ingest + hic_tad, no MUTATING, topo respects deps
@@ -97,7 +97,9 @@ def test_hic_tad_finds_boundary_between_two_tads(synthetic_adata, synthetic_cont
     boundaries = synthetic_adata.uns["hic_tad_boundaries"]
     compartments = synthetic_adata.uns["hic_compartments"]
     assert "insulation" in boundaries.columns
+    assert "position" in boundaries.columns
     assert "compartment" in compartments.columns
+    assert "position" in compartments.columns
     assert set(compartments["compartment"].unique()).issubset({"A", "B"})
     assert ctx.metadata["hic_tad_status"] == "ok"
 
@@ -109,6 +111,21 @@ def test_hic_ingest_skips_without_contacts(synthetic_adata, tmp_path):
                           run_dir=tmp_path, metadata={}, status=lambda *a, **k: None)
     HiCIngestModule().run(ctx)
     assert ctx.metadata["hic_ingest_status"] == "skipped_no_input"
+
+
+def test_hic_ingest_refuses_hic_binary_route(synthetic_adata, tmp_path):
+    from workflow.modular.modules.hic_ingest import HiCIngestModule
+    hic_path = tmp_path / "sample.hic"
+    hic_path.write_bytes(b"HIC\x00not-a-tsv")
+    cfg = SimpleNamespace(
+        hic_contacts_path=str(hic_path),
+        hic_resolution_bp=100,
+    )
+    ctx = SimpleNamespace(adata=synthetic_adata, cfg=cfg, random_state=42,
+                          run_dir=tmp_path, metadata={}, status=lambda *a, **k: None)
+    HiCIngestModule().run(ctx)
+    assert ctx.metadata["hic_ingest_status"] == "skipped_hic_unsupported"
+    assert "hic_contact_matrix" not in synthetic_adata.uns
 
 
 def test_hic_tad_skips_without_contact_matrix(synthetic_adata, tmp_path):
@@ -126,11 +143,11 @@ def test_schema_parity_after_hic_contract_check():
     assert sf.read_bytes() == rf.read_bytes()
 
 
-def test_hic_slot_reserved_until_bundle_vertical_slice():
+def test_hic_slot_active_after_bundle_vertical_slice():
     import yaml
     doc = yaml.safe_load((FACTORY_ROOT / "contracts" / "bundle_schema.yaml").read_text())
     hic = doc["extensions_v22"]["hic"]
-    assert hic["status"] == "reserved"
+    assert hic["status"] == "active"
     assert "table" in hic
     assert "contacts_path" in hic["table"]
 

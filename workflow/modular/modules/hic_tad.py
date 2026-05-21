@@ -191,6 +191,7 @@ class HiCTADModule:
         is_boundary = _detect_boundaries(insulation, k=boundary_k)
 
         boundaries_df = bins.copy()
+        boundaries_df["position"] = ((boundaries_df["start"].astype("int64") + boundaries_df["end"].astype("int64")) // 2)
         boundaries_df["insulation"] = insulation
         boundaries_df["is_boundary"] = is_boundary
         adata.uns["hic_tad_boundaries"] = boundaries_df
@@ -198,6 +199,7 @@ class HiCTADModule:
         logger.info("%s: computing A/B compartments via eigendecomposition", self.name)
         ab_scores = _ab_compartments(mat, bins)
         compart_df = bins.copy()
+        compart_df["position"] = ((compart_df["start"].astype("int64") + compart_df["end"].astype("int64")) // 2)
         compart_df["eigenvector_1"] = compart_df["bin_id"].map(lambda b: ab_scores.get(int(b), 0.0))
         compart_df["compartment"] = compart_df["eigenvector_1"].apply(lambda v: "A" if v >= 0 else "B")
         adata.uns["hic_compartments"] = compart_df

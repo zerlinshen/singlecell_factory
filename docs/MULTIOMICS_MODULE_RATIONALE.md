@@ -3,8 +3,8 @@
 Scope: this note documents the current Phase 2 multi-omics contract between
 `singlecell_factory`, `r_multiomics_factory` (R-native analysis), and
 `plotting_factory` (introduced 2026-05-18; `r/modality/*_plots.R` owns the plot
-halves extracted from each R modality module in Phase 2.1). ATAC is the active
-v2.2 vertical slice. VDJ, Ribo-seq, and Hi-C remain reserved bundle slots until
+halves extracted from each R modality module in Phase 2.1). ATAC and Hi-C are
+active v2.2 vertical slices. VDJ and Ribo-seq remain reserved bundle slots until
 their exporters have full Python-to-R round-trip tests.
 
 ## ATAC ingest
@@ -67,6 +67,36 @@ Supporting contracts:
 - `r_multiomics_factory/R_bundle/io_bundle.R` attaches
   `bundle$extensions$atac$data`.
 - `r_multiomics_factory/R/atac_module.R` fails soft for absent/reserved slots.
+
+## R bundle Hi-C / 3D genome extension
+
+Rationale: the compact R bundle exports plotting/reporting-scale 3D genome
+tables from the Python HIC modules: genomic bins, a sparse contact table, TAD
+boundary metrics, and A/B compartment calls. The exporter does not convert raw
+`.hic` files, balance contact matrices, or imply equivalence between `.hic`,
+`.cool/.mcool`, and sparse TSV routes. The full upstream contact source,
+genome build, bin size, and normalization remain the authority for quantitative
+3D genome claims.
+
+Supporting contracts:
+
+- `workflow/modular/modules/hic_ingest.py` reads `.cool/.mcool` via optional
+  `cooler` or validated TSV contact-pairs, keeps contacts sparse, and records
+  resolution/format metadata.
+- `workflow/modular/modules/hic_tad.py` writes insulation-score boundaries and
+  first-eigenvector A/B compartment tables with `position` coordinates.
+- `scripts/export_singlecell_r_bundle.py::maybe_export_hic(...)` writes
+  `extensions/hic/{bins,contacts,boundaries,compartments}.parquet` only when
+  `--schema-version v2.2 --include-hic` is requested.
+- `r_multiomics_factory/R_bundle/io_bundle.R` attaches
+  `bundle$extensions$hic$data`, and `r_multiomics_factory/R/hic_module.R`
+  fails soft for absent/reserved slots.
+
+Literature support:
+
+- Lieberman-Aiden et al. 2009, Science, doi:10.1126/science.1181369.
+- Crane et al. 2015, Nature, doi:10.1038/nature14450.
+- Abdennur and Mirny 2020, Bioinformatics, doi:10.1093/bioinformatics/btz540.
 
 ## VDJ reserved slot
 

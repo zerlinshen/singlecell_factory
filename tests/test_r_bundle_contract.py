@@ -35,6 +35,7 @@ from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle
 
 IO_BUNDLE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle/io_bundle.R"
 ATAC_MODULE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R/atac_module.R"
+HIC_MODULE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R/hic_module.R"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -95,6 +96,73 @@ def _make_tiny_atac_h5ad(
         }
     )
     adata.uns["atac_peaks"] = peaks
+    adata.write_h5ad(path)
+
+
+def _make_tiny_hic_h5ad(
+    path: Path,
+    n_cells: int = 6,
+    n_genes: int = 5,
+    n_bins: int = 6,
+) -> None:
+    rng = np.random.default_rng(45)
+    x = sparse.csr_matrix(
+        rng.integers(0, 10, size=(n_cells, n_genes)).astype(np.float32)
+    )
+    obs = pd.DataFrame(
+        {
+            "cell_type": [["T", "B", "Myeloid"][i % 3] for i in range(n_cells)],
+            "leiden": [str(i % 3) for i in range(n_cells)],
+        },
+        index=[f"cell_{i}" for i in range(n_cells)],
+    )
+    var = pd.DataFrame(index=["CD3E", "LYZ", "MS4A1", "NKG7", "ELF3"][:n_genes])
+    adata = ad.AnnData(X=x, obs=obs, var=var)
+    adata.obsm["X_umap"] = rng.random((n_cells, 2)).astype(np.float32)
+    adata.obsm["X_pca"] = rng.random((n_cells, 3)).astype(np.float32)
+
+    starts = np.arange(0, n_bins * 1000, 1000)
+    adata.uns["hic_bins"] = pd.DataFrame(
+        {
+            "bin_id": np.arange(n_bins, dtype=np.int64),
+            "chrom": ["chr1"] * n_bins,
+            "start": starts.astype(np.int64),
+            "end": (starts + 1000).astype(np.int64),
+        }
+    )
+    mat = np.zeros((n_bins, n_bins), dtype=np.float32)
+    for i in range(n_bins):
+        mat[i, i] = 10 - i
+        if i + 1 < n_bins:
+            mat[i, i + 1] = 2
+            mat[i + 1, i] = 2
+    adata.uns["hic_contact_matrix"] = sparse.csr_matrix(mat)
+    adata.uns["hic_tad_boundaries"] = pd.DataFrame(
+        {
+            "bin_id": np.arange(n_bins, dtype=np.int64),
+            "chrom": ["chr1"] * n_bins,
+            "start": starts.astype(np.int64),
+            "end": (starts + 1000).astype(np.int64),
+            "insulation": np.array([0.2, 0.1, -1.2, 0.0, -0.8, 0.1], dtype=np.float32)[:n_bins],
+            "is_boundary": [False, False, True, False, True, False][:n_bins],
+        }
+    )
+    adata.uns["hic_compartments"] = pd.DataFrame(
+        {
+            "bin_id": np.arange(n_bins, dtype=np.int64),
+            "chrom": ["chr1"] * n_bins,
+            "start": starts.astype(np.int64),
+            "end": (starts + 1000).astype(np.int64),
+            "eigenvector_1": np.array([0.5, 0.4, 0.2, -0.1, -0.2, -0.3], dtype=np.float32)[:n_bins],
+            "compartment": ["A", "A", "A", "B", "B", "B"][:n_bins],
+        }
+    )
+    adata.uns["hic_ingest_metadata"] = {
+        "resolution_bp": 1000,
+        "matrix_format": "csr_sparse",
+        "input_format": "tsv_contact_pairs",
+        "normalization": "raw_counts_or_unbalanced",
+    }
     adata.write_h5ad(path)
 
 
@@ -1306,6 +1374,66 @@ def test_atac_extension_round_trip(rscript_path, tmp_path):
     assert kv["ROWS_MATCH"] == "TRUE"
     assert kv["PEAK_ID"].startswith("chr1:")
     assert int(kv["PLOT_COLORS"]) >= 2
+
+
+@pytest.mark.r_contract
+def test_hic_extension_round_trip(rscript_path, tmp_path):
+    """Python writes v2.2 HIC tables; R attaches active contacts/bins/boundaries/compartments."""
+    h5ad = tmp_path / "tiny_hic.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_hic"
+    n_bins = 6
+    _make_tiny_hic_h5ad(h5ad, n_bins=n_bins)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.2",
+            format="parquet",
+            include_hic=True,
+            hic_max_contacts=100,
+        )
+    )
+
+    manifest = json.loads((bundle_dir / "bundle_manifest.json").read_text())
+    assert manifest["schema_version"] == "singlecell_r_bundle_v2.2"
+    hic_ext = manifest["extensions"]["hic"]
+    assert hic_ext["status"] == "active"
+    assert hic_ext["files"] == ["hic_bins", "hic_contacts", "hic_boundaries", "hic_compartments"]
+    assert hic_ext["n_bins"] == n_bins
+    assert hic_ext["n_boundary_bins"] == 2
+    assert hic_ext["table"]["contacts_path"] == "extensions/hic/contacts.parquet"
+    boundaries_df = pd.read_parquet(bundle_dir / "extensions" / "hic" / "boundaries.parquet")
+    assert "position" in boundaries_df.columns
+    assert int(boundaries_df.loc[boundaries_df["bin_id"] == 2, "position"].item()) == 2500
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"source('{HIC_MODULE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"m <- b$extensions$hic$metadata; "
+        f"d <- b$extensions$hic$data; "
+        f"cat(sprintf('STATUS=%s\\n', m$status)); "
+        f"cat(sprintf('BINS_NROW=%d\\n', nrow(d$bins))); "
+        f"cat(sprintf('CONTACTS_NROW=%d\\n', nrow(d$contacts))); "
+        f"cat(sprintf('BOUNDARY_BINS=%d\\n', sum(d$boundaries$is_boundary))); "
+        f"cat(sprintf('COMPARTMENTS=%s\\n', paste(sort(unique(d$compartments$compartment)), collapse=''))); "
+        f"p <- plot_contact_heatmap(b, max_bins=10); "
+        f"cat(sprintf('PLOT_CLASS=%s\\n', class(p)[1]))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "hic_round_trip")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["STATUS"] == "active"
+    assert int(kv["BINS_NROW"]) == n_bins
+    assert int(kv["CONTACTS_NROW"]) == hic_ext["n_contacts"]
+    assert int(kv["BOUNDARY_BINS"]) == 2
+    assert kv["COMPARTMENTS"] == "AB"
+    assert "ggplot" in kv["PLOT_CLASS"]
 
 
 def test_multimodal_module_off_by_default(tmp_path):

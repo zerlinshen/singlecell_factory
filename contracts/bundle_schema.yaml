@@ -15,8 +15,8 @@
 #           marker_format field in bundle block.
 #   v2.1 — additive superset of v2; adds optional top-level extensions map
 #           (protein, spatial, multimodal_obsm). On-disk layout identical to v2.
-#   v2.2 — additive superset of v2.1; adds marker_resolutions extension (active)
-#           and reserves atac/vdj/ribo/hic slots (status: reserved). Each Phase 2
+#   v2.2 — additive superset of v2.1; adds marker_resolutions, atac, and hic
+#           extensions (active) and reserves vdj/ribo slots. Each Phase 2
 #           slice merge flips its slot from reserved -> active. v2.1 loaders that
 #           ignore unknown extension keys remain fully compatible.
 #
@@ -407,7 +407,7 @@ tables:
 #   atac:               { status: active, required_when: include_atac_exported }
 #   vdj:                { status: reserved }
 #   ribo:               { status: reserved }
-#   hic:                { status: reserved }
+#   hic:                { status: active, required_when: include_hic_exported }
 extensions_v22:
   marker_resolutions:
     status: active
@@ -487,12 +487,14 @@ extensions_v22:
       te_path: "extensions/ribo/translation_efficiency.parquet"
       index_column: gene
   hic:
-    status: reserved
+    status: active
     description: >
-      Reserved Hi-C / scHi-C vertical slice (Phase 2, P2.S18-S20): bin x bin sparse
+      Hi-C / scHi-C vertical slice (Phase 2, P2.S18-S20): bin x bin sparse
       contact matrix + insulation-score TAD boundaries + first-eigenvector
-      A/B compartments. R-side loaders must return NULL until the exporter
-      publishes this slot.
+      A/B compartments produced by hic_ingest/hic_tad and exported when
+      --schema-version v2.2 --include-hic is used. R-side loaders must return
+      NULL for absent payloads and must not treat .hic/.cool/TSV formats as
+      interchangeable without upstream validation.
     columns:
       bins:
         - bin_id

@@ -376,6 +376,39 @@ def parse_args() -> argparse.Namespace:
         help="Fail the run if paper_repro reports missing provenance or failed figure checks.",
     )
 
+    # Hi-C / single-cell 3D genome
+    parser.add_argument(
+        "--hic-contacts-path",
+        default="",
+        help=(
+            "Optional .cool/.mcool or tab-separated Hi-C contact-pair file for "
+            "hic_ingest. TSV columns: chrom1,pos1,chrom2,pos2,count."
+        ),
+    )
+    parser.add_argument(
+        "--hic-resolution-bp",
+        type=int,
+        default=25_000,
+        help="Hi-C bin size in bp for TSV ingest or metadata reporting (default: 25000).",
+    )
+    parser.add_argument(
+        "--hic-chromsizes-path",
+        default="",
+        help="Optional chrom.sizes file for TSV Hi-C ingest; inferred from contacts when omitted.",
+    )
+    parser.add_argument(
+        "--hic-tad-window-bins",
+        type=int,
+        default=5,
+        help="Window radius in bins for insulation-score TAD boundary calling (default: 5).",
+    )
+    parser.add_argument(
+        "--hic-tad-boundary-k",
+        type=float,
+        default=1.0,
+        help="Boundary threshold in SD units below mean insulation score (default: 1.0).",
+    )
+
     # cBioPortal validation
     parser.add_argument(
         "--cbioportal-genes",
@@ -675,6 +708,12 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise SystemExit(f"Error: --max-ribo-pct must be in [0, 100], got {args.max_ribo_pct}")
     if args.parallel_workers < 1:
         raise SystemExit(f"Error: --parallel-workers must be >= 1, got {args.parallel_workers}")
+    if args.hic_resolution_bp <= 0:
+        raise SystemExit(f"Error: --hic-resolution-bp must be > 0, got {args.hic_resolution_bp}")
+    if args.hic_tad_window_bins < 1:
+        raise SystemExit(f"Error: --hic-tad-window-bins must be >= 1, got {args.hic_tad_window_bins}")
+    if args.hic_tad_boundary_k < 0:
+        raise SystemExit(f"Error: --hic-tad-boundary-k must be >= 0, got {args.hic_tad_boundary_k}")
     if args.n_pcs < 1:
         raise SystemExit(f"Error: --n-pcs must be >= 1, got {args.n_pcs}")
     if args.n_neighbors < 1:
@@ -918,6 +957,11 @@ def main() -> None:
         validate_context=args.validate_context,
         context_mismatch_threshold=args.context_mismatch_threshold,
         context_min_cells=args.context_min_cells,
+        hic_contacts_path=Path(args.hic_contacts_path) if args.hic_contacts_path else None,
+        hic_resolution_bp=args.hic_resolution_bp,
+        hic_chromsizes_path=Path(args.hic_chromsizes_path) if args.hic_chromsizes_path else None,
+        hic_tad_window_bins=args.hic_tad_window_bins,
+        hic_tad_boundary_k=args.hic_tad_boundary_k,
     )
     ledger = None
     try:

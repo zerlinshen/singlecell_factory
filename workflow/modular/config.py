@@ -278,6 +278,13 @@ class PipelineConfig:
     validate_context: bool = False
     context_mismatch_threshold: float = 0.3
     context_min_cells: int = 20
+    # Hi-C / single-cell 3D genome optional vertical slice. These fields are
+    # consumed by hic_ingest/hic_tad when those optional modules are selected.
+    hic_contacts_path: Path | None = None
+    hic_resolution_bp: int = 25_000
+    hic_chromsizes_path: Path | None = None
+    hic_tad_window_bins: int = 5
+    hic_tad_boundary_k: float = 1.0
 
 
 # Maps scale_mode preset names to their capability flag bundles.
