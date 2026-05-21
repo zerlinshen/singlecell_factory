@@ -165,6 +165,11 @@ Pipeline structure:
 - Mandatory modules (always): `cellranger -> qc -> doublet_detection`
 - Optional modules (22): selected by `--optional-modules` with auto dependency resolution.
 
+Doublet backend discipline:
+- `--doublet-backend scrublet` remains the global default because hgmm species-mix ground truth still favors Scrublet.
+- Do not replace that default from one tissue benchmark. If Scrublet under-calls on heterogeneous tumor/tissue data, rerun a conditional second-opinion lane with `--doublet-backend scdblfinder` or `--doublet-backend consensus --doublet-consensus-pair scrublet_scdblfinder --doublet-consensus-logic or`.
+- Treat consensus/scDblFinder recommendations as data-shape conditional until a second different-shape dataset supports a broader default change.
+
 ---
 
 ## 2. Prerequisites

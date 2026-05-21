@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 
 import matplotlib
 
@@ -24,6 +29,35 @@ __references__ = {
         "year": "2019",
         "doi": "10.1016/j.cels.2018.11.005",
         "description": "Reference implementation; supports whole-dataset and per-sample (grouped) doublet rate calibration.",
+    },
+    "McGinnis_DoubletFinder_2019": {
+        "title": "DoubletFinder: Doublet Detection in Single-Cell RNA Sequencing Data Using Artificial Nearest Neighbors",
+        "authors": "McGinnis, Murrow, Gartner",
+        "journal": "Cell Systems",
+        "year": "2019",
+        "doi": "10.1016/j.cels.2019.03.003",
+        "description": (
+            "Second-opinion backend invoked via the r_multiomics conda env using "
+            "subprocess. DoubletFinder is sourced directly from a local clone "
+            "(DOUBLETFINDER_R_PATH env, default "
+            "/home/zerlinshen/downloads/external_refs/DoubletFinder/R) rather "
+            "than installed as a package, so no remotes::install_github is "
+            "required. Added 2026-05-21 after a head-to-head benchmark on "
+            "LUSC PS01 (4,672 cells) revealed Scrublet's bimodality "
+            "auto-threshold under-called by ~40x on that slice."
+        ),
+    },
+    "Germain_scDblFinder_2021": {
+        "title": "Doublet identification in single-cell sequencing data using scDblFinder",
+        "authors": "Germain, Lun, Garcia Meixide, Macnair, Robinson",
+        "journal": "F1000Research",
+        "year": "2021",
+        "description": (
+            "Second-opinion Bioconductor backend invoked via the r_multiomics "
+            "conda env using the same 10X mtx bridge as DoubletFinder. Added "
+            "for data-shape-specific recovery when Scrublet under-calls on "
+            "tumor/tissue datasets."
+        ),
     },
 }
 
@@ -232,6 +266,453 @@ class DoubletDetectionModule:
         logger.info("Doublet detection fallback activated: %s", reason)
         return scores, predicted
 
+    @staticmethod
+    def _write_10x_mtx_triplet(adata, mtx_dir: Path) -> None:
+        """Write AnnData counts as a 10X-style triplet for R subprocesses."""
+        from scipy import io as _sio
+
+        mtx_dir.mkdir(parents=True, exist_ok=True)
+        X = adata.X
+        if not sparse.issparse(X):
+            X = sparse.csr_matrix(X)
+        # mtx is genes x cells for Seurat::ReadMtx.
+        _sio.mmwrite(str(mtx_dir / "matrix.mtx"), X.T.tocoo())
+        with open(mtx_dir / "features.tsv", "w") as f:
+            for g in adata.var_names:
+                f.write(f"{g}\t{g}\tGene Expression\n")
+        with open(mtx_dir / "barcodes.tsv", "w") as f:
+            for b in adata.obs_names:
+                f.write(f"{b}\n")
+
+    # ------------------------------------------------------------------
+    # DoubletFinder backend (R subprocess; sources local clone, no install)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_doubletfinder_driver() -> Path:
+        """Return the path to doubletfinder_run.R in r_multiomics_factory/scripts.
+
+        Resolution priority mirrors ambient_correction.py:
+          1. R_MULTIOMICS_SCRIPT_DIR env (explicit override)
+          2. Repo-relative path from this file
+        """
+        env_dir = os.environ.get("R_MULTIOMICS_SCRIPT_DIR")
+        if env_dir:
+            driver = Path(env_dir) / "doubletfinder_run.R"
+            if driver.exists():
+                return driver
+            raise FileNotFoundError(
+                f"R_MULTIOMICS_SCRIPT_DIR={env_dir} does not contain doubletfinder_run.R"
+            )
+        # Repo-relative: this file lives at
+        #   singlecell_factory/workflow/modular/modules/doublet_detection.py
+        # R driver lives at
+        #   r_multiomics_factory/scripts/doubletfinder_run.R
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            if (parent / "singlecell_factory").exists() and (parent / "r_multiomics_factory").exists():
+                driver = parent / "r_multiomics_factory" / "scripts" / "doubletfinder_run.R"
+                if driver.exists():
+                    return driver
+        raise FileNotFoundError(
+            "doubletfinder_run.R not located; set R_MULTIOMICS_SCRIPT_DIR or run "
+            "from a checkout where singlecell_factory and r_multiomics_factory "
+            "are siblings."
+        )
+
+    @staticmethod
+    def _resolve_scdblfinder_driver() -> Path:
+        """Return the path to scdblfinder_run.R in r_multiomics_factory/scripts."""
+        env_dir = os.environ.get("R_MULTIOMICS_SCRIPT_DIR")
+        if env_dir:
+            driver = Path(env_dir) / "scdblfinder_run.R"
+            if driver.exists():
+                return driver
+            raise FileNotFoundError(
+                f"R_MULTIOMICS_SCRIPT_DIR={env_dir} does not contain scdblfinder_run.R"
+            )
+        here = Path(__file__).resolve()
+        for parent in here.parents:
+            if (parent / "singlecell_factory").exists() and (parent / "r_multiomics_factory").exists():
+                driver = parent / "r_multiomics_factory" / "scripts" / "scdblfinder_run.R"
+                if driver.exists():
+                    return driver
+        raise FileNotFoundError(
+            "scdblfinder_run.R not located; set R_MULTIOMICS_SCRIPT_DIR or run "
+            "from a checkout where singlecell_factory and r_multiomics_factory "
+            "are siblings."
+        )
+
+    def _run_doubletfinder_via_r(
+        self,
+        adata,
+        cfg,
+        ctx,
+    ) -> tuple[np.ndarray, np.ndarray, float | None]:
+        """Run DoubletFinder via the r_multiomics conda env subprocess.
+
+        Returns (pANN_scores, calls_bool, threshold). Threshold is None because
+        DoubletFinder uses top-nExp ranking, not a score threshold.
+        """
+        if not shutil.which("conda"):
+            raise RuntimeError(
+                "DoubletFinder backend requires conda on PATH to launch the "
+                "r_multiomics env subprocess."
+            )
+        driver = self._resolve_doubletfinder_driver()
+
+        expected_rate = float(getattr(cfg, "expected_doublet_rate", 0.06))
+        pn = float(getattr(cfg, "doubletfinder_pn", 0.25))
+        pk = float(getattr(cfg, "doubletfinder_pk", 0.09))
+        pcs = int(getattr(cfg, "doubletfinder_pcs", 20))
+
+        tmp = tempfile.mkdtemp(prefix="doubletfinder_")
+        mtx_dir = Path(tmp) / "mtx"
+        mtx_dir.mkdir(parents=True, exist_ok=True)
+        out_csv = Path(tmp) / "out.csv"
+
+        self._write_10x_mtx_triplet(adata, mtx_dir)
+
+        cmd = [
+            "conda", "run", "-n", str(getattr(cfg, "r_conda_env", "r_multiomics")),
+            "Rscript", str(driver),
+            "--mtx-dir", str(mtx_dir),
+            "--out-csv", str(out_csv),
+            "--expected-rate", f"{expected_rate}",
+            "--pn", f"{pn}",
+            "--pk", f"{pk}",
+            "--pcs", f"{pcs}",
+            "--seed", f"{ctx.random_state}",
+        ]
+        logger.info("DoubletFinder subprocess: %s", " ".join(cmd))
+
+        timeout = float(getattr(cfg, "subprocess_timeout", 1800.0))
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(proc.pid), 9)
+                stdout, stderr = proc.communicate()
+                raise RuntimeError(
+                    f"DoubletFinder subprocess timed out after {timeout}s"
+                )
+        except Exception:
+            # Keep temp dir for debugging on failure.
+            logger.error("DoubletFinder failed; preserving %s for debug", tmp)
+            raise
+
+        if stderr:
+            for line in stderr.decode("utf-8", errors="replace").splitlines():
+                if line.strip():
+                    logger.warning("[DoubletFinder R] %s", line)
+
+        if proc.returncode != 0:
+            logger.error("DoubletFinder R driver exited with code %d; tmp dir preserved: %s",
+                         proc.returncode, tmp)
+            raise RuntimeError(
+                f"DoubletFinder R driver failed (exit {proc.returncode}); see "
+                f"stderr above and {tmp} for reproduction inputs."
+            )
+
+        if not out_csv.exists():
+            raise RuntimeError(f"DoubletFinder did not produce {out_csv}")
+
+        df_out = pd.read_csv(out_csv).set_index("barcode")
+        # Align back to AnnData order.
+        try:
+            df_out = df_out.loc[list(adata.obs_names)]
+        except KeyError as exc:
+            raise RuntimeError(
+                f"DoubletFinder output barcodes do not cover AnnData obs_names: {exc}"
+            )
+
+        scores = df_out["df_pANN"].to_numpy(dtype=np.float32)
+        predicted = df_out["df_call"].to_numpy().astype(bool)
+
+        # Clean temp on success.
+        shutil.rmtree(tmp, ignore_errors=True)
+
+        ctx.metadata["doublet_method"] = "doubletfinder"
+        ctx.metadata["doublet_doubletfinder_params"] = {
+            "expected_rate": expected_rate, "pn": pn, "pk": pk, "pcs": pcs,
+        }
+        return scores, predicted, None
+
+    def _run_scdblfinder_via_r(
+        self,
+        adata,
+        cfg,
+        ctx,
+    ) -> tuple[np.ndarray, np.ndarray, float | None]:
+        """Run scDblFinder via the r_multiomics conda env subprocess."""
+        if not shutil.which("conda"):
+            raise RuntimeError(
+                "scDblFinder backend requires conda on PATH to launch the "
+                "r_multiomics env subprocess."
+            )
+        driver = self._resolve_scdblfinder_driver()
+
+        expected_rate = float(getattr(cfg, "expected_doublet_rate", 0.06))
+        samples_col = getattr(cfg, "scdblfinder_samples_col", None)
+
+        tmp = tempfile.mkdtemp(prefix="scdblfinder_")
+        mtx_dir = Path(tmp) / "mtx"
+        out_csv = Path(tmp) / "out.csv"
+        self._write_10x_mtx_triplet(adata, mtx_dir)
+
+        cmd = [
+            "conda", "run", "-n", str(getattr(cfg, "r_conda_env", "r_multiomics")),
+            "Rscript", str(driver),
+            "--mtx-dir", str(mtx_dir),
+            "--out-csv", str(out_csv),
+            "--expected-rate", f"{expected_rate}",
+            "--seed", f"{ctx.random_state}",
+        ]
+        samples_tsv = None
+        if samples_col and samples_col in adata.obs.columns:
+            samples_tsv = Path(tmp) / "samples.tsv"
+            pd.DataFrame(
+                {
+                    "barcode": adata.obs_names.astype(str),
+                    "sample": adata.obs[samples_col].astype(str).to_numpy(),
+                }
+            ).to_csv(samples_tsv, sep="\t", index=False)
+            cmd += ["--samples-tsv", str(samples_tsv)]
+        elif samples_col:
+            msg = f"requested scDblFinder samples column not found: {samples_col}"
+            logger.warning(msg)
+            ctx.metadata["doublet_scdblfinder_samples_warning"] = msg
+
+        logger.info("scDblFinder subprocess: %s", " ".join(cmd))
+
+        timeout = float(getattr(cfg, "subprocess_timeout", 1800.0))
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(proc.pid), 9)
+                stdout, stderr = proc.communicate()
+                raise RuntimeError(
+                    f"scDblFinder subprocess timed out after {timeout}s"
+                )
+        except Exception:
+            logger.error("scDblFinder failed; preserving %s for debug", tmp)
+            raise
+
+        if stderr:
+            for line in stderr.decode("utf-8", errors="replace").splitlines():
+                if line.strip():
+                    logger.warning("[scDblFinder R] %s", line)
+
+        if proc.returncode != 0:
+            logger.error("scDblFinder R driver exited with code %d; tmp dir preserved: %s",
+                         proc.returncode, tmp)
+            raise RuntimeError(
+                f"scDblFinder R driver failed (exit {proc.returncode}); see "
+                f"stderr above and {tmp} for reproduction inputs."
+            )
+
+        if not out_csv.exists():
+            raise RuntimeError(f"scDblFinder did not produce {out_csv}")
+
+        df_out = pd.read_csv(out_csv).set_index("barcode")
+        try:
+            df_out = df_out.loc[list(adata.obs_names)]
+        except KeyError as exc:
+            raise RuntimeError(
+                f"scDblFinder output barcodes do not cover AnnData obs_names: {exc}"
+            )
+
+        scores = df_out["scdbl_score"].to_numpy(dtype=np.float32)
+        predicted = df_out["scdbl_call"].to_numpy().astype(bool)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+        ctx.metadata["doublet_method"] = "scdblfinder"
+        ctx.metadata["doublet_scdblfinder_params"] = {
+            "expected_rate": expected_rate,
+            "samples_col": samples_col if samples_tsv is not None else None,
+        }
+        return scores, predicted, None
+
+    # ------------------------------------------------------------------
+    # Consensus mode: require >=2 backends to agree
+    # ------------------------------------------------------------------
+
+    def _run_consensus(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, dict]:
+        """Run configured doublet backends and merge calls via consensus_logic."""
+        pair = (
+            os.environ.get("SC_DOUBLET_CONSENSUS_PAIR", "").strip().lower()
+            or getattr(cfg, "consensus_pair", "scrublet_doubletfinder")
+        ).lower()
+        aliases = {
+            "scrublet_scdbl": "scrublet_scdblfinder",
+            "scrublet_scdb": "scrublet_scdblfinder",
+            "all3": "scrublet_doubletfinder_scdblfinder",
+            "scrublet_all3": "scrublet_doubletfinder_scdblfinder",
+        }
+        pair = aliases.get(pair, pair)
+        valid_pairs = {
+            "scrublet_doubletfinder",
+            "scrublet_scdblfinder",
+            "scrublet_doubletfinder_scdblfinder",
+        }
+        if pair not in valid_pairs:
+            logger.warning(
+                "Unknown consensus_pair '%s'; defaulting to scrublet_doubletfinder.",
+                pair,
+            )
+            pair = "scrublet_doubletfinder"
+
+        scrub_scores, scrub_calls, scrub_threshold = self._run_scrublet_only(adata, cfg, ctx)
+        per_backend = {
+            "scrublet": {
+                "scores": scrub_scores,
+                "calls": scrub_calls,
+                "threshold": scrub_threshold,
+            }
+        }
+
+        if "doubletfinder" in pair:
+            df_scores, df_calls, _ = self._run_doubletfinder_via_r(adata, cfg, ctx)
+            per_backend["doubletfinder"] = {
+                "scores": df_scores,
+                "calls": df_calls,
+            }
+        if "scdblfinder" in pair:
+            scdbl_scores, scdbl_calls, _ = self._run_scdblfinder_via_r(adata, cfg, ctx)
+            per_backend["scdblfinder"] = {
+                "scores": scdbl_scores,
+                "calls": scdbl_calls,
+            }
+
+        ranks = [
+            pd.Series(result["scores"]).rank(pct=True).to_numpy(dtype=np.float32)
+            for result in per_backend.values()
+        ]
+        combined_score = np.mean(np.vstack(ranks), axis=0).astype(np.float32)
+
+        logic = (
+            os.environ.get("SC_DOUBLET_CONSENSUS_LOGIC", "").strip().lower()
+            or getattr(cfg, "consensus_logic", "or")
+        ).lower()
+        if logic not in {"and", "or", "rank"}:
+            logger.warning("Unknown consensus_logic '%s'; defaulting to 'or'.", logic)
+            logic = "or"
+
+        call_matrix = np.vstack([
+            result["calls"].astype(bool) for result in per_backend.values()
+        ])
+        if logic == "and":
+            combined_calls = np.all(call_matrix, axis=0)
+        elif logic == "or":
+            combined_calls = np.any(call_matrix, axis=0)
+        else:
+            n_expected = max(1, int(round(
+                float(getattr(cfg, "expected_doublet_rate", 0.06)) * adata.n_obs
+            )))
+            order = np.argsort(-combined_score, kind="stable")
+            combined_calls = np.zeros(adata.n_obs, dtype=bool)
+            combined_calls[order[:n_expected]] = True
+
+        backends = list(per_backend.keys())
+        pairwise_agreement = {}
+        for i, left in enumerate(backends):
+            for right in backends[i + 1:]:
+                pairwise_agreement[f"{left}|{right}"] = float(
+                    (per_backend[left]["calls"] == per_backend[right]["calls"]).mean()
+                )
+        mean_agreement = (
+            float(np.mean(list(pairwise_agreement.values())))
+            if pairwise_agreement else 1.0
+        )
+
+        ctx.metadata["doublet_method"] = f"consensus_{logic}_{pair}"
+        ctx.metadata["doublet_consensus_logic"] = logic
+        ctx.metadata["doublet_consensus_pair"] = pair
+        ctx.metadata["doublet_consensus_backends"] = ",".join(backends)
+        ctx.metadata["doublet_consensus_agreement"] = mean_agreement
+        ctx.metadata["doublet_consensus_pairwise_agreement"] = pairwise_agreement
+        ctx.metadata["doublet_consensus_per_backend_rates"] = {
+            **{name: float(result["calls"].mean()) for name, result in per_backend.items()},
+            "final": float(combined_calls.mean()),
+        }
+        return combined_score, combined_calls.astype(bool), per_backend
+
+    def _run_scrublet_only(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, float | None]:
+        """Helper: run scrublet via existing GPU/CPU paths and return results.
+
+        Extracted so consensus mode can call it. Mirrors the logic inside
+        `run()` for selecting whole vs grouped, GPU vs CPU.
+        """
+        strategy = self._resolve_doublet_strategy(ctx, adata)
+        use_grouped = strategy == "grouped"
+        random_state = ctx.random_state
+
+        if _RSC_AVAILABLE:
+            try:
+                if use_grouped:
+                    return self._run_rsc_scrublet_grouped(adata, cfg, ctx)
+                return self._run_rsc_scrublet_whole(adata, cfg, ctx)
+            except Exception as exc:
+                logger.warning(
+                    "rsc.pp.scrublet failed inside consensus, retrying CPU: %s", exc
+                )
+        # CPU path.
+        import scrublet as scr
+        if use_grouped:
+            return self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
+        scrub = scr.Scrublet(
+            self._materialize_counts_matrix(adata.X),
+            expected_doublet_rate=cfg.expected_doublet_rate,
+            random_state=random_state,
+        )
+        scores, predicted = scrub.scrub_doublets(
+            min_counts=2,
+            min_cells=3,
+            min_gene_variability_pctl=85,
+            n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
+        )
+        return scores.astype(np.float32), predicted.astype(bool), getattr(scrub, "threshold_", None)
+
+    # ------------------------------------------------------------------
+    # Under-call diagnostic
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _check_undercall(call_rate: float, expected_rate: float, ctx, backend: str) -> None:
+        """Emit WARNING when call rate < 0.5 * expected.
+
+        A 0.13% call on a 5%-expected sample (40x undercall) is what surfaced
+        on LUSC PS01 when Scrublet's bimodality threshold failed to find a
+        clean separation. Surfacing this loudly avoids silent quality
+        regressions on tumor cohorts.
+        """
+        if expected_rate <= 0:
+            return
+        if call_rate < 0.5 * expected_rate:
+            ratio = expected_rate / max(call_rate, 1e-6)
+            msg = (
+                f"{backend} call rate {call_rate*100:.2f}% is < 0.5x expected "
+                f"({expected_rate*100:.2f}%); under-called by {ratio:.1f}x. "
+                "Consider re-running with backend='consensus' or "
+                "backend='scdblfinder'/'doubletfinder' for a second opinion."
+            )
+            logger.warning("DOUBLET_UNDERCALL_DIAGNOSTIC: %s", msg)
+            ctx.metadata["doublet_undercall_warning"] = msg
+            ctx.metadata["doublet_undercall_ratio"] = ratio
+
     # ------------------------------------------------------------------
     # Entry point
     # ------------------------------------------------------------------
@@ -245,6 +726,26 @@ class DoubletDetectionModule:
         random_state = ctx.random_state
         threshold = None
 
+        # Backend selection (default = scrublet, preserves prior behavior).
+        # cfg.doublet.backend overridden by SC_DOUBLET_BACKEND env var if set.
+        requested_backend = (
+            os.environ.get("SC_DOUBLET_BACKEND", "").strip().lower()
+            or getattr(cfg, "backend", "scrublet")
+        ).lower()
+        backend = {"scdbl": "scdblfinder"}.get(requested_backend, requested_backend)
+        fallback_reason = None
+        if backend not in {"scrublet", "doubletfinder", "scdblfinder", "consensus"}:
+            logger.warning(
+                "Unknown doublet backend '%s'; falling back to 'scrublet'.", backend
+            )
+            fallback_reason = f"unknown_backend:{backend}"
+            backend = "scrublet"
+        ctx.metadata["doublet_backend_requested"] = requested_backend
+        ctx.metadata["doublet_backend"] = backend
+        if fallback_reason:
+            ctx.metadata["doublet_backend_fallback_reason"] = fallback_reason
+
+        _computed = False
         # Scrublet can fail on tiny/degenerate datasets; keep pipeline usable by
         # falling back to "all singlets" rather than aborting mandatory stage.
         if adata.n_obs < 20 or adata.n_vars < 50:
@@ -253,7 +754,49 @@ class DoubletDetectionModule:
                 reason=f"dataset too small (n_obs={adata.n_obs}, n_vars={adata.n_vars})",
             )
             ctx.metadata["doublet_method"] = "fallback_all_singlets"
-        else:
+            _computed = True
+        elif backend == "doubletfinder":
+            try:
+                doublet_scores, predicted_doublets, threshold = self._run_doubletfinder_via_r(
+                    adata, cfg, ctx,
+                )
+                _computed = True
+            except Exception as exc:
+                logger.warning(
+                    "DoubletFinder backend failed (%s); falling back to scrublet.", exc,
+                )
+                ctx.metadata["doublet_backend_fallback_reason"] = f"doubletfinder_failed:{exc}"
+                backend = "scrublet"  # fall through to scrublet path
+        elif backend == "scdblfinder":
+            try:
+                doublet_scores, predicted_doublets, threshold = self._run_scdblfinder_via_r(
+                    adata, cfg, ctx,
+                )
+                _computed = True
+            except Exception as exc:
+                logger.warning(
+                    "scDblFinder backend failed (%s); falling back to scrublet.", exc,
+                )
+                ctx.metadata["doublet_backend_fallback_reason"] = f"scdblfinder_failed:{exc}"
+                backend = "scrublet"  # fall through to scrublet path
+        elif backend == "consensus":
+            try:
+                doublet_scores, predicted_doublets, per_backend = self._run_consensus(
+                    adata, cfg, ctx,
+                )
+                # Persist per-backend annotations on adata for downstream inspection.
+                for name, result in per_backend.items():
+                    adata.obs[f"{name}_score"] = result["scores"]
+                    adata.obs[f"{name}_call"] = result["calls"].astype(bool)
+                _computed = True
+            except Exception as exc:
+                logger.warning(
+                    "Consensus backend failed (%s); falling back to scrublet.", exc,
+                )
+                ctx.metadata["doublet_backend_fallback_reason"] = f"consensus_failed:{exc}"
+                backend = "scrublet"  # fall through
+
+        if not _computed and backend == "scrublet":
             strategy = self._resolve_doublet_strategy(ctx, adata)
             use_grouped = strategy == "grouped"
 
@@ -339,14 +882,28 @@ class DoubletDetectionModule:
                         )
                         ctx.metadata["doublet_method"] = "fallback_all_singlets"
 
+        ctx.metadata["doublet_backend"] = backend
+        ctx.metadata.setdefault("doublet_method", backend)
         ctx.metadata["doublet_random_state"] = random_state
 
         adata.obs["doublet_score"] = doublet_scores
         adata.obs["predicted_doublet"] = predicted_doublets
 
         n_doublets = int(predicted_doublets.sum())
+        call_rate = n_doublets / adata.n_obs if adata.n_obs > 0 else 0.0
         ctx.metadata["doublets_detected"] = n_doublets
-        ctx.metadata["doublet_rate_pct"] = round(n_doublets / adata.n_obs * 100, 2)
+        ctx.metadata["doublet_rate_pct"] = round(call_rate * 100, 2)
+
+        # Diagnostic: warn loudly when call_rate is < 0.5x expected. This
+        # surfaced as a real failure on LUSC PS01 where Scrublet's
+        # bimodality threshold collapsed at 0.13% on a slice that should
+        # have yielded ~6% doublets.
+        self._check_undercall(
+            call_rate=call_rate,
+            expected_rate=float(getattr(cfg, "expected_doublet_rate", 0.06)),
+            ctx=ctx,
+            backend=backend,
+        )
 
         # Visualize doublet score distribution
         fig, ax = plt.subplots(figsize=(8, 4))
@@ -358,7 +915,8 @@ class DoubletDetectionModule:
             )
         ax.set_xlabel("Doublet score")
         ax.set_ylabel("Count")
-        ax.set_title(f"Scrublet doublet scores (detected {n_doublets} doublets)")
+        display_method = str(ctx.metadata.get("doublet_method", backend))
+        ax.set_title(f"{display_method} doublet scores (detected {n_doublets} doublets)")
         if threshold is not None:
             ax.legend()
         plt.tight_layout()

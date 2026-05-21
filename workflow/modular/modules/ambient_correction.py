@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import numpy as np
+import pandas as pd
 
 from ..config import AmbientCorrectionConfig
 from ..context import PipelineContext
@@ -147,7 +148,7 @@ class AmbientCorrectionModule:
         # ---- Step 1: hard-disable check ----
         if cfg.disable_triggers or os.environ.get("SC_AMBIENT_TRIGGERS_DISABLE") == "1":
             self._record_skip(adata, cfg, reason="disabled_by_user",
-                              triggers_fired=[], qc_pre=None)
+                              triggers_fired=[], qc_pre=None, ctx=ctx)
             logger.info("ambient_correction: disabled (SC_AMBIENT_TRIGGERS_DISABLE / cfg).")
             return
 
@@ -156,7 +157,7 @@ class AmbientCorrectionModule:
 
         if not triggers_fired:
             self._record_skip(adata, cfg, reason="skipped_no_trigger",
-                              triggers_fired=[], qc_pre=qc_pre)
+                              triggers_fired=[], qc_pre=qc_pre, ctx=ctx)
             logger.info(
                 "ambient_correction: no triggers fired -> SKIP (qc_pre=%s)",
                 {k: round(v, 3) if isinstance(v, float) else v
@@ -170,7 +171,7 @@ class AmbientCorrectionModule:
         # ---- Step 3: dry-run mode (skip R, record-only) ----
         if cfg.dry_run_triggers_only:
             self._record_skip(adata, cfg, reason="dry_run_triggers_only",
-                              triggers_fired=triggers_fired, qc_pre=qc_pre)
+                              triggers_fired=triggers_fired, qc_pre=qc_pre, ctx=ctx)
             logger.warning("ambient_correction: dry-run mode -- triggers fired "
                            "but R not invoked.")
             return
@@ -198,6 +199,7 @@ class AmbientCorrectionModule:
             "decontx_seed": cfg.decontx_seed,
         }
         # Surface key numbers in manifest
+        ctx.metadata["ambient_correction_engine"] = "decontx"
         ctx.metadata["ambient_correction_decision"] = "triggered"
         ctx.metadata["ambient_correction_triggers"] = ",".join(triggers_fired)
         ctx.metadata["ambient_contamination_median"] = float(summary["median"])
@@ -346,27 +348,48 @@ class AmbientCorrectionModule:
 
         keep_temp = cfg.keep_temp_on_failure
         tmp_root = Path(tempfile.mkdtemp(prefix="ambient_decontx_"))
-        in_h5ad = tmp_root / "input.h5ad"
+        mtx_dir = tmp_root / "mtx"
+        mtx_dir.mkdir(parents=True, exist_ok=True)
         out_dir = tmp_root / "out"
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write raw counts as input. DecontX expects counts in .X.
-        # Use a copy to avoid disturbing the live adata.
-        adata_in = adata.copy()
-        if "counts" not in adata_in.layers:
-            adata_in.layers["counts"] = adata_in.X.copy()
-        adata_in.write_h5ad(in_h5ad)
+        # Write filtered counts as 10X mtx triplet. We deliberately avoid
+        # h5ad here: the previous contract round-tripped through
+        # zellkonverter::readH5AD in R, which relies on basilisk and was
+        # observed attempting to compile Python 3.14 from source via
+        # pyenv during the 2026-05-21 hgmm_10k_v3 benchmark, hanging the
+        # subprocess indefinitely. mtx is native to Seurat::ReadMtx with
+        # no Python dependency on the R side.
+        from scipy import io as _sio
+        from scipy import sparse as _sp
+        X = adata.X
+        if not _sp.issparse(X):
+            X = _sp.csr_matrix(X)
+        # 10X convention: rows = genes, cols = cells.
+        _sio.mmwrite(str(mtx_dir / "matrix.mtx"), X.T.tocoo())
+        with open(mtx_dir / "features.tsv", "w") as f:
+            for g in adata.var_names:
+                f.write(f"{g}\t{g}\tGene Expression\n")
+        with open(mtx_dir / "barcodes.tsv", "w") as f:
+            for b in adata.obs_names:
+                f.write(f"{b}\n")
 
         cmd = [
             "conda", "run", "-n", cfg.r_conda_env,
             "Rscript", str(r_driver),
-            "--in-h5ad", str(in_h5ad),
+            "--mtx-dir", str(mtx_dir),
             "--out-dir", str(out_dir),
             "--max-iter", str(cfg.decontx_max_iter),
             "--seed", str(cfg.decontx_seed),
         ]
+        # Optional per-sample DecontX via a barcode\tbatch TSV.
         if cfg.batch_obs_column and cfg.batch_obs_column in adata.obs.columns:
-            cmd += ["--batch-column", cfg.batch_obs_column]
+            batch_tsv = tmp_root / "batch.tsv"
+            with open(batch_tsv, "w") as f:
+                for bc, b in zip(adata.obs_names,
+                                 adata.obs[cfg.batch_obs_column].astype(str)):
+                    f.write(f"{bc}\t{b}\n")
+            cmd += ["--batch-tsv", str(batch_tsv)]
 
         repro_cmd_str = " ".join(cmd)
         logger.info("ambient_correction: repro command -- %s", repro_cmd_str)
@@ -418,29 +441,50 @@ class AmbientCorrectionModule:
                 stderr=stderr or stdout,
             )
 
-        # Read back corrected adata
-        out_h5ad = out_dir / "decontaminated.h5ad"
+        # Read back corrected counts as mtx + contamination CSV + summary JSON.
+        corrected_dir = out_dir / "corrected_mtx"
+        contamination_csv = out_dir / "contamination.csv"
         summary_json = out_dir / "contamination_summary.json"
-        if not out_h5ad.exists() or not summary_json.exists():
+        missing = [p for p in (corrected_dir / "matrix.mtx",
+                               corrected_dir / "barcodes.tsv",
+                               corrected_dir / "features.tsv",
+                               contamination_csv,
+                               summary_json) if not p.exists()]
+        if missing:
             self._raise_with_artifacts(
-                "DecontX produced exit-0 but expected outputs missing",
+                f"DecontX produced exit-0 but missing outputs: {missing}",
                 tmp_root, keep_temp, repro_cmd_str, stderr=stderr,
             )
 
-        corrected = ad.read_h5ad(out_h5ad)
+        # Load corrected counts from mtx (rows=genes, cols=cells).
+        from scipy.io import mmread as _mmread
+        corrected_counts = _mmread(str(corrected_dir / "matrix.mtx")).tocsr()
+        corrected_barcodes = (corrected_dir / "barcodes.tsv").read_text().splitlines()
+        corrected_features = (corrected_dir / "features.tsv").read_text().splitlines()
+        if len(corrected_barcodes) != adata.n_obs or len(corrected_features) != adata.n_vars:
+            raise RuntimeError(
+                f"DecontX returned matrix with shape "
+                f"{(len(corrected_features), len(corrected_barcodes))}, "
+                f"expected {(adata.n_vars, adata.n_obs)}. Refusing to replace .X."
+            )
+        if list(corrected_barcodes) != list(adata.obs_names):
+            raise RuntimeError(
+                "DecontX corrected barcodes do not match adata.obs_names; "
+                "refusing to replace .X to prevent silent reordering."
+            )
         summary = json.loads(summary_json.read_text())
 
         # Replace .X (counts) with decontXcounts; preserve raw in a layer.
-        if corrected.n_obs != adata.n_obs or corrected.n_vars != adata.n_vars:
-            raise RuntimeError(
-                f"DecontX returned adata with shape {corrected.shape}, "
-                f"expected {adata.shape}. Refusing to replace .X."
-            )
         adata.layers["counts_raw_pre_decontx"] = adata.X.copy()
-        adata.X = corrected.X
-        contamination = np.asarray(corrected.obs["decontx_contamination"].values,
+        # corrected_counts is genes×cells in 10X convention; transpose to cells×genes.
+        adata.X = corrected_counts.T.tocsr()
+        contam_df = pd.read_csv(contamination_csv)
+        contam_df = contam_df.set_index("barcode").loc[list(adata.obs_names)]
+        contamination = np.asarray(contam_df["decontx_contamination"].values,
                                    dtype=float)
         adata.obs["decontx_contamination"] = contamination
+        if "decontx_clusters" in contam_df.columns:
+            adata.obs["decontx_clusters"] = contam_df["decontx_clusters"].values
 
         # Re-compute key QC metrics on corrected counts for qc_post.
         # Inline (no shared qc.py helper exists yet -- if a future refactor
@@ -482,6 +526,7 @@ class AmbientCorrectionModule:
     def _record_skip(
         self, adata: Any, cfg: AmbientCorrectionConfig,
         reason: str, triggers_fired: list[str], qc_pre: dict | None,
+        ctx: PipelineContext | None = None,
     ) -> None:
         adata.uns["ambient_correction"] = {
             "engine": "decontx",
@@ -494,6 +539,17 @@ class AmbientCorrectionModule:
             "contamination_summary": None,
             "decontx_runtime_seconds": None,
         }
+        if ctx is not None:
+            ctx.metadata["ambient_correction_engine"] = "decontx"
+            ctx.metadata["ambient_correction_decision"] = reason
+            ctx.metadata["ambient_correction_triggers"] = ",".join(triggers_fired)
+            if qc_pre:
+                for key, value in qc_pre.items():
+                    if (
+                        isinstance(value, (int, float, np.integer, np.floating))
+                        and np.isfinite(value)
+                    ):
+                        ctx.metadata[f"ambient_qc_pre_{key}"] = float(value)
 
     @staticmethod
     def _snapshot_thresholds(cfg: AmbientCorrectionConfig) -> dict[str, float]:

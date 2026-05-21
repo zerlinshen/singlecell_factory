@@ -77,6 +77,37 @@ def parse_args() -> argparse.Namespace:
     # Doublet detection
     parser.add_argument("--expected-doublet-rate", type=float, default=0.06)
     parser.add_argument("--no-remove-doublets", action="store_true", help="Keep doublets (mark but don't remove)")
+    parser.add_argument(
+        "--doublet-backend",
+        default="scrublet",
+        choices=["scrublet", "doubletfinder", "scdblfinder", "consensus"],
+        help="Doublet backend. Default stays scrublet; use consensus/second-opinion lanes for benchmarking.",
+    )
+    parser.add_argument(
+        "--doublet-consensus-logic",
+        default="or",
+        choices=["or", "and", "rank"],
+        help="Consensus merge logic when --doublet-backend consensus is used.",
+    )
+    parser.add_argument(
+        "--doublet-consensus-pair",
+        default="scrublet_doubletfinder",
+        choices=[
+            "scrublet_doubletfinder",
+            "scrublet_scdblfinder",
+            "scrublet_doubletfinder_scdblfinder",
+        ],
+        help="Backends to combine for consensus doublet calling.",
+    )
+    parser.add_argument("--doubletfinder-pn", type=float, default=0.25)
+    parser.add_argument("--doubletfinder-pk", type=float, default=0.09)
+    parser.add_argument("--doubletfinder-pcs", type=int, default=20)
+    parser.add_argument(
+        "--scdblfinder-samples-col",
+        default="",
+        help="Optional obs column passed to scDblFinder as sample labels. Empty = no sample grouping.",
+    )
+    parser.add_argument("--doublet-subprocess-timeout", type=int, default=1800)
 
     # Ambient RNA correction (DecontX, conditional per-sample triggers)
     # Policy: ops/policy/ambient_correction_policy.md (Phase 2 decided 2026-05-20)
@@ -773,6 +804,14 @@ def main() -> None:
         doublet=DoubletConfig(
             expected_doublet_rate=args.expected_doublet_rate,
             remove_doublets=not args.no_remove_doublets,
+            backend=args.doublet_backend,
+            consensus_logic=args.doublet_consensus_logic,
+            consensus_pair=args.doublet_consensus_pair,
+            subprocess_timeout=args.doublet_subprocess_timeout,
+            doubletfinder_pn=args.doubletfinder_pn,
+            doubletfinder_pk=args.doubletfinder_pk,
+            doubletfinder_pcs=args.doubletfinder_pcs,
+            scdblfinder_samples_col=args.scdblfinder_samples_col or None,
         ),
         ambient=AmbientCorrectionConfig(
             disable_triggers=args.ambient_disable_triggers,

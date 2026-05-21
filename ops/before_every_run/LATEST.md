@@ -1,5 +1,54 @@
 # Latest governance update: human conclusion logs required - 2026-05-19
 
+- Round9 LUSC closure completed on 2026-05-22 with three comparable production
+  lanes under `/home/zerlinshen/projects/round9-singlecell-comparison`.
+- Fresh runs:
+  - baseline refresh:
+    `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-21T1744Z-9907a7d/python/lusc_ps01_round9_baseline_refresh_20260522_014447`
+  - scDblFinder:
+    `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-21T1749Z-9907a7d/python/lusc_ps01_round9_scdblfinder_20260522_014947`
+  - consensus OR:
+    `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-21T1756Z-9907a7d/python/lusc_ps01_round9_consensus_scdbl_or_20260522_015643`
+- Outcome: all three lanes had `14` modules `ok`; `pseudobulk_de` skipped due
+  missing explicit contrast. Baseline Scrublet still under-called (`21`
+  doublets, `0.03%`, undercall ratio `206.9x`), while scDblFinder and
+  consensus called `6737`/`6751` doublets (`9.30%`/`9.32%`).
+- Decision: keep Scrublet as global default, but when the under-call diagnostic
+  fires on heterogeneous tumor/tissue data, use scDblFinder or consensus OR
+  with `scrublet_scdblfinder` as a conditional second-opinion lane.
+- Downstream stability: consensus retained `65669` cells, produced `35`
+  clusters, `0.0%` annotation unknown rate, and `10488` significant DE genes.
+- Reports:
+  - comparison:
+    `/home/zerlinshen/projects/round9-singlecell-comparison/reports/round9_lusc_doublet_downstream_comparison.md`
+  - curated vector figure bundle:
+    `/home/zerlinshen/projects/round9-singlecell-comparison/reports/figures/round9_lusc_closure`
+  - human conclusion:
+    `/home/zerlinshen/projects/round9-singlecell-comparison/ledger/human_review/2026-05-22-round9-lusc-closure-human-conclusion.md`
+- Figure QA: curated bundle passed `--require-vector` with `9` valid figures,
+  `6` vector outputs, `3` rasters, and `0` warnings. Manual visual review is
+  still required before publication use.
+- New journal: `before-every-run/journal/2026-05-22-round9-lusc-closure.md`.
+
+---
+
+- Round9 LUSC baseline evidence run completed on 2026-05-22:
+  `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-21T1718Z-9907a7d/python/lusc_ps01_round9_baseline_20260522_011822`.
+- Purpose: second real data shape for full single-cell comparative optimization,
+  with upstream and downstream modules plus Figure QA.
+- Outcome: run exit 0; `14` modules `ok`; `pseudobulk_de` truthfully skipped
+  because no explicit contrast was provided; final AnnData `72399 x 17267`.
+- Key caution: Scrublet under-called doublets strongly (`0.03%`, `21` calls,
+  undercall ratio `206.9x` vs expected `6%`). Do not promote a doublet default
+  without a second-opinion/consensus lane on this data shape.
+- Figure QA: `30` mechanically valid PNGs, `0` vector outputs; manuscript
+  vector gate fails as expected with `missing_vector_output`.
+- New project governance: `/home/zerlinshen/projects/round9-singlecell-comparison/project.yaml`.
+- New journal:
+  `before-every-run/journal/2026-05-22-round9-lusc-baseline.md`.
+
+---
+
 - Confirmed existing `before-every-run` rule already required remote run journaling, but did not explicitly require human-facing scientific decision logs.
 - Added canonical rule: when a discussion changes scientific interpretation, final-run strategy, claim support, benchmark lane choice, source-of-truth status, or human-facing next actions, write a human-readable conclusion log.
 - Required locations now documented:

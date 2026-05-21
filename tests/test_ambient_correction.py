@@ -87,6 +87,9 @@ def test_t1_top50_triggers(tmp_path):
     rec = adata.uns["ambient_correction"]
     assert rec["decision"] == "dry_run_triggers_only"
     assert "T1_top50_high" in rec["triggers_fired"]
+    assert ctx.metadata["ambient_correction_engine"] == "decontx"
+    assert ctx.metadata["ambient_correction_decision"] == "dry_run_triggers_only"
+    assert ctx.metadata["ambient_correction_triggers"] == "T1_top50_high"
     assert "T2_mt_excess" not in rec["triggers_fired"]
 
 
@@ -198,6 +201,45 @@ def test_dry_run_no_r_invocation(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Successful DecontX path: manifest metadata includes engine
+# ---------------------------------------------------------------------------
+
+def test_decontx_success_records_engine_metadata(tmp_path):
+    """When DecontX runs, manifest metadata exposes the engine as decontx."""
+    from workflow.modular.modules.ambient_correction import AmbientCorrectionModule
+
+    adata = _make_adata(top50=80.0, mt_pct=5.0)
+    ctx = _make_ctx(adata)
+
+    def fake_invoke(self, adata_arg, cfg, ctx_arg):
+        adata_arg.layers["counts_raw_pre_decontx"] = adata_arg.X.copy()
+        adata_arg.X = adata_arg.X.copy()
+        contamination = np.full(adata_arg.n_obs, 0.0125, dtype=float)
+        adata_arg.obs["decontx_contamination"] = contamination
+        summary = {
+            "celda_version": "test",
+            "median": 0.0125,
+            "q25": 0.01,
+            "q75": 0.02,
+            "max": 0.05,
+            "decontx_runtime_seconds": 1.23,
+        }
+        qc_post = {"total_counts_median": 100.0}
+        return contamination, summary, qc_post
+
+    mod = AmbientCorrectionModule()
+    with patch.object(AmbientCorrectionModule, "_invoke_decontx", fake_invoke):
+        mod.run(ctx)
+
+    rec = adata.uns["ambient_correction"]
+    assert rec["engine"] == "decontx"
+    assert rec["decision"] == "triggered"
+    assert ctx.metadata["ambient_correction_engine"] == "decontx"
+    assert ctx.metadata["ambient_correction_decision"] == "triggered"
+    assert ctx.metadata["ambient_contamination_median"] == pytest.approx(0.0125)
+
+
+# ---------------------------------------------------------------------------
 # Env-disable: SC_AMBIENT_TRIGGERS_DISABLE=1 skips everything
 # ---------------------------------------------------------------------------
 
@@ -215,6 +257,9 @@ def test_env_disable_skips_all_triggers(monkeypatch, tmp_path):
     rec = adata.uns["ambient_correction"]
     assert rec["decision"] == "disabled_by_user"
     assert rec["triggers_fired"] == []
+    assert ctx.metadata["ambient_correction_engine"] == "decontx"
+    assert ctx.metadata["ambient_correction_decision"] == "disabled_by_user"
+    assert ctx.metadata["ambient_correction_triggers"] == ""
     # X must not be mutated
     assert "decontx_contamination" not in adata.obs.columns
 
@@ -319,4 +364,8 @@ def test_no_trigger_records_skipped(tmp_path):
     rec = adata.uns["ambient_correction"]
     assert rec["decision"] == "skipped_no_trigger"
     assert rec["triggers_fired"] == []
+    assert ctx.metadata["ambient_correction_engine"] == "decontx"
+    assert ctx.metadata["ambient_correction_decision"] == "skipped_no_trigger"
+    assert ctx.metadata["ambient_correction_triggers"] == ""
+    assert ctx.metadata["ambient_qc_pre_mt_median"] == pytest.approx(3.0)
     assert "decontx_contamination" not in adata.obs.columns

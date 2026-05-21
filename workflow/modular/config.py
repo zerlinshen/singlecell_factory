@@ -40,6 +40,15 @@ class DoubletConfig:
     expected_doublet_rate: float = 0.06
     remove_doublets: bool = True
     n_prin_comps: int = 30  # Scrublet internal PCA; paper uses 30
+    backend: str = "scrublet"  # scrublet, doubletfinder, scdblfinder, consensus
+    consensus_logic: str = "or"  # or, and, rank
+    consensus_pair: str = "scrublet_doubletfinder"
+    r_conda_env: str = "r_multiomics"
+    subprocess_timeout: int = 1800
+    doubletfinder_pn: float = 0.25
+    doubletfinder_pk: float = 0.09
+    doubletfinder_pcs: int = 20
+    scdblfinder_samples_col: str | None = None
 
 
 @dataclass
