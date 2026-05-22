@@ -76,7 +76,7 @@ annotation_module, atac_module, batch_integration_module, cli_utils, hic_module,
 | trajectory | state_dynamics | singlecell_rna | clustering | no | stable |
 | pseudo_velocity | state_dynamics | singlecell_rna | trajectory | no | stable |
 | rna_velocity | state_dynamics | singlecell_rna_splicing | clustering | no | stable |
-| cnv_inference | genomic_optional | copy_number | clustering | no | stable |
+| cnv_inference | genomic_optional | copy_number | annotation | no | stable |
 | pathway_analysis | biology | singlecell_rna | differential_expression | no | stable |
 | cell_communication | biology | singlecell_rna | annotation | no | stable |
 | gene_regulatory_network | biology | singlecell_rna | clustering | no | stable |
@@ -378,4 +378,3 @@ Total collected on the named contract surface: **97** tests.
 | `singlecell_factory/docs/FACTORIES_OVERVIEW.md` | _singlecell_factory + r_multiomics_factory technical reference_ |
 | `singlecell_factory/docs/MODULE_TECH_DOC_TEMPLATE.md` | - Module name: |
 | `singlecell_factory/docs/PUBLICATION_READY.md` | This file provides copy-paste-ready Methods section text and citation patterns for manuscripts using this pip... |
-

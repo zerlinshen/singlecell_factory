@@ -451,6 +451,7 @@ Regenerate with `python scripts/generate_factories_report.py`.
 | [docs/PAPER_REPRODUCTION_SOP.md](docs/PAPER_REPRODUCTION_SOP.md) | Standard operating procedure for paper reproduction: faithful-first ladder, gate criteria, and agent protocol |
 | [docs/PUBLICATION_READY.md](docs/PUBLICATION_READY.md) | Methods section template and citation patterns for manuscript drafting |
 | [docs/NEXT_ROUND_PIPELINE_REVIEW_AND_MODULE_INTEGRATION_README.md](docs/NEXT_ROUND_PIPELINE_REVIEW_AND_MODULE_INTEGRATION_README.md) | Next-session plan for GitHub method intake, upstream/downstream comparison, figure QA, and default-change gates |
+| [docs/SINGLECELL_PREPROCESSING_DECISION_GATES_2026-05-22.md](docs/SINGLECELL_PREPROCESSING_DECISION_GATES_2026-05-22.md) | QC, normalization, resolution, batch, annotation, and CNV decision gates |
 
 ### Engineering Disciplines (Phase 7+)
 
@@ -761,7 +762,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 | `trajectory` | PAGA trajectory graph + DPT pseudotime + gene expression dynamics | clustering |
 | `pseudo_velocity` | Pseudo-RNA velocity with arrow/stream plots (vectorized) | trajectory |
 | `rna_velocity` | Real RNA velocity (scVelo: stochastic/dynamical) | clustering |
-| `cnv_inference` | Expression-based CNV inference (infercnvpy / vectorized sliding window) | clustering |
+| `cnv_inference` | Expression-based CNV inference (infercnvpy / vectorized sliding window) after annotation gate | annotation |
 | `pathway_analysis` | Gene set enrichment (gseapy/decoupler/built-in Hallmark, BH FDR) | differential_expression |
 | `cell_communication` | Ligand-receptor interactions (LIANA / manual L-R scoring) | annotation |
 | `gene_regulatory_network` | TF activity inference (decoupler+DoRothEA / manual TF-target) | clustering |
@@ -786,9 +787,9 @@ cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression
                                                       |               +-> immune_phenotyping
                                                       |               +-> tumor_microenvironment
                                                       |               +-> composition
+                                                      |               +-> cnv_inference --+--> evolution
                                                       +-> trajectory -+-> pseudo_velocity
                                                       |               +-> cell_fate
-                                                      +-> cnv_inference --+--> evolution
                                                       |                        (requires both trajectory + cnv_inference)
                                                       +-> cell_cycle
                                                       +-> batch_correction
@@ -1396,13 +1397,13 @@ Each legacy run creates an independent timestamped folder under `--output-dir`
 ```
 
 Current module output folders (as implemented):
-- `annotation`: `cell_type_annotation.csv`, `cluster_majority_cell_type.csv`, `umap_cell_type.png`
-- `batch_correction`: `umap_batch_before.png`, `umap_batch_after.png`
+- `annotation`: `cell_type_annotation.csv`, `cluster_majority_cell_type.csv`, `epithelial_marker_qc.json`, `epithelial_marker_summary_by_leiden.csv`, `epithelial_marker_summary_by_cell_type.csv`, `umap_cell_type.png`, `umap_epithelial_markers.png`
+- `batch_correction`: `umap_batch_before.png`, `umap_batch_after.png`, `batch_mixing_metrics.json`, `leiden_resolution_sweep.csv` when `--leiden-resolution-sweep` is set
 - `cell_communication`: `cell_communication_liana.csv`, `cell_communication_lr.csv`, `cell_communication_dotplot.png`, `cell_communication_heatmap.png`
 - `cell_cycle`: `cell_cycle_scores.csv`, `cell_cycle_umap.png`
 - `cell_fate`: `fate_probabilities.csv`, `terminal_states.csv`, `fate_heatmap.png`, `fate_umap_cellrank.png`
-- `clustering`: `pca_variance_explained.png`, `umap_leiden.png`
-- `cnv_inference`: `cnv_scores.csv`, `cnv_classification.json`, `cnv_score_umap.png`, `cnv_heatmap.png`
+- `clustering`: `pca_variance_explained.png`, `umap_leiden.png`, optional `leiden_resolution_sweep.csv`
+- `cnv_inference`: `cnv_scores.csv`, `cnv_classification.json`, `cnv_annotation_qc.json`, `cnv_score_umap.png`, `cnv_heatmap.png`
 - `composition`: `composition_counts.csv`, `composition_proportions.csv`, `composition_test_results.csv`, `composition_barplot.png`, `composition_boxplot.png`
 - `differential_expression`: `marker_genes.csv`, `marker_genes_all.csv`, `marker_top5_by_cluster.csv`, `de_dotplot_top5.png`, `de_heatmap_top5.png`, `de_volcano.png`
 - `doublet_detection`: `doublet_scores.png`
@@ -1415,7 +1416,7 @@ Current module output folders (as implemented):
 - `pathway_analysis`: `pathway_enrichment.csv`, `pathway_activity_per_cluster.csv`, `pathway_enrichment_bar.png`, `pathway_activity_heatmap.png`
 - `pseudo_velocity`: `pseudo_velocity_speed.csv`, `pseudo_velocity_per_cluster.csv`, `pseudo_velocity_arrows*.png`, `pseudo_velocity_stream*.png`, `pseudo_velocity_speed_umap.png`, `pseudo_velocity_speed_boxplot.png`
 - `pseudobulk_de`: `pseudobulk_counts.csv`, `pseudobulk_de_results.csv`, `pseudobulk_volcano.png`, `pseudobulk_heatmap.png`
-- `qc`: `qc_violin_pre_filter.png`, `qc_violin_post_filter.png`, `qc_scatter_pre_filter.png`, `qc_scatter_post_filter.png`
+- `qc`: `qc_violin_pre_filter.png`, `qc_violin_post_filter.png`, `qc_scatter_pre_filter.png`, `qc_scatter_post_filter.png`, `qc_threshold_audit.json`
 - `rna_velocity`: `velocity_confidence.csv`, `velocity_top_genes.csv`, `velocity_stream_umap.png`, `velocity_grid_umap.png`, `velocity_length_distribution.png` (+ dynamical-mode plots)
 - `trajectory`: `dpt_pseudotime.csv`, `pseudotime_per_cluster.csv`, `pseudotime_top_genes.csv`, `pseudotime_dpt_umap.png`, `paga_trajectory.png`
 - `tumor_microenvironment`: `tme_scores_per_cell.csv`, `tme_scores_per_cluster.csv`, `checkpoint_expression.csv`, `tme_cyt_umap.png`, `tme_tis_umap.png`
@@ -1504,6 +1505,7 @@ This preserves `.checkpoints/after_<module>.json` status/metadata sidecars while
 | `--n-pcs` | 40 | PCA dimensions |
 | `--n-neighbors` | 15 | k-NN neighbors |
 | `--leiden-resolution` | 0.8 | Leiden clustering resolution |
+| `--leiden-resolution-sweep` | empty | Optional diagnostic sweep, e.g. `0.5,0.8,1.0`; writes `leiden_resolution_sweep.csv` without changing final labels |
 | `--scale-data` | false | Apply `sc.pp.scale()` before PCA |
 | `--de-method` | `wilcoxon` | DE method (`wilcoxon`, `t-test`, `t-test_overestim_var`, `logreg`) |
 | `--de-n-genes` | 300 | Max genes ranked per cluster |

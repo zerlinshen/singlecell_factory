@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -78,14 +80,16 @@ class QCModule:
         qc = ctx.cfg.qc
         before = adata.n_obs
         # Use one combined mask to avoid multiple full AnnData copies.
-        mask = (
-            (adata.obs["n_genes_by_counts"] >= qc.min_genes)
-            & (adata.obs["n_genes_by_counts"] <= qc.max_genes)
-            & (adata.obs["total_counts"] >= qc.min_counts)
-            & (adata.obs["total_counts"] <= qc.max_counts)
-            & (adata.obs["pct_counts_mt"] <= qc.max_mito_pct)
-            & (adata.obs["pct_counts_ribo"] <= qc.max_ribo_pct)
-        )
+        criteria = {
+            "n_genes_ge_min": adata.obs["n_genes_by_counts"] >= qc.min_genes,
+            "n_genes_le_max": adata.obs["n_genes_by_counts"] <= qc.max_genes,
+            "total_counts_ge_min": adata.obs["total_counts"] >= qc.min_counts,
+            "total_counts_le_max": adata.obs["total_counts"] <= qc.max_counts,
+            "pct_counts_mt_le_max": adata.obs["pct_counts_mt"] <= qc.max_mito_pct,
+            "pct_counts_ribo_le_max": adata.obs["pct_counts_ribo"] <= qc.max_ribo_pct,
+        }
+        mask = np.logical_and.reduce([np.asarray(v, dtype=bool) for v in criteria.values()])
+        threshold_audit = self._build_threshold_audit(adata, qc, criteria, mask)
         adata = adata[mask, :].copy()
         if has_api(sc, "pp.filter_genes"):
             sc.pp.filter_genes(adata, min_cells=qc.min_cells)
@@ -100,6 +104,63 @@ class QCModule:
         ctx.metadata["cells_after_qc"] = int(adata.n_obs)
         ctx.metadata["genes_after_qc"] = int(adata.n_vars)
         ctx.metadata["qc_removed_cells"] = int(before - adata.n_obs)
+        ctx.metadata["qc_retention_pct"] = round(float(adata.n_obs) / max(before, 1) * 100.0, 3)
+        threshold_audit["cells_after_qc"] = int(adata.n_obs)
+        threshold_audit["genes_after_qc"] = int(adata.n_vars)
+        threshold_audit["cell_retention_pct"] = ctx.metadata["qc_retention_pct"]
+        (ctx.table_dir / "qc_threshold_audit.json").write_text(
+            json.dumps(threshold_audit, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _metric_quantiles(values) -> dict[str, float]:
+        arr = np.asarray(values, dtype=float)
+        arr = arr[np.isfinite(arr)]
+        if arr.size == 0:
+            return {}
+        qs = np.quantile(arr, [0.0, 0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99, 1.0])
+        keys = ["min", "p01", "p05", "p25", "median", "p75", "p95", "p99", "max"]
+        return {key: round(float(value), 6) for key, value in zip(keys, qs)}
+
+    @classmethod
+    def _build_threshold_audit(cls, adata, qc, criteria: dict[str, object], mask) -> dict:
+        failure_counts = {
+            name: int((~np.asarray(value, dtype=bool)).sum())
+            for name, value in criteria.items()
+        }
+        failure_counts["any_cell_filter"] = int((~np.asarray(mask, dtype=bool)).sum())
+        metric_quantiles = {
+            col: cls._metric_quantiles(adata.obs[col])
+            for col in [
+                "n_genes_by_counts",
+                "total_counts",
+                "pct_counts_mt",
+                "pct_counts_ribo",
+            ]
+            if col in adata.obs
+        }
+        return {
+            "threshold_mode": "fixed_configurable_audit_only",
+            "adaptivity_status": (
+                "not_adaptive; defaults are operator-configurable and must not be changed "
+                "without a second dataset or a data-shape conditional"
+            ),
+            "thresholds": {
+                "min_genes": int(qc.min_genes),
+                "max_genes": int(qc.max_genes),
+                "min_counts": int(qc.min_counts),
+                "max_counts": int(qc.max_counts),
+                "max_mito_pct": float(qc.max_mito_pct),
+                "max_ribo_pct": float(qc.max_ribo_pct),
+                "min_cells": int(qc.min_cells),
+            },
+            "cells_before_qc": int(adata.n_obs),
+            "genes_before_qc": int(adata.n_vars),
+            "candidate_cells_after_cell_filters": int(np.asarray(mask, dtype=bool).sum()),
+            "failure_counts": failure_counts,
+            "metric_quantiles": metric_quantiles,
+        }
 
     @staticmethod
     def _plot_qc_metrics(adata, ctx: PipelineContext, suffix: str) -> None:

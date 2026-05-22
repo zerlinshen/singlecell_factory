@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import matplotlib
 from pathlib import Path
@@ -63,6 +64,8 @@ DEFAULT_MARKERS = {
     "Mast cell": ["TPSAB1", "TPSB2", "CPA3", "KIT"],
     "Dendritic cell": ["CD1C", "CLEC9A", "FCER1A", "IRF8"],
 }
+
+EPITHELIAL_QC_MARKERS = ("EPCAM", "KRT8", "KRT18")
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +171,7 @@ class AnnotationModule:
             .agg(lambda x: x.value_counts().idxmax())
         ).rename("majority_cell_type")
         cluster_summary.to_csv(ctx.table_dir / "cluster_majority_cell_type.csv")
+        self._write_epithelial_marker_qc(adata, ctx)
 
         # --- Visualizations ---
         sc.pl.umap(adata, color=["cell_type"], show=False, legend_loc="on data")
@@ -324,3 +328,92 @@ class AnnotationModule:
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "cell_type_composition.png", dpi=160, bbox_inches="tight")
         plt.close()
+
+    @staticmethod
+    def _marker_expression_frame(adata, markers: list[str]) -> pd.DataFrame:
+        expr = adata[:, markers].X
+        if sparse.issparse(expr):
+            # densify-allowed: marker panel is O(n_cells x <=3 genes)
+            expr = expr.toarray()
+        else:
+            expr = np.asarray(expr)
+        return pd.DataFrame(expr, index=adata.obs_names, columns=markers)
+
+    @staticmethod
+    def _summarize_marker_distribution(expr: pd.DataFrame, labels, group_name: str) -> pd.DataFrame:
+        work = expr.copy()
+        work[group_name] = pd.Series(labels, index=expr.index).astype(str)
+        rows = []
+        for group, sub in work.groupby(group_name, observed=True):
+            marker_values = sub.drop(columns=[group_name])
+            for marker in marker_values.columns:
+                values = marker_values[marker].to_numpy(dtype=float)
+                rows.append(
+                    {
+                        group_name: str(group),
+                        "marker": marker,
+                        "n_cells": int(values.shape[0]),
+                        "mean": float(np.mean(values)),
+                        "median": float(np.median(values)),
+                        "pct_positive": round(float(np.mean(values > 0.0)) * 100.0, 3),
+                    }
+                )
+        return pd.DataFrame(rows)
+
+    @classmethod
+    def _write_epithelial_marker_qc(cls, adata, ctx: PipelineContext) -> None:
+        present = [marker for marker in EPITHELIAL_QC_MARKERS if marker in adata.var_names]
+        ctx.metadata["epithelial_marker_qc_present_markers"] = present
+        if not present:
+            ctx.metadata["epithelial_marker_qc_status"] = "skipped_no_epithelial_markers"
+            return
+
+        expr = cls._marker_expression_frame(adata, present)
+        if "leiden" in adata.obs:
+            cls._summarize_marker_distribution(
+                expr,
+                adata.obs["leiden"],
+                "leiden",
+            ).to_csv(ctx.table_dir / "epithelial_marker_summary_by_leiden.csv", index=False)
+        if "cell_type" in adata.obs:
+            cls._summarize_marker_distribution(
+                expr,
+                adata.obs["cell_type"],
+                "cell_type",
+            ).to_csv(ctx.table_dir / "epithelial_marker_summary_by_cell_type.csv", index=False)
+
+        epithelial_mask = adata.obs["cell_type"].astype(str).str.contains(
+            "epithelial",
+            case=False,
+            regex=False,
+        ) if "cell_type" in adata.obs else pd.Series(False, index=adata.obs_names)
+        marker_score = expr.mean(axis=1)
+        qc_payload = {
+            "present_markers": present,
+            "epithelial_cells": int(epithelial_mask.sum()),
+            "non_epithelial_cells": int((~epithelial_mask).sum()),
+            "epithelial_marker_score_median": (
+                float(marker_score[epithelial_mask].median()) if epithelial_mask.any() else None
+            ),
+            "non_epithelial_marker_score_median": (
+                float(marker_score[~epithelial_mask].median()) if (~epithelial_mask).any() else None
+            ),
+            "status": "completed",
+        }
+        ctx.metadata["epithelial_marker_qc_status"] = "completed"
+        ctx.metadata["epithelial_marker_score_median"] = qc_payload[
+            "epithelial_marker_score_median"
+        ]
+        (ctx.table_dir / "epithelial_marker_qc.json").write_text(
+            json.dumps(qc_payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+        if "X_umap" in adata.obsm:
+            sc.pl.umap(adata, color=present, show=False, cmap="viridis")
+            plt.savefig(
+                ctx.figure_dir / "umap_epithelial_markers.png",
+                dpi=160,
+                bbox_inches="tight",
+            )
+            plt.close()

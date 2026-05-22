@@ -487,6 +487,8 @@ Interpretation note:
 - `--leiden-resolution` (default `0.8`)
   - higher: more/smaller clusters
   - lower: fewer/larger clusters
+  - use `--leiden-resolution-sweep 0.5,0.8,1.0` on first-pass tuning runs to write a diagnostic table without changing final labels
+  - if batch correction reruns Leiden, inspect `batch_correction/leiden_resolution_sweep.csv` because it reflects the corrected graph
 
 - `--n-pcs` (default `40`)
   - lower for speed, higher for complex datasets
@@ -496,6 +498,7 @@ Interpretation note:
 
 - `--batch-method` (default `harmony`)
   - only use when true multi-batch effect exists
+  - inspect `batch_correction/batch_mixing_metrics.json` with the before/after UMAPs; better correction should reduce same-batch neighbor fraction and increase normalized batch entropy without erasing real cell-type separation
 
 ### 10.2 QC thresholds
 
@@ -508,7 +511,19 @@ Defaults:
 - `--max-ribo-pct 50`
 - `--min-cells 3`
 
-Change carefully and rerun QC/clustering for sanity.
+The QC defaults are fixed and configurable, not adaptive. Each run writes
+`qc/qc_threshold_audit.json` with threshold values, metric quantiles, and
+filter-failure counts. Do not promote new QC defaults from one benchmark alone;
+use either a second dataset with a different shape or an explicit data-shape
+conditional. Change carefully and rerun QC/clustering for sanity.
+
+### 10.3 Annotation before CNV
+
+`cnv_inference` depends on `annotation` in the module DAG. The CNV module writes
+`cnv_inference/cnv_annotation_qc.json`, and annotation writes
+`annotation/epithelial_marker_qc.json` plus EPICAM/KRT8/KRT18 summaries when
+those genes are present. Treat epithelial subcluster and CNV conclusions as
+blocked until these marker and annotation checks are plausible.
 
 ---
 

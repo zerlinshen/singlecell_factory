@@ -93,6 +93,7 @@ class ClusteringConfig:
     n_pcs: int = 15  # paper: 15-PC Harmony space for Leiden clustering
     n_neighbors: int = 15
     leiden_resolution: float = 1.0  # paper: Leiden resolution=1.0
+    leiden_resolution_sweep: tuple[float, ...] = ()
     random_state: int = 0
     scale_data: bool = False
 

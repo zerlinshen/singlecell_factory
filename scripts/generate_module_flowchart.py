@@ -1,25 +1,30 @@
 from __future__ import annotations
 
-import ast
 from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
 
-def _load_dependencies(project_root: Path) -> dict[str, set[str]]:
-    pipeline_py = project_root / "workflow" / "modular" / "pipeline.py"
-    tree = ast.parse(pipeline_py.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            if node.target.id == "MODULE_DEPENDENCIES":
-                raw = ast.literal_eval(node.value)
-                return {k: set(v) for k, v in raw.items()}
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "MODULE_DEPENDENCIES":
-                    raw = ast.literal_eval(node.value)
-                    return {k: set(v) for k, v in raw.items()}
-    raise RuntimeError("Failed to load MODULE_DEPENDENCIES from pipeline.py")
+
+def _load_catalog(project_root: Path) -> tuple[dict[str, set[str]], list[str], list[str]]:
+    sys.path.insert(0, str(project_root))
+    try:
+        from workflow.modular.module_catalog import (
+            MANDATORY_MODULES,
+            module_dependencies,
+            optional_module_names,
+        )
+    finally:
+        try:
+            sys.path.remove(str(project_root))
+        except ValueError:
+            pass
+    return (
+        module_dependencies(),
+        list(MANDATORY_MODULES),
+        list(optional_module_names()),
+    )
 
 
 def _resolve_execution_order(
@@ -71,33 +76,11 @@ def _build_tiers(module_dependencies: dict[str, set[str]], order: list[str]) -> 
 
 def generate(out_png: Path, out_svg: Path) -> None:
     project_root = out_png.resolve().parents[1]
-    module_dependencies = _load_dependencies(project_root)
+    module_dependencies, mandatory, optional = _load_catalog(project_root)
     order = _resolve_execution_order(
         module_dependencies,
-        mandatory=["cellranger", "qc", "doublet_detection"],
-        optional=[
-            "clustering",
-            "cell_cycle",
-            "batch_correction",
-            "differential_expression",
-            "annotation",
-            "trajectory",
-            "pseudo_velocity",
-            "rna_velocity",
-            "cnv_inference",
-            "pathway_analysis",
-            "cell_communication",
-            "gene_regulatory_network",
-            "validate_cbioportal",
-            "immune_phenotyping",
-            "tumor_microenvironment",
-            "gene_signature_scoring",
-            "evolution",
-            "pseudobulk_de",
-            "cell_fate",
-            "composition",
-            "metacell",
-        ],
+        mandatory=mandatory,
+        optional=optional,
     )
     tiers = _build_tiers(module_dependencies, order)
 
@@ -131,7 +114,7 @@ def generate(out_png: Path, out_svg: Path) -> None:
             ax.add_patch(arrow)
 
     for mod, (x, y) in node_pos.items():
-        if mod in {"cellranger", "qc", "doublet_detection"}:
+        if mod in set(mandatory):
             fc = "#d1fae5"
             ec = "#065f46"
         elif mod in {"batch_correction"}:
@@ -165,6 +148,11 @@ def generate(out_png: Path, out_svg: Path) -> None:
     fig.tight_layout()
     fig.savefig(out_png, dpi=220, bbox_inches="tight")
     fig.savefig(out_svg, dpi=220, bbox_inches="tight")
+    svg_text = out_svg.read_text(encoding="utf-8")
+    out_svg.write_text(
+        "\n".join(line.rstrip() for line in svg_text.splitlines()) + "\n",
+        encoding="utf-8",
+    )
     plt.close(fig)
 
 

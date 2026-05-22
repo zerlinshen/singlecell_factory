@@ -125,10 +125,13 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     ),
     "cnv_inference": ModuleSpec(
         name="cnv_inference",
-        depends_on=("clustering",),
+        depends_on=("annotation",),
         layer="genomic_optional",
         modality="copy_number",
-        description="CNV inference lane; keep scale-safe before full cohorts.",
+        description=(
+            "CNV inference lane; runs after annotation so epithelial/tumor calls "
+            "and normal-reference groups are auditable before CNV classification."
+        ),
     ),
     "pathway_analysis": ModuleSpec(
         name="pathway_analysis",

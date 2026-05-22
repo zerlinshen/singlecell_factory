@@ -174,6 +174,7 @@ class ClusteringModule:
         if _engine_pre_gpu == "sparse_exact":
             self._run_sparse_exact(adata, cfg, ctx)
             use_gpu = False
+            self._write_resolution_sweep_audit(adata, ctx, cfg)
             self._plot_umap_clusters(adata, ctx)
             ctx.adata = adata
             ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
@@ -272,6 +273,7 @@ class ClusteringModule:
         else:
             self._run_cpu(adata, cfg, ctx)
 
+        self._write_resolution_sweep_audit(adata, ctx, cfg)
         self._plot_umap_clusters(adata, ctx)
         ctx.adata = adata
         ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
@@ -571,6 +573,66 @@ class ClusteringModule:
         # Record how many PCs needed for 90% variance
         pcs_for_90 = int(np.searchsorted(cumulative, 0.9) + 1)
         ctx.metadata["pca_cumulative_var_90pct"] = min(pcs_for_90, n_pcs)
+
+    @staticmethod
+    def _write_resolution_sweep_audit(adata, ctx: PipelineContext, cfg) -> None:
+        """Write optional Leiden resolution diagnostics without changing final labels."""
+        sweep = tuple(getattr(cfg, "leiden_resolution_sweep", ()) or ())
+        if not sweep:
+            ctx.metadata["leiden_resolution_sweep_status"] = "skipped_not_requested"
+            return
+        if "neighbors" not in adata.uns:
+            ctx.metadata["leiden_resolution_sweep_status"] = "skipped_missing_neighbors"
+            return
+
+        original = adata.obs["leiden"].copy() if "leiden" in adata.obs else None
+        rows = []
+        for resolution in sweep:
+            key = f"leiden_res_{str(resolution).replace('.', 'p')}"
+            try:
+                sc.tl.leiden(
+                    adata,
+                    resolution=float(resolution),
+                    key_added=key,
+                    flavor="igraph",
+                    directed=False,
+                    random_state=cfg.random_state,
+                )
+            except TypeError:
+                sc.tl.leiden(
+                    adata,
+                    resolution=float(resolution),
+                    flavor="igraph",
+                    directed=False,
+                    random_state=cfg.random_state,
+                )
+                adata.obs[key] = adata.obs["leiden"].copy()
+                if original is not None:
+                    adata.obs["leiden"] = original.copy()
+            labels = adata.obs[key].astype(str)
+            sizes = labels.value_counts()
+            small_cluster_threshold = max(10, int(round(adata.n_obs * 0.005)))
+            small_cells = int(sizes[sizes < small_cluster_threshold].sum())
+            rows.append(
+                {
+                    "resolution": float(resolution),
+                    "n_clusters": int(sizes.shape[0]),
+                    "min_cluster_size": int(sizes.min()),
+                    "median_cluster_size": float(sizes.median()),
+                    "max_cluster_size": int(sizes.max()),
+                    "small_cluster_threshold_cells": int(small_cluster_threshold),
+                    "small_cluster_cell_pct": round(
+                        float(small_cells) / max(int(adata.n_obs), 1) * 100.0,
+                        3,
+                    ),
+                }
+            )
+
+        if original is not None:
+            adata.obs["leiden"] = original
+        pd.DataFrame(rows).to_csv(ctx.table_dir / "leiden_resolution_sweep.csv", index=False)
+        ctx.metadata["leiden_resolution_sweep_status"] = "completed"
+        ctx.metadata["leiden_resolution_sweep_values"] = [float(v) for v in sweep]
 
     @staticmethod
     def _plot_umap_clusters(adata, ctx: PipelineContext) -> None:

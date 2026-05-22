@@ -169,6 +169,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-pcs", type=int, default=40)
     parser.add_argument("--n-neighbors", type=int, default=15)
     parser.add_argument("--leiden-resolution", type=float, default=0.8)
+    parser.add_argument(
+        "--leiden-resolution-sweep",
+        default="",
+        help=(
+            "Comma-separated diagnostic Leiden resolutions to audit, e.g. 0.5,0.8,1.0. "
+            "Writes clustering/leiden_resolution_sweep.csv without changing --leiden-resolution."
+        ),
+    )
     parser.add_argument("--scale-data", action="store_true", help="Apply sc.pp.scale() before PCA")
     parser.add_argument(
         "--gpu-mode",
@@ -625,6 +633,27 @@ def _load_markers(markers_json: str) -> dict[str, list[str]]:
     return {str(k): [str(g) for g in v] for k, v in payload.items()}
 
 
+def _parse_resolution_sweep(value: str) -> tuple[float, ...]:
+    if not value:
+        return ()
+    parsed: list[float] = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            resolution = float(token)
+        except ValueError as exc:
+            raise SystemExit(f"Error: invalid --leiden-resolution-sweep token: {token!r}") from exc
+        if resolution <= 0:
+            raise SystemExit(
+                "Error: --leiden-resolution-sweep values must be > 0, "
+                f"got {resolution}"
+            )
+        parsed.append(resolution)
+    return tuple(dict.fromkeys(parsed))
+
+
 def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
     """Expand scale_mode preset into capability flags, then apply numeric tuning.
 
@@ -867,6 +896,7 @@ def main() -> None:
             n_pcs=args.n_pcs,
             n_neighbors=args.n_neighbors,
             leiden_resolution=args.leiden_resolution,
+            leiden_resolution_sweep=_parse_resolution_sweep(args.leiden_resolution_sweep),
             scale_data=args.scale_data,
         ),
         batch=BatchConfig(

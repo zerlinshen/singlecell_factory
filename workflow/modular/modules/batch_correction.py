@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import warnings
@@ -10,6 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from ._scanpy_compat import import_scanpy_or_stub
 from scipy import sparse
+from sklearn.neighbors import NearestNeighbors
 
 sc = import_scanpy_or_stub()
 
@@ -147,6 +149,19 @@ class BatchCorrectionModule:
         ctx.metadata["batch_method"] = cfg.method
         ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
 
+        mixing_audit = {
+            "method": cfg.method,
+            "batch_key": batch_key,
+            "interpretation": (
+                "Higher normalized batch entropy and lower same-batch neighbor fraction after "
+                "correction support better global batch mixing. Interpret this alongside "
+                "cell-type markers; a batch remaining separated within the same cell type "
+                "suggests residual batch effect, while different biological cell types should "
+                "remain separable."
+            ),
+            "before": self._compute_batch_mixing_metrics(adata, batch_key, "X_pca"),
+        }
+
         # Pre-correction UMAP (for comparison)
         if "X_umap" in adata.obsm:
             sc.pl.umap(adata, color=[batch_key], show=False)
@@ -198,6 +213,7 @@ class BatchCorrectionModule:
             use_rep = "X_fastmnn"
 
         use_gpu = gpu_available(ctx.cfg.gpu_mode)
+        post_processing_ok = False
         if use_gpu:
             try:
                 import rapids_singlecell as rsc
@@ -217,8 +233,12 @@ class BatchCorrectionModule:
                         compute_fn=lambda: rsc.pp.neighbors(adata, use_rep=use_rep),
                     )
                 rsc.tl.umap(adata, random_state=ctx.cfg.clustering.random_state)
-                rsc.tl.leiden(adata, resolution=ctx.cfg.clustering.leiden_resolution,
-                              random_state=ctx.cfg.clustering.random_state)
+                rsc.tl.leiden(
+                    adata,
+                    resolution=ctx.cfg.clustering.leiden_resolution,
+                    random_state=ctx.cfg.clustering.random_state,
+                )
+                post_processing_ok = True
             except Exception as exc:
                 if ctx.cfg.gpu_mode == "force":
                     raise RuntimeError(f"GPU batch post-processing failed in force mode: {exc}") from exc
@@ -250,6 +270,7 @@ class BatchCorrectionModule:
                     directed=False,
                     random_state=ctx.cfg.clustering.random_state,
                 )
+                post_processing_ok = True
             except Exception as exc:
                 # Keep prior clustering outputs rather than failing the module.
                 logger.warning(
@@ -261,6 +282,14 @@ class BatchCorrectionModule:
         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique()) if "leiden" in adata.obs else 0
         ctx.metadata["batch_correction_status"] = "completed"
         ctx.metadata["batch_correction_random_state"] = ctx.random_state
+        if post_processing_ok:
+            self._write_corrected_resolution_sweep(adata, ctx, use_rep)
+        elif getattr(ctx.cfg.clustering, "leiden_resolution_sweep", ()):
+            ctx.metadata["leiden_resolution_sweep_status"] = (
+                "skipped_batch_post_processing_failed"
+            )
+        mixing_audit["after"] = self._compute_batch_mixing_metrics(adata, batch_key, use_rep)
+        self._write_batch_mixing_audit(ctx, mixing_audit)
 
         # Post-correction UMAP
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -271,6 +300,96 @@ class BatchCorrectionModule:
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "umap_batch_after.png", dpi=160, bbox_inches="tight")
         plt.close()
+
+    @staticmethod
+    def _compute_batch_mixing_metrics(
+        adata,
+        batch_key: str,
+        use_rep: str,
+        n_neighbors: int = 15,
+    ) -> dict:
+        if use_rep not in adata.obsm:
+            return {"status": "skipped_missing_representation", "use_rep": use_rep}
+        if batch_key not in adata.obs:
+            return {"status": "skipped_missing_batch_key", "use_rep": use_rep}
+
+        x = np.asarray(adata.obsm[use_rep])
+        labels = adata.obs[batch_key].astype(str).to_numpy()
+        finite = np.isfinite(x).all(axis=1)
+        x = x[finite]
+        labels = labels[finite]
+        n_cells = int(labels.shape[0])
+        batch_levels = np.array(sorted(set(labels.tolist())))
+        n_batches = int(batch_levels.shape[0])
+        if n_cells < 3 or n_batches < 2:
+            return {
+                "status": "skipped_insufficient_cells_or_batches",
+                "use_rep": use_rep,
+                "n_cells": n_cells,
+                "n_batches": n_batches,
+            }
+
+        k = min(int(n_neighbors) + 1, n_cells)
+        nn = NearestNeighbors(n_neighbors=k, metric="euclidean")
+        nn.fit(x)
+        neighbor_idx = nn.kneighbors(x, return_distance=False)
+        if neighbor_idx.shape[1] > 1 and np.array_equal(neighbor_idx[:, 0], np.arange(n_cells)):
+            neighbor_idx = neighbor_idx[:, 1:]
+        else:
+            neighbor_idx = neighbor_idx[:, : min(int(n_neighbors), neighbor_idx.shape[1])]
+        if neighbor_idx.shape[1] == 0:
+            return {
+                "status": "skipped_no_neighbors",
+                "use_rep": use_rep,
+                "n_cells": n_cells,
+                "n_batches": n_batches,
+            }
+
+        neighbor_labels = labels[neighbor_idx]
+        same_batch_fraction = float((neighbor_labels == labels[:, None]).mean())
+        level_index = {label: idx for idx, label in enumerate(batch_levels)}
+        entropies = []
+        for row in neighbor_labels:
+            counts = np.zeros(n_batches, dtype=float)
+            for label in row:
+                counts[level_index[label]] += 1.0
+            probs = counts[counts > 0] / counts.sum()
+            entropy = -float(np.sum(probs * np.log(probs))) / float(np.log(n_batches))
+            entropies.append(entropy)
+        return {
+            "status": "ok",
+            "use_rep": use_rep,
+            "n_cells": n_cells,
+            "n_batches": n_batches,
+            "n_neighbors_effective": int(neighbor_idx.shape[1]),
+            "same_batch_neighbor_fraction": round(same_batch_fraction, 6),
+            "normalized_batch_entropy": round(float(np.mean(entropies)), 6),
+        }
+
+    @staticmethod
+    def _write_batch_mixing_audit(ctx: PipelineContext, audit: dict) -> None:
+        (ctx.table_dir / "batch_mixing_metrics.json").write_text(
+            json.dumps(audit, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        for phase in ("before", "after"):
+            metrics = audit.get(phase, {})
+            if metrics.get("status") != "ok":
+                continue
+            ctx.metadata[f"batch_mixing_{phase}_same_batch_neighbor_fraction"] = metrics[
+                "same_batch_neighbor_fraction"
+            ]
+            ctx.metadata[f"batch_mixing_{phase}_normalized_batch_entropy"] = metrics[
+                "normalized_batch_entropy"
+            ]
+
+    @staticmethod
+    def _write_corrected_resolution_sweep(adata, ctx: PipelineContext, use_rep: str) -> None:
+        from .clustering import ClusteringModule
+
+        ClusteringModule._write_resolution_sweep_audit(adata, ctx, ctx.cfg.clustering)
+        if ctx.metadata.get("leiden_resolution_sweep_status") == "completed":
+            ctx.metadata["leiden_resolution_sweep_representation"] = use_rep
 
     @staticmethod
     def _resolve_harmony_backend(ctx) -> str:

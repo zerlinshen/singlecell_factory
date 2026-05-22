@@ -50,6 +50,7 @@ class CNVInferenceModule:
     """
 
     name = "cnv_inference"
+    requires_keys = {"obs": ["cell_type"]}
     provides_keys = {"obs": ["cnv_score"], "obsm": ["X_cnv"]}
 
     def run(self, ctx: PipelineContext) -> None:
@@ -74,6 +75,7 @@ class CNVInferenceModule:
 
         cfg = ctx.cfg.cnv
         reference_group = cfg.reference_group  # e.g., "Fibroblast" or None
+        self._write_annotation_gate(adata, ctx, reference_group)
 
         # Attempt to load chromosome position annotations
         gene_pos = self._get_gene_positions(adata)
@@ -230,6 +232,47 @@ class CNVInferenceModule:
                 "malignant_count": ctx.metadata["cnv_malignant_cells"],
                 "normal_count": int((adata.obs["cnv_class"] == "Normal").sum()),
             }, indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _write_annotation_gate(adata, ctx: PipelineContext, reference_group: str | None) -> None:
+        if "cell_type" not in adata.obs:
+            payload = {
+                "status": "missing_cell_type",
+                "reference_group": reference_group,
+                "message": (
+                    "Pipeline DAG requires annotation before cnv_inference; direct module "
+                    "runs without cell_type use global centering only."
+                ),
+            }
+            ctx.metadata["cnv_annotation_gate_status"] = "missing_cell_type"
+            (ctx.table_dir / "cnv_annotation_qc.json").write_text(
+                json.dumps(payload, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            return
+
+        counts = adata.obs["cell_type"].astype(str).value_counts().to_dict()
+        reference_cells = int(counts.get(str(reference_group), 0)) if reference_group else None
+        reference_status = "not_requested"
+        if reference_group:
+            reference_status = (
+                "usable"
+                if int(reference_cells or 0) > 10
+                else "insufficient_cells_global_mean"
+            )
+        payload = {
+            "status": "present",
+            "reference_group": reference_group,
+            "reference_group_cells": reference_cells,
+            "reference_group_status": reference_status,
+            "cell_type_counts": {str(k): int(v) for k, v in counts.items()},
+        }
+        ctx.metadata["cnv_annotation_gate_status"] = "present"
+        ctx.metadata["cnv_reference_group_status"] = reference_status
+        (ctx.table_dir / "cnv_annotation_qc.json").write_text(
+            json.dumps(payload, indent=2, sort_keys=True),
             encoding="utf-8",
         )
 
