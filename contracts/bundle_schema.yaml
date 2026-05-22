@@ -494,7 +494,9 @@ extensions_v22:
       A/B compartments produced by hic_ingest/hic_tad and exported when
       --schema-version v2.2 --include-hic is used. R-side loaders must return
       NULL for absent payloads and must not treat .hic/.cool/TSV formats as
-      interchangeable without upstream validation.
+      interchangeable without upstream validation. Low-information chromosomes
+      are labeled low_information in the compartments table and in
+      hic_tad_metadata so plotting layers do not render them as A/B calls.
     columns:
       bins:
         - bin_id
@@ -517,6 +519,25 @@ extensions_v22:
         - position
         - eigenvector_1
         - compartment
+    metadata:
+      hic_tad_metadata:
+        description: >
+          Claim-safety status for A/B compartment calls. hic_tad writes this
+          after per-chromosome low-information screening; the exporter emits
+          unknown_or_unvalidated when HIC compartment tables are supplied
+          without module metadata.
+        fields:
+          compartment_status:
+            type: enum
+            values:
+              - confident
+              - partial_low_information
+              - low_information
+              - unknown_or_unvalidated
+          low_information_chromosomes:
+            type: list<string>
+          compartment_status_by_chrom:
+            type: map<string,string>
     table:
       bins_path: "extensions/hic/bins.parquet"
       contacts_path: "extensions/hic/contacts.parquet"

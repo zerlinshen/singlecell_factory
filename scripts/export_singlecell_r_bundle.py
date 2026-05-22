@@ -169,6 +169,14 @@ class ExportConfig:
 KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm", "marker_resolutions", "atac", "hic")
 
 
+def _unknown_hic_tad_metadata() -> dict[str, object]:
+    return {
+        "compartment_status": "unknown_or_unvalidated",
+        "low_information_chromosomes": [],
+        "compartment_status_by_chrom": {},
+    }
+
+
 def add_extension(manifest, name, *, version, files, claim_guard=CLAIM_GUARD, **fields):
     """Register an optional bundle extension on a manifest dict.
 
@@ -813,9 +821,13 @@ def _normalize_hic_optional_table(raw_table, bins_df: pd.DataFrame, kind: str) -
         if "compartment" not in df.columns:
             df["compartment"] = np.where(df["eigenvector_1"] >= 0, "A", "B")
         df["compartment"] = df["compartment"].astype(str)
-        bad = set(df["compartment"].dropna().unique()) - {"A", "B"}
+        allowed_compartments = {"A", "B", "low_information"}
+        bad = set(df["compartment"].dropna().unique()) - allowed_compartments
         if bad:
-            raise ValueError(f"Hi-C compartments must be A/B labels; observed {sorted(bad)}")
+            raise ValueError(
+                "Hi-C compartments must be A/B/low_information labels; "
+                f"observed {sorted(bad)}"
+            )
 
     return df[columns].sort_values("bin_id").reset_index(drop=True)
 
@@ -902,14 +914,15 @@ def maybe_export_hic(
     ingest_meta = uns.get("hic_ingest_metadata")
     if not isinstance(ingest_meta, dict):
         ingest_meta = {}
+    hic_tad_metadata = uns.get("hic_tad_metadata")
+    if isinstance(hic_tad_metadata, dict):
+        hic_tad_metadata = _coerce_jsonable(hic_tad_metadata)
+    else:
+        hic_tad_metadata = _unknown_hic_tad_metadata()
 
-    return add_extension(
-        manifest,
-        "hic",
-        version="1.0",
-        files=["hic_bins", "hic_contacts", "hic_boundaries", "hic_compartments"],
-        status="active",
-        table={
+    extension_fields = {
+        "status": "active",
+        "table": {
             "bins_path": "extensions/hic/bins.parquet",
             "contacts_path": "extensions/hic/contacts.parquet",
             "boundaries_path": "extensions/hic/boundaries.parquet",
@@ -919,16 +932,25 @@ def maybe_export_hic(
             "contact_col_column": "col",
             "contact_count_column": "count",
         },
-        n_bins=int(bins_df.shape[0]),
-        n_contacts=int(contacts_df.shape[0]),
-        n_boundaries=int(boundaries_df.shape[0]),
-        n_boundary_bins=int(boundaries_df["is_boundary"].sum()) if "is_boundary" in boundaries_df else 0,
-        n_compartments=int(compartments_df.shape[0]),
-        resolution_bp=int(ingest_meta["resolution_bp"]) if "resolution_bp" in ingest_meta else None,
-        method="sparse_contact_tad_compartment",
-        normalization=str(ingest_meta.get("normalization", "raw_counts_or_unbalanced")),
-        matrix_format=str(ingest_meta.get("matrix_format", "csr_sparse")),
-        max_contacts=int(max_contacts),
+        "n_bins": int(bins_df.shape[0]),
+        "n_contacts": int(contacts_df.shape[0]),
+        "n_boundaries": int(boundaries_df.shape[0]),
+        "n_boundary_bins": int(boundaries_df["is_boundary"].sum()) if "is_boundary" in boundaries_df else 0,
+        "n_compartments": int(compartments_df.shape[0]),
+        "resolution_bp": int(ingest_meta["resolution_bp"]) if "resolution_bp" in ingest_meta else None,
+        "method": "sparse_contact_tad_compartment",
+        "normalization": str(ingest_meta.get("normalization", "raw_counts_or_unbalanced")),
+        "matrix_format": str(ingest_meta.get("matrix_format", "csr_sparse")),
+        "max_contacts": int(max_contacts),
+    }
+    extension_fields["hic_tad_metadata"] = hic_tad_metadata
+
+    return add_extension(
+        manifest,
+        "hic",
+        version="1.0",
+        files=["hic_bins", "hic_contacts", "hic_boundaries", "hic_compartments"],
+        **extension_fields,
     )
 
 
@@ -936,9 +958,13 @@ def _coerce_jsonable(value):
     """Best-effort coercion of small uns metadata values into JSON-friendly types."""
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return [_coerce_jsonable(v) for v in value.tolist()]
     if isinstance(value, (bytes, bytearray)):
         # Reject silently dropping binary metadata into the manifest.
-        raise ValueError("spatial coord_system metadata must not contain bytes.")
+        raise ValueError("bundle extension metadata must not contain bytes.")
     if isinstance(value, dict):
         return {str(k): _coerce_jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import gzip
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -100,8 +101,114 @@ def test_hic_tad_finds_boundary_between_two_tads(synthetic_adata, synthetic_cont
     assert "position" in boundaries.columns
     assert "compartment" in compartments.columns
     assert "position" in compartments.columns
-    assert set(compartments["compartment"].unique()).issubset({"A", "B"})
+    assert set(compartments["compartment"].unique()).issubset({"A", "B", "low_information"})
     assert ctx.metadata["hic_tad_status"] == "ok"
+    assert "hic_tad_metadata" in synthetic_adata.uns
+    assert synthetic_adata.uns["hic_tad_metadata"]["compartment_status"] in {
+        "confident",
+        "partial_low_information",
+        "low_information",
+    }
+
+
+def test_hic_tad_marks_low_information_chromosomes_without_warnings(synthetic_adata, tmp_path):
+    from workflow.modular.modules.hic_tad import HiCTADModule
+
+    bins = pd.DataFrame(
+        {
+            "bin_id": np.arange(10, dtype=np.int64),
+            "chrom": ["chr1"] * 5 + ["chr2"] * 5,
+            "start": np.tile(np.arange(0, 5000, 1000, dtype=np.int64), 2),
+            "end": np.tile(np.arange(1000, 6000, 1000, dtype=np.int64), 2),
+        }
+    )
+    informative = np.array(
+        [
+            [8, 2, 1, 0, 0],
+            [2, 7, 2, 1, 0],
+            [1, 2, 9, 2, 1],
+            [0, 1, 2, 6, 3],
+            [0, 0, 1, 3, 5],
+        ],
+        dtype=np.float32,
+    )
+    zero_chrom = np.zeros((5, 5), dtype=np.float32)
+    synthetic_adata.uns["hic_bins"] = bins
+    synthetic_adata.uns["hic_contact_matrix"] = sp.block_diag((informative, zero_chrom), format="csr")
+
+    cfg = SimpleNamespace(hic_tad_window_bins=1, hic_tad_boundary_k=0.5)
+    ctx = SimpleNamespace(
+        adata=synthetic_adata,
+        cfg=cfg,
+        random_state=42,
+        run_dir=tmp_path,
+        metadata={},
+        status=lambda *a, **k: None,
+    )
+    HiCTADModule().run(ctx)
+
+    meta = synthetic_adata.uns["hic_tad_metadata"]
+    assert meta["compartment_status"] == "partial_low_information"
+    assert meta["low_information_chromosomes"] == ["chr2"]
+    assert meta["compartment_status_by_chrom"] == {"chr1": "confident", "chr2": "low_information"}
+    assert ctx.metadata["hic_tad_metadata"] == meta
+
+    compartments = synthetic_adata.uns["hic_compartments"]
+    chr2_scores = compartments.loc[compartments["chrom"] == "chr2", "eigenvector_1"].to_numpy()
+    assert np.allclose(chr2_scores, 0.0)
+    assert set(compartments.loc[compartments["chrom"] == "chr2", "compartment"]) == {"low_information"}
+
+    summary = json.loads((tmp_path / "hic_tad" / "tad_summary.json").read_text())
+    assert summary["hic_tad_metadata"]["compartment_status"] == "partial_low_information"
+    assert ctx.metadata["hic_tad_status"] == "ok"
+
+
+def test_hic_tad_marks_eigendecomposition_failure_low_information(synthetic_adata, tmp_path, monkeypatch):
+    from workflow.modular.modules.hic_tad import HiCTADModule
+
+    bins = pd.DataFrame(
+        {
+            "bin_id": np.arange(5, dtype=np.int64),
+            "chrom": ["chr1"] * 5,
+            "start": np.arange(0, 5000, 1000, dtype=np.int64),
+            "end": np.arange(1000, 6000, 1000, dtype=np.int64),
+        }
+    )
+    contact_matrix = np.array(
+        [
+            [8, 2, 1, 0, 0],
+            [2, 7, 2, 1, 0],
+            [1, 2, 9, 2, 1],
+            [0, 1, 2, 6, 3],
+            [0, 0, 1, 3, 5],
+        ],
+        dtype=np.float32,
+    )
+    synthetic_adata.uns["hic_bins"] = bins
+    synthetic_adata.uns["hic_contact_matrix"] = sp.csr_matrix(contact_matrix)
+
+    def raise_linalg_error(_corr):
+        raise np.linalg.LinAlgError("forced eigendecomposition failure")
+
+    monkeypatch.setattr(np.linalg, "eigh", raise_linalg_error)
+
+    cfg = SimpleNamespace(hic_tad_window_bins=1, hic_tad_boundary_k=0.5)
+    ctx = SimpleNamespace(
+        adata=synthetic_adata,
+        cfg=cfg,
+        random_state=42,
+        run_dir=tmp_path,
+        metadata={},
+        status=lambda *a, **k: None,
+    )
+    HiCTADModule().run(ctx)
+
+    meta = synthetic_adata.uns["hic_tad_metadata"]
+    assert meta["compartment_status"] == "low_information"
+    assert meta["low_information_chromosomes"] == ["chr1"]
+    assert meta["compartment_status_by_chrom"] == {"chr1": "low_information"}
+    assert np.allclose(synthetic_adata.uns["hic_compartments"]["eigenvector_1"].to_numpy(), 0.0)
+    assert set(synthetic_adata.uns["hic_compartments"]["compartment"]) == {"low_information"}
 
 
 def test_hic_ingest_skips_without_contacts(synthetic_adata, tmp_path):
@@ -150,6 +257,12 @@ def test_hic_slot_active_after_bundle_vertical_slice():
     assert hic["status"] == "active"
     assert "table" in hic
     assert "contacts_path" in hic["table"]
+    assert hic["metadata"]["hic_tad_metadata"]["fields"]["compartment_status"]["values"] == [
+        "confident",
+        "partial_low_information",
+        "low_information",
+        "unknown_or_unvalidated",
+    ]
 
 
 def test_r_extension_registry_includes_hic():
@@ -172,9 +285,11 @@ def test_r_hic_module_present():
 def test_hic_modules_in_registry():
     from workflow.modular.pipeline import _build_registry, MUTATING_MODULES, _resolve_execution_order
     from workflow.modular.module_catalog import MANDATORY_MODULES
+    from workflow.modular.modules.hic_tad import HiCTADModule
     reg = _build_registry()
     for name in ("hic_ingest", "hic_tad"):
         assert name in reg
         assert name not in MUTATING_MODULES
+    assert "hic_tad_metadata" in HiCTADModule.provides_keys["uns"]
     order = _resolve_execution_order(list(MANDATORY_MODULES), ["hic_ingest", "hic_tad"])
     assert order.index("hic_tad") > order.index("hic_ingest")

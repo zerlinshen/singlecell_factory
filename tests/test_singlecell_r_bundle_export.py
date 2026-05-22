@@ -96,6 +96,11 @@ def make_tiny_h5ad(path: Path, include_pca: bool = True, include_hic: bool = Fal
             "input_format": "tsv_contact_pairs",
             "normalization": "raw_counts_or_unbalanced",
         }
+        adata.uns["hic_tad_metadata"] = {
+            "compartment_status": "confident",
+            "low_information_chromosomes": [],
+            "compartment_status_by_chrom": {"chr1": "confident"},
+        }
     adata.write_h5ad(path)
 
 
@@ -250,6 +255,9 @@ def test_export_bundle_v22_hic_extension(tmp_path: Path) -> None:
     assert hic_ext["n_boundary_bins"] == 1
     assert hic_ext["resolution_bp"] == 1000
     assert hic_ext["table"]["contacts_path"] == "extensions/hic/contacts.parquet"
+    assert hic_ext["hic_tad_metadata"]["compartment_status"] == "confident"
+    assert hic_ext["hic_tad_metadata"]["low_information_chromosomes"] == []
+    assert hic_ext["hic_tad_metadata"]["compartment_status_by_chrom"] == {"chr1": "confident"}
     for stem in ("hic_bins", "hic_contacts", "hic_boundaries", "hic_compartments"):
         assert stem in manifest["files"]
         assert stem in manifest["bundle"]["required_files"]
@@ -263,6 +271,68 @@ def test_export_bundle_v22_hic_extension(tmp_path: Path) -> None:
     assert boundaries.loc[boundaries["bin_id"] == 1, "position"].item() == 1500
     compartments = pd.read_parquet(out_dir / "extensions" / "hic" / "compartments.parquet")
     assert set(compartments["compartment"]) == {"A", "B"}
+
+
+def test_export_bundle_v22_hic_extension_marks_missing_tad_metadata_unknown(tmp_path: Path) -> None:
+    input_path = tmp_path / "tiny_hic_without_metadata.h5ad"
+    out_dir = tmp_path / "bundle_v22_hic_unknown"
+    make_tiny_h5ad(input_path, include_hic=True)
+    adata = ad.read_h5ad(input_path)
+    del adata.uns["hic_tad_metadata"]
+    adata.write_h5ad(input_path)
+
+    manifest = export_bundle(
+        ExportConfig(
+            input_h5ad=input_path,
+            output_dir=out_dir,
+            schema_version="v2.2",
+            format="parquet",
+            markers=("CD3E", "LYZ"),
+            include_hic=True,
+            hic_max_contacts=100,
+        )
+    )
+
+    assert manifest["extensions"]["hic"]["hic_tad_metadata"] == {
+        "compartment_status": "unknown_or_unvalidated",
+        "low_information_chromosomes": [],
+        "compartment_status_by_chrom": {},
+    }
+
+
+def test_export_bundle_v22_hic_extension_allows_low_information_compartment_label(tmp_path: Path) -> None:
+    input_path = tmp_path / "tiny_hic_low_information.h5ad"
+    out_dir = tmp_path / "bundle_v22_hic_low_information"
+    make_tiny_h5ad(input_path, include_hic=True)
+    adata = ad.read_h5ad(input_path)
+    compartments = adata.uns["hic_compartments"].copy()
+    compartments.loc[compartments["bin_id"].isin([2, 3]), "eigenvector_1"] = 0.0
+    compartments.loc[compartments["bin_id"].isin([2, 3]), "compartment"] = "low_information"
+    adata.uns["hic_compartments"] = compartments
+    adata.uns["hic_tad_metadata"] = {
+        "compartment_status": "partial_low_information",
+        "low_information_chromosomes": ["chr1"],
+        "compartment_status_by_chrom": {"chr1": "low_information"},
+    }
+    adata.write_h5ad(input_path)
+
+    manifest = export_bundle(
+        ExportConfig(
+            input_h5ad=input_path,
+            output_dir=out_dir,
+            schema_version="v2.2",
+            format="parquet",
+            markers=("CD3E", "LYZ"),
+            include_hic=True,
+            hic_max_contacts=100,
+        )
+    )
+
+    hic_ext = manifest["extensions"]["hic"]
+    exported = pd.read_parquet(out_dir / "extensions" / "hic" / "compartments.parquet")
+    assert "low_information" in set(exported["compartment"])
+    assert hic_ext["hic_tad_metadata"]["compartment_status"] == "partial_low_information"
+    assert hic_ext["hic_tad_metadata"]["low_information_chromosomes"] == ["chr1"]
 
 
 def test_export_bundle_hic_requires_v22_and_contact_cap(tmp_path: Path) -> None:

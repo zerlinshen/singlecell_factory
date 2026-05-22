@@ -1197,10 +1197,17 @@ Known extension keys:
 v2.2 still reserves `vdj` and `ribo` in `contracts/bundle_schema.yaml`. HIC is
 active only when the source AnnData carries `hic_contact_matrix` + `hic_bins`
 from `hic_ingest`, and optional `hic_tad_boundaries` / `hic_compartments` from
-`hic_tad`. `.hic`, `.cool/.mcool`, and sparse TSV formats are not treated as
-interchangeable: the production ingest reads `.cool/.mcool` via optional
-`cooler` or validated TSV contact-pairs, while `.hic` must be converted or
-handled in an isolated paper-reproduction lane first. Module rationale and
+`hic_tad`. `hic_tad` also writes `hic_tad_metadata` with
+`compartment_status` (`confident`, `partial_low_information`,
+`low_information`, or exporter-only `unknown_or_unvalidated`) so low-contact
+chromosomes or legacy/manual compartment tables are carried as explicit claim
+limits instead of silent A/B compartment calls. Low-information chromosomes are
+also labeled `low_information` in the compartments table so downstream figures
+cannot infer A from a zero eigenvector. `.hic`, `.cool/.mcool`, and sparse TSV
+formats are not treated as interchangeable: the production ingest reads
+`.cool/.mcool` via optional `cooler` or validated TSV contact-pairs, while
+`.hic` must be converted or handled in an isolated paper-reproduction lane
+first. Module rationale and
 literature support for active and reserved multi-omics slots are recorded in
 [docs/MULTIOMICS_MODULE_RATIONALE.md](docs/MULTIOMICS_MODULE_RATIONALE.md).
 

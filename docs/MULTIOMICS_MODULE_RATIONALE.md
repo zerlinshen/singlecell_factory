@@ -84,10 +84,16 @@ Supporting contracts:
   `cooler` or validated TSV contact-pairs, keeps contacts sparse, and records
   resolution/format metadata.
 - `workflow/modular/modules/hic_tad.py` writes insulation-score boundaries and
-  first-eigenvector A/B compartment tables with `position` coordinates.
+  first-eigenvector A/B compartment tables with `position` coordinates. It
+  records `hic_tad_metadata` so zero-contact or near-zero-variance chromosomes
+  are marked as `low_information` and receive deterministic zero compartment
+  scores plus `low_information` labels rather than unstable A/B calls.
 - `scripts/export_singlecell_r_bundle.py::maybe_export_hic(...)` writes
   `extensions/hic/{bins,contacts,boundaries,compartments}.parquet` only when
-  `--schema-version v2.2 --include-hic` is requested.
+  `--schema-version v2.2 --include-hic` is requested. It carries
+  `hic_tad_metadata` into the HIC extension manifest when present and emits
+  `unknown_or_unvalidated` for legacy/manual HIC compartments that lack module
+  metadata.
 - `r_multiomics_factory/R_bundle/io_bundle.R` attaches
   `bundle$extensions$hic$data`, and `r_multiomics_factory/R/hic_module.R`
   fails soft for absent/reserved slots.

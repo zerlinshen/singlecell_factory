@@ -163,6 +163,11 @@ def _make_tiny_hic_h5ad(
         "input_format": "tsv_contact_pairs",
         "normalization": "raw_counts_or_unbalanced",
     }
+    adata.uns["hic_tad_metadata"] = {
+        "compartment_status": "confident",
+        "low_information_chromosomes": [],
+        "compartment_status_by_chrom": {"chr1": "confident"},
+    }
     adata.write_h5ad(path)
 
 
@@ -1406,6 +1411,8 @@ def test_hic_extension_round_trip(rscript_path, tmp_path):
     assert hic_ext["n_bins"] == n_bins
     assert hic_ext["n_boundary_bins"] == 2
     assert hic_ext["table"]["contacts_path"] == "extensions/hic/contacts.parquet"
+    assert hic_ext["hic_tad_metadata"]["compartment_status"] == "confident"
+    assert hic_ext["hic_tad_metadata"]["compartment_status_by_chrom"] == {"chr1": "confident"}
     boundaries_df = pd.read_parquet(bundle_dir / "extensions" / "hic" / "boundaries.parquet")
     assert "position" in boundaries_df.columns
     assert int(boundaries_df.loc[boundaries_df["bin_id"] == 2, "position"].item()) == 2500
@@ -1417,7 +1424,12 @@ def test_hic_extension_round_trip(rscript_path, tmp_path):
         f"b <- read_bundle_v2('{bundle_dir_r}'); "
         f"m <- b$extensions$hic$metadata; "
         f"d <- b$extensions$hic$data; "
+        f"h <- load_hic_extension(b); "
         f"cat(sprintf('STATUS=%s\\n', m$status)); "
+        f"cat(sprintf('COMPARTMENT_STATUS=%s\\n', m$hic_tad_metadata$compartment_status)); "
+        f"cat(sprintf('LOW_INFO_N=%d\\n', length(m$hic_tad_metadata$low_information_chromosomes))); "
+        f"cat(sprintf('CHR1_STATUS=%s\\n', m$hic_tad_metadata$compartment_status_by_chrom$chr1)); "
+        f"cat(sprintf('LOAD_COMPARTMENT_STATUS=%s\\n', h$metadata$hic_tad_metadata$compartment_status)); "
         f"cat(sprintf('BINS_NROW=%d\\n', nrow(d$bins))); "
         f"cat(sprintf('CONTACTS_NROW=%d\\n', nrow(d$contacts))); "
         f"cat(sprintf('BOUNDARY_BINS=%d\\n', sum(d$boundaries$is_boundary))); "
@@ -1429,11 +1441,105 @@ def test_hic_extension_round_trip(rscript_path, tmp_path):
     _assert_r_ok(proc, "hic_round_trip")
     kv = _parse_kv_stdout(proc.stdout)
     assert kv["STATUS"] == "active"
+    assert kv["COMPARTMENT_STATUS"] == "confident"
+    assert int(kv["LOW_INFO_N"]) == 0
+    assert kv["CHR1_STATUS"] == "confident"
+    assert kv["LOAD_COMPARTMENT_STATUS"] == "confident"
     assert int(kv["BINS_NROW"]) == n_bins
     assert int(kv["CONTACTS_NROW"]) == hic_ext["n_contacts"]
     assert int(kv["BOUNDARY_BINS"]) == 2
     assert kv["COMPARTMENTS"] == "AB"
     assert "ggplot" in kv["PLOT_CLASS"]
+
+
+@pytest.mark.r_contract
+def test_hic_ab_plot_honors_low_information_metadata(rscript_path):
+    """A/B plotting must not render low-information or unknown rows as A/B calls."""
+    script = (
+        f"source('{HIC_MODULE_R}'); "
+        "bundle <- list(extensions=list(hic=list("
+        "metadata=list(status='active', hic_tad_metadata=list("
+        "compartment_status='partial_low_information', "
+        "low_information_chromosomes=c('chr2'), "
+        "compartment_status_by_chrom=list(chr1='confident', chr2='low_information'))), "
+        "data=list(compartments=data.frame("
+        "bin_id=0:3, chrom=c('chr1','chr1','chr2','chr2'), "
+        "eigenvector_1=c(0.3,-0.2,0,0), "
+        "compartment=c('A','B','low_information','low_information'), "
+        "stringsAsFactors=FALSE))))); "
+        "p <- plot_ab_compartments(bundle); "
+        "cat(sprintf('AB_COLORS=%s\\n', paste(sort(unique(p$data$ab_color)), collapse=','))); "
+        "cat(sprintf('LOW_INFO_N=%d\\n', sum(p$data$ab_color == 'low_information'))); "
+        "unknown_bundle <- list(extensions=list(hic=list("
+        "metadata=list(status='active', hic_tad_metadata=list("
+        "compartment_status='unknown_or_unvalidated', "
+        "low_information_chromosomes=c(), "
+        "compartment_status_by_chrom=list())), "
+        "data=list(compartments=data.frame("
+        "bin_id=0:1, eigenvector_1=c(0.3,-0.2), compartment=c('A','B'), "
+        "stringsAsFactors=FALSE))))); "
+        "p2 <- plot_ab_compartments(unknown_bundle); "
+        "cat(sprintf('UNKNOWN_COLORS=%s\\n', paste(sort(unique(p2$data$ab_color)), collapse=',')))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "hic_ab_plot_low_information")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["AB_COLORS"] == "A,B,low_information"
+    assert int(kv["LOW_INFO_N"]) == 2
+    assert kv["UNKNOWN_COLORS"] == "unknown_or_unvalidated"
+
+
+@pytest.mark.r_contract
+def test_exported_hic_low_information_round_trip_to_ab_plot(rscript_path, tmp_path):
+    """Python-exported low-information HIC compartments stay non-A/B in R plots."""
+    h5ad = tmp_path / "tiny_hic_low_information.h5ad"
+    bundle_dir = tmp_path / "bundle_v2_hic_low_information"
+    _make_tiny_hic_h5ad(h5ad, n_bins=6)
+    adata = ad.read_h5ad(h5ad)
+    compartments = adata.uns["hic_compartments"].copy()
+    compartments["eigenvector_1"] = 0.0
+    compartments["compartment"] = "low_information"
+    adata.uns["hic_compartments"] = compartments
+    adata.uns["hic_tad_metadata"] = {
+        "compartment_status": "low_information",
+        "low_information_chromosomes": ["chr1"],
+        "compartment_status_by_chrom": {"chr1": "low_information"},
+    }
+    adata.write_h5ad(h5ad)
+
+    export_bundle(
+        ExportConfig(
+            input_h5ad=h5ad,
+            output_dir=bundle_dir,
+            obs_columns=("cell_type", "leiden"),
+            markers=("CD3E", "LYZ"),
+            obsm_keys=("X_umap", "X_pca"),
+            schema_version="v2.2",
+            format="parquet",
+            include_hic=True,
+            hic_max_contacts=100,
+        )
+    )
+
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    script = (
+        f"source('{IO_BUNDLE_R}'); "
+        f"source('{HIC_MODULE_R}'); "
+        f"b <- read_bundle_v2('{bundle_dir_r}'); "
+        f"h <- load_hic_extension(b); "
+        f"p <- plot_ab_compartments(b); "
+        f"cat(sprintf('LOAD_COMPARTMENT_STATUS=%s\\n', h$metadata$hic_tad_metadata$compartment_status)); "
+        f"cat(sprintf('PARQUET_COMPARTMENTS=%s\\n', paste(sort(unique(h$compartments$compartment)), collapse=','))); "
+        f"cat(sprintf('PLOT_COLORS=%s\\n', paste(sort(unique(p$data$ab_color)), collapse=','))); "
+        f"cat(sprintf('LOW_INFO_N=%d\\n', sum(p$data$ab_color == 'low_information')))"
+    )
+    proc = _run_r(rscript_path, script)
+    _assert_r_ok(proc, "exported_hic_low_information_plot")
+    kv = _parse_kv_stdout(proc.stdout)
+    assert kv["LOAD_COMPARTMENT_STATUS"] == "low_information"
+    assert kv["PARQUET_COMPARTMENTS"] == "low_information"
+    assert kv["PLOT_COLORS"] == "low_information"
+    assert int(kv["LOW_INFO_N"]) == 6
 
 
 def test_multimodal_module_off_by_default(tmp_path):

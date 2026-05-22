@@ -6,7 +6,8 @@ the first eigenvector of the per-chromosome correlation matrix.
 
 Outputs:
   adata.uns["hic_tad_boundaries"]  DataFrame: bin_id, chrom, position, insulation, is_boundary
-  adata.uns["hic_compartments"]    DataFrame: bin_id, chrom, position, eigenvector_1, compartment ("A"|"B")
+  adata.uns["hic_compartments"]    DataFrame: bin_id, chrom, position, eigenvector_1, compartment ("A"|"B"|"low_information")
+  adata.uns["hic_tad_metadata"]    Dict: per-chromosome A/B compartment claim-safety status
   runs/<run-id>/hic_tad/tad_summary.json
 """
 from __future__ import annotations
@@ -111,17 +112,39 @@ def _detect_boundaries(insulation: np.ndarray, k: float = 1.0) -> np.ndarray:
     return boundaries
 
 
-def _ab_compartments(mat: sp.csr_matrix, bins: pd.DataFrame) -> dict[str, np.ndarray]:
+def _zero_scores(bin_ids: np.ndarray, result: dict[int, float]) -> None:
+    for b in bin_ids:
+        result[int(b)] = 0.0
+
+
+def _mark_low_information(
+    chrom_name: str,
+    bin_ids: np.ndarray,
+    result: dict[int, float],
+    status_by_chrom: dict[str, str],
+    low_information_chromosomes: list[str],
+) -> None:
+    _zero_scores(bin_ids, result)
+    status_by_chrom[chrom_name] = "low_information"
+    low_information_chromosomes.append(chrom_name)
+
+
+def _ab_compartments(mat: sp.csr_matrix, bins: pd.DataFrame) -> tuple[dict[int, float], dict[str, object]]:
     """Per-chromosome A/B compartment scores via first eigenvector of correlation matrix.
 
-    Returns dict bin_id → eigenvector_1 value (sign → compartment).
+    Returns bin_id → eigenvector_1 value plus claim-safety metadata.
     """
     result: dict[int, float] = {}
+    status_by_chrom: dict[str, str] = {}
+    low_information_chromosomes: list[str] = []
+    eps = 1e-8
     for chrom, group in bins.groupby("chrom"):
+        chrom_name = str(chrom)
         bin_ids = group["bin_id"].to_numpy()
         if len(bin_ids) < 5:
-            for b in bin_ids:
-                result[int(b)] = 0.0
+            _mark_low_information(
+                chrom_name, bin_ids, result, status_by_chrom, low_information_chromosomes
+            )
             continue
         chrom_shape = (len(bin_ids), len(bin_ids))
         decision = plan_densify(
@@ -136,26 +159,53 @@ def _ab_compartments(mat: sp.csr_matrix, bins: pd.DataFrame) -> dict[str, np.nda
             )
         # densify-allowed: chromosome submatrix guarded by plan_densify before eigendecomposition
         chrom_mat = mat[bin_ids[:, None], bin_ids[None, :]].toarray()
-        # Normalize by O/E (observed / expected); use distance-decay normalization
-        # Skip if too sparse
-        if chrom_mat.sum() == 0:
-            for b in bin_ids:
-                result[int(b)] = 0.0
+        if chrom_mat.sum() <= eps:
+            _mark_low_information(
+                chrom_name, bin_ids, result, status_by_chrom, low_information_chromosomes
+            )
             continue
         # Log-transform with pseudocount for numerical stability
         chrom_mat = np.log1p(chrom_mat)
-        # Correlation matrix
-        corr = np.corrcoef(chrom_mat)
-        corr = np.nan_to_num(corr, nan=0.0)
+        row_vars = chrom_mat.var(axis=1)
+        variable_rows = row_vars > eps
+        if (~variable_rows).any() or int(variable_rows.sum()) < 2:
+            _mark_low_information(
+                chrom_name, bin_ids, result, status_by_chrom, low_information_chromosomes
+            )
+            continue
+        # Build row correlations directly after screening constant rows; this
+        # avoids np.corrcoef runtime warnings on low-information chromosomes.
+        centered = chrom_mat - chrom_mat.mean(axis=1, keepdims=True)
+        denom = np.sqrt(np.sum(centered * centered, axis=1, keepdims=True))
+        denom = np.maximum(denom, eps)
+        normalized = centered / denom
+        corr = normalized @ normalized.T
+        corr = np.clip(corr, -1.0, 1.0)
         try:
-            eigvals, eigvecs = np.linalg.eigh(corr)
+            _eigvals, eigvecs = np.linalg.eigh(corr)
             # Largest eigenvalue → last column
             ev1 = eigvecs[:, -1]
         except np.linalg.LinAlgError:
-            ev1 = np.zeros(len(bin_ids))
+            _mark_low_information(
+                chrom_name, bin_ids, result, status_by_chrom, low_information_chromosomes
+            )
+            continue
         for j, b in enumerate(bin_ids):
             result[int(b)] = float(ev1[j])
-    return result
+        status_by_chrom[chrom_name] = "confident"
+
+    if not status_by_chrom or len(low_information_chromosomes) == len(status_by_chrom):
+        compartment_status = "low_information"
+    elif low_information_chromosomes:
+        compartment_status = "partial_low_information"
+    else:
+        compartment_status = "confident"
+    metadata = {
+        "compartment_status": compartment_status,
+        "low_information_chromosomes": sorted(low_information_chromosomes),
+        "compartment_status_by_chrom": status_by_chrom,
+    }
+    return result, metadata
 
 
 class HiCTADModule:
@@ -168,7 +218,7 @@ class HiCTADModule:
         "uns": ["hic_contact_matrix", "hic_bins"],
     }
     provides_keys: dict[str, list[str]] = {
-        "uns": ["hic_tad_boundaries", "hic_compartments"],
+        "uns": ["hic_tad_boundaries", "hic_compartments", "hic_tad_metadata"],
     }
 
     def run(self, ctx: PipelineContext) -> None:
@@ -197,12 +247,21 @@ class HiCTADModule:
         adata.uns["hic_tad_boundaries"] = boundaries_df
 
         logger.info("%s: computing A/B compartments via eigendecomposition", self.name)
-        ab_scores = _ab_compartments(mat, bins)
+        ab_scores, hic_tad_metadata = _ab_compartments(mat, bins)
         compart_df = bins.copy()
         compart_df["position"] = ((compart_df["start"].astype("int64") + compart_df["end"].astype("int64")) // 2)
         compart_df["eigenvector_1"] = compart_df["bin_id"].map(lambda b: ab_scores.get(int(b), 0.0))
-        compart_df["compartment"] = compart_df["eigenvector_1"].apply(lambda v: "A" if v >= 0 else "B")
+        status_by_chrom = hic_tad_metadata["compartment_status_by_chrom"]
+        compart_df["compartment"] = compart_df.apply(
+            lambda row: (
+                "low_information"
+                if status_by_chrom.get(str(row["chrom"])) == "low_information"
+                else ("A" if row["eigenvector_1"] >= 0 else "B")
+            ),
+            axis=1,
+        )
         adata.uns["hic_compartments"] = compart_df
+        adata.uns["hic_tad_metadata"] = hic_tad_metadata
 
         out_dir = ctx.run_dir / "hic_tad"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -213,11 +272,13 @@ class HiCTADModule:
             "n_compartment_B": int((compart_df["compartment"] == "B").sum()),
             "boundary_k": boundary_k,
             "window_bins": window_bins,
+            "hic_tad_metadata": hic_tad_metadata,
         }
         (out_dir / "tad_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
         ctx.metadata["hic_tad_status"] = "ok"
         ctx.metadata["hic_n_boundaries"] = int(is_boundary.sum())
         ctx.metadata["hic_compartment_counts"] = {"A": summary["n_compartment_A"], "B": summary["n_compartment_B"]}
+        ctx.metadata["hic_tad_metadata"] = hic_tad_metadata
         logger.info("%s: %d boundaries, %d A / %d B compartments",
                     self.name, summary["n_boundaries"], summary["n_compartment_A"], summary["n_compartment_B"])
