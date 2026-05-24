@@ -15,7 +15,7 @@ from scipy import sparse
 
 from .config import PipelineConfig
 from .context import PipelineContext
-from .module_catalog import MANDATORY_MODULES, module_dependencies
+from .module_catalog import MANDATORY_MODULES, module_dependencies, module_runs_after
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,12 @@ MEMORY_RESERVE_BYTES = 8 * 1024 * 1024 * 1024
 # The canonical module hierarchy lives in module_catalog.py so CLI help, docs,
 # validation scripts, and orchestration all share the same layer contract.
 MODULE_DEPENDENCIES: dict[str, set[str]] = module_dependencies()
+
+# Ordering-only hints (e.g. annotation runs_after batch_correction). These are
+# deliberately SEPARATE from MODULE_DEPENDENCIES: they never auto-include a
+# module (no inclusion auto-pull) and never seed _compute_tiers in-degree.
+# They only refine sequencing among modules already in the requested set.
+MODULE_RUNS_AFTER: dict[str, set[str]] = module_runs_after()
 
 # Static fallback for modules that mutate adata structurally.
 # Prefer the class-level `mutates_structure = True` attribute on modules;
@@ -127,27 +133,15 @@ def _check_requires(mod, ctx: PipelineContext) -> list[str]:
     return missing
 
 
-def _resolve_execution_order(mandatory: list[str], optional: list[str]) -> list[str]:
-    """Topologically sort modules respecting dependencies.
+def _kahn_order(all_requested: set[str], adjacency: dict[str, set[str]]) -> list[str] | None:
+    """Deterministic Kahn topo sort over `adjacency` restricted to `all_requested`.
 
-    Mandatory modules always run first. For optional modules, any missing
-    dependencies that are themselves optional are auto-included.
+    `adjacency[mod]` is the set of nodes `mod` must run after. Returns the
+    ordered list, or ``None`` if a cycle/stall prevents emitting every node.
     """
-    all_requested = set(mandatory) | set(optional)
-
-    # Auto-include transitive dependencies
-    to_process = list(all_requested)
-    while to_process:
-        mod = to_process.pop()
-        for dep in MODULE_DEPENDENCIES.get(mod, set()):
-            if dep not in all_requested:
-                all_requested.add(dep)
-                to_process.append(dep)
-
-    # Topological sort (Kahn's algorithm)
     in_degree: dict[str, int] = {m: 0 for m in all_requested}
     for mod in all_requested:
-        for dep in MODULE_DEPENDENCIES.get(mod, set()):
+        for dep in adjacency.get(mod, set()):
             if dep in all_requested:
                 in_degree[mod] += 1
 
@@ -157,18 +151,112 @@ def _resolve_execution_order(mandatory: list[str], optional: list[str]) -> list[
         node = queue.popleft()
         order.append(node)
         for mod in sorted(all_requested):
-            if node in MODULE_DEPENDENCIES.get(mod, set()):
+            if node in adjacency.get(mod, set()):
                 in_degree[mod] -= 1
                 if in_degree[mod] == 0:
                     queue.append(mod)
 
-    # Detect cycles: if not all requested modules were emitted, a dependency
-    # cycle exists in the induced subgraph.
-    remaining = sorted(m for m in all_requested if m not in order)
-    if remaining:
+    if len(order) != len(all_requested):
+        return None
+    return order
+
+
+def _resolve_execution_order(
+    mandatory: list[str],
+    optional: list[str],
+    dropped_hints_sink: list[dict] | None = None,
+) -> list[str]:
+    """Topologically sort modules respecting dependencies.
+
+    Mandatory modules always run first. For optional modules, any missing
+    dependencies that are themselves optional are auto-included.
+
+    A SECOND, ordering-only pass folds in ``MODULE_RUNS_AFTER`` hints (e.g.
+    ``annotation`` runs_after ``batch_correction``). These hints:
+      - are restricted to pairs where BOTH endpoints are already in
+        ``all_requested`` (they never auto-include — that is the exclusive
+        job of ``MODULE_DEPENDENCIES`` above), and
+      - never feed ``_compute_tiers`` (which keys off MODULE_DEPENDENCIES).
+
+    The hard cycle ``raise`` stays bound to the ``depends_on``-only graph. If
+    the COMBINED (depends_on + runs_after) graph stalls, the runs_after edges
+    are DROPPED (never raise) and a loud breadcrumb is recorded so the run
+    manifest + log surface that the ordering hint could not be honored.
+    """
+    all_requested = set(mandatory) | set(optional)
+
+    # Auto-include transitive dependencies (depends_on ONLY — runs_after must
+    # never force-pull a module into the run).
+    to_process = list(all_requested)
+    while to_process:
+        mod = to_process.pop()
+        for dep in MODULE_DEPENDENCIES.get(mod, set()):
+            if dep not in all_requested:
+                all_requested.add(dep)
+                to_process.append(dep)
+
+    # First pass: depends_on-only graph. A failure here is a real dependency
+    # cycle and must raise (preserves the historical contract + tests).
+    base_order = _kahn_order(all_requested, MODULE_DEPENDENCIES)
+    if base_order is None:
+        # Recompute remaining the same way the legacy code did for the message.
+        in_degree: dict[str, int] = {m: 0 for m in all_requested}
+        for mod in all_requested:
+            for dep in MODULE_DEPENDENCIES.get(mod, set()):
+                if dep in all_requested:
+                    in_degree[mod] += 1
+        queue = deque(sorted(m for m, d in in_degree.items() if d == 0))
+        emitted: set[str] = set()
+        while queue:
+            node = queue.popleft()
+            emitted.add(node)
+            for mod in sorted(all_requested):
+                if node in MODULE_DEPENDENCIES.get(mod, set()):
+                    in_degree[mod] -= 1
+                    if in_degree[mod] == 0:
+                        queue.append(mod)
+        remaining = sorted(m for m in all_requested if m not in emitted)
         raise ValueError(f"Cyclic dependency detected: {remaining}")
 
-    return order
+    # Second pass (ordering-only): combine depends_on with runs_after hints,
+    # restricted to pairs already present in all_requested. Never auto-include.
+    active_hints: dict[str, set[str]] = {}
+    for mod in all_requested:
+        hints = {
+            after for after in MODULE_RUNS_AFTER.get(mod, set())
+            if after in all_requested
+        }
+        if hints:
+            active_hints[mod] = hints
+
+    if not active_hints:
+        return base_order
+
+    combined: dict[str, set[str]] = {
+        m: set(MODULE_DEPENDENCIES.get(m, set())) for m in all_requested
+    }
+    for mod, hints in active_hints.items():
+        combined[mod] = combined.get(mod, set()) | hints
+
+    combined_order = _kahn_order(all_requested, combined)
+    if combined_order is not None:
+        return combined_order
+
+    # Combined-graph STALL: drop runs_after edges (NEVER raise) and emit a
+    # loud breadcrumb. The base depends_on order is still valid and used.
+    dropped = {mod: sorted(hints) for mod, hints in sorted(active_hints.items())}
+    logger.warning(
+        "runs_after ordering hints could not be honored without stalling the "
+        "combined graph; DROPPING ordering hints and proceeding on the "
+        "depends_on order. Dropped hints: %s",
+        dropped,
+    )
+    if dropped_hints_sink is not None:
+        dropped_hints_sink.append({
+            "reason": "combined_graph_stall",
+            "dropped_runs_after": dropped,
+        })
+    return base_order
 
 
 def _build_registry() -> dict[str, object]:
@@ -759,7 +847,15 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
 
         mandatory = list(MANDATORY_MODULES)
         mandatory_set = set(mandatory)
-        execution_order = _resolve_execution_order(mandatory, cfg.optional_modules)
+        dropped_hints_sink: list[dict] = []
+        execution_order = _resolve_execution_order(
+            mandatory, cfg.optional_modules, dropped_hints_sink
+        )
+        if dropped_hints_sink:
+            # Loud breadcrumb in run_manifest.json: ordering hints were dropped
+            # to avoid a combined-graph stall (annotation/batch_correction
+            # leiden race fix). The depends_on order was used instead.
+            ctx.metadata["runs_after_hints_dropped"] = dropped_hints_sink
 
         # --- Resume from checkpoint ---
         if cfg.resume_from:

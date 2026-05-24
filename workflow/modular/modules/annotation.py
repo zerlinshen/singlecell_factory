@@ -77,10 +77,25 @@ class AnnotationModule:
     requires_keys = {"obs": ["leiden"]}
     provides_keys = {"obs": ["cell_type"]}
 
+    @staticmethod
+    def _resolve_leiden_key(adata) -> str:
+        """Pick the cluster column to bind cell_type against.
+
+        Prefer ``leiden_corrected`` (the post-batch-correction snapshot written
+        by batch_correction) so cell_type is a deterministic function of the
+        FINAL post-correction clustering regardless of execution mode. Fall
+        back to ``leiden`` when batch_correction did not run.
+        """
+        if "leiden_corrected" in adata.obs:
+            return "leiden_corrected"
+        return "leiden"
+
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata
         if adata is None or "leiden" not in adata.obs:
             raise ValueError("Annotation requires clustered AnnData.")
+        leiden_key = self._resolve_leiden_key(adata)
+        ctx.metadata["annotation_leiden_source"] = leiden_key
 
         marker_map = ctx.cfg.markers or DEFAULT_MARKERS
         available = {
@@ -109,9 +124,9 @@ class AnnotationModule:
             # unreliable when absolute marker expression is low (background genes in the
             # same expression bin dominate the signal). Raw mean expression correctly
             # captures relative marker enrichment per cluster.
-            cluster_score_matrix = self._cluster_mean_expression(adata, available)
+            cluster_score_matrix = self._cluster_mean_expression(adata, available, leiden_key)
             cluster_label_map = cluster_score_matrix.idxmax(axis=1).to_dict()
-            adata.obs["cell_type"] = adata.obs["leiden"].astype(str).map(cluster_label_map).astype(str)
+            adata.obs["cell_type"] = adata.obs[leiden_key].astype(str).map(cluster_label_map).astype(str)
             # Confidence: per-cell score_genes margin (max - second), for reference mapping gate
             max_scores = score_mat.max(axis=1)
             vals = score_mat.values
@@ -127,7 +142,7 @@ class AnnotationModule:
             low_conf_clusters = set(
                 cluster_max_score[cluster_max_score < ctx.cfg.annotation_confidence_threshold].index.astype(str)
             )
-            low_conf = adata.obs["leiden"].astype(str).isin(low_conf_clusters)
+            low_conf = adata.obs[leiden_key].astype(str).isin(low_conf_clusters)
             adata.obs.loc[low_conf, "cell_type"] = "Unknown"
             # Write audit trail
             cluster_score_matrix.to_csv(ctx.table_dir / "cluster_score_matrix.csv")
@@ -147,9 +162,9 @@ class AnnotationModule:
             adata.obs.loc[low_conf, "cell_type"] = "Unknown"
             # Write cluster_score_matrix.csv for consistency
             cluster_score_matrix = score_mat.groupby(
-                adata.obs["leiden"].astype(str), observed=True
+                adata.obs[leiden_key].astype(str), observed=True
             ).mean()
-            cluster_score_matrix.index.name = "leiden"
+            cluster_score_matrix.index.name = leiden_key
             cluster_score_matrix.to_csv(ctx.table_dir / "cluster_score_matrix.csv")
 
         adata.obs["cell_type_marker"] = adata.obs["cell_type"].astype(str)
@@ -196,14 +211,16 @@ class AnnotationModule:
         self._plot_composition(adata, ctx)
 
     @staticmethod
-    def _cluster_mean_expression(adata, available: dict[str, list[str]]) -> pd.DataFrame:
+    def _cluster_mean_expression(
+        adata, available: dict[str, list[str]], leiden_key: str = "leiden"
+    ) -> pd.DataFrame:
         """Compute mean expression of each marker gene set per leiden cluster.
 
         Returns DataFrame with rows=cluster, cols=cell_type, values=mean log-expr of gene set.
         Uses raw matrix slicing to avoid score_genes background subtraction artefacts.
         """
         X = adata.X
-        leiden_vals = adata.obs["leiden"].astype(str).values
+        leiden_vals = adata.obs[leiden_key].astype(str).values
         clusters = sorted(set(leiden_vals), key=lambda c: (not c.isdigit(), int(c) if c.isdigit() else c))
         gene_index = {g: i for i, g in enumerate(adata.var_names)}
 
@@ -222,7 +239,7 @@ class AnnotationModule:
             rows[cluster] = row
 
         df = pd.DataFrame(rows).T
-        df.index.name = "leiden"
+        df.index.name = leiden_key
         return df
 
     @staticmethod

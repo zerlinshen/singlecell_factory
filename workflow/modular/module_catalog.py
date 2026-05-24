@@ -10,10 +10,18 @@ class ModuleSpec:
     The execution engine still imports module implementations lazily from
     pipeline.py; this catalog deliberately stays dependency-light so CLI/help
     paths can inspect module structure without importing scanpy/liana/scvelo.
+
+    ``runs_after`` is an ORDERING-ONLY hint distinct from ``depends_on``. It
+    declares that this module must be sequenced after the named modules WHEN
+    BOTH are already in the requested set, but it must never force-pull a
+    module into the run (no inclusion auto-pull) and never seed parallel-tier
+    in-degree. ``depends_on`` carries hard dependency + auto-include semantics;
+    ``runs_after`` only refines order among already-requested modules.
     """
 
     name: str
     depends_on: tuple[str, ...] = ()
+    runs_after: tuple[str, ...] = ()
     layer: str = "analysis"
     modality: str = "singlecell_rna"
     owner: str = "singlecell_factory"
@@ -55,7 +63,7 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
         layer="quality_control",
         description=(
             "Conditional DecontX ambient RNA correction (Yang 2020 Genome Biology). "
-            "Per-sample trigger evaluation against 5 QC rules (top50, mt%, doublet rate, "
+            "Per-sample trigger evaluation against 4 QC rules (top50, mt%, "
             "total/n_genes correlation, cross-sample housekeeping CV); self-skips when "
             "no trigger fires. R driver runs in r_multiomics conda env via subprocess. "
             "Policy: ops/policy/ambient_correction_policy.md Phase 2 (2026-05-20). "
@@ -100,9 +108,14 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     "annotation": ModuleSpec(
         name="annotation",
         depends_on=("clustering",),
+        runs_after=("batch_correction",),
         layer="annotation",
         bridge_ready=True,
-        description="Cluster-voting cell type annotation.",
+        description=(
+            "Cluster-voting cell type annotation. Ordering-only runs_after "
+            "batch_correction so cell_type binds to post-correction leiden "
+            "(see leiden race fix); does NOT auto-include batch_correction."
+        ),
     ),
     "trajectory": ModuleSpec(
         name="trajectory",
@@ -376,8 +389,15 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
         modality="atac",
         bridge_ready=False,
         description=(
-            "Distance-based linkage of ATAC peaks to nearest gene TSS (Cicero-style). "
-            "Writes adata.uns['peak_to_gene'] for joint RNA+ATAC analysis. Wave 2B / P2.S13."
+            "Two-pass peak-to-gene linkage. (1) Distance-based assignment of "
+            "ATAC peaks to gene TSSs within --peak-to-gene-window bp; writes "
+            "adata.uns['peak_to_gene']. (2) Pearson + permutation-FDR "
+            "scoring over the joint ATAC+RNA cell axis (Trevino 2021 / Ma "
+            "2020 SHARE-seq; n_perms default 100, sparse-axis preserved); "
+            "writes adata.uns['peak_to_gene_top1000'] and "
+            "['peak_to_gene_linkages'] consumed by tf_network. NOT Cicero "
+            "co-accessibility (see __references__ in module). Wave 2B / "
+            "P2.S13 + Wave 5 / US-W5-6."
         ),
     ),
     "hic_ingest": ModuleSpec(
@@ -422,6 +442,20 @@ def module_dependencies() -> dict[str, set[str]]:
     """Return dependency DAG in the legacy pipeline shape."""
 
     return {name: set(spec.depends_on) for name, spec in MODULE_SPECS.items()}
+
+
+def module_runs_after() -> dict[str, set[str]]:
+    """Return ordering-only ``runs_after`` hints keyed by module name.
+
+    Distinct from :func:`module_dependencies`: these edges only refine
+    execution order among already-requested modules and never auto-include.
+    """
+
+    return {
+        name: set(spec.runs_after)
+        for name, spec in MODULE_SPECS.items()
+        if spec.runs_after
+    }
 
 
 def optional_module_names() -> tuple[str, ...]:

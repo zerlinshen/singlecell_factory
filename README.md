@@ -780,27 +780,27 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 ### Module Dependency DAG
 
 ```
-cellranger -> qc -> doublet_detection -> clustering -+-> differential_expression -+-> pathway_analysis
-                                                      |                            +-> validate_cbioportal
-                                                      |                            +-> pseudobulk_de
-                                                      +-> annotation -+-> cell_communication
-                                                      |               +-> immune_phenotyping
-                                                      |               +-> tumor_microenvironment
-                                                      |               +-> composition
-                                                      |               +-> cnv_inference --+--> evolution
-                                                      +-> trajectory -+-> pseudo_velocity
-                                                      |               +-> cell_fate
-                                                      |                        (requires both trajectory + cnv_inference)
-                                                      +-> cell_cycle
-                                                      +-> batch_correction
-                                                      +-> rna_velocity
-                                                      +-> gene_regulatory_network
-                                                      +-> gene_signature_scoring
-                                                      +-> metacell
-                                                      +-> paper_repro
-                                                      +-> protein_adt
-                                                      +-> spatial_ingest --+--> spatial_neighborhoods
-                                                      +-> multimodal_integration   [EXPERIMENTAL]
+cellranger -> qc -> ambient_correction -> doublet_detection -> clustering -+-> differential_expression -+-> pathway_analysis
+                                                                            |                            +-> validate_cbioportal
+                                                                            |                            +-> pseudobulk_de
+                                                                            +-> annotation -+-> cell_communication
+                                                                            |               +-> immune_phenotyping
+                                                                            |               +-> tumor_microenvironment
+                                                                            |               +-> composition
+                                                                            |               +-> cnv_inference --+--> evolution
+                                                                            +-> trajectory -+-> pseudo_velocity
+                                                                            |               +-> cell_fate
+                                                                            |                        (requires both trajectory + cnv_inference)
+                                                                            +-> cell_cycle
+                                                                            +-> batch_correction
+                                                                            +-> rna_velocity
+                                                                            +-> gene_regulatory_network
+                                                                            +-> gene_signature_scoring
+                                                                            +-> metacell
+                                                                            +-> paper_repro
+                                                                            +-> protein_adt
+                                                                            +-> spatial_ingest --+--> spatial_neighborhoods
+                                                                            +-> multimodal_integration   [EXPERIMENTAL]
 ```
 
 Standalone flowchart artifact (generated from `workflow/modular/pipeline.py`):
