@@ -41,6 +41,12 @@
     "title": "Scrublet: Computational Identification of Cell Doublets in Single-Cell Transcriptomic Data",
     "year": "2019"
   },
+  "10.1016/j.cels.2019.03.003": {
+    "authors": "McGinnis",
+    "journal": "Cell Systems",
+    "title": "DoubletFinder: Doublet Detection in Single-Cell RNA Sequencing Data Using Artificial Nearest Neighbors",
+    "year": "2019"
+  },
   "10.1016/j.immuni.2019.03.009": {
     "authors": "Zilionis",
     "journal": "Immunity",
