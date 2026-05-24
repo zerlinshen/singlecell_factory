@@ -132,9 +132,19 @@ def extract_references_from_modules(modules_dir: Path) -> list[dict]:
 
     dedup = {}
     for r in refs:
-        key = (r.get("doi", "").lower(), r.get("module", ""), r.get("description", ""))
+        key = (
+            _ref_text(r.get("doi")).lower(),
+            _ref_text(r.get("module")),
+            _ref_text(r.get("description")),
+        )
         dedup[key] = r
     return list(dedup.values())
+
+
+def _ref_text(value, default: str = "") -> str:
+    if value is None or value == "":
+        return default
+    return str(value)
 
 
 def _count_existing_rows(section_text: str) -> int:
@@ -146,20 +156,26 @@ def update_readme_references(readme_path: Path, references: list[dict], force: b
         raise FileNotFoundError(f"README not found: {readme_path}")
 
     content = readme_path.read_text(encoding="utf-8")
-    references.sort(key=lambda x: (x.get("module", ""), x.get("year", ""), x.get("title", "")))
+    references.sort(
+        key=lambda x: (
+            _ref_text(x.get("module")),
+            _ref_text(x.get("year")),
+            _ref_text(x.get("title")),
+        )
+    )
 
     lines = [
         "| # | Reference | DOI | Used by |",
         "|---|---|---|---|",
     ]
     for i, ref in enumerate(references, start=1):
-        author = ref.get("authors", "Unknown")
-        journal = ref.get("journal", "Unknown")
-        year = ref.get("year", "Unknown")
-        doi = ref.get("doi", "")
+        author = _ref_text(ref.get("authors"), "Unknown")
+        journal = _ref_text(ref.get("journal"), "Unknown")
+        year = _ref_text(ref.get("year"), "Unknown")
+        doi = _ref_text(ref.get("doi"))
         doi_link = f"[{doi}](https://doi.org/{doi})" if doi else "N/A"
-        module = f"`{ref.get('module', 'unknown')}`"
-        desc = ref.get("description", "")
+        module = f"`{_ref_text(ref.get('module'), 'unknown')}`"
+        desc = _ref_text(ref.get("description"))
         if desc:
             module += f" ({desc})"
         lines.append(f"| {i} | {author} et al., *{journal}*, {year} | {doi_link} | {module} |")
