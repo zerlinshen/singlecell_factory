@@ -134,3 +134,48 @@ def test_resolve_scdblfinder_driver_from_script_dir(monkeypatch, tmp_path):
     monkeypatch.setenv("R_MULTIOMICS_SCRIPT_DIR", str(tmp_path))
 
     assert DoubletDetectionModule._resolve_scdblfinder_driver() == driver
+
+
+def test_null_fallback_gate_raises_without_opt_in(monkeypatch):
+    """Failure-based all-singlets fallback must raise unless explicitly opted in.
+
+    Mirrors the SC_ALLOW_WELCH_FALLBACK / Principle 9 / Plan F-3 contract used
+    by differential_expression.py: a silent algorithmic compromise on a
+    mandatory QC stage is not allowed.
+    """
+    monkeypatch.delenv(DoubletDetectionModule._NULL_FALLBACK_ENV, raising=False)
+    primary = RuntimeError("rsc.pp.scrublet boom")
+    secondary = RuntimeError("cpu scrublet also boom")
+    try:
+        DoubletDetectionModule._require_null_fallback_opt_in(primary, secondary)
+    except RuntimeError as e:
+        msg = str(e)
+        assert DoubletDetectionModule._NULL_FALLBACK_ENV in msg
+        assert "banned by default" in msg
+        assert "rsc.pp.scrublet boom" in msg
+        assert "cpu scrublet also boom" in msg
+    else:
+        raise AssertionError("expected RuntimeError when opt-in env is unset")
+
+
+def test_null_fallback_gate_allows_with_opt_in(monkeypatch):
+    """Explicit SC_ALLOW_DOUBLET_NULL_FALLBACK=1 lets the gate return cleanly."""
+    monkeypatch.setenv(DoubletDetectionModule._NULL_FALLBACK_ENV, "1")
+    # Must not raise.
+    DoubletDetectionModule._require_null_fallback_opt_in(
+        RuntimeError("primary boom"), RuntimeError("secondary boom")
+    )
+
+
+def test_tiny_dataset_path_records_method_actually_used(tmp_path):
+    """The legitimate tiny-dataset degenerate path is exempt from the gate
+    but must still record doublet_method_actually_used in metadata so the
+    run manifest unambiguously identifies the engine that produced calls."""
+    adata = _adata(n_obs=10, n_vars=20)
+    ctx = _ctx(tmp_path, DoubletConfig(backend="scrublet", remove_doublets=False))
+    ctx.adata = adata
+
+    DoubletDetectionModule().run(ctx)
+
+    assert ctx.metadata["doublet_method"] == "fallback_all_singlets"
+    assert ctx.metadata["doublet_method_actually_used"] == "fallback_all_singlets"

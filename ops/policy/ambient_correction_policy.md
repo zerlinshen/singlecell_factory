@@ -166,17 +166,17 @@ DecontX runs as a **new optional module** named `ambient_correction`, positioned
 cellranger → qc → ambient_correction (conditional) → doublet_detection → ... (existing chain)
 ```
 
-The module is `optional` (not in `MANDATORY_STAGES`) because:
-- The conditional policy itself may decide to skip (no-trigger samples bypass).
-- Paper-faithful reproductions may want to opt out entirely (`SC_AMBIENT_TRIGGERS_DISABLE=1`).
-- The factory should not force ambient correction on lightweight tests or sandbox runs.
-
-But the module is **enabled by default** in production project runs — the conditional logic decides per-sample whether the *correction itself* runs, distinct from whether the *module is invoked*. The module is always invoked; it self-skips when no triggers fire.
+The module is in `MANDATORY_MODULES` so the audit decision is always recorded.
+The conditional policy decides per sample whether the *correction itself* runs,
+distinct from whether the *module is invoked*. The module is always invoked and
+self-skips when no triggers fire. Paper-faithful reproductions or sandbox runs
+can still force-skip correction with `SC_AMBIENT_TRIGGERS_DISABLE=1` or
+`--ambient-disable-triggers`, with the opt-out recorded in metadata.
 
 ## Implementation artifacts (this delivery)
 
 - **R driver script:** `workflow/modular/modules/_r_scripts/decontx_run.R` ✅ DELIVERED 2026-05-20 — accepts h5ad input via zellkonverter, runs `celda::decontX`, writes decontaminated h5ad + JSON summary.
-- **Python module:** `workflow/modular/modules/ambient_correction.py` ✅ DELIVERED 2026-05-20 — `AmbientCorrectionModule` class with 5-trigger evaluator, conda subprocess to R (`conda run -n r_multiomics Rscript ...`), full provenance to `adata.uns["ambient_correction"]`, cross-language debugging design (env isolation, stderr pass-through, keep-temp-on-failure, repro-cmd logging, dry-run mode, no-silent-skip on R missing).
+- **Python module:** `workflow/modular/modules/ambient_correction.py` ✅ DELIVERED 2026-05-20 — `AmbientCorrectionModule` class with the active 4-trigger evaluator (T1, T2, T4, T5; T3 removed), conda subprocess to R (`conda run -n r_multiomics Rscript ...`), full provenance to `adata.uns["ambient_correction"]`, cross-language debugging design (env isolation, stderr pass-through, keep-temp-on-failure, repro-cmd logging, dry-run mode, no-silent-skip on R missing).
 - **Pipeline wiring:** `workflow/modular/pipeline.py` `_build_registry()` ✅ DONE 2026-05-20 — registered as `AmbientCorrectionModule()`. `module_catalog.py` `MODULE_SPECS` ✅ DONE 2026-05-20 — `ambient_correction.depends_on=("qc",)`, `doublet_detection.depends_on=("qc","ambient_correction")` (DAG forces ambient before doublet). Added to `MANDATORY_MODULES` so it always runs (self-skips internally when no trigger fires).
 - **CLI flags:** `cli.py` ✅ DONE 2026-05-20 — 8 flags: `--ambient-disable-triggers`, `--ambient-dry-run-triggers-only`, `--ambient-trigger-top50/-mt/-count-corr/-cohort-cv`, `--ambient-decontx-max-iter`, `--ambient-batch-column`. `AmbientCorrectionConfig` lives in `config.py` and is constructed from these args at `parse_args()`-end. (Originally 9 flags; `--ambient-trigger-doublet-mult` was dropped 2026-05-20 with the T3 removal.)
 - **Tests:** parity test for "no triggers → skipped"; contract test for "triggered → post-QC re-runs" — TODO for next pass, written after first NG2025 run exercises the trigger evaluator on real data.
@@ -190,7 +190,7 @@ But the module is **enabled by default** in production project runs — the cond
 ## Changelog
 
 - **2026-05-19:** Phase 1 decision recorded. Option (a) chosen after user clarified that the factory is a general-purpose single-cell production tool, not a one-shot reproduction harness. Tool selection deferred to follow-up plan.
-- **2026-05-20:** Phase 2 decision recorded. Tool = DecontX; activation = conditional (5-trigger rule, threshold override allowed); installed `bioconductor-celda` 1.26.0 in `r_multiomics` env; R + Python artifacts to be written; pipeline wiring DEFERRED pending user policy review. **Note:** the De Zuani 2024 NSCLC reproduction project (nc-reproduction) that originally motivated Phase 1 was ABORTED 2026-05-20 due to cell-calling divergence; the policy survives because it is factory-level and now serves the next single-cell project (NG 2025 pan-cancer 3D genome, DOI 10.1038/s41588-025-02188-0).
+- **2026-05-20:** Phase 2 decision recorded. Tool = DecontX; activation = conditional (active trigger rule is T1, T2, T4, T5 after T3 removal; threshold override allowed); installed `bioconductor-celda` 1.26.0 in `r_multiomics` env; R + Python artifacts to be written; pipeline wiring DEFERRED pending user policy review. **Note:** the De Zuani 2024 NSCLC reproduction project (nc-reproduction) that originally motivated Phase 1 was ABORTED 2026-05-20 due to cell-calling divergence; the policy survives because it is factory-level and now serves the next single-cell project (NG 2025 pan-cancer 3D genome, DOI 10.1038/s41588-025-02188-0).
 - **2026-05-20 (post-review):** Phase 2 hardening landed (Team B). Five behavioral fixes:
   1. **T3 removed** — DAG ordering makes `obs["predicted_doublet"]` unreachable at ambient-trigger time. The doublet-driven re-trigger idea is deferred to potential Phase 3. CLI flag `--ambient-trigger-doublet-mult` and `AmbientCorrectionConfig.trigger_doublet_multiplier` were dropped to match. Trigger ID set is now T1, T2, T4, T5.
   2. **Missing-QC fail-loud** — when both `pct_counts_in_top_50` AND `pct_counts_mt` are absent, the module now RAISES `RuntimeError` with `decision="qc_metrics_unavailable"` recorded in `adata.uns`, instead of silently returning `decision="skipped_no_trigger"`. Principle 9: a "no triggers fired" label for an "no triggers evaluable" run is a silent algorithmic compromise.

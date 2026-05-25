@@ -109,7 +109,7 @@ Opt-in env vars (use with explicit human approval only):
   `pytest -q tests/test_modular.py tests/test_modular_optimizations.py`
 
 ## Pipeline Contract
-- Mandatory stages are `cellranger -> qc -> doublet_detection`.
+- Mandatory stages are `cellranger -> qc -> ambient_correction -> doublet_detection`.
 - Optional stages are dependency-resolved from `workflow/modular/pipeline.py`.
 - Each module writes only to its own output subdirectory via `ctx.set_module_dir(...)`.
 - Module status and manifest are source-of-truth outputs:

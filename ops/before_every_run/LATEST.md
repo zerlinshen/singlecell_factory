@@ -1,3 +1,48 @@
+# Factory Governance Real-Data Validation - 2026-05-25
+
+## Scope
+
+- Task: G004 of the factory-governance ultragoal, responding to the critique
+  that current gates were mostly structural and should not be treated as
+  scientific validation.
+- Execution mode: controller_validation with bounded real-data proof.
+- Host: `/home/zerlinshen` on `ubuntu-tail`.
+
+## What Changed
+
+- Recorded failed HGMM exploratory rerun scaffold:
+  `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`.
+  The process hung after scaffold creation and was terminated; the run now has a
+  README marking it as failed exploratory evidence only.
+- Created governed Round9 validation run:
+  `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`.
+- Exported a v2.1 compact R bundle from retained real Round9 LUSC consensus
+  AnnData using current `singlecell_factory` exporter.
+- Rendered `7` PNG figures plus `1` PDF with `r_multiomics_factory` in the
+  `r_multiomics_arrow` environment through the plotting-factory bridge.
+- Added project evidence and human-review records for the bounded validation
+  claim.
+
+## Verification
+
+- Export and R plotting both completed under explicit timeouts.
+- Bundle manifest records `5000` real cells, `X_umap`, `X_pca`, and `17`
+  marker genes.
+- PNG QA passed: `7/7` nonblank rendered PNGs.
+- `python scripts/validate_run_bundle.py` passed with warnings only.
+- `bash scripts/run_all_gates.sh` passed `8/8`.
+
+## Caveats
+
+- This is cross-factory real-data handoff validation, not a full raw-input
+  pipeline reproduction and not NG2025 end-to-end proof.
+- Default `r_multiomics` lacks R package `arrow`; `r_multiomics_arrow` works.
+  Canonical environment repair remains open.
+- New journal:
+  `before-every-run/journal/2026-05-25-factory-governance-realdata-validation.md`.
+
+---
+
 # Remote Project Retention Cleanup And Suite Gitification - 2026-05-24
 
 ## Scope
@@ -43,6 +88,205 @@
   preservation records, and non-git project/data root checks.
 - Suite gate and git commit/push status are recorded in the active Codex
   session final report.
+
+---
+
+# Latest Yost STK11/LKB1 figure cleanup - 2026-05-23
+
+- User requested preserving only the final 14 Yost/STK11 figures and deleting
+  outdated images locally and remotely.
+- Retained canonical remote package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_stk11_storyline_individual_figures_20260523T_single_script_per_figure`.
+- Retained Mac archive:
+  `/Users/zerlinshen/Downloads/1. Codex/remote_handoffs/3d_genome_reproductions_2026-05-22/figures/yost_stk11_storyline_individual_figures_20260523T_single_script_per_figure`.
+- Deleted remote generated figure packages:
+  `3d_lung_author_style_single_figures_20260522`,
+  `3d_lung_stk11_ppt_20260521`,
+  `3d_lung_stk11_single_figures_20260522`,
+  `3d_lung_yost_author_code_figures_20260522`,
+  `debug_individual_01`,
+  `yost_2025_exact_panel_heatmaps_20260523T000054`,
+  `yost_2025_exact_panel_heatmaps_20260523T000529`,
+  `yost_2025_exact_panel_heatmaps_20260523T001058`, and
+  `yost_stk11_storyline_single_figures_20260523T010004`.
+- Deleted local generated figure packages under the Mac handoff `figures/`
+  directory except the final individual package.
+- Verification after cleanup: both local and remote figure-package listings show
+  only the final individual package; the final package still contains 14 PNG,
+  14 SVG, 14 PDF, and 14 TIFF outputs.
+- Preserved boundary: raw data, prepared inputs, source code, original
+  references, project ledgers, README files, and final package metadata were not
+  deleted.
+- Updated project policy cleanup record and local handoff `FIGURE_INDEX.md` /
+  `CONCLUSION.md`.
+- New journal:
+  `before-every-run/journal/2026-05-23-yost-stk11-outdated-figure-cleanup.md`.
+
+---
+
+# Latest Yost STK11/LKB1 individual single-script figure update - 2026-05-23
+
+- Corrected the storyline rendering rule after user review: final handoff figures
+  must be generated one by one from real data/run tables, not copied from old
+  rendered packages and not cropped from a larger generated figure.
+- Current canonical remote storyline package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_stk11_storyline_individual_figures_20260523T_single_script_per_figure`.
+- Superseded for final handoff:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_stk11_storyline_single_figures_20260523T010004`.
+- Current renderer:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r/report/render_yost_stk11_storyline_individual_figures.R`.
+- Individual figure scripts:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r/report/yost_stk11_individual/render_XX_*.R`.
+- Compatibility wrapper:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r/report/render_yost_stk11_storyline_single_figures.R`
+  now forwards to the individual renderer and must not reintroduce copy/crop
+  behavior.
+- Output: 14 standalone figures, each exported as PNG/SVG/PDF/TIFF.
+  Figures 01-03 are direct Yost Fig. 1f context correspondences; 04-10 are
+  STK11/LKB1 real-run extension figures; 11-13 add real NSCLC single-cell
+  context from WCH and Round9; 14 is a metadata audit showing that current
+  remote NSCLC resources lack audited STK11 genotype, therapy-response, and
+  survival labels.
+- Verification: renderer completed on `ubuntu-tail`; output counts are 14 PNG,
+  14 SVG, 14 PDF, and 14 TIFF; `SCRIPT_MANIFEST.tsv` has 14/14 exit status 0;
+  `PNG_QA.tsv` has 14/14 nonblank high-resolution PNGs; `FIGURE_STATUS.tsv`
+  marks all rows `independent_data_render_no_copy_no_crop`; grep found no
+  `file.copy` or `copy_exact_bundle` in the new individual scripts/driver.
+- Current Mac handoff copy:
+  `/Users/zerlinshen/Downloads/1. Codex/remote_handoffs/3d_genome_reproductions_2026-05-22/figures/yost_stk11_storyline_individual_figures_20260523T_single_script_per_figure`.
+- Caveats: CN and methylation remain proxy-only; STK11-mut versus WT LUAD is
+  exploratory (`n=2` versus `n=2`); WCH and Round9 support cell-state/checkpoint
+  context but not STK11-genotype or clinical-efficacy claims.
+- New journal:
+  `before-every-run/journal/2026-05-23-yost-stk11-individual-single-script-per-figure.md`.
+- New human review log:
+  `/home/zerlinshen/projects/ng2025-3d-genome/ledger/human_review/2026-05-23-yost-stk11-individual-single-script-per-figure-human-review.md`.
+
+---
+
+# Latest Yost STK11/LKB1 storyline single-figure package update - 2026-05-23
+
+- Completed a remote-rendered STK11/LKB1 storyline package using only real
+  NG2025/Yost project data and real run outputs.
+- Current canonical remote storyline package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_stk11_storyline_single_figures_20260523T010004`.
+- Added R renderer:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r/report/render_yost_stk11_storyline_single_figures.R`.
+- Supporting exact-panel package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_2025_exact_panel_heatmaps_20260523T001058`.
+- Output: 10 standalone single figures, each exported as PNG/SVG/PDF/TIFF.
+  The first three figures are direct Yost Fig. 1f context correspondences; the
+  remaining STK11/LKB1 storyline figures are extension outputs and are not
+  labeled as original paper panels.
+- Verification: renderer completed on `ubuntu-tail`; output counts are 10
+  PNG, 10 SVG, 10 PDF, and 10 TIFF; R PNG QA passed for all 10 PNGs; `git diff
+  --check` passed for the storyline renderer, exact-panel renderer title
+  correction, and `r/report/README.md`; visual spot-check confirmed the CALDER
+  title is no longer clipped and the STK11 extension panel has no non-original
+  title.
+- Caveats: CN and methylation remain proxy-only; STK11-mut versus WT LUAD is
+  exploratory (`n=2` versus `n=2`); bulk ATAC motif context is not
+  STK11-genotype-specific; external single-cell support remains a metadata-audit
+  gap.
+- New journal:
+  `before-every-run/journal/2026-05-23-yost-stk11-storyline-single-figures.md`.
+- New human review log:
+  `/home/zerlinshen/projects/ng2025-3d-genome/ledger/human_review/2026-05-23-yost-stk11-storyline-single-figures-human-review.md`.
+
+---
+
+# Latest Yost exact-panel heatmap/contact package update - 2026-05-23
+
+- Completed the Yost-only exact-panel heatmap/contact/track rerun requested by
+  the handoff
+  `/home/zerlinshen/projects/ng2025-3d-genome/NEXT_AGENT_YOST_EXACT_PANEL_REPRODUCTION.md`.
+- Current canonical remote package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_2025_exact_panel_heatmaps_20260523T001058`.
+- Added R renderer:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r/report/render_yost_exact_panel_heatmaps.R`.
+- Output status summary from `PANEL_STATUS.tsv`:
+  - `EXACT_AUTHOR_CODE_DATA_AVAILABLE`: 2 panels, Fig. 1f H3K27ac 1D-signal
+    and FitHiChIP loop sample-correlation heatmaps from full staged matrices.
+  - `LUNG_SUBSET_EXACT`: 2 panels, LUAD/LUSC CALDER comp-rank correlation
+    heatmap and chr8 HiChIP contact maps.
+  - `AUTHOR_CODE_ADAPTED`: 1 MYC/PVT1 track/loop panel.
+  - `STK11_EXTENSION_NOT_ORIGINAL_PANEL`: 1 separated STK11/LKB1 extension.
+  - `UNSUPPORTED_INPUT_GAP`: full-cohort CALDER Fig. 1f remains blocked until
+    all-cancer CALDER `all_sub_compartments.tsv` files are staged.
+- Comparison sheet:
+  `/home/zerlinshen/projects/reproductions/figure_packages/yost_2025_exact_panel_heatmaps_20260523T001058/comparisons/Yost2025_NatGenet_Fig1_original_vs_exact_panel_outputs.png`.
+- Verification: renderer completed without contact-map coordinate warnings after
+  switching contact maps to `geom_tile`; package has 18 PNG files including
+  original references, 7 SVG, 7 PDF, and 7 TIFF outputs; R PNG QA passed for all
+  18 PNGs; filename check found `0` Miao/Qiaowei outputs; STK11 files are absent
+  from reproduced/lung-subset panel directories and present only under
+  `04_STK11_LKB1_extension`; `git diff --check` passed for the exact-panel
+  renderer.
+- New journal:
+  `before-every-run/journal/2026-05-23-yost-exact-panel-heatmaps.md`.
+- New human review log:
+  `/home/zerlinshen/projects/reproductions/ledger/human_review/2026-05-23-yost-exact-panel-heatmaps-human-review.md`.
+
+---
+
+# Latest Yost author-code-informed figure package update - 2026-05-22
+
+- Replaced the mixed lung 3D-genome figure-generation lane with a Yost-only
+  author-code-informed renderer.
+- Current canonical remote package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_yost_author_code_figures_20260522`.
+- Current Mac handoff copy:
+  `/Users/zerlinshen/Downloads/1. Codex/remote_handoffs/3d_genome_reproductions_2026-05-22/figures/3d_lung_yost_author_code_figures_20260522`.
+- Added R renderer:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/r/report/render_yost_author_style_figures.R`.
+- Output: 6 Yost-only records, each exported as PNG/SVG/PDF/TIFF:
+  Yost Fig. 1-Fig. 5-style reproduction figures plus separated STK11/LKB1
+  exploratory extension.
+- Governance: `plotting_factory/contracts/lung_3d_author_style_profiles.json`
+  now treats Yost as the only current generated author-code route; Miao Liu and
+  Qiaowei Liu are record-only/source-memory routes unless explicitly reopened.
+- Verification: R renderer completed; package has 6 PNG/SVG/PDF/TIFF files;
+  filename check found no Qiaowei or Miao outputs; author-style profile
+  validator passed with `OK profiles=3 groups=2 record_only=2`; runtime check
+  found Yost `Rscript` and `python3`; `git diff --check` passed for renderer,
+  contract, README, and AGENTS files; manual visual QA passed after removing
+  the stray ggplot text-legend glyph and edge-label clipping.
+- New journal:
+  `before-every-run/journal/2026-05-22-yost-author-code-figure-package.md`.
+- New human review log:
+  `/home/zerlinshen/projects/reproductions/ledger/human_review/2026-05-22-yost-author-code-figure-package-human-review.md`.
+
+---
+
+# Latest lung 3D single-figure package update - 2026-05-22
+
+- Completed a plotting/reporting-only redesign of the lung 3D-genome
+  reproduction handoff into standalone publication-style figures.
+- Current canonical project-side figure package:
+  `/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522`.
+- Current Mac handoff copy:
+  `/Users/zerlinshen/Downloads/1. Codex/remote_handoffs/3d_genome_reproductions_2026-05-22/figures/3d_lung_stk11_single_figures_20260522`.
+- Added plotting renderer:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/python/report/render_lung_3d_single_figures.py`.
+- Added plotting renderer README:
+  `/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/python/report/README.md`.
+- Output: 12 standalone figure records, each exported as PNG/SVG/PDF; package
+  includes `FIGURE_MAP.tsv` and `README.md`.
+- Scientific conclusion:
+  - Yost 2025 Nat Genet: LUAD/LUSC processed MVS evidence supports loop
+    landscape, CALDER2, lineage accessibility, gene-loop/RNA, CNV-aware axes;
+    strict cell-type scATAC remains not reproduced.
+  - Miao Liu 2025 Nat Genet: true single-cell 3D genome track; processed
+    4DN/source-data supports progression; STK11 is a boundary/negative result.
+  - Qiaowei Liu 2025 Nat Commun: TP63-MYC processed/proxy loop mechanism
+    companion; not single-cell and not STK11-centric.
+- Verification: `py_compile` passed, renderer wrote 12 figures, PNG QA passed
+  for 12/12 nonblank high-resolution figures, and `git diff --check` passed for
+  the plotting renderer.
+- New journal:
+  `before-every-run/journal/2026-05-22-lung-3d-single-figure-redesign.md`.
+- New human review log:
+  `/home/zerlinshen/projects/reproductions/ledger/human_review/2026-05-22-lung-3d-single-figure-human-review.md`.
 
 ---
 

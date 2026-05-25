@@ -17,8 +17,17 @@ __references__ = {
         "authors": "singlecell_factory contributors",
         "journal": "Internal documentation",
         "year": "2025",
-        "doi": "PMID: 33288903",
-        "description": "Lightweight transitional-probability proxy via PCA-space KNN flow when spliced/unspliced counts are unavailable. NOT a canonical RNA velocity method \u2014 see rna_velocity.py for that. PMID points to a transcription-velocity review for context only.",
+        "doi": None,
+        "description": (
+            "Project-local heuristic: per-cell velocity vectors are computed as a "
+            "k-nearest-neighbour gradient of dpt_pseudotime in UMAP coordinate space. "
+            "This is NOT canonical RNA velocity and does not implement the "
+            "spliced/unspliced dynamical model of La Manno 2018 (Nature) or "
+            "Bergen 2020 (Nat Biotech, scVelo). It must remain labeled 'proxy' / "
+            "'exploratory' in claim ledgers. For canonical RNA velocity claims use "
+            "workflow.modular.modules.rna_velocity instead, which requires spliced/"
+            "unspliced count layers."
+        ),
     },
 }
 

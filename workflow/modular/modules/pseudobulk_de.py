@@ -182,6 +182,21 @@ class PseudobulkDEModule:
         ctx.metadata["pseudobulk_de_significant_genes"] = n_sig
         ctx.metadata["pseudobulk_de_status"] = "completed"
         ctx.metadata["pseudobulk_de_mode"] = mode
+        # H-3 audit fix (2026-05-22): manifest-level summary of which DE
+        # test produced the rows. Squair 2021 (the cited pseudobulk paper)
+        # presumes a DESeq2-class model; reviewers must be able to gate
+        # publication claims by reading the manifest, not the per-row table.
+        if "test_used" in results.columns:
+            test_counts = results["test_used"].value_counts().to_dict()
+            ctx.metadata["pseudobulk_de_test_used_counts"] = {
+                str(k): int(v) for k, v in test_counts.items()
+            }
+            ctx.metadata["pseudobulk_de_test_actually_used"] = (
+                "pydeseq2"
+                if test_counts.get("pydeseq2", 0) > 0
+                and test_counts.get("pydeseq2", 0) == len(results)
+                else "mixed_or_rank_fallback"
+            )
         self._plot_volcano(results, ctx)
         self._plot_heatmap(results, pb_counts, pb_meta, sample_col, ctx)
 
@@ -410,8 +425,15 @@ class PseudobulkDEModule:
         if na < min_samples_per_condition or nb < min_samples_per_condition:
             logger.info("Skipping %s vs %s: samples %d vs %d.", ca, cb, na, nb)
             return None
+        # H-3 audit fix (2026-05-22): record which test actually produced
+        # the p-values. Squair 2021 (the cited pseudobulk paper) presumes a
+        # DESeq2-class model; if we silently fall through to rank tests the
+        # result rows must say so explicitly so reviewers cannot mis-cite.
         try:
-            return self._de_pydeseq2(counts, meta, cond_col, ca, cb)
+            res = self._de_pydeseq2(counts, meta, cond_col, ca, cb)
+            if res is not None:
+                res["test_used"] = "pydeseq2"
+            return res
         except ImportError:
             logger.info("pydeseq2 not available, falling back to Mann-Whitney U.")
         except Exception as exc:
@@ -419,7 +441,7 @@ class PseudobulkDEModule:
         try:
             from scipy.stats import mannwhitneyu
 
-            return self._de_ranktest(
+            res = self._de_ranktest(
                 counts,
                 meta,
                 cond_col,
@@ -428,11 +450,17 @@ class PseudobulkDEModule:
                 mannwhitneyu,
                 two_sided_kw={"alternative": "two-sided"},
             )
+            if res is not None:
+                res["test_used"] = "mannwhitneyu"
+            return res
         except Exception as exc:
             logger.warning("Mann-Whitney failed (%s), falling back to Wilcoxon.", exc)
         from scipy.stats import ranksums
 
-        return self._de_ranktest(counts, meta, cond_col, ca, cb, ranksums)
+        res = self._de_ranktest(counts, meta, cond_col, ca, cb, ranksums)
+        if res is not None:
+            res["test_used"] = "ranksums"
+        return res
 
     # -- backend: pydeseq2 ----------------------------------------------
     @staticmethod

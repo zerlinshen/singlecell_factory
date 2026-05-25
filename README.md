@@ -13,6 +13,24 @@ AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That
 file is the onboarding index; `AGENTS.md` / `CLAUDE.md` remain runtime-specific
 authorities, and `PROTOCOL.md` remains the deep operational guide.
 
+## Current Validation Status (2026-05-25)
+
+Current factory readiness is split into structural validation and bounded
+real-data proof:
+
+- Suite gate: `/home/zerlinshen/Bioinformatics Research Pipeline/scripts/run_all_gates.sh`
+  runs 8 structure/contract checks across the three factories.
+- Real-data handoff proof:
+  `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`
+  exports a retained Round9 LUSC consensus AnnData through the current bundle
+  exporter and renders it with `r_multiomics_factory`/`plotting_factory`.
+- Failed exploratory raw-input attempt:
+  `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`
+  hung after scaffold creation and is not scientific validation evidence.
+
+Do not summarize the current suite as fully scientifically validated. The
+restored real-data harness and curated figure-parity gate remain open debt.
+
 ## Bioinformatics Research Pipeline suite
 
 Physical suite layout: this repository now lives at `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/`. The historical path `/home/zerlinshen/singlecell_factory` is retired; validators, project manifests, and bridge contracts must use canonical suite paths or repo-relative discovery.

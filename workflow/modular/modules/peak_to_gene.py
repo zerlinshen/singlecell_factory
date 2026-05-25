@@ -53,13 +53,22 @@ logger = logging.getLogger(__name__)
 
 
 __references__ = {
-    "Pliner_Cicero_2018": {
+    "Pliner_Cicero_2018_REJECTED_ALTERNATIVE": {
         "title": "Cicero Predicts cis-Regulatory DNA Interactions from Single-Cell Chromatin Accessibility Data",
         "authors": "Pliner et al.",
         "journal": "Molecular Cell",
         "year": "2018",
         "doi": "10.1016/j.molcel.2018.06.044",
-        "description": "Distance-based peak-to-gene mapping methodology; this module implements the simple nearest-TSS variant and leaves co-accessibility scoring to a Cicero-style follow-up.",
+        "description": (
+            "REJECTED ALTERNATIVE (kept for traceability only). Cicero models "
+            "peak co-accessibility within a cell using ATAC-only signal. This "
+            "module implements neither Cicero's co-accessibility scoring nor "
+            "its distance kernel; the implemented method is "
+            "Pearson + permutation-FDR over the joint ATAC+RNA cell axis "
+            "(Trevino_2021 + Ma_2020). Listed here so reviewers can verify "
+            "the methodological choice. Do NOT cite Cicero as method support "
+            "for downstream claims."
+        ),
     },
     "GENCODE_TSS": {
         "title": "GENCODE gene annotation",

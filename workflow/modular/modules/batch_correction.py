@@ -96,7 +96,7 @@ def _ensure_cpu_batch_inputs(adata) -> None:
     adata.X = _to_cpu_value(adata.X)
     for layer_key in list(adata.layers.keys()):
         adata.layers[layer_key] = _to_cpu_value(adata.layers[layer_key])
-    for rep_key in ["X_pca", "X_pca_harmony", "X_scanorama", "X_scvi", "X_mnn", "X_fastmnn"]:
+    for rep_key in ["X_pca", "X_pca_harmony", "X_pca_combat", "X_scanorama", "X_scvi", "X_mnn", "X_fastmnn"]:
         if rep_key in adata.obsm:
             adata.obsm[rep_key] = _to_cpu_value(adata.obsm[rep_key])
 
@@ -192,10 +192,30 @@ class BatchCorrectionModule:
         except Exception as exc:
             if cfg.method not in {"scvi", "mnn", "fastmnn"}:
                 raise
+            # H-6 audit fix (2026-05-22): Harmony already fails loud on
+            # backend failure. For scvi/mnn/fastmnn the user typed an
+            # explicit --batch-method choice, so a silent skip masks the
+            # fact that integration did NOT run. Require an explicit opt-in
+            # env var (matching the SC_ALLOW_WELCH_FALLBACK / F-3 pattern)
+            # before the silent skip is permitted.
+            opt_in_env = "SC_ALLOW_BATCH_BACKEND_SKIP"
+            if os.environ.get(opt_in_env, "").strip() != "1":
+                raise RuntimeError(
+                    f"batch_correction: explicitly-selected backend "
+                    f"'{cfg.method}' failed ({exc!r}) and the silent skip "
+                    f"is banned by default. Set {opt_in_env}=1 to opt in to "
+                    "the skip (and accept that batch_correction did not run); "
+                    "or fix the backend install."
+                ) from exc
             msg = f"{cfg.method} backend unavailable or failed: {exc}"
-            logger.warning("%s", msg)
-            ctx.metadata["batch_correction_status"] = f"skipped_{cfg.method}_unavailable_or_failed"
+            logger.error(
+                "%s; %s=1 acknowledged — skipping batch correction.",
+                msg, opt_in_env,
+            )
+            ctx.metadata["batch_correction_status"] = f"skipped_{cfg.method}_unavailable_or_failed_opt_in"
+            ctx.metadata["batch_correction_method_actually_used"] = "none_opt_in_skip"
             ctx.metadata["batch_correction_skip_reason"] = str(exc)
+            ctx.metadata["batch_correction_skip_opt_in_acknowledged"] = True
             ctx.status(self.name, "skipped", msg)
             return
 
@@ -203,6 +223,8 @@ class BatchCorrectionModule:
         use_rep = "X_pca"
         if cfg.method == "harmony":
             use_rep = "X_pca_harmony"
+        elif cfg.method == "combat":
+            use_rep = "X_pca_combat"
         elif cfg.method == "scanorama":
             use_rep = "X_scanorama"
         elif cfg.method == "scvi":
@@ -211,6 +233,7 @@ class BatchCorrectionModule:
             use_rep = "X_mnn"
         elif cfg.method == "fastmnn":
             use_rep = "X_fastmnn"
+        ctx.metadata["batch_correction_use_rep"] = use_rep
 
         use_gpu = gpu_available(ctx.cfg.gpu_mode)
         post_processing_ok = False
@@ -279,6 +302,14 @@ class BatchCorrectionModule:
                 )
                 ctx.metadata["batch_post_error"] = str(exc)
         ctx.metadata["batch_post_backend"] = "gpu" if use_gpu else "cpu"
+        # Non-destructive audit column: snapshot the post-correction leiden so
+        # annotation can bind cell_type to the corrected clusters even after a
+        # later module re-clusters. The `provides obs.leiden` overwrite above is
+        # intentionally kept; leiden_corrected survives parallel merge-back as a
+        # new obs column. See annotation leiden-race fix.
+        if post_processing_ok and "leiden" in adata.obs:
+            adata.obs["leiden_corrected"] = adata.obs["leiden"].copy()
+            ctx.metadata["leiden_corrected_written"] = True
         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique()) if "leiden" in adata.obs else 0
         ctx.metadata["batch_correction_status"] = "completed"
         ctx.metadata["batch_correction_random_state"] = ctx.random_state
@@ -546,7 +577,25 @@ class BatchCorrectionModule:
 
     @staticmethod
     def _run_combat(adata, batch_key: str, ctx) -> None:
+        """ComBat correction (Johnson 2007) + corrected-embedding recompute.
+
+        sc.pp.combat rewrites only adata.X. Previously the downstream
+        neighbors/UMAP/Leiden and the 'after' mixing metric still ran on the
+        stale X_pca, making ComBat a no-op for embedding/clustering. Recompute
+        PCA on the corrected X into obsm['X_pca_combat'] so use_rep='X_pca_combat'
+        flows through the post-processing recompute.
+        """
         sc.pp.combat(adata, key=batch_key)
+        n_pcs = int(getattr(ctx.cfg.clustering, "n_pcs", 50))
+        n_pcs = max(2, min(n_pcs, adata.n_obs - 1, adata.n_vars - 1))
+        # Recompute PCA on corrected X without clobbering the pre-combat
+        # obsm['X_pca'] (kept for the 'before' baseline / audit).
+        prev_pca = adata.obsm.get("X_pca")
+        sc.pp.pca(adata, n_comps=n_pcs)
+        adata.obsm["X_pca_combat"] = np.asarray(adata.obsm["X_pca"], dtype=np.float32)
+        if prev_pca is not None:
+            adata.obsm["X_pca"] = prev_pca
+        ctx.metadata["combat_n_pcs"] = n_pcs
 
     @staticmethod
     def _run_scanorama(adata, batch_key: str, ctx) -> None:

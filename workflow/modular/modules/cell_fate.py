@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import matplotlib
 
@@ -11,6 +12,11 @@ import pandas as pd
 from scipy.sparse import diags, issparse
 
 from ..context import PipelineContext
+
+
+_CELLRANK_FALLBACK_ENV = "SC_ALLOW_CELLRANK_FALLBACK"
+_FALLBACK_ENGINE = "fallback_connectivity_diffusion"
+_PRIMARY_ENGINE = "cellrank"
 
 
 __references__ = {
@@ -48,14 +54,72 @@ class CellFateModule:
         if "connectivities" not in adata.obsp:
             raise ValueError("Cell fate analysis requires a neighbors graph in adata.obsp.")
 
+        engine_used = _PRIMARY_ENGINE
+        fallback_reason: str | None = None
+        cellrank_version: str | None = None
+
         try:
             terminal_df, fate_df = self._run_cellrank(adata, ctx)
-        except ImportError:
-            logger.info("CellRank not available, using manual fallback")
+            try:
+                import cellrank as _cr
+
+                cellrank_version = getattr(_cr, "__version__", None)
+            except Exception:  # pragma: no cover - version probe only
+                cellrank_version = None
+        except ImportError as exc:
+            # Canonical missing-dep path: always allowed because the cited
+            # method (Lange 2022) requires the cellrank package. The fallback
+            # is recorded as a separate engine so consumers cannot mistake it
+            # for CellRank output.
+            logger.info("CellRank not importable (%s); using connectivity-diffusion fallback", exc)
+            engine_used = _FALLBACK_ENGINE
+            fallback_reason = f"cellrank_import_error:{exc}"
             terminal_df, fate_df = self._run_fallback(adata)
         except Exception as exc:
-            logger.warning("CellRank failed (%s), using manual fallback", exc)
+            # Non-ImportError CellRank failure: this is a silent algorithmic
+            # compromise risk (Principle 9). We refuse to silently swap the
+            # cited Lange 2022 method for the project-local diffusion proxy
+            # unless the operator explicitly opts in with SC_ALLOW_CELLRANK_FALLBACK=1.
+            if os.environ.get(_CELLRANK_FALLBACK_ENV, "").strip() != "1":
+                raise RuntimeError(
+                    "cell_fate: CellRank computation failed and the silent "
+                    "fallback to connectivity-diffusion is banned by default. "
+                    f"Original CellRank error: {exc!r}. "
+                    f"Set {_CELLRANK_FALLBACK_ENV}=1 to acknowledge that the "
+                    "downstream fate_probabilities will NOT come from the cited "
+                    "Lange 2022 method."
+                ) from exc
+            logger.error(
+                "cell_fate: %s=1 OPT-IN ACKNOWLEDGED; replacing CellRank output "
+                "with connectivity-diffusion fallback. Original error: %s",
+                _CELLRANK_FALLBACK_ENV,
+                exc,
+            )
+            engine_used = _FALLBACK_ENGINE
+            fallback_reason = f"cellrank_runtime_error_opt_in:{exc}"
+            ctx.metadata["cell_fate_fallback_opt_in_acknowledged"] = True
             terminal_df, fate_df = self._run_fallback(adata)
+
+        # --- Provenance stamp (always written, before any side-effect tables) ---
+        terminal_names = [c for c in fate_df.columns if c != "cell"]
+        adata.uns["cell_fate"] = {
+            "engine": engine_used,
+            "primary_engine": _PRIMARY_ENGINE,
+            "cellrank_version": cellrank_version,
+            "fallback_reason": fallback_reason,
+            "n_terminal_states": len(terminal_df),
+            "terminal_state_names": list(terminal_names),
+        }
+        ctx.metadata["cell_fate_engine"] = engine_used
+        ctx.metadata["cell_fate_method_actually_used"] = engine_used
+        if fallback_reason is not None:
+            ctx.metadata["cell_fate_fallback_reason"] = fallback_reason
+
+        # --- Unified obsm shape across engines (numpy float32 + uns column names) ---
+        if terminal_names:
+            fate_matrix = fate_df[terminal_names].to_numpy(dtype=np.float32, copy=False)
+            adata.obsm["fate_probabilities"] = fate_matrix
+            adata.uns["cell_fate"]["fate_probability_columns"] = list(terminal_names)
 
         # --- Save tables ---
         terminal_df.to_csv(ctx.table_dir / "terminal_states.csv", index=False)
@@ -67,7 +131,6 @@ class CellFateModule:
             logger.warning("Fewer than 2 terminal states identified (%d)", n_terminal)
 
         # --- Figures ---
-        terminal_names = [c for c in fate_df.columns if c != "cell"]
         if "X_umap" in adata.obsm and terminal_names:
             self._plot_fate_umaps(adata, fate_df, terminal_names, ctx)
         if "leiden" in adata.obs and terminal_names:
@@ -162,12 +225,10 @@ class CellFateModule:
         row_totals = np.maximum(row_totals, 1e-10)
         fate_matrix = fate_matrix / row_totals
 
-        # Store in obsm
         fate_cols = [f"fate_{tc}" for tc in terminal_clusters]
-        adata.obsm["fate_probabilities"] = pd.DataFrame(
-            fate_matrix, index=adata.obs_names, columns=fate_cols,
-        )
-
+        # Note: adata.obsm["fate_probabilities"] is written by run() in a
+        # unified shape (np.ndarray + column names in adata.uns["cell_fate"])
+        # to keep schema consistent across the cellrank and fallback engines.
         fate_df = pd.DataFrame(fate_matrix, columns=fate_cols)
         fate_df.insert(0, "cell", adata.obs_names.values)
 

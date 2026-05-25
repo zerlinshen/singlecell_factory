@@ -1,0 +1,343 @@
+{
+  "figures": [
+    {
+      "id": "nc2024_cell_fraction",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/cell_fraction.png",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_marker_dot",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/marker_dot.png",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_marker_feature",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/marker_feature.png",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_qc_scatter",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/qc_scatter.png",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_qc_violin",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/qc_violin.png",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_r",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/r.pdf",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_umap_by_cluster",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/umap_by_cluster.png",
+      "status": "conditional"
+    },
+    {
+      "id": "nc2024_umap_by_group",
+      "produced": null,
+      "reason": "produced_path_unregistered",
+      "reference": "/home/zerlinshen/data/external/published_figures/de_zuani_2024_nc_nsclc/figures/umap_by_group.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_cell_fraction",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/cell_fraction.png",
+      "produced_bytes": 131208,
+      "produced_dimensions": [
+        3200,
+        1920
+      ],
+      "produced_sha256": "c12b67d556cef0d372712862acda190eb601ea82f97cc19c6d07a81327bea01d",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/cell_fraction.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_marker_dot",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/marker_dot.png",
+      "produced_bytes": 149175,
+      "produced_dimensions": [
+        3840,
+        2560
+      ],
+      "produced_sha256": "419824247e8dba3e3278390a24da75b3d0d550905312d36a348746b5a7eebe2a",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/marker_dot.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_marker_feature",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/marker_feature.png",
+      "produced_bytes": 769749,
+      "produced_dimensions": [
+        3840,
+        2560
+      ],
+      "produced_sha256": "748d62b4899e4d209a18aa608873d9724f2825ff83714a417e00b6511450bf89",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/marker_feature.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_qc_scatter",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/qc_scatter.png",
+      "produced_bytes": 306087,
+      "produced_dimensions": [
+        3840,
+        1600
+      ],
+      "produced_sha256": "4bf64883101a9939aa28c16e3334f20e51e2649d5973e1ca9bd609ad74e68bf8",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/qc_scatter.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_qc_violin",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/qc_violin.png",
+      "produced_bytes": 489991,
+      "produced_dimensions": [
+        3840,
+        1280
+      ],
+      "produced_sha256": "9db35da460ae4323fde2f665b997973fa825bcfe5ed624e04278d4884171ece3",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/qc_violin.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_r",
+      "kind": "pdf",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/r.pdf",
+      "produced_bytes": 26703963,
+      "produced_sha256": "13217c7ce807ff073675ecaddde301a224e070b0d9d0c5f4cc07e8864a066e1a",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/r.pdf",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_umap_by_cluster",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/umap_by_cluster.png",
+      "produced_bytes": 1094890,
+      "produced_dimensions": [
+        3200,
+        2560
+      ],
+      "produced_sha256": "f34d21b799bd3ecc63fa011e343fafe048a115de6defbdd131bb552acbaf6bbc",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/umap_by_cluster.png",
+      "status": "conditional"
+    },
+    {
+      "id": "cell_trevino_umap_by_group",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/wave5-trevino/runs/2026-05-19T0557Z-349ef96/r/umap_by_group.png",
+      "produced_bytes": 980273,
+      "produced_dimensions": [
+        3200,
+        2560
+      ],
+      "produced_sha256": "daac5b6ce218c6d5a937e96809cd673e81d28dfc9db4ff2fd85ec08e59ebdb2d",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/trevino_2021_cell_brain_multiome/figures/umap_by_group.png",
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_fig1_lung_hichip_calder2_landscape",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_Fig1_lung_hichip_calder2_landscape.png",
+      "produced_bytes": 357920,
+      "produced_dimensions": [
+        2995,
+        2313
+      ],
+      "produced_sha256": "bbc27e52e18fda3eb184d57bfa246e45eb62c9053fb8e1b238e4eb10abdee269",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/yost_2025_natgenet_3d_genome_cancers/figures/Fig1.png",
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_fig2_differential_loop_volcano",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_Fig2_differential_loop_volcano.png",
+      "produced_bytes": 452299,
+      "produced_dimensions": [
+        3112,
+        1672
+      ],
+      "produced_sha256": "13635f6d8a493a7df0bd537daa4f91e475f4ff58e64544f996be7cc5c6e8d922",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/yost_2025_natgenet_3d_genome_cancers/figures/Fig2.png",
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_fig3_lineage_tf_accessibility",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_Fig3_lineage_tf_accessibility.png",
+      "produced_bytes": 269161,
+      "produced_dimensions": [
+        3034,
+        2045
+      ],
+      "produced_sha256": "5fab37760495ff1c0e149cb01509ec61f780333e483a9d0d46fb1d40d7ce0446",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/yost_2025_natgenet_3d_genome_cancers/figures/Fig3.png",
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_fig4_gene_loop_rna_coupling",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_Fig4_gene_loop_rna_coupling.png",
+      "produced_bytes": 329503,
+      "produced_dimensions": [
+        3331,
+        2693
+      ],
+      "produced_sha256": "09e15025a67b999e2801b8b84da716d2be45e3855c485127ef383ae1b164a20f",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/yost_2025_natgenet_3d_genome_cancers/figures/Fig4.png",
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_fig5_cnv_loop_axis",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_Fig5_cnv_loop_axis.png",
+      "produced_bytes": 387412,
+      "produced_dimensions": [
+        3074,
+        1906
+      ],
+      "produced_sha256": "5407bdec5e01fe8113bf06c23c6b4fd68521396cffc83fead36ca47c0753c31f",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/yost_2025_natgenet_3d_genome_cancers/figures/Fig5.png",
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_scatac_boundary_not_strict",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_scATAC_boundary_not_strict_reproduction.png",
+      "produced_bytes": 244516,
+      "produced_dimensions": [
+        3034,
+        1754
+      ],
+      "produced_sha256": "5386983ba3c6b9dcf68d7e4eeb9d4a61e8c212dbbd0917e891e87c98cabb30a8",
+      "reason": "reference_missing",
+      "reference": null,
+      "status": "conditional"
+    },
+    {
+      "id": "yost2025_extension_stk11_lkb1",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/Yost2025_Extension_STK11_LKB1.png",
+      "produced_bytes": 385975,
+      "produced_dimensions": [
+        3063,
+        2380
+      ],
+      "produced_sha256": "05120fa70a938bd06683ab0f21ee8377d8e462cde1e04ae252e67e58ebd3291f",
+      "reason": "reference_missing",
+      "reference": null,
+      "status": "conditional"
+    },
+    {
+      "id": "liu2025_ng_fig2_compaction_heterogeneity",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/MiaoLiu2025_Fig2_single_cell_3D_genome_progression.png",
+      "produced_bytes": 416671,
+      "produced_dimensions": [
+        3209,
+        2179
+      ],
+      "produced_sha256": "3e9b9815caf5c882ed7585e8f34d908a104be4b94269340d474d4aee789d144b",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/liu_2025_natgenet_kras_single_cell_3d_genome/figures/Fig2.png",
+      "status": "conditional"
+    },
+    {
+      "id": "liu2025_ng_stk11_boundary_not_primary_claim",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/MiaoLiu2025_STK11_boundary_not_primary_claim.png",
+      "produced_bytes": 222935,
+      "produced_dimensions": [
+        3139,
+        1482
+      ],
+      "produced_sha256": "11ffe4833f52f06324d2b9024eddad548267b90fe044f897986b2b4e727ff7b6",
+      "reason": "reference_missing",
+      "reference": null,
+      "status": "conditional"
+    },
+    {
+      "id": "liu2025_nc_fig2_tad_reproduction",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/QiaoweiLiu2025_Fig2_TAD_reproduction.png",
+      "produced_bytes": 322385,
+      "produced_dimensions": [
+        3606,
+        1866
+      ],
+      "produced_sha256": "c922221271a1fbbc8679acb0f381936af6734f898e764a05c0387c670b1fc3f7",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/liu_2025_natcomm_tp63_myc_loops/figures/Fig2.png",
+      "status": "conditional"
+    },
+    {
+      "id": "liu2025_nc_fig3_myc_microc_proxy",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/QiaoweiLiu2025_Fig3_MYC_microC_proxy.png",
+      "produced_bytes": 272856,
+      "produced_dimensions": [
+        3114,
+        1613
+      ],
+      "produced_sha256": "c4808d23e598a5c28e55b304956f2ba7c3a91a3f7e321fb8401596d62d3a1eb1",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/liu_2025_natcomm_tp63_myc_loops/figures/Fig3.png",
+      "status": "conditional"
+    },
+    {
+      "id": "liu2025_nc_fig6_tp63_myc_loop_axis",
+      "kind": "png",
+      "produced": "/home/zerlinshen/projects/reproductions/figure_packages/3d_lung_stk11_single_figures_20260522/figures/QiaoweiLiu2025_Fig6_TP63_MYC_loop_axis.png",
+      "produced_bytes": 251883,
+      "produced_dimensions": [
+        3149,
+        1642
+      ],
+      "produced_sha256": "6af080a2e033702b64d2ae181c39d1b270d759794537208d037974891731bc18",
+      "reason": "reference_missing",
+      "reference": "/home/zerlinshen/data/external/published_figures/liu_2025_natcomm_tp63_myc_loops/figures/Fig6.png",
+      "status": "conditional"
+    }
+  ],
+  "generated_at_utc": "2026-05-22T14:09:45.313252+00:00",
+  "schema_version": "figure_parity_gate_v1",
+  "scientific_boundary": "Curated reference figure registry. Each entry pins a produced figure to its expected curated original-paper or processed-data reference. Until the curated PNG/PDF actually exists at the `reference` path, the figure parity gate reports `conditional: reference_missing`. Until `produced` is populated, the gate reports `conditional: produced_path_unregistered`. Both are documented scientific boundaries, not silent passes.",
+  "status_counts": {
+    "conditional": 28
+  },
+  "verdict": "conditional"
+}

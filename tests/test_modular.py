@@ -1589,7 +1589,7 @@ def test_batch_correction_fastmnn_uses_fastmnn_embedding(monkeypatch, tmp_path):
 
 
 def test_batch_correction_scvi_failure_skips_module(monkeypatch, tmp_path):
-    """When scVI backend fails, batch_correction should be skipped (not failed)."""
+    """When scVI backend fails: loud RuntimeError by default (H-6); skip only on opt-in."""
     from unittest.mock import MagicMock
     from workflow.modular.modules.batch_correction import BatchCorrectionModule
     import workflow.modular.modules.batch_correction as bc_mod
@@ -1609,34 +1609,43 @@ def test_batch_correction_scvi_failure_skips_module(monkeypatch, tmp_path):
     monkeypatch.setattr(bc_mod.plt, "savefig", lambda *a, **kw: None)
     monkeypatch.setattr(bc_mod.plt, "close", lambda *a, **kw: None)
 
-    rng = np.random.default_rng(11)
-    adata = AnnData(rng.random((20, 10)).astype(np.float32))
-    adata.obs["sample"] = ["A"] * 10 + ["B"] * 10
-    adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
-    adata.obsm["X_pca"] = rng.random((20, 10)).astype(np.float32)
-    adata.obsm["X_umap"] = rng.random((20, 2)).astype(np.float32)
-
     from workflow.modular.context import PipelineContext
 
-    cfg = PipelineConfig(
-        project="p",
-        output_dir=tmp_path / "out",
-        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
-        batch=BatchConfig(method="scvi"),
-    )
-    fig_dir = tmp_path / "run" / "batch_correction"
-    fig_dir.mkdir(parents=True, exist_ok=True)
-    ctx = PipelineContext(
-        cfg=cfg,
-        run_dir=tmp_path / "run",
-        figure_dir=fig_dir,
-        table_dir=fig_dir,
-        adata=adata,
-    )
+    def _build_ctx():
+        rng = np.random.default_rng(11)
+        adata = AnnData(rng.random((20, 10)).astype(np.float32))
+        adata.obs["sample"] = ["A"] * 10 + ["B"] * 10
+        adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
+        adata.obsm["X_pca"] = rng.random((20, 10)).astype(np.float32)
+        adata.obsm["X_umap"] = rng.random((20, 2)).astype(np.float32)
+        cfg = PipelineConfig(
+            project="p",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+            batch=BatchConfig(method="scvi"),
+        )
+        fig_dir = tmp_path / "run" / "batch_correction"
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        return PipelineContext(
+            cfg=cfg,
+            run_dir=tmp_path / "run",
+            figure_dir=fig_dir,
+            table_dir=fig_dir,
+            adata=adata,
+        )
 
+    # H-6: an explicitly-selected backend failure is a loud RuntimeError by
+    # default (silent skip banned); SC_ALLOW_BATCH_BACKEND_SKIP=1 opts back in.
+    monkeypatch.delenv("SC_ALLOW_BATCH_BACKEND_SKIP", raising=False)
+    with pytest.raises(RuntimeError, match="SC_ALLOW_BATCH_BACKEND_SKIP"):
+        BatchCorrectionModule().run(_build_ctx())
+
+    monkeypatch.setenv("SC_ALLOW_BATCH_BACKEND_SKIP", "1")
+    ctx = _build_ctx()
     BatchCorrectionModule().run(ctx)
-    assert ctx.metadata["batch_correction_status"] == "skipped_scvi_unavailable_or_failed"
+    assert ctx.metadata["batch_correction_status"] == "skipped_scvi_unavailable_or_failed_opt_in"
     assert "no scvi-tools" in ctx.metadata["batch_correction_skip_reason"]
+    assert ctx.metadata["batch_correction_skip_opt_in_acknowledged"] is True
     assert ctx.module_status[-1]["status"] == "skipped"
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 
@@ -1661,34 +1670,42 @@ def test_batch_correction_mnn_failure_skips_module(monkeypatch, tmp_path):
     monkeypatch.setattr(bc_mod.plt, "savefig", lambda *a, **kw: None)
     monkeypatch.setattr(bc_mod.plt, "close", lambda *a, **kw: None)
 
-    rng = np.random.default_rng(111)
-    adata = AnnData(rng.random((20, 10)).astype(np.float32))
-    adata.obs["sample"] = ["A"] * 10 + ["B"] * 10
-    adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
-    adata.obsm["X_pca"] = rng.random((20, 10)).astype(np.float32)
-    adata.obsm["X_umap"] = rng.random((20, 2)).astype(np.float32)
-
     from workflow.modular.context import PipelineContext
 
-    cfg = PipelineConfig(
-        project="p",
-        output_dir=tmp_path / "out",
-        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
-        batch=BatchConfig(method="mnn"),
-    )
-    fig_dir = tmp_path / "run" / "batch_correction"
-    fig_dir.mkdir(parents=True, exist_ok=True)
-    ctx = PipelineContext(
-        cfg=cfg,
-        run_dir=tmp_path / "run",
-        figure_dir=fig_dir,
-        table_dir=fig_dir,
-        adata=adata,
-    )
+    def _build_ctx():
+        rng = np.random.default_rng(111)
+        adata = AnnData(rng.random((20, 10)).astype(np.float32))
+        adata.obs["sample"] = ["A"] * 10 + ["B"] * 10
+        adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
+        adata.obsm["X_pca"] = rng.random((20, 10)).astype(np.float32)
+        adata.obsm["X_umap"] = rng.random((20, 2)).astype(np.float32)
+        cfg = PipelineConfig(
+            project="p",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+            batch=BatchConfig(method="mnn"),
+        )
+        fig_dir = tmp_path / "run" / "batch_correction"
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        return PipelineContext(
+            cfg=cfg,
+            run_dir=tmp_path / "run",
+            figure_dir=fig_dir,
+            table_dir=fig_dir,
+            adata=adata,
+        )
 
+    # H-6: loud RuntimeError by default; skip only on explicit opt-in.
+    monkeypatch.delenv("SC_ALLOW_BATCH_BACKEND_SKIP", raising=False)
+    with pytest.raises(RuntimeError, match="SC_ALLOW_BATCH_BACKEND_SKIP"):
+        BatchCorrectionModule().run(_build_ctx())
+
+    monkeypatch.setenv("SC_ALLOW_BATCH_BACKEND_SKIP", "1")
+    ctx = _build_ctx()
     BatchCorrectionModule().run(ctx)
-    assert ctx.metadata["batch_correction_status"] == "skipped_mnn_unavailable_or_failed"
+    assert ctx.metadata["batch_correction_status"] == "skipped_mnn_unavailable_or_failed_opt_in"
     assert "no mnnpy" in ctx.metadata["batch_correction_skip_reason"]
+    assert ctx.metadata["batch_correction_skip_opt_in_acknowledged"] is True
     assert ctx.module_status[-1]["status"] == "skipped"
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 
@@ -1713,34 +1730,42 @@ def test_batch_correction_fastmnn_failure_skips_module(monkeypatch, tmp_path):
     monkeypatch.setattr(bc_mod.plt, "savefig", lambda *a, **kw: None)
     monkeypatch.setattr(bc_mod.plt, "close", lambda *a, **kw: None)
 
-    rng = np.random.default_rng(222)
-    adata = AnnData(rng.random((20, 10)).astype(np.float32))
-    adata.obs["sample"] = ["A"] * 10 + ["B"] * 10
-    adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
-    adata.obsm["X_pca"] = rng.random((20, 10)).astype(np.float32)
-    adata.obsm["X_umap"] = rng.random((20, 2)).astype(np.float32)
-
     from workflow.modular.context import PipelineContext
 
-    cfg = PipelineConfig(
-        project="p",
-        output_dir=tmp_path / "out",
-        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
-        batch=BatchConfig(method="fastmnn"),
-    )
-    fig_dir = tmp_path / "run" / "batch_correction"
-    fig_dir.mkdir(parents=True, exist_ok=True)
-    ctx = PipelineContext(
-        cfg=cfg,
-        run_dir=tmp_path / "run",
-        figure_dir=fig_dir,
-        table_dir=fig_dir,
-        adata=adata,
-    )
+    def _build_ctx():
+        rng = np.random.default_rng(222)
+        adata = AnnData(rng.random((20, 10)).astype(np.float32))
+        adata.obs["sample"] = ["A"] * 10 + ["B"] * 10
+        adata.obs["leiden"] = (np.arange(20) % 3).astype(str)
+        adata.obsm["X_pca"] = rng.random((20, 10)).astype(np.float32)
+        adata.obsm["X_umap"] = rng.random((20, 2)).astype(np.float32)
+        cfg = PipelineConfig(
+            project="p",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+            batch=BatchConfig(method="fastmnn"),
+        )
+        fig_dir = tmp_path / "run" / "batch_correction"
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        return PipelineContext(
+            cfg=cfg,
+            run_dir=tmp_path / "run",
+            figure_dir=fig_dir,
+            table_dir=fig_dir,
+            adata=adata,
+        )
 
+    # H-6: loud RuntimeError by default; skip only on explicit opt-in.
+    monkeypatch.delenv("SC_ALLOW_BATCH_BACKEND_SKIP", raising=False)
+    with pytest.raises(RuntimeError, match="SC_ALLOW_BATCH_BACKEND_SKIP"):
+        BatchCorrectionModule().run(_build_ctx())
+
+    monkeypatch.setenv("SC_ALLOW_BATCH_BACKEND_SKIP", "1")
+    ctx = _build_ctx()
     BatchCorrectionModule().run(ctx)
-    assert ctx.metadata["batch_correction_status"] == "skipped_fastmnn_unavailable_or_failed"
+    assert ctx.metadata["batch_correction_status"] == "skipped_fastmnn_unavailable_or_failed_opt_in"
     assert "no mnnpy" in ctx.metadata["batch_correction_skip_reason"]
+    assert ctx.metadata["batch_correction_skip_opt_in_acknowledged"] is True
     assert ctx.module_status[-1]["status"] == "skipped"
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 

@@ -150,6 +150,70 @@ Targeted evidence lane for NC2024 subtype checkpoint closure:
 
 ---
 
+## 0A. Opt-in environment variables (Principle 9 / F-3 pattern)
+
+The audit Round-2 closing added explicit opt-in gates for previously silent
+algorithmic compromises. None of these should ever be set in a
+publication-claim run unless the operator has explicitly verified the
+downstream consequences and recorded them in the run ledger.
+
+| Variable | What it permits | Default | Recorded as |
+|---|---|---|---|
+| `SC_ALLOW_WELCH_FALLBACK=1` | `differential_expression` module: Welch t-test fallback when sparse-CPU DE path is missing | unset → strict mode raises | `ctx.metadata["de_welch_opt_in_acknowledged"] = True` |
+| `SC_ALLOW_DOUBLET_NULL_FALLBACK=1` | `doublet_detection` module: all-singlets fallback when **both** rsc.scrublet AND CPU scrublet raise (failure-based path only; the tiny-dataset degenerate path remains exempt) | unset → strict mode raises | `ctx.metadata["doublet_null_fallback_opt_in_acknowledged"] = True`; `doublet_method_actually_used = "fallback_all_singlets_opt_in"` |
+| `SC_ALLOW_CELLRANK_FALLBACK=1` | `cell_fate` module: connectivity-diffusion fallback when CellRank raises a non-ImportError exception (ImportError fallback always allowed and stamped) | unset → strict mode raises | `ctx.metadata["cell_fate_fallback_opt_in_acknowledged"] = True`; `adata.uns["cell_fate"]["engine"] = "fallback_connectivity_diffusion"` |
+| `SC_ALLOW_BATCH_BACKEND_SKIP=1` | `batch_correction` module: silent skip when an explicitly-selected scvi/mnn/fastmnn backend fails (Harmony unchanged — always fail-loud) | unset → strict mode raises | `ctx.metadata["batch_correction_skip_opt_in_acknowledged"] = True`; `batch_correction_method_actually_used = "none_opt_in_skip"` |
+| `SC_AMBIENT_TRIGGERS_DISABLE=1` | `ambient_correction` module: force-skip DecontX irrespective of QC triggers (paper-faithful reproduction mode) | unset → triggered-on policy | `adata.uns["ambient_correction"]["decision"] = "force_skip_env_disabled"` |
+| `SC_REQUIRE_PROJECT_ROOT=1` | Pipeline entry: fail-fast on missing `--project-root` instead of falling back to legacy `output/` | unset → DeprecationWarning + legacy fallback | controller error exit |
+
+A run that sets any of `SC_ALLOW_*_FALLBACK` should record:
+- the env var actually set
+- the resulting `*_actually_used` field from `run_manifest.json`
+- the reviewer's explicit acknowledgement in `ops/before_every_run/`
+
+---
+
+## 0B. Tier-3 methodology dependencies (2026-05-22 ralplan close)
+
+These conda envs and reference assets are required when running the
+upgraded canonical modules. All are local, no further downloads needed.
+
+| Module | Env / asset | Path |
+|---|---|---|
+| `chromvar` full mode (pychromvar) | `sc10x_methods` conda env (pychromvar 0.0.4, biopython 1.87) | `/home/zerlinshen/conda/envs/sc10x_methods/bin/python` |
+| `chromvar` PWMs | JASPAR2024 CORE non-redundant | `singlecell_factory/data/references/JASPAR2024/JASPAR2024_CORE_non-redundant_pfms_meme.txt` (sha256 stored alongside) |
+| `chromvar` genome | GRCh38 (Cell Ranger refdata) | `singlecell_factory/ref/reference/refdata-gex-GRCh38-2024-A/fasta/genome.fa` |
+| `multimodal_integration` MOFA | `sc10x_methods` (muon 0.1.7, mofapy2 0.7.4) | same env |
+| `multimodal_integration` WNN | `r_multiomics` (Seurat 5.4.0) | `/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript` |
+| `spatial_neighborhoods` | `sc10x_methods` (squidpy 1.8.1) | same env |
+| `projection_module.R` | `r_multiomics` (Seurat 5.4.0, SingleR 2.12.0, celldex 1.20.0, harmony 1.2.4) | same Rscript |
+| `projection_module.R` symphony backend | optional install (`remotes::install_github("immunogenomics/symphony")`) | pending GitHub rate-limit window |
+
+Smoke tests (all exit 0 on 2026-05-22):
+
+```bash
+# chromVAR pychromvar
+/home/zerlinshen/conda/envs/sc10x_methods/bin/python \
+    "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/scripts/test_chromvar_pychromvar_smoke.py"
+
+# multimodal MOFA
+/home/zerlinshen/conda/envs/sc10x_methods/bin/python \
+    "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/scripts/test_multimodal_wnn_mofa_smoke.py"
+
+# spatial neighborhoods (Visium V1 Mouse Brain)
+/home/zerlinshen/conda/envs/sc10x_methods/bin/python \
+    "/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/scripts/test_spatial_neighborhoods_visium_smoke.py"
+
+# projection (R)
+/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript \
+    "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/scripts/test_projection_module_smoke.R"
+```
+
+Evidence record:
+`governance/external_references/audits/tier3_methodology_uplift_2026-05-22.md`.
+
+---
+
 ## 1. What You Will Do
 
 You will:
@@ -162,7 +226,7 @@ You will:
 7. Tune parameters safely.
 
 Pipeline structure:
-- Mandatory modules (always): `cellranger -> qc -> doublet_detection`
+- Mandatory modules (always): `cellranger -> qc -> ambient_correction -> doublet_detection`
 - Optional modules (22): selected by `--optional-modules` with auto dependency resolution.
 
 Doublet backend discipline:
@@ -271,6 +335,7 @@ implementation/registry/tests.
 Mandatory:
 - `cellranger`
 - `qc`
+- `ambient_correction`
 - `doublet_detection`
 
 Optional (22):

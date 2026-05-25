@@ -109,7 +109,28 @@ setting `SC_REQUIRE_PROJECT_ROOT=1` to fail-fast on a missing `--project-root`.
 Never rely on the legacy `output/` fallback — it emits a `DeprecationWarning`
 and will be removed in Round-2.
 
-## Current State (2026-05-16)
+## Current State (2026-05-25)
+
+The current suite-level validation posture is intentionally honest:
+
+- The one-command suite gate is an 8-step structure/contract harness, not a
+  complete scientific validation harness.
+- Current bounded real-data handoff proof:
+  `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`.
+  It uses a retained Round9 LUSC consensus AnnData and validates current
+  `singlecell_factory` compact-bundle export into `r_multiomics_factory` and
+  `plotting_factory` rendering.
+- Failed exploratory raw-input rerun:
+  `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`.
+  It hung after scaffold creation and is not validation evidence.
+- `r_multiomics_arrow` is the working R environment for parquet v2 bundle
+  plotting. The default `r_multiomics` env is missing R package `arrow`.
+
+This does not prove NG2025 end-to-end reproduction or full raw-input pipeline
+correctness. Treat restored real-data and curated figure-parity gates as open
+release-readiness work.
+
+## Historical State (2026-05-16)
 
 **Wave-5 Trevino PCW21 (biology-aware validation pivot, plan v4.2)** is the most recent canonical work:
 
@@ -196,7 +217,8 @@ skill management. `codex_skills/` remains only as a legacy compatibility mirror
 for historical project-local skills.
 
 ## Contract Rules (Must Keep)
-- Mandatory module chain remains: `cellranger -> qc -> doublet_detection`.
+- Mandatory module chain remains:
+  `cellranger -> qc -> ambient_correction -> doublet_detection`.
 - Dependency graph updates must be reflected in `workflow/modular/pipeline.py`.
 - Each module writes only within its own module directory via context helpers.
 - `module_status.csv` and `run_manifest.json` are source-of-truth artifacts.

@@ -109,6 +109,31 @@ class TrajectoryModule:
 
         sc.tl.dpt(adata)
 
+        # M-3 audit fix (2026-05-22): persist trajectory provenance in
+        # adata.uns so downstream consumers (cell_fate, pseudo_velocity,
+        # bundle export) can tell which embedding was used to compute
+        # dpt_pseudotime — PCA-only vs WNN joint embedding meaningfully
+        # changes the interpretation of any fate or velocity claim.
+        try:
+            import scanpy as _sc
+
+            scanpy_version = getattr(_sc, "__version__", None)
+        except Exception:  # pragma: no cover - version probe only
+            scanpy_version = None
+        adata.uns["trajectory"] = {
+            "engine": "scanpy",
+            "method": "paga_dpt",
+            "scanpy_version": scanpy_version,
+            "embedding_key": embedding_key,
+            "iroot": int(adata.uns.get("iroot", 0)),
+            "root_cluster": (
+                str(root_cluster) if root_cluster is not None else None
+            ),
+            "n_obs": int(adata.n_obs),
+        }
+        ctx.metadata["trajectory_engine"] = "scanpy_paga_dpt"
+        ctx.metadata["trajectory_method_actually_used"] = "scanpy_paga_dpt"
+
         # --- Tables ---
         adata.obs[["dpt_pseudotime"]].to_csv(ctx.table_dir / "dpt_pseudotime.csv")
 

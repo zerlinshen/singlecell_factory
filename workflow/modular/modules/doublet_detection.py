@@ -115,6 +115,61 @@ class DoubletDetectionModule:
         return np.asarray(x)
 
     @staticmethod
+    def _matrix_looks_integer_like(matrix, sample_size: int = 2048) -> bool:
+        """Heuristic: does `matrix` resemble raw non-negative integer counts?
+
+        Mirrors batch_correction._matrix_looks_integer_like so the doublet
+        raw-counts resolver does not need to import the batch module.
+        """
+        if sparse.issparse(matrix):
+            values = matrix.data
+        else:
+            values = np.asarray(matrix).ravel()
+        if values.size == 0:
+            return True
+        if values.size > sample_size:
+            idx = np.linspace(0, values.size - 1, sample_size, dtype=int)
+            values = values[idx]
+        finite = values[np.isfinite(values)]
+        if finite.size == 0:
+            return False
+        if np.any(finite < 0):
+            return False
+        return bool(np.allclose(finite, np.round(finite), atol=1e-6))
+
+    @classmethod
+    def _resolve_raw_counts_matrix(cls, adata):
+        """Return a raw-integer-UMI count matrix for Scrublet, or RAISE.
+
+        Scrublet's synthetic-doublet model assumes raw integer UMI counts.
+        ambient_correction overwrites adata.X with FRACTIONAL decontXcounts
+        (raw preserved at layers['counts_raw_pre_decontx']), so feeding adata.X
+        directly violates the model. Priority resolver (no silent fallback):
+          1. layers['counts']                  (pseudobulk-DE raw layer)
+          2. layers['counts_raw_pre_decontx']  (ambient-correction snapshot)
+          3. adata.X IFF it looks integer-like  (ambient never fired)
+          4. loud RAISE                         (Principle 9: no silent compromise)
+
+        Returns (matrix, source_label). `matrix` shares dtype/sparsity with the
+        chosen source (caller swaps it onto adata.X under try/finally).
+        """
+        layers = getattr(adata, "layers", {})
+        if "counts" in layers:
+            return layers["counts"], "layers.counts"
+        if "counts_raw_pre_decontx" in layers:
+            return layers["counts_raw_pre_decontx"], "layers.counts_raw_pre_decontx"
+        if cls._matrix_looks_integer_like(adata.X):
+            return adata.X, "adata.X_integer_like"
+        raise RuntimeError(
+            "doublet_detection: no raw integer-UMI count source for Scrublet. "
+            "adata.X is not integer-like (likely fractional ambient-corrected "
+            "counts) and neither layers['counts'] nor "
+            "layers['counts_raw_pre_decontx'] is present. Scrublet's "
+            "synthetic-doublet model requires raw counts; refusing to score on "
+            "fractional input (Principle 9: no silent algorithmic compromise)."
+        )
+
+    @staticmethod
     def _resolve_doublet_strategy(ctx, adata) -> str:
         """Return the effective doublet strategy string.
 
@@ -259,12 +314,39 @@ class DoubletDetectionModule:
             return col.to_numpy()
         return np.asarray(col)
 
+    # Opt-in env var for failure-based all-singlets fallback. The
+    # tiny-dataset path remains exempt because n_obs<20 / n_vars<50 is a
+    # legitimate degenerate input where no doublet algorithm can produce
+    # meaningful calls. The two FAILURE-based paths (rsc+cpu scrublet both
+    # raise, or stand-alone scrublet raises) are silent algorithmic
+    # compromises (Principle 9) and now require explicit acknowledgement.
+    _NULL_FALLBACK_ENV = "SC_ALLOW_DOUBLET_NULL_FALLBACK"
+
     @staticmethod
     def _fallback_all_singlets(n_obs: int, reason: str) -> tuple[np.ndarray, np.ndarray]:
         scores = np.zeros(n_obs, dtype=np.float32)
         predicted = np.zeros(n_obs, dtype=bool)
         logger.info("Doublet detection fallback activated: %s", reason)
         return scores, predicted
+
+    @classmethod
+    def _require_null_fallback_opt_in(cls, primary_exc: Exception, secondary_exc: Exception | None = None) -> None:
+        """Raise unless the operator has opted in to the all-singlets fallback on real failures.
+
+        Tiny-dataset degeneracy is exempt and handled at its own call site.
+        """
+        if os.environ.get(cls._NULL_FALLBACK_ENV, "").strip() == "1":
+            return
+        detail = f"primary={primary_exc!r}"
+        if secondary_exc is not None:
+            detail += f"; secondary={secondary_exc!r}"
+        raise RuntimeError(
+            "doublet_detection: all backend attempts failed and the silent "
+            "all-singlets fallback is banned by default (Principle 9). "
+            f"Errors: {detail}. Set {cls._NULL_FALLBACK_ENV}=1 to acknowledge "
+            "that the run will record zero doublets and proceed; the run "
+            "manifest will mark this as fallback_all_singlets_opt_in."
+        ) from primary_exc
 
     @staticmethod
     def _write_10x_mtx_triplet(adata, mtx_dir: Path) -> None:
@@ -748,6 +830,8 @@ class DoubletDetectionModule:
         _computed = False
         # Scrublet can fail on tiny/degenerate datasets; keep pipeline usable by
         # falling back to "all singlets" rather than aborting mandatory stage.
+        # Tiny-dataset path never invokes a count-based caller, so it runs
+        # outside the raw-counts .X swap below.
         if adata.n_obs < 20 or adata.n_vars < 50:
             doublet_scores, predicted_doublets = self._fallback_all_singlets(
                 adata.n_obs,
@@ -755,6 +839,67 @@ class DoubletDetectionModule:
             )
             ctx.metadata["doublet_method"] = "fallback_all_singlets"
             _computed = True
+
+        # Raw-counts .X swap (try/finally) around ALL count-based doublet calls.
+        # ambient_correction may have overwritten adata.X with fractional
+        # decontXcounts; Scrublet/DoubletFinder/scDblFinder all model raw
+        # integer UMIs. Swap the resolved raw counts onto adata.X for the
+        # compute block and ALWAYS restore the original .X afterward (before the
+        # post-doublet row-subset). GPU paths use adata.copy(), so the swapped
+        # .X propagates to device.
+        _original_x = None
+        _x_swapped = False
+        if _computed:
+            doublet_scores_local = doublet_scores
+            predicted_local = predicted_doublets
+            backend_local = backend
+            threshold_local = threshold
+        else:
+            raw_counts, raw_source = self._resolve_raw_counts_matrix(adata)
+            ctx.metadata["doublet_input_source"] = raw_source
+            if raw_source != "adata.X_integer_like":
+                _original_x = adata.X
+                adata.X = raw_counts
+                _x_swapped = True
+            try:
+                (
+                    doublet_scores_local,
+                    predicted_local,
+                    threshold_local,
+                    backend_local,
+                ) = self._compute_doublets_with_raw_x(
+                    ctx, adata, cfg, backend, random_state,
+                    computed=_computed,
+                    scores=None,
+                    predicted=None,
+                    threshold=threshold,
+                )
+            finally:
+                if _x_swapped:
+                    adata.X = _original_x
+
+        self._finalize_doublets(
+            ctx, adata, cfg, backend_local, random_state,
+            doublet_scores_local, predicted_local, threshold_local,
+        )
+        return
+
+    def _compute_doublets_with_raw_x(
+        self, ctx, adata, cfg, backend, random_state, *,
+        computed, scores, predicted, threshold,
+    ) -> None:
+        """Count-based doublet compute block, run with raw-integer .X in place.
+
+        Split out of run() so the raw-counts .X swap in run() can wrap every
+        Scrublet/DoubletFinder/scDblFinder/consensus path in a single
+        try/finally, guaranteeing .X is restored before the row-subset.
+        """
+        _computed = computed
+        doublet_scores = scores
+        predicted_doublets = predicted
+        if _computed:
+            # Tiny-dataset all-singlets path already produced results in run().
+            pass
         elif backend == "doubletfinder":
             try:
                 doublet_scores, predicted_doublets, threshold = self._run_doubletfinder_via_r(
@@ -844,11 +989,17 @@ class DoubletDetectionModule:
                         ctx.metadata["doublet_method"] = "cpu_scrublet_fallback_from_rsc"
                         ctx.metadata["doublet_rsc_failure_reason"] = str(exc)
                     except Exception as cpu_exc:
-                        logger.warning("CPU scrublet retry also failed, falling back to all singlets: %s", cpu_exc)
+                        logger.error(
+                            "CPU scrublet retry also failed; gating on %s. rsc=%s cpu=%s",
+                            self._NULL_FALLBACK_ENV, exc, cpu_exc,
+                        )
+                        self._require_null_fallback_opt_in(exc, cpu_exc)
                         doublet_scores, predicted_doublets = self._fallback_all_singlets(
                             adata.n_obs, reason=f"rsc={exc}; cpu_scrublet={cpu_exc}",
                         )
-                        ctx.metadata["doublet_method"] = "fallback_all_singlets"
+                        ctx.metadata["doublet_method"] = "fallback_all_singlets_opt_in"
+                        ctx.metadata["doublet_method_actually_used"] = "fallback_all_singlets_opt_in"
+                        ctx.metadata["doublet_null_fallback_opt_in_acknowledged"] = True
                         ctx.metadata["doublet_rsc_failure_reason"] = str(exc)
                         ctx.metadata["doublet_cpu_failure_reason"] = str(cpu_exc)
             else:
@@ -876,14 +1027,36 @@ class DoubletDetectionModule:
                             logger.info("Scrublet auto-threshold: %.4f", threshold)
                         ctx.metadata["doublet_method"] = "scrublet"
                     except Exception as exc:
-                        logger.warning("Scrublet failed, falling back to all singlets: %s", exc)
-                        doublet_scores, predicted_doublets = self._fallback_all_singlets(
-                            adata.n_obs, reason=str(exc)
+                        logger.error(
+                            "Scrublet failed; gating on %s. error=%s",
+                            self._NULL_FALLBACK_ENV, exc,
                         )
-                        ctx.metadata["doublet_method"] = "fallback_all_singlets"
+                        self._require_null_fallback_opt_in(exc)
+                        doublet_scores, predicted_doublets = self._fallback_all_singlets(
+                            adata.n_obs, reason=str(exc),
+                        )
+                        ctx.metadata["doublet_method"] = "fallback_all_singlets_opt_in"
+                        ctx.metadata["doublet_method_actually_used"] = "fallback_all_singlets_opt_in"
+                        ctx.metadata["doublet_null_fallback_opt_in_acknowledged"] = True
+                        ctx.metadata["doublet_scrublet_failure_reason"] = str(exc)
 
+        # Return raw results to run(); metadata assembly, visualization, and the
+        # row-subset happen in run() AFTER the .X swap is restored.
+        return doublet_scores, predicted_doublets, threshold, backend
+
+    def _finalize_doublets(
+        self, ctx, adata, cfg, backend, random_state,
+        doublet_scores, predicted_doublets, threshold,
+    ) -> None:
+        """Record metadata, plot, and apply the row-subset (raw .X restored)."""
         ctx.metadata["doublet_backend"] = backend
         ctx.metadata.setdefault("doublet_method", backend)
+        # Mirror doublet_method into a manifest-stable field so every run
+        # records which engine actually produced the predicted_doublet column,
+        # including the degenerate-input tiny-dataset case and the opt-in
+        # null fallback. This lets reviewers gate publication claims without
+        # parsing per-path metadata keys.
+        ctx.metadata.setdefault("doublet_method_actually_used", ctx.metadata["doublet_method"])
         ctx.metadata["doublet_random_state"] = random_state
 
         adata.obs["doublet_score"] = doublet_scores

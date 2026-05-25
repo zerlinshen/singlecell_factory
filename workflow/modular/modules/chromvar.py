@@ -243,11 +243,30 @@ def _maybe_pychromvar(adata, cfg) -> tuple[np.ndarray, list[str], dict] | None:
         logger.info("chromvar: pychromvar not importable (%s) — lightweight fallback.", exc)
         return None
     # pychromvar expects an AnnData with X = peaks; we shim from obsm['atac_peaks'].
-    atac_var = adata.uns["atac_var"]
+    # 2026-05-22 audit fix: pychromvar 0.0.4 splits adata.var_names by a single
+    # delimiter (default "-") and reads positions [0],[1],[2] as chrom/start/end.
+    # The 10x convention "chr1:1000-1500" splits to only two tokens and breaks
+    # the indexing. Normalize the index to "{chrom}-{start}-{end}" so the
+    # default delimiter works, regardless of how upstream produced peak_id.
+    atac_var = adata.uns["atac_var"].copy()
+    if {"chrom", "start", "end"}.issubset(atac_var.columns):
+        canonical_names = (
+            atac_var["chrom"].astype(str)
+            + "-"
+            + atac_var["start"].astype(int).astype(str)
+            + "-"
+            + atac_var["end"].astype(int).astype(str)
+        )
+        var_for_pychromvar = atac_var.copy()
+        var_for_pychromvar.index = canonical_names.values
+    elif "peak_id" in atac_var.columns:
+        var_for_pychromvar = atac_var.set_index("peak_id")
+    else:
+        var_for_pychromvar = atac_var
     atac_ad = AnnData(
         X=adata.obsm["atac_peaks"],
         obs=adata.obs[[]].copy(),
-        var=atac_var.set_index("peak_id") if "peak_id" in atac_var.columns else atac_var,
+        var=var_for_pychromvar,
     )
     pc.add_peak_seq(atac_ad, genome_file=str(genome_fa))
     pc.add_gc_bias(atac_ad)
@@ -271,11 +290,50 @@ def _maybe_pychromvar(adata, cfg) -> tuple[np.ndarray, list[str], dict] | None:
 
 
 def _load_meme_motifs(path: Path):
-    """Minimal MEME / JASPAR motif parser — pychromvar tolerates a list of
-    Bio.motifs.Motif. Kept inline to avoid extra utility module."""
+    """Parse motifs from MEME-format file (JASPAR2024 text or MEME XML).
+
+    Biopython's ``Bio.motifs.parse(handle, "MEME")`` expects MEME-XML output
+    (from the ``meme`` discovery tool). JASPAR distributes motifs in
+    MEME-text format which Biopython exposes as ``"minimal"``. We probe the
+    file header to choose the right parser; downstream pychromvar tolerates
+    a list of ``Bio.motifs.Motif`` from either source.
+
+    pychromvar 0.0.4's ``match_motif`` requires each motif object to expose
+    ``matrix_id`` and ``name`` attributes in JASPAR convention. Biopython's
+    minimal-MEME parser only sets ``.name`` to the raw ``MOTIF`` line text,
+    so we attach a JASPAR-style ``matrix_id`` (first whitespace token of the
+    MOTIF line) and split-out short ``name`` (remaining text) before
+    returning. This adapter is invisible to callers and only normalizes
+    metadata, never PWM weights.
+    """
     from Bio import motifs
+    text = Path(path).read_text(encoding="utf-8", errors="ignore")
+    if text.lstrip().lower().startswith("<?xml") or "<MEME " in text[:512]:
+        fmt = "MEME"
+    else:
+        # 2026-05-22 audit fix: JASPAR2024_CORE_non-redundant_pfms_meme.txt is
+        # MEME minimal text, not MEME XML; biopython names that parser
+        # "minimal".
+        fmt = "minimal"
     with open(path) as fh:
-        return list(motifs.parse(fh, "MEME"))
+        parsed = list(motifs.parse(fh, fmt))
+    # Normalize matrix_id / name for pychromvar's JASPAR-style expectation.
+    for idx, m in enumerate(parsed):
+        raw_name = getattr(m, "name", None) or f"motif_{idx}"
+        tokens = str(raw_name).split(None, 1)
+        matrix_id = tokens[0]
+        short_name = tokens[1] if len(tokens) > 1 else matrix_id
+        try:
+            m.matrix_id = matrix_id  # type: ignore[attr-defined]
+            m.name = short_name  # type: ignore[attr-defined]
+        except Exception:
+            # Some Motif implementations use __slots__; fall back to setattr-via-dict.
+            try:
+                m.__dict__["matrix_id"] = matrix_id
+                m.__dict__["name"] = short_name
+            except Exception:
+                pass
+    return parsed
 
 
 class ChromVARModule:
@@ -385,8 +443,20 @@ class ChromVARModule:
             encoding="utf-8",
         )
 
-        ctx.metadata["chromvar_status"] = "ok"
+        # H-1 audit fix (2026-05-22): give lightweight vs strict modes
+        # distinct top-level status strings so downstream consumers reading
+        # the manifest cannot mistake the FASTA-free deviation lane (no
+        # GC-matched background, no permutation null) for the canonical
+        # Schep 2017 / pychromvar workflow.
+        ctx.metadata["chromvar_status"] = (
+            "ok_pychromvar" if mode == "pychromvar" else "ok_lightweight"
+        )
         ctx.metadata["chromvar_mode"] = mode
+        ctx.metadata["chromvar_method_actually_used"] = (
+            "pychromvar_full_gc_matched_background"
+            if mode == "pychromvar"
+            else "lightweight_fasta_free_deviation_proxy"
+        )
         ctx.metadata["chromvar_n_tfs"] = len(tfs)
         logger.info("chromvar: mode=%s, n_tfs=%d, n_cells=%d",
                     mode, len(tfs), Z.shape[0])

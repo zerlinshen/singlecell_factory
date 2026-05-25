@@ -364,6 +364,36 @@ class RNAVelocityModule:
             k: round(v, 3) for k, v in step_times.items()
         }
 
+        # H-4 audit fix (2026-05-22): bundle consumers reading the h5ad
+        # cannot otherwise tell which scVelo version produced the velocity
+        # layers, nor whether the numpy 2.x monkeypatch was applied. Stamp
+        # provenance into adata.uns directly so it survives bundle export.
+        scvelo_version = getattr(scv, "__version__", None)
+        anndata_version = None
+        try:
+            import anndata as _ad  # noqa: WPS433
+
+            anndata_version = getattr(_ad, "__version__", None)
+        except Exception:  # pragma: no cover - version probe only
+            anndata_version = None
+        adata.uns["rna_velocity"] = {
+            "engine": "scvelo",
+            "scvelo_version": scvelo_version,
+            "anndata_version": anndata_version,
+            "mode": cfg.mode,
+            "numpy2_patch_applied": True,
+            "n_pcs": cfg.n_pcs,
+            "n_neighbors": cfg.n_neighbors,
+            "min_shared_counts": cfg.min_shared_counts,
+            "n_vars_after_filter": int(adata_v.n_vars),
+            "n_vars_original": int(n_vars_original),
+            "random_state": int(ctx.random_state),
+            "step_seconds": {k: round(v, 3) for k, v in step_times.items()},
+        }
+        ctx.metadata["rna_velocity_engine"] = "scvelo"
+        ctx.metadata["rna_velocity_method_actually_used"] = f"scvelo_{cfg.mode}"
+        ctx.metadata["rna_velocity_scvelo_version"] = scvelo_version
+
     # ------------------------------------------------------------------
     # Data loading
     # ------------------------------------------------------------------

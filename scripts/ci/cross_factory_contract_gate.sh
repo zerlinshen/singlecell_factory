@@ -22,6 +22,40 @@ R_REPO="$PARENT_DIR/r_multiomics_factory"
 
 FAIL=0
 
+expected_hash_for_key() {
+    local expected_file="$1"
+    local key="$2"
+    awk -v key="$key" '$1 == key { print $2 }' "$expected_file"
+}
+
+check_expected_hash() {
+    local expected_file="$1"
+    local key="$2"
+    local actual_hash="$3"
+    local label="$4"
+    local expected_hash
+
+    if [[ ! -f "$expected_file" ]]; then
+        echo "FAIL: missing .expected_sha256 sentinel for $label: $expected_file" >&2
+        FAIL=1
+        return
+    fi
+    expected_hash="$(expected_hash_for_key "$expected_file" "$key")"
+    if [[ -z "$expected_hash" ]]; then
+        echo "FAIL: $label missing '$key' entry in .expected_sha256" >&2
+        FAIL=1
+        return
+    fi
+    if [[ "$actual_hash" != "$expected_hash" ]]; then
+        echo "FAIL: $label $key hash does not match .expected_sha256" >&2
+        echo "  computed: $actual_hash" >&2
+        echo "  expected: $expected_hash" >&2
+        FAIL=1
+        return
+    fi
+    echo "OK: $label $key matches .expected_sha256"
+}
+
 # ---------------------------------------------------------------------------
 # 1. bundle_schema.yaml byte-identical between SC and r_multiomics_factory
 # ---------------------------------------------------------------------------
@@ -56,6 +90,9 @@ else
     echo "OK: bundle_schema.yaml sha256=$SC_HASH"
 fi
 
+check_expected_hash "$SC_REPO/contracts/.expected_sha256" "bundle_schema" "$SC_HASH" "singlecell_factory"
+check_expected_hash "$R_REPO/contracts/.expected_sha256" "bundle_schema" "$R_HASH" "r_multiomics_factory"
+
 # ---------------------------------------------------------------------------
 # 2. figure_bundle_schema.yaml byte-identical across all three repos (Phase 3)
 # ---------------------------------------------------------------------------
@@ -88,6 +125,10 @@ if [[ "$SC_FIG_HASH" != "$R_FIG_HASH" ]] || [[ "$SC_FIG_HASH" != "$PLOT_FIG_HASH
 else
     echo "OK: figure_bundle_schema.yaml sha256=$SC_FIG_HASH (all 3 repos)"
 fi
+
+check_expected_hash "$SC_REPO/contracts/.expected_sha256" "figure_bundle_schema" "$SC_FIG_HASH" "singlecell_factory"
+check_expected_hash "$R_REPO/contracts/.expected_sha256" "figure_bundle_schema" "$R_FIG_HASH" "r_multiomics_factory"
+check_expected_hash "$PLOT_REPO/contracts/.expected_sha256" "figure_bundle_schema" "$PLOT_FIG_HASH" "plotting_factory"
 
 # ---------------------------------------------------------------------------
 # 3. Bridge symlinks resolve via readlink -f

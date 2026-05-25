@@ -49,8 +49,10 @@ As of 2026-05, the working tree follows a three-way split. Full plan:
   compute tool. Writes to `<project-root>/runs/<run-id>/r/`.
 - **`plotting_factory`** (`/home/zerlinshen/Bioinformatics Research Pipeline/plotting_factory/`): dual-language
   visualization library (`python/` + `r/` subtrees). Figures write to
-  `<project-root>/runs/<run-id>/figures/`. Theme tokens, per-plot schemas, and
-  `figure_bundle_schema.yaml` contracts live here (Phase 3+).
+  project-owned output directories, such as `<project-root>/runs/<run-id>/r/`
+  for R bundle renders or `<project-root>/figure_packages/<id>/` for
+  reproduction figure packages. Theme tokens, per-plot schemas, and
+  `figure_bundle_schema.yaml` contracts live here.
 - **`projects/`** (`/home/zerlinshen/projects/<project-id>/`): self-contained
   project directories. Create with `omc-new-project` from
   `/home/zerlinshen/projects-bootstrap/`.
@@ -173,7 +175,28 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
-## Current State (2026-05-20)
+## Current State (2026-05-25)
+
+The current validation stack has two distinct tiers:
+
+- `bash /home/zerlinshen/Bioinformatics Research Pipeline/scripts/run_all_gates.sh`
+  is the suite structure/contract harness. It must pass before claiming the
+  factories are synchronized, but it does not prove scientific parity.
+- `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`
+  is the current bounded real-data cross-factory proof. It exports a retained
+  Round9 LUSC consensus AnnData with current `singlecell_factory`, reads and
+  renders it with `r_multiomics_factory` in `r_multiomics_arrow`, and exercises
+  plotting helpers through the governed bridge.
+
+Do not cite `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`
+as validation evidence; it is a recorded failed exploratory scaffold from a
+hung HGMM raw-input rerun.
+
+Environment caveat: the default `r_multiomics` env lacks R package `arrow` for
+v2 parquet bundle plotting; use `r_multiomics_arrow` until the canonical env is
+repaired.
+
+## Historical State (2026-05-20)
 
 > **NC2024 ABORTED (2026-05-20).** The two-real-dataset bridge validation gate
 > (`validate_two_realdata_final.py`, `validate_nc2024_architecture_contract.py`,
