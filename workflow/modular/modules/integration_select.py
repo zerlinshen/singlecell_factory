@@ -28,6 +28,7 @@ the shuffle control uses seed=0.
 """
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -131,7 +132,8 @@ class IntegrationSelectModule:
             return
 
         # --- Cache MISS: compute candidate embeddings on the production backends.
-        embeddings = self._compute_embeddings(adata, batch_key, scvi_seeds)
+        embeddings, candidates_failed = self._compute_embeddings(
+            adata, batch_key, scvi_seeds)
 
         # Score + recommend via the reviewed gate.
         results, ref = dm.score_all_embeddings_discovery(
@@ -158,7 +160,7 @@ class IntegrationSelectModule:
         sel.write_discovery_scoreboard(results, out_dir / "integration_scoreboard.csv")
         sel.write_audit_md(payload, out_dir / "integration_audit.md")
         (out_dir / "integration_audit.json").write_text(
-            __import__("json").dumps(payload, indent=2) + "\n"
+            json.dumps(payload, indent=2) + "\n"
         )
         cache.store(cache_key, payload)
 
@@ -170,7 +172,15 @@ class IntegrationSelectModule:
             "cache_key": cache_key.digest(),
             "rule_constants": rec.rule_constants,
             "shuffle_control_fired": bool(controls.get("shuffle_fired")),
+            # Candidates whose embedding failed to compute (excluded from the
+            # gate). Surfaced here so a post-run reviewer sees a degraded
+            # candidate set rather than only a buried log line (review LOW).
+            "candidates_failed": candidates_failed,
         }
+        if candidates_failed:
+            payload["candidates_failed"] = candidates_failed
+            (out_dir / "integration_audit.json").write_text(
+                json.dumps(payload, indent=2) + "\n")
         ctx.metadata["integration_select_status"] = "completed"
         ctx.status(
             self.name,
@@ -203,23 +213,30 @@ class IntegrationSelectModule:
         return out_dir
 
     @staticmethod
-    def _compute_embeddings(adata, batch_key: str, scvi_seeds: tuple[int, ...]) -> dict:
+    def _compute_embeddings(
+        adata, batch_key: str, scvi_seeds: tuple[int, ...]
+    ) -> tuple[dict, list[dict]]:
         """Build the candidate embeddings dict via the production-backed helpers.
 
         baseline = X_pca (already present); harmony via harmonypy-direct; scVI
         seed sweep; shuffle control (required falsifiability anchor). Reuses
-        scripts/bench/integration/methods.py call signatures verbatim.
+        scripts/bench/integration/methods.py call signatures verbatim. Returns
+        ``(embeddings, candidates_failed)`` — a failed candidate is excluded from
+        the gate AND recorded in ``candidates_failed`` (surfaced in metadata so a
+        degraded candidate set is visible post-run, not only in logs).
         """
         from scripts.bench.integration import methods as M
 
         embeddings: dict[str, np.ndarray] = {
             M.BASELINE_METHOD: np.asarray(adata.obsm["X_pca"], dtype=np.float64),
         }
+        failed: list[dict] = []
 
         harmony = M.compute_harmonypy_direct(adata, batch_key)
         if harmony.X is not None:
             embeddings[M.HARMONY_METHOD] = np.asarray(harmony.X, dtype=np.float64)
         else:
+            failed.append({"method": M.HARMONY_METHOD, "error": str(harmony.error)})
             logger.warning(
                 "integration_select: Harmony embedding failed (%s); harmony "
                 "candidate excluded from the gate.", harmony.error,
@@ -230,6 +247,7 @@ class IntegrationSelectModule:
             if run.X is not None:
                 embeddings[run.method] = np.asarray(run.X, dtype=np.float64)
             else:
+                failed.append({"method": run.method, "error": str(run.error)})
                 logger.warning(
                     "integration_select: scVI %s failed (%s); excluded.",
                     run.method, run.error,
@@ -241,8 +259,11 @@ class IntegrationSelectModule:
             embeddings[sel.SHUFFLE_CONTROL_METHOD] = np.asarray(
                 shuffle.X, dtype=np.float64
             )
+        else:
+            failed.append({"method": "neg_control_shuffle_label",
+                           "error": str(shuffle.error)})
 
-        return embeddings
+        return embeddings, failed
 
     @staticmethod
     def _apply_choice(ctx: PipelineContext, chosen_method: str) -> None:

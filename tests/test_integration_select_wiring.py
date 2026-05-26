@@ -158,7 +158,7 @@ def test_tm10_gate_then_batch_correction_e2e(tmp_path, monkeypatch):
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
         }
-        return emb
+        return emb, []
 
     monkeypatch.setattr(
         IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
@@ -210,13 +210,13 @@ def test_two_batch_selects_non_none_and_sets_cfg(tmp_path, monkeypatch):
     import scripts.bench.integration.select_integration as sel
 
     def _fake_embeddings(adata_arg, batch_key, scvi_seeds):
-        return {
+        return ({
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
             sel.SHUFFLE_CONTROL_METHOD: np.asarray(
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
-        }
+        }, [])
 
     monkeypatch.setattr(
         IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
@@ -279,13 +279,13 @@ def test_cache_hit_replays_recommendation(tmp_path, monkeypatch):
     import scripts.bench.integration.select_integration as sel
 
     def _fake_embeddings(adata_arg, batch_key, scvi_seeds):
-        return {
+        return ({
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
             sel.SHUFFLE_CONTROL_METHOD: np.asarray(
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
-        }
+        }, [])
 
     monkeypatch.setattr(
         IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
