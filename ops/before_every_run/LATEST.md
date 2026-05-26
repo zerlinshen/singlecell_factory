@@ -1,3 +1,33 @@
+# Integration Calibration Bench — Trevino RNA Atlas — 2026-05-26
+
+- Task T4 (integration-bench team, worker-2): CALIBRATION/RELATIVE lane on the real
+  Trevino GSE162170 RNA atlas (57,868 cells x 33,355 genes). Outputs under
+  `/home/zerlinshen/projects/integration-bench-20260526/` (never in factory tree).
+  Full journal: `journal/2026-05-26-integration-bench-trevino-calibration.md`.
+- 6 embeddings persisted to `embeddings/` (baseline, scVI seed 0/1/2, harmonypy-direct
+  Harmony, shuffle-label control) for next-phase label-agnostic separability metrics
+  WITHOUT re-running scVI. Scoreboard + audit md/JSON written; `FULL_EXIT=0`.
+- Gates: G5 two-part guard PASS (8 samples / 3 technical batches; single-batch multiome
+  subset hard-fails part (b)); G2 vs author seurat_clusters 23cl (cluster_names join
+  refused — dead symlink); G4 per-age (w16/w20 clean, w21+w24 confounded on b2020_02);
+  G6 calibration_relative_only + relative_ranking_only, no winner.
+- CRITICAL finding (logged to `.omc/plans/open-questions.md`): production DEFAULT Harmony
+  backend `BatchCorrectionModule._run_harmony` is BROKEN in sc_gpu on BOTH paths (rapids
+  GPU cupy CUBLAS_NOT_INITIALIZED + context corruption; scanpy1.12<->harmonypy0.2.0
+  wrapper shape bug). Bench used harmonypy.run_harmony DIRECT (canonical algo; scanpy
+  wrapper bypassed). Fix = separate production PR.
+- Neg-control: shuffle-label is the robust over-correction anchor (ARI 0.486->0.0002);
+  Harmony-extreme-theta singular at theta=100 on full data. Data-derived aggregate
+  T=0.346 -> 0 flags on real methods; structure-sensitive detector (ARI/NMI) control
+  fires (PASS). Over-correction metric SHOULD be cluster-separability based (discovery
+  requirement) — re-scoped next phase.
+- Cautions: ragged-header off-by-one trap (use pandas post-index_col columns, not
+  header[1:]); never dense-read or np.fromstring the genes x cells TSV (OOM / SIGABRT —
+  use pandas chunked sparse, ~11 GB); launch heavy runs via setsid (harness SIGTERMs
+  long foreground shells ~100s; no zsh globs in launch line).
+
+---
+
 # Factory Governance Real-Data Validation - 2026-05-25
 
 ## Scope
