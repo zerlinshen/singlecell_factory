@@ -1,0 +1,336 @@
+# whole_object_handoff.yaml — Canonical contract for the Python→R whole-object h5ad handoff.
+#
+# Version: 1.0
+# Canonical location: singlecell_factory/contracts/whole_object_handoff.yaml
+# Vendored copy:      r_multiomics_factory/contracts/whole_object_handoff.yaml
+#
+# The two copies MUST be byte-identical. Use tools/sync-contracts.sh to
+# propagate changes from the canonical copy to the vendored copy.
+# A pre-commit hook in each repo asserts sha256sum matches .expected_sha256.
+#
+# PURPOSE: Full-fidelity analysis handoff of the complete AnnData object.
+# This contract is INDEPENDENT of bundle_schema.yaml v2.2.
+#
+# bundle_schema.yaml v2.2 governs the COMPACT, claim-guarded plotting bundle
+# (subset of obs/obsm/marker genes only; carries claim_guard).
+# This contract governs the LOSSLESS h5ad handed to anndataR for R analysis
+# (full X + layers + obs + var + obsm + uns; NO claim_guard).
+#
+# Do NOT merge or conflate these two contracts. They serve different consumers:
+#   - bundle_schema.yaml → plotting_factory / R_bundle loaders (compact, guarded)
+#   - whole_object_handoff.yaml → r_multiomics_factory R modules via anndataR
+#
+# Reader (R side): anndataR (pure-R, no basilisk). anndataR maps h5ad assays
+# to SCE assay names: counts→counts, logcounts→logcounts, X→X (default).
+#
+# Schema history:
+#   v1.0 — initial whole-object handoff contract; covers X, counts, logcounts,
+#           obs, var, obsm (X_umap/X_pca), and uns.symphony reduction model.
+
+# ---------------------------------------------------------------------------
+# Routing table: which surface to use for which intent
+# ---------------------------------------------------------------------------
+#
+# ┌────────────────────────────────┬────────────────────────────────┬──────────────┬─────────────────────────────────────────────────┐
+# │ Intent                         │ Surface                        │ Fidelity     │ Allowed claims                                  │
+# ├────────────────────────────────┼────────────────────────────────┼──────────────┼─────────────────────────────────────────────────┤
+# │ Plotting / visual summary      │ bundle_schema.yaml v2.2        │ Compact      │ plotting_and_visual_summary_only (claim_guard)  │
+# │ (marker expression, UMAP,      │ Compact plotting bundle        │ (subsample,  │ NOT for DE or new quantitative claims without   │
+# │  embeddings, cell metadata)    │ exported by                    │ marker genes │ full-object validation.                         │
+# │                                │ export_singlecell_r_bundle.py) │ only)        │                                                 │
+# ├────────────────────────────────┼────────────────────────────────┼──────────────┼─────────────────────────────────────────────────┤
+# │ Lossless R analysis            │ THIS contract                  │ Full object  │ All analysis claims permitted when the R module │
+# │ (DE, batch correction,         │ whole_object_handoff.yaml v1.0 │ (all cells,  │ produces primary scientific outputs (not merely │
+# │  projection, annotation,       │ h5ad via anndataR              │ full matrix, │ downstream rendering of Python results).        │
+# │  pseudobulk, etc.)             │                                │ all layers)  │ Provenance must be traceable to this h5ad path. │
+# └────────────────────────────────┴────────────────────────────────┴──────────────┴─────────────────────────────────────────────────┘
+
+version: "1.0"
+contract_id: "whole_object_handoff"
+purpose: >
+  Full-fidelity Python→R handoff of the complete AnnData object via h5ad.
+  Consumed by r_multiomics_factory R modules through anndataR (pure-R, no
+  basilisk). This is the lossless analysis surface; use bundle_schema.yaml
+  v2.2 for the compact plotting bundle.
+independent_of: "bundle_schema.yaml v2.2"
+no_claim_guard: true
+
+# ---------------------------------------------------------------------------
+# File location contract
+# ---------------------------------------------------------------------------
+file_location:
+  path_pattern: "<project-root>/runs/<run-id>/final_adata.h5ad"
+  written_by: "singlecell_factory/workflow/modular/pipeline.py:391,906"
+  notes: >
+    The file is written by _save_manifest() at pipeline completion. The run-id
+    directory is created by _prepare_output() using timestamp + project name.
+    R modules must discover this path from run_manifest.json ("run_dir" key)
+    rather than constructing it from a hardcoded pattern.
+
+# ---------------------------------------------------------------------------
+# X — main data matrix
+# ---------------------------------------------------------------------------
+X:
+  required: true
+  semantics: >
+    The main expression matrix at pipeline completion. Typically
+    log-normalized counts after sc.pp.normalize_total + sc.pp.log1p,
+    potentially batch-corrected by the batch_correction module (e.g. ComBat
+    rewrites adata.X). The exact state depends on which modules ran.
+  dtype: float32
+  storage: >
+    May be sparse (scipy CSR/CSC, stored as CSRDataset in h5ad) or dense
+    depending on cohort size and module transforms. R readers must handle both.
+  anndataR_sce_slot: "X"
+  r_access: >
+    anndataR reads this as the SCE "X" assay. The R loader maps it
+    DETERMINISTICALLY to slot="data" (the normalized slot) and ONLY when no
+    separate "logcounts" assay is present (standard scanpy convention stores
+    log-normalized values in X with no separate logcounts layer). X is NEVER
+    loaded into slot="counts" — raw counts come exclusively from the counts
+    layer below. See R/io_bridge.R::load_seurat_from_h5ad.
+
+# ---------------------------------------------------------------------------
+# layers — required named layers
+# ---------------------------------------------------------------------------
+layers:
+  counts:
+    required: true
+    semantics: >
+      Raw UMI counts preserved before normalization. Written by the cellranger
+      module (cellranger.py:191,225) before sc.pp.normalize_total mutates X.
+      Used by projection_module.R:54,177 (layer="counts") for symphony reference
+      building and by pseudobulk DE.
+    dtype: float32_or_int32
+    storage: sparse (CSR preferred)
+    anndataR_sce_slot: "counts"
+    r_access: >
+      anndataR exposes this as SCE assay "counts".
+      In Seurat: GetAssayData(obj, layer="counts", assay="RNA").
+    guard: >
+      Readers MUST stop() if this layer is absent; it is not optional for
+      batch_integration_module.R or projection_module.R downstream callers.
+
+  logcounts:
+    required: false   # required as a SLOT, satisfiable by either logcounts OR X (see guard)
+    semantics: >
+      Log-normalized expression (log1p of CPM-normalized counts). "logcounts" is
+      the anndataR/SCE convention for the normalized assay. Consumed by
+      batch_integration_module.R:162,244 (slot="data") and
+      projection_module.R:281-282 (layer="data") via GetAssayData(..., slot/layer="data"),
+      which in Seurat maps to the normalized slot. NOTE: scanpy commonly stores
+      the log-normalized matrix directly in X with no separate "logcounts"
+      assay; in that case X serves as the normalized slot.
+    dtype: float32
+    storage: sparse or dense
+    anndataR_sce_slot: "logcounts"
+    r_access: >
+      anndataR exposes this as SCE assay "logcounts".
+      In Seurat after as.Seurat(): GetAssayData(obj, layer="data", assay="RNA").
+    guard: >
+      The normalized "data" slot is REQUIRED. The R loader resolves it from the
+      "logcounts" assay when present, otherwise from "X". Readers MUST stop() if
+      NEITHER logcounts nor X is present. X is never used as the counts slot.
+
+  counts_raw_pre_decontx:
+    required: false
+    semantics: >
+      Snapshot of raw counts before DecontX ambient correction. Written by
+      ambient_correction.py:478 only when the ambient_correction module ran.
+    anndataR_sce_slot: "counts_raw_pre_decontx"
+    r_access: >
+      Present only when ambient_correction module ran. R callers should check
+      for existence before using.
+
+# ---------------------------------------------------------------------------
+# obs — cell metadata
+# ---------------------------------------------------------------------------
+obs:
+  index:
+    name: "obs_names (cell barcodes)"
+    type: string
+    required: true
+    notes: >
+      Cell barcodes. Used as the primary join key for all R write-back sidecar
+      tables. Must match colnames(seurat_obj) after anndataR loading.
+  required_columns:
+    - name: total_counts
+      type: float
+      optional: true
+      description: Total UMI counts per cell; present when QC module ran.
+    - name: n_genes_by_counts
+      type: int
+      optional: true
+      description: Number of genes with non-zero counts per cell.
+    - name: pct_counts_mt
+      type: float
+      optional: true
+      description: Percent mitochondrial counts per cell.
+    - name: doublet_score
+      type: float
+      optional: true
+      description: Doublet probability score; present when doublet_detection module ran.
+    - name: predicted_doublet
+      type: bool
+      optional: true
+      description: Boolean doublet call; present when doublet_detection module ran.
+    - name: leiden
+      type: string
+      optional: true
+      description: Leiden cluster label; present when clustering module ran.
+    - name: cell_type
+      type: string
+      optional: true
+      description: Cell type annotation when annotation module ran.
+    - name: sample
+      type: string
+      optional: true
+    - name: patient
+      type: string
+      optional: true
+    - name: batch
+      type: string
+      optional: true
+      description: Batch label used for integration; column name may vary by project.
+  notes: >
+    Additional obs columns may be present depending on which modules ran and
+    what metadata was provided at pipeline entry. R callers should check
+    column existence before accessing. All obs columns are accessible via
+    seurat_obj[[]] after anndataR/Seurat conversion.
+
+# ---------------------------------------------------------------------------
+# var — feature (gene) metadata
+# ---------------------------------------------------------------------------
+var:
+  index:
+    name: "var_names (gene symbols or Ensembl IDs)"
+    type: string
+    required: true
+    notes: >
+      Gene identifiers. Matches rownames(seurat_obj) after conversion.
+  common_columns:
+    - name: gene_ids
+      type: string
+      optional: true
+      description: Ensembl gene IDs when distinct from var_names.
+    - name: highly_variable
+      type: bool
+      optional: true
+      description: HVG flag; present when FindVariableFeatures equivalent ran.
+    - name: mt
+      type: bool
+      optional: true
+      description: True for mitochondrial genes.
+    - name: ribo
+      type: bool
+      optional: true
+      description: True for ribosomal genes.
+
+# ---------------------------------------------------------------------------
+# obsm — embeddings
+# ---------------------------------------------------------------------------
+obsm:
+  X_umap:
+    required: false
+    description: >
+      UMAP embedding. Shape (n_cells, 2) or (n_cells, 3). Present when the
+      UMAP module ran. anndataR maps this to SCE reducedDim("X_umap").
+      In Seurat: seurat_obj[["umap"]]@cell.embeddings.
+    columns: [UMAP_1, UMAP_2]  # or UMAP_1, UMAP_2, UMAP_3 for 3D
+    r_consumed_by: pipeline_steps.R:71 (ensure_reduction_present)
+
+  X_pca:
+    required: false
+    description: >
+      PCA embedding. Shape (n_cells, n_components). Present when PCA ran
+      (typically part of neighbors/UMAP preprocessing). anndataR maps this
+      to SCE reducedDim("X_pca"). In Seurat: seurat_obj[["pca"]]@cell.embeddings.
+    r_consumed_by: pipeline_steps.R:71 (ensure_reduction_present)
+
+  notes: >
+    Additional obsm keys (e.g. X_scvi, X_harmony, X_mnn) may be present
+    depending on which batch correction backend ran. R callers should probe
+    names(seurat_obj@reductions) rather than assuming fixed reduction names.
+
+# ---------------------------------------------------------------------------
+# uns — unstructured metadata
+# ---------------------------------------------------------------------------
+uns:
+  symphony_reduction_model:
+    key: "symphony_model"
+    required: false
+    description: >
+      Symphony reference model stored in uns when the batch_correction module
+      ran with method="symphony". Consumed by projection_module.R:155-156
+      to build the reference for query projection.
+    r_consumed_by: projection_module.R:155-156
+    notes: >
+      The model object is serialized by Python's symphony wrapper. R callers
+      must check for key existence before attempting to load.
+
+  pipeline_metadata:
+    key: "pipeline_metadata"
+    required: false
+    description: >
+      Dict of pipeline run metadata (module status, wall time, etc.).
+      Mirrors run_manifest.json["metadata"]. Present in runs produced by
+      workflow/modular/pipeline.py after 2026-05.
+
+# ---------------------------------------------------------------------------
+# Loader contract (R side)
+# ---------------------------------------------------------------------------
+r_loader:
+  package: "anndataR"
+  approach: "pure-R, no basilisk"
+  entry_point: >
+    anndataR::read_h5ad(path, as = "SingleCellExperiment") returning a
+    SingleCellExperiment; convert to Seurat via as.Seurat(sce, counts=, data=)
+    using the deterministic slot map below. (SeuratDisk and to_Seurat() are not
+    used; SeuratDisk is intentionally absent.)
+  assay_name_mapping:
+    h5ad_layer: SCE_assay -> Seurat_slot
+    counts: counts -> slot=counts (raw UMIs; the ONLY source for the counts slot)
+    logcounts: logcounts -> slot=data (preferred normalized slot)
+    X: X -> slot=data ONLY when no logcounts assay is present; NEVER slot=counts
+  hard_errors:
+    - condition: "counts assay absent"
+      action: "stop() — refuse to mis-slot a normalized matrix as raw counts"
+    - condition: "neither logcounts nor X present (no normalized slot resolvable)"
+      action: "stop() — readers MUST check and abort, not silently proceed"
+  soft_warnings:
+    - condition: "X_umap absent"
+      action: "message() — note missing embedding, proceed without UMAP"
+    - condition: "X_pca absent"
+      action: "message() — note missing embedding, proceed without PCA"
+    - condition: "symphony_model absent in uns"
+      action: "message() — symphony projection unavailable; skip projection step"
+
+# ---------------------------------------------------------------------------
+# R→Python write-back convention (downstream direction)
+# ---------------------------------------------------------------------------
+writeback_convention:
+  direction: "R → Python (downstream)"
+  spec: "r_multiomics_factory/docs/R_PYTHON_WRITEBACK_CONVENTION.md"
+  summary: >
+    R analysis results are written to <project-root>/runs/<run-id>/r/result.rds
+    PLUS barcode-keyed sidecar tables (<module>_per_cell.csv and/or
+    <module>_per_cell.parquet). Python re-ingests by left join on the `barcode`
+    column. No h5ad write this round — anndataR write path is deferred pending
+    round-trip validation (Task #5).
+  no_h5ad_write: true
+  no_h5ad_write_reason: >
+    anndataR h5ad write-path round-trip fidelity not yet validated. Deferred
+    to a future contract revision after Task #5 verifier lane passes.
+
+# ---------------------------------------------------------------------------
+# Sync and integrity
+# ---------------------------------------------------------------------------
+sync:
+  mechanism: "tools/sync-contracts.sh (run from singlecell_factory root)"
+  vendored_copy: "r_multiomics_factory/contracts/whole_object_handoff.yaml"
+  parity: "byte-identical; sha256sum must match .expected_sha256 in both repos"
+  pre_commit_assertion: >
+    Each repo's pre-commit hook (or CI parity check) must verify:
+      actual=$(sha256sum contracts/whole_object_handoff.yaml | awk '{print $1}')
+      expected=$(grep '^whole_object_handoff ' contracts/.expected_sha256 | awk '{print $2}')
+      [ "$actual" = "$expected" ] || { echo "contracts parity FAIL: whole_object_handoff"; exit 1; }

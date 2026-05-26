@@ -4,9 +4,11 @@
 # plotting_factory/contracts/, and update all .expected_sha256 sentinel files.
 #
 # Schemas synced:
-#   bundle_schema.yaml        → r_multiomics_factory/contracts/ (byte-identical)
-#   figure_bundle_schema.yaml → r_multiomics_factory/contracts/ AND
-#                               plotting_factory/contracts/ (byte-identical)
+#   bundle_schema.yaml          → r_multiomics_factory/contracts/ (byte-identical)
+#   figure_bundle_schema.yaml   → r_multiomics_factory/contracts/ AND
+#                                 plotting_factory/contracts/ (byte-identical)
+#   whole_object_handoff.yaml   → r_multiomics_factory/contracts/ (byte-identical)
+#                                 (NOT plotting_factory — this is analysis-only)
 #
 # Usage:
 #   bash tools/sync-contracts.sh
@@ -27,6 +29,7 @@
 #     actual=$(sha256sum contracts/bundle_schema.yaml | awk '{print $1}')
 #     expected=$(grep '^bundle_schema ' contracts/.expected_sha256 | awk '{print $2}')
 #     [ "$actual" = "$expected" ] || { echo "contracts parity FAIL: bundle_schema"; exit 1; }
+#   Same pattern applies for whole_object_handoff — grep '^whole_object_handoff '.
 
 set -euo pipefail
 
@@ -118,21 +121,43 @@ echo "  vendored:  ${FIG_VENDORED_R}"
 echo "  vendored:  ${FIG_VENDORED_PF}"
 
 # ---------------------------------------------------------------------------
+# Sync whole_object_handoff.yaml → r_multiomics_factory only
+# (NOT plotting_factory — this contract governs lossless analysis handoff,
+#  not compact plotting bundles; plotting_factory has no anndataR consumer)
+# ---------------------------------------------------------------------------
+HANDOFF_CANONICAL="${REPO_ROOT}/contracts/whole_object_handoff.yaml"
+HANDOFF_VENDORED_R="${SIBLING_R}/contracts/whole_object_handoff.yaml"
+
+HANDOFF_HASH=$(copy_and_verify "${HANDOFF_CANONICAL}" "${HANDOFF_VENDORED_R}" "whole_object_handoff")
+echo "whole_object_handoff sync OK: ${HANDOFF_HASH}"
+echo "  canonical: ${HANDOFF_CANONICAL}"
+echo "  vendored:  ${HANDOFF_VENDORED_R}"
+
+# ---------------------------------------------------------------------------
 # Update .expected_sha256 sentinels in all repos
 #
 # Format: one line per tracked schema — "<stem> <sha256>"
 # This multi-schema format supersedes the single-hash format used in Phase 2.
 # Readers checking only bundle_schema may still grep for 'bundle_schema'.
+# whole_object_handoff is absent from plotting_factory sentinel (no consumer).
 # ---------------------------------------------------------------------------
 write_sha_file() {
   local path="$1"
   local bundle_hash="$2"
   local fig_hash="$3"
-  printf 'bundle_schema %s\nfigure_bundle_schema %s\n' "${bundle_hash}" "${fig_hash}" > "${path}"
+  local handoff_hash="$4"
+  local include_handoff="${5:-yes}"
+  if [[ "${include_handoff}" == "yes" ]]; then
+    printf 'bundle_schema %s\nfigure_bundle_schema %s\nwhole_object_handoff %s\n' \
+      "${bundle_hash}" "${fig_hash}" "${handoff_hash}" > "${path}"
+  else
+    printf 'bundle_schema %s\nfigure_bundle_schema %s\n' \
+      "${bundle_hash}" "${fig_hash}" > "${path}"
+  fi
 }
 
-write_sha_file "${REPO_ROOT}/contracts/.expected_sha256"       "${BUNDLE_HASH}" "${FIG_HASH_CANONICAL}"
-write_sha_file "${SIBLING_R}/contracts/.expected_sha256"       "${BUNDLE_HASH}" "${FIG_HASH_R}"
-write_sha_file "${SIBLING_PF}/contracts/.expected_sha256"      "${BUNDLE_HASH}" "${FIG_HASH_PF}"
+write_sha_file "${REPO_ROOT}/contracts/.expected_sha256"  "${BUNDLE_HASH}" "${FIG_HASH_CANONICAL}" "${HANDOFF_HASH}" "yes"
+write_sha_file "${SIBLING_R}/contracts/.expected_sha256"  "${BUNDLE_HASH}" "${FIG_HASH_R}"         "${HANDOFF_HASH}" "yes"
+write_sha_file "${SIBLING_PF}/contracts/.expected_sha256" "${BUNDLE_HASH}" "${FIG_HASH_PF}"        ""               "no"
 
 echo "contracts sync complete — all .expected_sha256 sentinels updated."
