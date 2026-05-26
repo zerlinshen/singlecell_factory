@@ -67,7 +67,7 @@ def test_modular_cli_parse(monkeypatch):
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
-    # Verify all modules are registered (4 mandatory + 39 optional = 43).
+    # Verify all modules are registered (4 mandatory + 40 optional = 44).
     # Phase B (v2.1) added protein_adt; spatial lane (spatial_ingest +
     # spatial_neighborhoods); multimodal_integration (EXPERIMENTAL).
     # Phase 1A added marker_db_loader (P1A.S2) + context_aware_annotation (P1A.S3).
@@ -76,7 +76,11 @@ def test_new_modules_in_dag():
     # (vdj_ingest, vdj_metrics), ribo_ingest, modality_registry,
     # cross_modality_qc.
     # 2026-05-20: added ambient_correction (conditional DecontX, MANDATORY).
-    assert len(MODULE_DEPENDENCIES) == 43
+    # 2026-05-26: added integration_select (per-run discovery integration gate,
+    # opt-in; depends_on clustering; batch_correction runs_after it).
+    assert len(MODULE_DEPENDENCIES) == 44
+    assert "integration_select" in MODULE_DEPENDENCIES
+    assert MODULE_DEPENDENCIES["integration_select"] == {"clustering"}
     assert "ambient_correction" in MODULE_DEPENDENCIES
     assert MODULE_DEPENDENCIES["ambient_correction"] == {"qc"}
     assert "ambient_correction" in MODULE_DEPENDENCIES["doublet_detection"]

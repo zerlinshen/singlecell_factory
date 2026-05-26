@@ -145,6 +145,19 @@ class BatchCorrectionModule:
             ctx.status(self.name, "skipped", f"Only one batch found in '{batch_key}'.")
             return
 
+        # The integration_select gate may set method="none" (no integration is
+        # the discovery-safe choice when no candidate survives its gates). Honor
+        # it as a clean skip rather than an unknown-method error.
+        if cfg.method == "none":
+            ctx.metadata["batch_correction_status"] = "skipped_method_none"
+            ctx.status(
+                self.name,
+                "skipped",
+                "cfg.batch.method='none' (no integration selected); "
+                "leaving X_pca as the latent representation.",
+            )
+            return
+
         ctx.metadata["n_batches"] = n_batches
         ctx.metadata["batch_method"] = cfg.method
         ctx.metadata["gpu_mode"] = ctx.cfg.gpu_mode
@@ -427,24 +440,35 @@ class BatchCorrectionModule:
         """Resolve the Harmony backend.
 
         Selection precedence (highest first):
-        1. `SC_HARMONY_BACKEND` env var (`cpu` | `gpu` | `auto`)
-        2. `ctx.cfg.batch.harmony_backend` (`cpu` | `gpu` | `auto`)
+        1. `SC_HARMONY_BACKEND` env var (`cpu` | `gpu` | `auto` | `direct`)
+        2. `ctx.cfg.batch.harmony_backend` (`cpu` | `gpu` | `auto` | `direct`)
         3. Module default: `auto`
 
         `auto` resolves to `gpu` if `rapids_singlecell` imports successfully,
         otherwise `cpu`. Explicit `gpu` raises if rsc is unavailable; explicit
         `cpu` always uses harmonypy via scanpy_external.
+
+        `direct` is an EXPLICIT choice that bypasses scanpy/rapids' thin Harmony
+        wrappers and calls ``harmonypy.run_harmony`` (the canonical Korsunsky
+        2019 reference) directly, transposing its (n_pcs, n_cells) ``Z_corr`` to
+        (n_cells, n_pcs). This is the proven-working path on the sc_gpu env
+        where both auto/gpu (rapids CUBLAS) and cpu (scanpy 1.12 +
+        harmonypy 0.2.0 stores a wrong-shape embedding) are broken. The
+        integration_select gate selects this backend when it recommends Harmony.
+        ``direct`` is never auto-resolved — it must be requested explicitly.
         """
         choice = (
             os.environ.get("SC_HARMONY_BACKEND", "").strip().lower()
             or getattr(ctx.cfg.batch, "harmony_backend", "").strip().lower()
             or "auto"
         )
-        if choice not in {"auto", "cpu", "gpu"}:
+        if choice not in {"auto", "cpu", "gpu", "direct"}:
             raise ValueError(
                 f"Invalid harmony_backend={choice!r}; expected one of "
-                f"{{'auto', 'cpu', 'gpu'}}."
+                f"{{'auto', 'cpu', 'gpu', 'direct'}}."
             )
+        if choice == "direct":
+            return "direct"
         if choice == "auto":
             try:
                 import rapids_singlecell  # noqa: F401
@@ -496,6 +520,9 @@ class BatchCorrectionModule:
             raise ValueError("Harmony requires PCA (run clustering first).")
         cfg_batch = ctx.cfg.batch
         backend = BatchCorrectionModule._resolve_harmony_backend(ctx)
+        if backend == "direct":
+            BatchCorrectionModule._run_harmony_direct(adata, batch_key, ctx)
+            return
         ctx.metadata["harmony_backend"] = backend
         ctx.metadata["harmony_device"] = "gpu" if backend == "gpu" else "cpu"
         ctx.metadata["harmony_theta"] = cfg_batch.harmony_theta
@@ -561,6 +588,131 @@ class BatchCorrectionModule:
         adata.obsm["X_pca_harmony"] = np.asarray(
             adata.obsm["X_pca_harmony"], dtype=np.float32
         )
+
+    @staticmethod
+    def _run_harmony_direct(adata, batch_key: str, ctx) -> None:
+        """Harmony via ``harmonypy.run_harmony`` DIRECT — the proven-working path.
+
+        DEVIATION (documented, authorized): both production scanpy/rapids Harmony
+        backends are broken in the sc_gpu env on this hardware
+        (``harmony_backend=gpu`` raises CUBLAS_STATUS_NOT_INITIALIZED;
+        ``harmony_backend=cpu`` via scanpy.external.pp.harmony_integrate with
+        harmonypy 0.2.0 stores ``X_pca_harmony`` with the wrong shape — (n_pcs,)
+        instead of (n_cells, n_pcs)). ``harmonypy.run_harmony`` IS the canonical
+        Korsunsky-2019 reference; this routes around scanpy 1.12's proven-buggy
+        wrapper while running the SAME algorithm on the CPU.
+
+        harmonypy returns ``Z_corr`` shape (n_pcs, n_cells); we transpose to
+        (n_cells, n_pcs) before storing. Honors Principle 9 (no silent
+        non-convergence) — non-convergence raises unless
+        ``SC_ALLOW_HARMONY_NON_CONVERGENCE=1`` is set.
+        """
+        if "X_pca" not in adata.obsm:
+            raise ValueError("Harmony requires PCA (run clustering first).")
+        cfg_batch = ctx.cfg.batch
+        ctx.metadata["harmony_backend"] = "direct"
+        ctx.metadata["harmony_device"] = "cpu"
+        ctx.metadata["harmony_theta"] = cfg_batch.harmony_theta
+        ctx.metadata["harmony_sigma"] = cfg_batch.harmony_sigma
+        ctx.metadata["harmony_max_iter"] = cfg_batch.harmony_max_iter
+        ctx.metadata["harmony_engine"] = "harmonypy.run_harmony direct (scanpy wrapper bypassed)"
+
+        import harmonypy
+
+        # Principle 9 (no silent non-convergence): harmonypy reports convergence
+        # via the `logging` module, NOT `warnings` — it logs "Converged after N
+        # iterations" on success and "Stopped before convergence" otherwise. The
+        # warnings-based _detect_non_convergence alone would MISS a non-converged
+        # direct run and silently report success. Capture the harmonypy logger to
+        # detect convergence authoritatively (review MEDIUM-2).
+        _hlog = logging.getLogger("harmonypy")
+
+        class _ConvergenceCatcher(logging.Handler):
+            def __init__(self) -> None:
+                super().__init__()
+                self.saw_record = False
+                self.saw_converged = False
+                self.signals: list[str] = []
+
+            def emit(self, record) -> None:
+                msg = record.getMessage()
+                self.saw_record = True
+                low = msg.lower()
+                if "converged after" in low:
+                    self.saw_converged = True
+                if "stopped before convergence" in low or "did not converge" in low:
+                    self.signals.append(msg)
+
+        catcher = _ConvergenceCatcher()
+        _prev_level = _hlog.level
+        _hlog.addHandler(catcher)
+        if _hlog.level == logging.NOTSET or _hlog.level > logging.INFO:
+            _hlog.setLevel(logging.INFO)
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                pca = np.asarray(adata.obsm["X_pca"], dtype=np.float64)
+                ho = harmonypy.run_harmony(
+                    pca,
+                    adata.obs,
+                    [batch_key],
+                    theta=cfg_batch.harmony_theta,
+                    sigma=cfg_batch.harmony_sigma,
+                    max_iter_harmony=cfg_batch.harmony_max_iter,
+                )
+        finally:
+            _hlog.removeHandler(catcher)
+            _hlog.setLevel(_prev_level)
+
+        # Prefer the authoritative harmonypy log signal. If harmonypy emitted
+        # records but never "Converged after", it did NOT converge. Only fall
+        # back to the warnings-based check if harmonypy emitted no records at all
+        # (anomalous logging) — recorded loud so the anomaly is visible.
+        warn_converged, warn_signals = BatchCorrectionModule._detect_non_convergence(caught)
+        if catcher.saw_record:
+            converged = catcher.saw_converged
+            signals = catcher.signals or warn_signals
+        else:
+            converged = warn_converged
+            signals = warn_signals
+            ctx.metadata["harmony_convergence_detection"] = (
+                "harmonypy emitted no log records; fell back to warnings-based "
+                "detection (anomalous — verify harmonypy logging is enabled)."
+            )
+        ctx.metadata["harmony_converged"] = converged
+        if signals:
+            ctx.metadata["harmony_non_convergence_signals"] = signals[:5]
+        if not converged:
+            opt_in = os.environ.get("SC_ALLOW_HARMONY_NON_CONVERGENCE", "").strip() == "1"
+            if opt_in:
+                logger.error(
+                    "Harmony (direct) did not converge at max_iter=%d — "
+                    "SC_ALLOW_HARMONY_NON_CONVERGENCE=1 opt-in acknowledged; "
+                    "downstream results may be iteration-trajectory-dependent. "
+                    "Signals: %s",
+                    cfg_batch.harmony_max_iter, signals[:3],
+                )
+                ctx.metadata["harmony_non_convergence_opt_in_acknowledged"] = True
+            else:
+                raise RuntimeError(
+                    f"Harmony (direct) did not converge at "
+                    f"max_iter={cfg_batch.harmony_max_iter}. Principle 9: no "
+                    f"silent non-convergence. Raise --harmony-max-iter "
+                    f"(recommended >= 50 for 75-batch tumor cohorts) or set "
+                    f"SC_ALLOW_HARMONY_NON_CONVERGENCE=1 to override with "
+                    f"audit-logged opt-in. Captured signals: {signals[:3]}"
+                )
+
+        # harmonypy Z_corr is (n_pcs, n_cells); transpose to (n_cells, n_pcs).
+        Z = np.asarray(ho.Z_corr, dtype=np.float32)
+        if Z.shape[0] != adata.n_obs:
+            Z = Z.T
+        if Z.shape[0] != adata.n_obs:
+            raise ValueError(
+                f"harmonypy output shape {Z.shape} does not align to "
+                f"n_obs={adata.n_obs} on either axis."
+            )
+        adata.obsm["X_pca_harmony"] = np.ascontiguousarray(Z, dtype=np.float32)
 
     @staticmethod
     def _run_bbknn(adata, batch_key: str, ctx) -> None:

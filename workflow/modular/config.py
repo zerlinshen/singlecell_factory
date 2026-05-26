@@ -125,6 +125,17 @@ class BatchConfig:
     scvi_max_epochs: int = 200
     scvi_n_latent: int = 30
     scvi_early_stopping: bool = True
+    # Per-run discovery integration-selection gate (integration_select module,
+    # plan per-run-discovery-integration-gate.md). OPT-IN only: the gate runs an
+    # expensive scVI seed sweep, so it is never default-on. When enabled, the
+    # gate scores baseline/harmony/scVI label-free and SETS `method` (and, if it
+    # picks harmony, `harmony_backend="direct"`) before batch_correction runs.
+    select_integration: bool = False
+    # Margin the candidate batch-mixing must beat baseline by (gate 1). Mirrors
+    # select_integration.MARGIN_MIX; exposed so a run can tune the gate strictness.
+    integration_margin_mix: float = 0.05
+    # scVI seed sweep for the gate (>=3 seeds required for the band-aware tie).
+    integration_scvi_seeds: tuple[int, ...] = (0, 1, 2)
 
 
 @dataclass

@@ -774,7 +774,8 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 |---|---|---|
 | `clustering` | Normalization, HVG, PCA, UMAP, Leiden clustering | doublet_detection |
 | `cell_cycle` | Cell cycle scoring (S/G2M), optional regression | clustering |
-| `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama/scVI/MNN/fastMNN-style) | clustering |
+| `integration_select` | **Opt-in** per-run discovery integration-selection gate. Scores baseline/Harmony/scVI label-free after clustering and SETS `cfg.batch.method` (routing a Harmony pick to the working `harmonypy`-direct backend) before `batch_correction`. Expensive scVI seed sweep, cache-bounded. Enable with `--select-integration`. | clustering |
+| `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama/scVI/MNN/fastMNN-style). `harmony_backend` accepts `auto`/`cpu`/`gpu`/`direct` (`direct` = canonical `harmonypy.run_harmony`, the proven-working path). | clustering |
 | `differential_expression` | Cluster marker genes (`wilcoxon` default, configurable), significance filtering | clustering |
 | `annotation` | Marker-based cell type annotation with confidence scores | clustering |
 | `trajectory` | PAGA trajectory graph + DPT pseudotime + gene expression dynamics | clustering |
@@ -810,6 +811,7 @@ cellranger -> qc -> ambient_correction -> doublet_detection -> clustering -+-> d
                                                                             |               +-> cell_fate
                                                                             |                        (requires both trajectory + cnv_inference)
                                                                             +-> cell_cycle
+                                                                            +-> integration_select (opt-in; ordering-only runs_after -> batch_correction)
                                                                             +-> batch_correction
                                                                             +-> rna_velocity
                                                                             +-> gene_regulatory_network
@@ -1549,6 +1551,9 @@ This preserves `.checkpoints/after_<module>.json` status/metadata sidecars while
 |---|---|---|
 | `--batch-key` | sample | Batch column in adata.obs |
 | `--batch-method` | harmony | Method: harmony/bbknn/combat/scanorama/scvi/mnn/fastmnn |
+| `--harmony-backend` | auto | Harmony backend: `auto`/`cpu`/`gpu`/`direct`. `direct` calls canonical `harmonypy.run_harmony` and transposes `Z_corr` to `(n_cells, n_pcs)` — the proven-working path when the rapids/scanpy wrappers are broken. The `integration_select` gate auto-selects `direct` when it picks Harmony. |
+| `--select-integration` | false | **Opt-in**: run the `integration_select` discovery gate after clustering to pick `--batch-method` automatically (label-free baseline/Harmony/scVI scoring). Adds `integration_select` to the requested modules; runs an expensive scVI seed sweep (cache-bounded). |
+| `--integration-margin-mix` | 0.05 | Margin the candidate batch-mixing must beat baseline by in the `integration_select` gate. |
 | `--scvi-max-epochs` | 200 | Max epochs for scVI training when `--batch-method scvi` |
 | `--scvi-n-latent` | 30 | Latent dimension for scVI embedding |
 | `--no-scvi-early-stopping` | false | Disable scVI early stopping (default behavior is enabled) |

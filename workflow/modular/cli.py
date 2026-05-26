@@ -324,6 +324,28 @@ def parse_args() -> argparse.Namespace:
         help="Harmony sigma kernel width parameter (Korsunsky 2019).",
     )
     parser.add_argument(
+        "--select-integration",
+        action="store_true",
+        help=(
+            "Opt-in: run the per-run discovery integration-selection gate "
+            "(integration_select module) after clustering and before "
+            "batch_correction. It scores baseline/Harmony/scVI label-free and "
+            "SETS cfg.batch.method (routing a Harmony pick to the working "
+            "harmonypy-direct backend). Runs an expensive scVI seed sweep "
+            "(cache-bounded); NOT default-on. Adds integration_select to the "
+            "requested modules."
+        ),
+    )
+    parser.add_argument(
+        "--integration-margin-mix",
+        type=float,
+        default=0.05,
+        help=(
+            "Margin the candidate batch-mixing must beat baseline by in the "
+            "integration_select gate (default: 0.05)."
+        ),
+    )
+    parser.add_argument(
         "--scvi-max-epochs",
         type=int,
         default=200,
@@ -626,6 +648,20 @@ def _validate_modules(optional_modules_str: str) -> list[str]:
     return modules
 
 
+def _resolve_optional_modules(args: argparse.Namespace) -> list[str]:
+    """Validate the requested module list and fold in opt-in flag modules.
+
+    ``--select-integration`` adds ``integration_select`` to the requested set
+    (idempotent; never default-on). Dependency/ordering resolution is handled by
+    the pipeline (integration_select depends_on clustering; batch_correction
+    runs_after integration_select).
+    """
+    modules = _validate_modules(args.optional_modules)
+    if getattr(args, "select_integration", False) and "integration_select" not in modules:
+        modules.append("integration_select")
+    return modules
+
+
 def _load_markers(markers_json: str) -> dict[str, list[str]]:
     if not markers_json:
         return {}
@@ -909,6 +945,8 @@ def main() -> None:
             scvi_max_epochs=args.scvi_max_epochs,
             scvi_n_latent=args.scvi_n_latent,
             scvi_early_stopping=not args.no_scvi_early_stopping,
+            select_integration=args.select_integration,
+            integration_margin_mix=args.integration_margin_mix,
         ),
         cnv=CNVConfig(
             reference_group=args.cnv_reference_group,
@@ -924,7 +962,7 @@ def main() -> None:
             n_pcs=args.velocity_n_pcs,
             n_neighbors=args.velocity_n_neighbors,
         ),
-        optional_modules=_validate_modules(args.optional_modules),
+        optional_modules=_resolve_optional_modules(args),
         markers=_load_markers(args.markers_json),
         gene_signature=GeneSignatureConfig(
             signature_json=Path(args.signature_json) if args.signature_json else None,

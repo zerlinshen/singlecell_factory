@@ -92,11 +92,29 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
         layer="covariates",
         description="Cell-cycle scoring and optional regression inputs.",
     ),
+    "integration_select": ModuleSpec(
+        name="integration_select",
+        depends_on=("clustering",),
+        layer="latent_structure",
+        description=(
+            "Per-run discovery integration-selection gate. Scores baseline/"
+            "Harmony/scVI label-free after clustering and SETS cfg.batch.method "
+            "(routing Harmony to the working harmonypy-direct backend) before "
+            "batch_correction. OPT-IN via --select-integration (runs an "
+            "expensive scVI seed sweep; cache-bounded). Never writes inside the "
+            "factory tree."
+        ),
+    ),
     "batch_correction": ModuleSpec(
         name="batch_correction",
         depends_on=("clustering",),
+        runs_after=("integration_select",),
         layer="latent_structure",
-        description="Batch integration, currently Harmony-first for NC2024.",
+        description=(
+            "Batch integration, currently Harmony-first for NC2024. Ordering-only "
+            "runs_after integration_select so a gate-chosen method/backend is "
+            "applied before correction; does NOT auto-include integration_select."
+        ),
     ),
     "differential_expression": ModuleSpec(
         name="differential_expression",

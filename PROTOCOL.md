@@ -338,9 +338,10 @@ Mandatory:
 - `ambient_correction`
 - `doublet_detection`
 
-Optional (22):
+Optional (23):
 - `clustering`
 - `cell_cycle`
+- `integration_select` (opt-in via `--select-integration`; per-run discovery gate that sets `--batch-method` automatically and routes a Harmony pick to `harmony_backend=direct`)
 - `batch_correction`
 - `differential_expression`
 - `annotation`
@@ -564,6 +565,16 @@ Interpretation note:
 - `--batch-method` (default `harmony`)
   - only use when true multi-batch effect exists
   - inspect `batch_correction/batch_mixing_metrics.json` with the before/after UMAPs; better correction should reduce same-batch neighbor fraction and increase normalized batch entropy without erasing real cell-type separation
+
+- `--harmony-backend` (default `auto`; choices `auto`/`cpu`/`gpu`/`direct`)
+  - `direct` calls the canonical `harmonypy.run_harmony` and stores `Z_corr.T` as `(n_cells, n_pcs)` — the proven-working path when the rapids (GPU CUBLAS) and scanpy-external (wrong-shape) wrappers fail on the host env
+  - Principle 9 preserved: non-convergence raises unless `SC_ALLOW_HARMONY_NON_CONVERGENCE=1`
+
+- `--select-integration` (opt-in; default off)
+  - runs the `integration_select` discovery gate after clustering and BEFORE `batch_correction`; it scores baseline/Harmony/scVI label-free and SETS `cfg.batch.method` for THIS dataset (a Harmony pick also sets `harmony_backend=direct`)
+  - expensive scVI seed sweep, so it is NOT default-on; the per-run cost is bounded by a default-ON cache keyed on `(data_hash, batch_key, scVI_config, code_version)`
+  - outputs (`integration_recommendation.json`, `integration_scoreboard.csv`, `integration_audit.md`) land under the run's `integration_select/` module dir, never inside the factory tree
+  - tune the mixing gate with `--integration-margin-mix` (default 0.05)
 
 ### 10.2 QC thresholds
 

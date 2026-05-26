@@ -279,6 +279,7 @@ def _build_registry() -> dict[str, object]:
     from .modules.gene_regulatory_network import GeneRegulatoryNetworkModule
     from .modules.gene_signature_scoring import GeneSignatureScoringModule
     from .modules.immune_phenotyping import ImmunePhenotypingModule
+    from .modules.integration_select import IntegrationSelectModule
     from .modules.pathway_analysis import PathwayAnalysisModule
     from .modules.pseudo_velocity import PseudoVelocityModule
     from .modules.qc import QCModule
@@ -316,6 +317,7 @@ def _build_registry() -> dict[str, object]:
         "doublet_detection": DoubletDetectionModule(),
         "clustering": ClusteringModule(),
         "cell_cycle": CellCycleModule(),
+        "integration_select": IntegrationSelectModule(),
         "batch_correction": BatchCorrectionModule(),
         "differential_expression": DifferentialExpressionModule(),
         "annotation": AnnotationModule(),
