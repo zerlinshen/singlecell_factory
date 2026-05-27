@@ -109,6 +109,20 @@ setting `SC_REQUIRE_PROJECT_ROOT=1` to fail-fast on a missing `--project-root`.
 Never rely on the legacy `output/` fallback — it emits a `DeprecationWarning`
 and will be removed in Round-2.
 
+## Current State (2026-05-27)
+
+Integration-selection gate + batch correction hardened (comprehensive review + ralplan campaign) —
+canonical detail in `docs/SCIENTIFIC_AUDIT_2026-05-15.md`:
+
+- scVI now consumes the SAME ambient-corrected signal as clustering/DE (was STALE pre-ambient
+  counts), rounded to integers for the NB likelihood, with a fail-loud integrality guard
+  (contract `scvi-counts-v3-ambient-corrected-rounded-int`).
+- `integration_select` cache key folds all gate-affecting params; the cache-HIT path re-asserts
+  engine version pins (fail loud on drift).
+- `batch_correction` CPU post-processing failure fails loud by default (audited
+  `SC_ALLOW_BATCH_BACKEND_SKIP` opt-in → a distinct non-"completed" status), never silently keeping
+  pre-correction clustering.
+
 ## Current State (2026-05-25)
 
 The current suite-level validation posture is intentionally honest:
