@@ -393,6 +393,7 @@ def compute_scvi_seed_sweep(
     seeds: tuple[int, ...] = DEFAULT_SCVI_SEEDS,
     gpu_mode: str = "auto",
     per_seed_timeout_s: float | None = None,
+    scvi_max_epochs: int | None = None,
 ) -> list[MethodEmbedding]:
     """scVI seed sweep via BatchCorrectionModule._run_scvi (production path).
 
@@ -413,6 +414,8 @@ def compute_scvi_seed_sweep(
         ctx.cfg.batch.batch_key = batch_key
         ctx.cfg.gpu_mode = gpu_mode
         ctx.cfg.random_state = int(seed)
+        if scvi_max_epochs is not None:
+            ctx.cfg.batch.scvi_max_epochs = scvi_max_epochs
         method_name = f"{SCVI_METHOD}_seed{seed}"
         per_seed_key = f"{SCVI_OBSM}_seed{seed}"
         t0 = time.time()

@@ -199,11 +199,12 @@ class EvolutionModule:
         """Find top DE genes per clone."""
         if adata.obs["clone"].nunique() < 2:
             return None
-        from ._gpu_utils import gpu_available
+        from ._gpu_utils import bind_cuda_context, gpu_available
 
         if gpu_available():
             try:
                 import rapids_singlecell as rsc
+                bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
                 rsc.tl.rank_genes_groups(
                     adata, groupby="clone", method="wilcoxon",
                     use_raw=False, n_genes=50, key_added="rank_genes_clone",

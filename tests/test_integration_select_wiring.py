@@ -117,15 +117,30 @@ def test_run_harmony_direct_shape_is_n_cells_by_n_pcs(tmp_path):
     assert ctx.metadata["harmony_converged"] is True
 
 
-def test_resolve_harmony_backend_accepts_direct(tmp_path):
-    """`direct` is an explicit, valid backend choice and is never auto-resolved."""
+def test_resolve_harmony_backend_accepts_direct(tmp_path, monkeypatch):
+    """`direct` is an explicit, valid backend choice; `auto` now routes to `direct`.
+
+    DOCUMENTED ROUTING CHANGE (2026-05-27): both gpu (rapids CUBLAS) and cpu
+    (scanpy 1.12 wrapper mis-stores harmonypy Z_corr) are broken on this env, so
+    `auto` resolves to the proven-working `direct` path. The escape hatches stay
+    intact: explicit gpu still raises without rsc, explicit cpu is unchanged, and
+    SC_HARMONY_BACKEND still overrides config.
+    """
+    monkeypatch.delenv("SC_HARMONY_BACKEND", raising=False)
     a = ad.AnnData(np.zeros((4, 2), dtype=np.float32))
     ctx = _make_ctx(a, tmp_path)
     ctx.cfg.batch.harmony_backend = "direct"
     assert BatchCorrectionModule._resolve_harmony_backend(ctx) == "direct"
-    # auto/cpu/gpu resolution is unchanged: auto never resolves TO direct.
+    # auto now resolves TO direct (documented routing change on this env).
     ctx.cfg.batch.harmony_backend = "auto"
-    assert BatchCorrectionModule._resolve_harmony_backend(ctx) in {"cpu", "gpu"}
+    assert BatchCorrectionModule._resolve_harmony_backend(ctx) == "direct"
+    # Escape hatch: explicit cpu is honored unchanged.
+    ctx.cfg.batch.harmony_backend = "cpu"
+    assert BatchCorrectionModule._resolve_harmony_backend(ctx) == "cpu"
+    # Escape hatch: SC_HARMONY_BACKEND env override wins over config.
+    ctx.cfg.batch.harmony_backend = "auto"
+    monkeypatch.setenv("SC_HARMONY_BACKEND", "cpu")
+    assert BatchCorrectionModule._resolve_harmony_backend(ctx) == "cpu"
 
 
 # ==========================================================================
@@ -150,7 +165,7 @@ def test_tm10_gate_then_batch_correction_e2e(tmp_path, monkeypatch):
     import scripts.bench.integration.methods as M
     import scripts.bench.integration.select_integration as sel
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds):
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
         emb = {
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
@@ -209,7 +224,7 @@ def test_two_batch_selects_non_none_and_sets_cfg(tmp_path, monkeypatch):
     import scripts.bench.integration.methods as M
     import scripts.bench.integration.select_integration as sel
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds):
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
         return ({
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
@@ -278,7 +293,7 @@ def test_cache_hit_replays_recommendation(tmp_path, monkeypatch):
     import scripts.bench.integration.methods as M
     import scripts.bench.integration.select_integration as sel
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds):
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
         return ({
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),

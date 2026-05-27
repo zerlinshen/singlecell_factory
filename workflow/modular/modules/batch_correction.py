@@ -16,7 +16,7 @@ from sklearn.neighbors import NearestNeighbors
 sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
-from ._gpu_utils import gpu_available
+from ._gpu_utils import bind_cuda_context, gpu_available
 from .._neighbors_cache import get_or_compute_neighbors
 
 
@@ -253,6 +253,7 @@ class BatchCorrectionModule:
         if use_gpu:
             try:
                 import rapids_singlecell as rsc
+                bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
                 logger.info("GPU batch post-processing: neighbors/UMAP/Leiden")
                 if cfg.method != "bbknn":
                     # bbknn bypasses cache: incompatible neighbors API signature
@@ -444,18 +445,24 @@ class BatchCorrectionModule:
         2. `ctx.cfg.batch.harmony_backend` (`cpu` | `gpu` | `auto` | `direct`)
         3. Module default: `auto`
 
-        `auto` resolves to `gpu` if `rapids_singlecell` imports successfully,
-        otherwise `cpu`. Explicit `gpu` raises if rsc is unavailable; explicit
-        `cpu` always uses harmonypy via scanpy_external.
+        `auto` resolves to `direct` on this env (DOCUMENTED ROUTING CHANGE,
+        2026-05-27): both the `gpu` path (rapids CUBLAS_STATUS_NOT_INITIALIZED
+        + CUDA-context corruption) and the `cpu` path (scanpy 1.12
+        harmony_integrate mis-stores harmonypy 0.2.0's ``Z_corr`` with the wrong
+        shape) are broken on the sc_gpu env / this hardware, whereas
+        ``_run_harmony_direct`` (canonical Korsunsky-2019 via
+        ``harmonypy.run_harmony`` + ``Z_corr.T``) WORKS. This is an EXPLICIT
+        routing decision, NOT a silent try/except fallback around broken calls.
+        Explicit `gpu` still raises if rsc is unavailable; explicit `cpu` still
+        uses harmonypy via scanpy_external unchanged (both escape hatches
+        preserved for when the upstream bugs are fixed). Operators can also
+        force any backend via `SC_HARMONY_BACKEND` or `ctx.cfg.batch.harmony_backend`.
 
-        `direct` is an EXPLICIT choice that bypasses scanpy/rapids' thin Harmony
-        wrappers and calls ``harmonypy.run_harmony`` (the canonical Korsunsky
-        2019 reference) directly, transposing its (n_pcs, n_cells) ``Z_corr`` to
-        (n_cells, n_pcs). This is the proven-working path on the sc_gpu env
-        where both auto/gpu (rapids CUBLAS) and cpu (scanpy 1.12 +
-        harmonypy 0.2.0 stores a wrong-shape embedding) are broken. The
-        integration_select gate selects this backend when it recommends Harmony.
-        ``direct`` is never auto-resolved — it must be requested explicitly.
+        `direct` bypasses scanpy/rapids' thin Harmony wrappers and calls
+        ``harmonypy.run_harmony`` (the canonical Korsunsky 2019 reference)
+        directly, transposing its (n_pcs, n_cells) ``Z_corr`` to
+        (n_cells, n_pcs). The integration_select gate also selects this backend
+        when it recommends Harmony.
         """
         choice = (
             os.environ.get("SC_HARMONY_BACKEND", "").strip().lower()
@@ -470,11 +477,11 @@ class BatchCorrectionModule:
         if choice == "direct":
             return "direct"
         if choice == "auto":
-            try:
-                import rapids_singlecell  # noqa: F401
-                choice = "gpu"
-            except ImportError:
-                choice = "cpu"
+            # DOCUMENTED ROUTING CHANGE (2026-05-27): auto -> direct because
+            # both gpu (rapids CUBLAS) and cpu (scanpy 1.12 wrapper mis-stores
+            # harmonypy Z_corr) are broken on this env; _run_harmony_direct
+            # works. NOT a silent fallback — explicit gpu/cpu still honored.
+            return "direct"
         if choice == "gpu":
             try:
                 import rapids_singlecell  # noqa: F401
@@ -533,6 +540,7 @@ class BatchCorrectionModule:
             warnings.simplefilter("always")
             if backend == "gpu":
                 import rapids_singlecell as rsc
+                bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
                 try:
                     rsc.pp.harmony_integrate(
                         adata,

@@ -15,7 +15,7 @@ from ._scanpy_compat import has_api, import_scanpy_or_stub
 sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
-from ._gpu_utils import gpu_available
+from ._gpu_utils import bind_cuda_context, gpu_available
 from .._densify_policy import plan_densify, DensifyDecision
 
 
@@ -99,6 +99,7 @@ class DifferentialExpressionModule:
         if use_gpu:
             try:
                 import rapids_singlecell as rsc
+                bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
                 rsc_version = self._rapids_singlecell_version()
                 gpu_rank_genes = getattr(getattr(rsc, "tl", None), "rank_genes_groups", None)
                 ctx.metadata["de_rapids_singlecell_version"] = rsc_version

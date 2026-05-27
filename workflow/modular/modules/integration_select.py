@@ -133,7 +133,8 @@ class IntegrationSelectModule:
 
         # --- Cache MISS: compute candidate embeddings on the production backends.
         embeddings, candidates_failed = self._compute_embeddings(
-            adata, batch_key, scvi_seeds)
+            adata, batch_key, scvi_seeds,
+            scvi_max_epochs=cfg_batch.scvi_max_epochs)
 
         # Score + recommend via the reviewed gate.
         results, ref = dm.score_all_embeddings_discovery(
@@ -214,7 +215,8 @@ class IntegrationSelectModule:
 
     @staticmethod
     def _compute_embeddings(
-        adata, batch_key: str, scvi_seeds: tuple[int, ...]
+        adata, batch_key: str, scvi_seeds: tuple[int, ...],
+        scvi_max_epochs: int | None = None,
     ) -> tuple[dict, list[dict]]:
         """Build the candidate embeddings dict via the production-backed helpers.
 
@@ -242,7 +244,8 @@ class IntegrationSelectModule:
                 "candidate excluded from the gate.", harmony.error,
             )
 
-        scvi_runs = M.compute_scvi_seed_sweep(adata, batch_key, seeds=scvi_seeds)
+        scvi_runs = M.compute_scvi_seed_sweep(adata, batch_key, seeds=scvi_seeds,
+                                              scvi_max_epochs=scvi_max_epochs)
         for run in scvi_runs:
             if run.X is not None:
                 embeddings[run.method] = np.asarray(run.X, dtype=np.float64)

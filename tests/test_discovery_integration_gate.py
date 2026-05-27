@@ -564,3 +564,204 @@ def test_scoreboard_has_new_columns(f1, tmp_path):
     for col in ("good_merge_fraction", "within_batch_distinctness",
                 "within_batch_isolation", "n_corresponded_pairs"):
         assert col in header
+
+
+# ==========================================================================
+# Q21 HYBRID — optional Jaccard membership-overlap cross-check on the
+# Euclidean-matched correspondence pairs (opt-in, off by default).
+# ==========================================================================
+
+def test_q21_crosscheck_off_is_byte_identical(f1):
+    """Cross-check OFF (default) -> correspondence + reference identical to
+    current behavior; correspondence_jaccard stays None (regression guard)."""
+    fx = f1["fx"]
+    # Default reference (cross-check implicitly off).
+    base = dm.compute_per_batch_reference(fx.embeddings["baseline"], fx.batch)
+    # Explicit off must match the default exactly.
+    off = dm.compute_per_batch_reference(
+        fx.embeddings["baseline"], fx.batch, jaccard_crosscheck=False)
+    assert base.correspondence_jaccard is None
+    assert off.correspondence_jaccard is None
+    assert base.correspondence == off.correspondence
+    assert base.matched_keys == off.matched_keys
+    assert base.notes == off.notes
+    for b in base.batches:
+        assert np.array_equal(base.labels[b], off.labels[b])
+    # And ON must NOT mutate the formed correspondence (default-unchanged path:
+    # no jaccard_min -> no filtering).
+    on = dm.compute_per_batch_reference(
+        fx.embeddings["baseline"], fx.batch, jaccard_crosscheck=True)
+    assert on.correspondence == base.correspondence
+    assert on.matched_keys == base.matched_keys
+
+
+def test_q21_crosscheck_on_populates_jaccard(f1):
+    """Cross-check ON -> correspondence_jaccard populated for every corresponded
+    pair, keyed by the same ordered pairs, values in [0, 1]."""
+    fx = f1["fx"]
+    ref = dm.compute_per_batch_reference(
+        fx.embeddings["baseline"], fx.batch, jaccard_crosscheck=True)
+    assert ref.correspondence_jaccard is not None
+    assert set(ref.correspondence_jaccard.keys()) == set(ref.correspondence)
+    assert len(ref.correspondence) > 0
+    for v in ref.correspondence_jaccard.values():
+        assert 0.0 <= v <= 1.0
+
+
+def test_q21_disjoint_low_colocalized_high():
+    """A constructed pair with DISJOINT membership gets a LOW Jaccard while a
+    co-localized pair gets a HIGH Jaccard.
+
+    Exercises the cross-check kernel ``_correspondence_membership_jaccard``
+    directly with a HAND-BUILT correspondence list so the two regimes are
+    controlled exactly (the Euclidean matcher that normally FORMS the list is
+    deliberately bypassed here — it is tested separately above). Geometry: two
+    shared regions far apart on dim0. ``colocal`` clusters from each batch sit in
+    the SAME region (-> same shared-partition cluster -> Jaccard high). The
+    ``disjoint`` clusters sit in OPPOSITE regions (-> different shared-partition
+    clusters -> Jaccard 0).
+    """
+    rng = np.random.default_rng(0)
+    n_dims = 4
+
+    def blob(n, center):
+        return rng.normal(0.0, 0.4, size=(n, n_dims)) + np.asarray(center, float)
+
+    # Region L near origin, region R far away on dim0 -> Leiden separates them.
+    rows = [
+        blob(60, [0, 0, 0, 0]),     # idx 0:   b0 colocal (region L)
+        blob(60, [0, 0, 0, 0]),     # idx 1:   b1 colocal (region L)
+        blob(60, [60, 0, 0, 0]),    # idx 2:   b0 disjoint (region R)
+        blob(60, [0, 0, 0, 0]),     # idx 3:   b1 disjoint (region L)  <- opposite
+    ]
+    X = np.vstack(rows)
+    batch = np.asarray(["b0"] * 60 + ["b1"] * 60 + ["b0"] * 60 + ["b1"] * 60,
+                       dtype=object)
+    bstr = np.asarray([str(b) for b in batch])
+    # Build frozen per-batch labels mirroring the four hand-built blocks:
+    # b0 -> {0: colocal(L), 1: disjoint(R)}; b1 -> {0: colocal(L), 1: disjoint(L)}.
+    labels = {
+        "b0": np.array([0] * 60 + [1] * 60, dtype=np.int64),
+        "b1": np.array([0] * 60 + [1] * 60, dtype=np.int64),
+    }
+    colocal_pair = ("b0::0", "b1::0")     # both region L -> co-localized
+    disjoint_pair = ("b0::1", "b1::1")    # region R vs region L -> disjoint
+    correspondence = [colocal_pair, disjoint_pair]
+
+    jac = dm._correspondence_membership_jaccard(
+        X, bstr, labels, correspondence)
+
+    # Co-localized pair: shares the same shared-partition cluster -> high Jaccard.
+    assert jac[colocal_pair] >= 0.5
+    # Disjoint pair: occupies different shared-partition clusters -> Jaccard 0.
+    assert jac[disjoint_pair] < 0.5
+    assert jac[disjoint_pair] < jac[colocal_pair]
+
+
+def test_q21_jaccard_min_filtering_is_separate_opt_in():
+    """Filtering is its OWN opt-in: jaccard_min drops below-threshold pairs and
+    records a loud note; without it the corresponded set is unchanged."""
+    rng = np.random.default_rng(0)
+    n_dims = 4
+
+    def blob(n, center):
+        return rng.normal(0.0, 0.4, size=(n, n_dims)) + np.asarray(center, float)
+
+    rows, bio, bat = [], [], []
+    for b in (0, 1):
+        rows.append(blob(80, [0, 0, 0, 0]))
+        bio += ["match"] * 80
+        bat += [f"b{b}"] * 80
+    rows.append(blob(80, [40, 0, 0, 0]))
+    bio += ["disjoint"] * 80
+    bat += ["b0"] * 80
+    rows.append(blob(80, [40, 60, 0, 0]))
+    bio += ["disjoint"] * 80
+    bat += ["b1"] * 80
+    X = np.vstack(rows)
+    batch = np.asarray(bat, dtype=object)
+
+    # No filtering (jaccard_min=None): every corresponded pair retained.
+    on = dm.compute_per_batch_reference(X, batch, jaccard_crosscheck=True)
+    # Filtering enabled: a high threshold drops the membership-disjoint pair(s).
+    filt = dm.compute_per_batch_reference(
+        X, batch, jaccard_crosscheck=True, jaccard_min=0.5)
+    assert set(filt.correspondence).issubset(set(on.correspondence))
+    assert len(filt.correspondence) < len(on.correspondence)
+    # Dropped pairs are recorded loudly, never silently.
+    assert any("Q21 jaccard cross-check DROPPED" in n for n in filt.notes)
+    # Surviving pairs all meet the threshold.
+    for pair in filt.correspondence:
+        assert filt.correspondence_jaccard[pair] >= 0.5
+
+
+# ==========================================================================
+# P3a — scvi_max_epochs plumbing: caller-set value must reach _run_scvi ctx
+# ==========================================================================
+
+def test_p3a_scvi_max_epochs_propagates_to_ctx(monkeypatch):
+    """scvi_max_epochs passed to compute_scvi_seed_sweep must reach
+    ctx.cfg.batch.scvi_max_epochs inside each per-seed _run_scvi call.
+    Fails if the plumbing is removed or bypassed."""
+    from scripts.bench.integration import methods as M
+
+    captured_epochs: list[int] = []
+
+    def fake_run_scvi(adata, batch_key, ctx):
+        captured_epochs.append(ctx.cfg.batch.scvi_max_epochs)
+
+    Backend = M._import_backend()
+    monkeypatch.setattr(Backend, "_run_scvi", fake_run_scvi)
+
+    import anndata as ad
+    rng = np.random.default_rng(42)
+    n_cells, n_genes = 60, 20
+    X = rng.integers(0, 50, size=(n_cells, n_genes)).astype(np.float32)
+    a = ad.AnnData(X)
+    a.obs["batch"] = (["A"] * 30 + ["B"] * 30)
+    a.obsm["X_pca"] = rng.normal(size=(n_cells, 10)).astype(np.float32)
+
+    CUSTOM_EPOCHS = 42
+    M.compute_scvi_seed_sweep(
+        a, "batch",
+        seeds=(0, 1, 2),
+        scvi_max_epochs=CUSTOM_EPOCHS,
+    )
+
+    assert len(captured_epochs) == 3, (
+        f"Expected _run_scvi called 3 times (one per seed), got {len(captured_epochs)}"
+    )
+    for ep in captured_epochs:
+        assert ep == CUSTOM_EPOCHS, (
+            f"Expected ctx.cfg.batch.scvi_max_epochs={CUSTOM_EPOCHS}, got {ep}; "
+            "scvi_max_epochs plumbing is broken."
+        )
+
+
+def test_p3a_scvi_max_epochs_none_keeps_default(monkeypatch):
+    """When scvi_max_epochs=None, ctx.cfg.batch.scvi_max_epochs keeps the
+    _BatchCfgShim default (200). Back-compat: callers that don't pass the
+    param must not see a changed epoch count."""
+    from scripts.bench.integration import methods as M
+
+    captured_epochs: list[int] = []
+
+    def fake_run_scvi(adata, batch_key, ctx):
+        captured_epochs.append(ctx.cfg.batch.scvi_max_epochs)
+
+    Backend = M._import_backend()
+    monkeypatch.setattr(Backend, "_run_scvi", fake_run_scvi)
+
+    import anndata as ad
+    rng = np.random.default_rng(7)
+    n_cells, n_genes = 60, 20
+    X = rng.integers(0, 50, size=(n_cells, n_genes)).astype(np.float32)
+    a = ad.AnnData(X)
+    a.obs["batch"] = (["A"] * 30 + ["B"] * 30)
+    a.obsm["X_pca"] = rng.normal(size=(n_cells, 10)).astype(np.float32)
+
+    M.compute_scvi_seed_sweep(a, "batch", seeds=(0, 1, 2))
+
+    assert all(ep == 200 for ep in captured_epochs), (
+        f"Default scvi_max_epochs should be 200 when None; got {captured_epochs}"
+    )

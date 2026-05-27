@@ -1,3 +1,63 @@
+# Q22 v2 — Production change re-run (extreme-theta in `_compute_embeddings`) — 2026-05-27
+
+- Trigger: lead added the extreme-theta over-corrector control to
+  `integration_select.py::_compute_embeddings` (REPORTED-NOT-GATING per §D3).
+  Re-ran the gate to verify no regression + produce a fresh design-consistent artifact.
+- STEP 1 tests: `tests/test_integration_select_wiring.py` +
+  `tests/test_discovery_integration_gate.py` -> **45 passed, 0 failed**. No test
+  updates needed (wiring tests monkeypatch `_compute_embeddings`; gate tests cover
+  REPORTED-NOT-GATING semantics).
+- STEP 2 fresh artifact: `runs/lusc_dataset_axis_gate_v2/` (new cache key
+  `1529e328…` != prior `b26ad3ac…` => fresh recompute, no replay). 92,430 cells,
+  scVI 100 ep / seeds (0,1,2) / GPU. exit 0, ~22 min.
+- VERDICT (design-consistent, task STEP 3): **Q22 PASSES.** (a) recommends REAL
+  integration `harmony` (floors mix 0.1038>0.0520, dist 0.5884>=0.5410, iso
+  0.4827>=0.4785; scVI band fails mixing+isolation). (b) the REQUIRED SHUFFLE
+  anchor is disqualified by BOTH floors (dist 0.4782<0.5410 AND iso 0.4693<0.4785),
+  fired=True — falsifiability proof holds.
+- extreme-theta (REPORTED-NOT-GATING) — TWO calls DISAGREE this run:
+  PRODUCTION `_compute_embeddings` call went SINGULAR at theta=100
+  (`_LinAlgError`, logged in `integration_audit.json.candidates_failed`) =>
+  production JSON `extreme_theta_control_present:FALSE` (expected flip to TRUE did
+  NOT materialize, but the change DID run — failure is the known theta=100
+  singularity at scale, 3rd confirmation). The driver's SEPARATE re-score
+  SUCCEEDED => `overcorrector_audit.json` records it present (mix 0.0288, dist
+  0.5659, iso 0.4890; survives dist+iso, fails mixing; fired=False). Either way
+  NON-GATING; the shuffle anchor carries the Q22 (b) proof.
+- Driver's OWN printed "Q22 PASS: False" keys (b) on the extreme-theta, not the
+  shuffle — that is the wrong anchor per the design-consistent criterion;
+  superseded by the shuffle-anchor verdict above. NO code committed.
+
+---
+
+# Q22 — LUSC Integration-Selection Gate (REAL, GPU) — 2026-05-27
+
+- Task Q22: per-run discovery integration gate on a REAL strong-batch LUSC cohort,
+  GPU path (P1 `bind_cuda_context` fix). Branch `wave6-trevino-v5.1`, env `sc_gpu`.
+  Full journal: `journal/2026-05-27-q22-lusc-integration-gate-gpu.md`. NO code committed.
+- Cohort: LuCA core 892k -> squamous subset (MONDO:0005097) 92,430 cells, batch_key
+  `dataset` (9 datasets, cross-study + cross-platform). NOT subsampled. Outputs under
+  `/home/zerlinshen/projects/lusc-integration-gate-20260527/runs/lusc_dataset_axis_gate/`.
+- VERDICT: **Q22 PASSES** (both conditions). (a) gate recommends a REAL integration
+  = `harmony` (cleared all 3 floors: mixing 0.104>0.052, distinctness 0.591>=0.542,
+  isolation 0.489>=0.480). scVI did NOT survive (under-mixed at 100 epochs:
+  mixing 0.020<floor, isolation 0.474<floor). (b) the SHUFFLE over-merge anchor
+  FIRED — distinctness 0.478<0.542 AND isolation 0.469<0.480 (disqualified);
+  scoreboard shows its over-merger signature (mixing 0.530/kBET 0.921 but LOWEST
+  bio). chosen=harmony, backend=`direct`, X_pca_harmony [92430,15], converged 11/50.
+- P1 GPU FIX CONFIRMED on real 92k data: pre-rapids cuBLAS/cuSOLVER warm held; GPU
+  rsc PCA (6.1s, no CUSOLVER error) + scVI 3x100ep on GPU torch (no CUBLAS error)
+  + downstream all in ONE process. Total wall ~22 min.
+- CAVEAT (regression, same family as 2026-05-26): extreme-theta=100 over-corrector
+  candidate went SINGULAR (`linalg.inv` zero diagonal) — could not be materialized.
+  Known numerical limit at scale; gate treats extreme-theta as REPORTED-NOT-GATING,
+  shuffle is the robust anchor and fired. Next time use theta 20-50 or ridge.
+- Lesson: the gate's over-correction detector is BIO-CONSERVATION-based
+  (distinctness/isolation floors), not mixing — shuffle has max mixing yet is
+  disqualified. Do NOT chase extreme-theta to "pass" Q22.
+
+---
+
 # Integration Calibration Bench — Trevino RNA Atlas — 2026-05-26
 
 - Task T4 (integration-bench team, worker-2): CALIBRATION/RELATIVE lane on the real

@@ -166,6 +166,17 @@ class PerBatchReference:
         match are absent here.
     matched_keys:
         set of global keys that participate in >=1 mutual match.
+    correspondence_jaccard:
+        OPTIONAL membership-overlap cross-check on the corresponded pairs
+        (Q21 hybrid). ``None`` unless ``jaccard_crosscheck=True`` was passed to
+        ``compute_per_batch_reference``. When populated it is
+        ``{(key_a, key_b) -> jaccard}`` keyed by the SAME ordered pairs as
+        ``correspondence``: the Jaccard of the two clusters' occupancy SETS over
+        a shared full-cohort partition of the baseline ``X_pca`` (see
+        ``_correspondence_membership_jaccard``). The Euclidean
+        mutual-nearest-centroid match STILL forms ``correspondence``; this is an
+        independent cross-check, never the matcher. ``correspondence`` is
+        UNCHANGED by this field unless filtering was explicitly requested.
     notes:
         loud notes (e.g. a batch too small for distinctness).
     """
@@ -177,6 +188,7 @@ class PerBatchReference:
     sizes: dict[str, int]
     correspondence: list[tuple[str, str]]
     matched_keys: set[str]
+    correspondence_jaccard: dict[tuple[str, str], float] | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -227,6 +239,9 @@ def compute_per_batch_reference(
     n_neighbors: int = LEIDEN_N_NEIGHBORS,
     resolution: float = LEIDEN_RESOLUTION,
     random_state: int = LEIDEN_RANDOM_STATE,
+    jaccard_crosscheck: bool = False,
+    jaccard_occupancy_min: float = 0.0,
+    jaccard_min: float | None = None,
 ) -> PerBatchReference:
     """Build the FROZEN per-batch Leiden reference + cross-batch correspondence.
 
@@ -236,6 +251,24 @@ def compute_per_batch_reference(
       2. Each per-batch cluster -> centroid in the COMMON full-cohort ``X_pca``.
       3. Cross-batch match by MUTUAL-NEAREST-CENTROID; ties broken by lowest
          cluster index (deterministic). COND #5: unmatched clusters excluded.
+
+    Q21 HYBRID cross-check (OPT-IN, OFF BY DEFAULT — preserves byte-identical
+    determinism / outputs unless explicitly enabled):
+      - ``jaccard_crosscheck=False`` (default): NO extra work runs; the returned
+        ``correspondence`` / ``matched_keys`` and every other field are produced
+        EXACTLY as before, and ``correspondence_jaccard`` stays ``None``.
+      - ``jaccard_crosscheck=True``: the Euclidean mutual-nearest-centroid match
+        STILL forms ``correspondence`` (it is NOT replaced). In addition, each
+        corresponded pair gets a membership-overlap Jaccard recorded in
+        ``correspondence_jaccard`` (see ``_correspondence_membership_jaccard``).
+        ``jaccard_occupancy_min`` sets the per-cluster occupancy fraction a
+        shared-partition cluster must reach to count as "occupied" by a cluster
+        (default 0.0 = any cell).
+      - ``jaccard_min`` (default ``None`` = NO filtering): filtering is a
+        SEPARATE opt-in. Only when ``jaccard_crosscheck=True`` AND ``jaccard_min``
+        is not ``None`` are corresponded pairs whose Jaccard < ``jaccard_min``
+        DROPPED from ``correspondence`` / ``matched_keys`` (a loud note records
+        each drop). The default path NEVER silently drops a pair.
     """
     X_pca = np.asarray(X_pca, dtype=np.float64)
     batch = np.asarray(batch)
@@ -281,10 +314,39 @@ def compute_per_batch_reference(
     correspondence, matched_keys = _mutual_nearest_centroid(
         batches, cluster_keys, centroids)
 
+    correspondence_jaccard: dict[tuple[str, str], float] | None = None
+    if jaccard_crosscheck:
+        # Q21 hybrid: independent membership-overlap cross-check on the pairs the
+        # Euclidean matcher already formed. Reuses the SAME pinned-Leiden
+        # machinery (no new clustering kind, no new randomness) over the shared
+        # full-cohort baseline X_pca.
+        correspondence_jaccard = _correspondence_membership_jaccard(
+            X_pca, batch_str, labels, correspondence,
+            n_neighbors=n_neighbors, resolution=resolution,
+            random_state=random_state, occupancy_min=jaccard_occupancy_min)
+        if jaccard_min is not None:
+            # Filtering is its OWN opt-in (jaccard_min not None). Drop low-Jaccard
+            # pairs loudly; never silent. Default path (jaccard_min is None) keeps
+            # every corresponded pair.
+            kept: list[tuple[str, str]] = []
+            for pair in correspondence:
+                jv = correspondence_jaccard[pair]
+                if jv < jaccard_min:
+                    notes.append(
+                        f"Q21 jaccard cross-check DROPPED corresponded pair "
+                        f"{pair} (jaccard {jv:.4f} < jaccard_min {jaccard_min}); "
+                        "Euclidean-matched but membership-disjoint (loud, opt-in "
+                        "filter).")
+                else:
+                    kept.append(pair)
+            correspondence = kept
+            matched_keys = {k for p in kept for k in p}
+
     return PerBatchReference(
         batches=batches, labels=labels, cluster_keys=cluster_keys,
         centroids=centroids, sizes=sizes, correspondence=correspondence,
-        matched_keys=matched_keys, notes=notes,
+        matched_keys=matched_keys,
+        correspondence_jaccard=correspondence_jaccard, notes=notes,
     )
 
 
@@ -343,6 +405,73 @@ def _mutual_nearest_centroid(
         matched_keys.add(a)
         matched_keys.add(b)
     return sorted(matches), matched_keys
+
+
+def _correspondence_membership_jaccard(
+    X_pca: np.ndarray,
+    batch_str: np.ndarray,
+    labels: dict[str, np.ndarray],
+    correspondence: list[tuple[str, str]],
+    *,
+    n_neighbors: int = LEIDEN_N_NEIGHBORS,
+    resolution: float = LEIDEN_RESOLUTION,
+    random_state: int = LEIDEN_RANDOM_STATE,
+    occupancy_min: float = 0.0,
+) -> dict[tuple[str, str], float]:
+    """Q21 hybrid membership-overlap cross-check on already-matched pairs.
+
+    This is an INDEPENDENT cross-check, NOT the matcher: the Euclidean
+    mutual-nearest-centroid step already formed ``correspondence``. Here we ask,
+    for each corresponded pair, whether the two per-batch clusters' CELL
+    MEMBERSHIPS actually land in the SAME regions of a SHARED partition.
+
+    Shared reference partition (judgment call, documented): we reuse the SAME
+    pinned-Leiden machinery (``_embedding_cluster_assignment``) that
+    ``good_merge_correspondence`` uses for its E-cluster occupancy distributions,
+    but applied to the SHARED full-cohort baseline ``X_pca`` — the COMMON space
+    the centroids already live in (COND #1). Using the baseline keeps the
+    cross-check a property of the FROZEN reference (it does not depend on any
+    embedding E under test), and it avoids inventing a second clustering KIND:
+    same Leiden, same pinned seed/resolution/neighbors, no new randomness
+    (COND #4). The partition is computed ONCE for all pairs.
+
+    Sets compared (explicit): for each corresponded cluster we form its
+    OCCUPANCY SET = the set of shared-partition cluster ids that hold at least
+    ``occupancy_min`` (fraction, default 0.0 = any cell) of that cluster's cells.
+    Jaccard = |set_a ∩ set_b| / |set_a ∪ set_b|. Two clusters that occupy the
+    SAME shared regions -> high Jaccard; DISJOINT memberships -> Jaccard 0. This
+    is the membership analogue of the geometric centroid match: it agrees when
+    the match is real and dissents when two centroids are close yet the cells
+    occupy disjoint shared regions (the case the cheap Euclidean gate cannot
+    see).
+    """
+    shared = _embedding_cluster_assignment(
+        np.asarray(X_pca, dtype=np.float64), n_neighbors=n_neighbors,
+        resolution=resolution, random_state=random_state)
+
+    # Global row indices for each corresponded cluster key (batch::local_label).
+    keys = {k for pair in correspondence for k in pair}
+    key_to_rows: dict[str, np.ndarray] = {}
+    for key in keys:
+        b, u = key.rsplit("::", 1)
+        idx = np.where(batch_str == b)[0]
+        key_to_rows[key] = idx[labels[b] == int(u)]
+
+    def occupancy_set(rows: np.ndarray) -> set[int]:
+        if rows.size == 0:
+            return set()
+        vals, counts = np.unique(shared[rows], return_counts=True)
+        total = float(counts.sum())
+        return {int(v) for v, c in zip(vals, counts)
+                if (float(c) / total) >= occupancy_min}
+
+    out: dict[tuple[str, str], float] = {}
+    for ka, kb in correspondence:
+        sa = occupancy_set(key_to_rows.get(ka, np.array([], dtype=int)))
+        sb = occupancy_set(key_to_rows.get(kb, np.array([], dtype=int)))
+        union = sa | sb
+        out[(ka, kb)] = (len(sa & sb) / len(union)) if union else 0.0
+    return out
 
 
 # ==========================================================================

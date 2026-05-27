@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from ._gpu_utils import bind_cuda_context
 from ._scanpy_compat import import_scanpy_or_stub
 
 sc = import_scanpy_or_stub()
@@ -216,6 +217,7 @@ class DoubletDetectionModule:
     def _run_rsc_scrublet_whole(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, float | None]:
         """Run rsc.pp.scrublet on the full dataset."""
         import rapids_singlecell as rsc
+        bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
 
         adata_gpu = adata.copy()
         try:
@@ -239,6 +241,7 @@ class DoubletDetectionModule:
     def _run_rsc_scrublet_grouped(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, None]:
         """Run rsc.pp.scrublet with batch_key for per-sample doublet detection."""
         import rapids_singlecell as rsc
+        bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
 
         sample_key = "sample" if "sample" in adata.obs.columns else None
         if sample_key is None:

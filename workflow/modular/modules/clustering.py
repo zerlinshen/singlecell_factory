@@ -15,7 +15,7 @@ from ._scanpy_compat import import_scanpy_or_stub
 sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
-from ._gpu_utils import gpu_available
+from ._gpu_utils import bind_cuda_context, gpu_available
 from .._neighbors_cache import get_or_compute_neighbors
 
 
@@ -321,6 +321,7 @@ class ClusteringModule:
         """Use CPU PCA with GPU neighbors/UMAP/Leiden when GPU PCA is unstable."""
         try:
             import rapids_singlecell as rsc
+            bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
         except Exception as exc:
             ctx.metadata["clustering_hybrid_skip_reason"] = f"rapids_singlecell_import_failed: {exc}"
             return False
@@ -515,6 +516,7 @@ class ClusteringModule:
     def _run_gpu(self, adata, cfg, ctx) -> None:
         """GPU-accelerated clustering via rapids-singlecell."""
         import rapids_singlecell as rsc
+        bind_cuda_context()  # rebind CUDA context poisoned by rapids import (P1 fix)
 
         sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
         sc.pp.log1p(adata)
