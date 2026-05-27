@@ -498,6 +498,10 @@ A change that passes only nano/small_real is not cleared for full_real runs. Bui
 
 **Shutdown cleanup** — `workflow/modular/_shutdown.py` runs explicit cupy / torch / zarr cleanup at interpreter exit, eliminating the post-completion C-extension teardown segfault that previously affected exit codes (run outputs were intact but `set -e` propagated exit 139 and skipped downstream stages).
 
+**Latest scientific audit** — `docs/SCIENTIFIC_AUDIT_2026-05-15.md` is the current scientific-audit
+record (includes the 2026-05-27 W11-W14 hardening ledger notes: scVI ambient-aware counts contract,
+integration cache key + version-pin, batch-correction fail-loud post-processing).
+
 **Pre-commit doc-sync gate** — `.githooks/pre-commit` (activated via `git config core.hooksPath .githooks`) runs two stages before every commit: (1) the existing reference manager that keeps the README citation list in sync with module-level `__references__` blocks, then (2) the global `repo-doc-sync` drift detector that validates README + `AGENTS.md` + `AI_AGENT_PROTOCOL.md` against the current canonical state (latest run dir, latest ledger, latest audit doc, missing DOIs, stale `Current State (YYYY-MM-DD)` blocks, missing v1 do-not-cite when v2 exists). The hook blocks commits when drift is found. The detector is installed globally at `~/.claude/skills/repo-doc-sync/` (also symlinked into `~/.codex/skills/` and `~/.kimi/skills/`). Bypass with `git commit --no-verify` only when drift is intentional and documented.
 
 **Module catalog contract** — `workflow/modular/module_catalog.py` is the

@@ -317,3 +317,57 @@ def test_cache_hit_replays_recommendation(tmp_path, monkeypatch):
     IntegrationSelectModule().run(ctx2)
     assert ctx2.metadata["integration_select_status"] == "completed_cache_hit"
     assert ctx2.cfg.batch.method == ctx1.cfg.batch.method
+    # W13: the HIT path re-asserts the engine pins and records the resolved map.
+    assert "pins_reasserted_on_hit" in ctx2.metadata["integration_select"]
+
+
+def test_w13_cache_hit_reasserts_engine_pins_and_fails_loud_on_drift(
+    tmp_path, monkeypatch
+):
+    """W13: a cache HIT must re-run assert_pinned_discovery_engine() and FAIL
+    LOUD on engine-version drift, instead of silently serving a stored
+    recommendation computed under different (now-drifted) pins.
+
+    First populate the cache (clean pins). Then, on the second run, force a
+    Leiden-engine version mismatch and assert the HIT path raises (proving the
+    pin assertion now runs on HIT, not only on MISS).
+    """
+    fx = fixtures.make_f1_batch_split()
+    import scripts.bench.integration.methods as M
+    import scripts.bench.integration.select_integration as sel
+    from scripts.bench.integration import discovery_metrics as dm
+
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
+        return ({
+            M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
+            M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
+            sel.SHUFFLE_CONTROL_METHOD: np.asarray(
+                fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
+            ),
+        }, [])
+
+    monkeypatch.setattr(
+        IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
+    )
+
+    # First run with clean pins: compute + store in the cache.
+    monkeypatch.delenv(dm.SC_ALLOW_SCIB_VERSION_DRIFT, raising=False)
+    adata1 = _adata_from_fixture(fx)
+    ctx1 = _make_ctx(adata1, tmp_path)
+    IntegrationSelectModule().run(ctx1)
+    assert ctx1.metadata["integration_select_status"] == "completed"
+
+    # Second run on identical X_pca/batch -> cache HIT. Now drift the Leiden pin.
+    real = dm._installed_version_any
+
+    def fake(aliases):
+        if "leidenalg" in aliases:
+            return "0.0.0-bogus"
+        return real(aliases)
+
+    monkeypatch.setattr(dm, "_installed_version_any", fake)
+
+    adata2 = _adata_from_fixture(fx)
+    ctx2 = _make_ctx(adata2, tmp_path)  # same cache dir -> HIT
+    with pytest.raises(RuntimeError, match="Leiden-engine version gate FAILED"):
+        IntegrationSelectModule().run(ctx2)

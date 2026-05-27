@@ -313,3 +313,71 @@ def test_combat_run_combat_helper_sets_combat_rep(tmp_path):
     assert np.allclose(adata.obsm["X_pca"], prev_pca)
     # Corrected embedding differs from the pre-combat one.
     assert not np.allclose(adata.obsm["X_pca_combat"], prev_pca)
+
+
+# ---------------------------------------------------------------------------
+# W14 batch_correction post-processing failure must not be swallowed
+# ---------------------------------------------------------------------------
+
+
+def _run_batch_correction_with_failing_postproc(adata, ctx):
+    """Run batch_correction with CPU post-processing forced to fail.
+
+    The corrected representation (X_pca_combat via _run_combat) is still
+    produced, but neighbors/UMAP/Leiden on it raises — exactly the W14
+    scenario where leiden/X_umap would be left STALE (pre-correction).
+    """
+    import unittest.mock as mock
+    from workflow.modular.modules.batch_correction import BatchCorrectionModule
+    import workflow.modular.modules.batch_correction as bc_mod
+
+    def _boom(*a, **kw):
+        raise RuntimeError("forced post-processing failure")
+
+    with mock.patch.object(bc_mod.plt, "savefig", return_value=None), \
+         mock.patch.object(bc_mod.plt, "subplots",
+                           return_value=(mock.MagicMock(),
+                                         [mock.MagicMock(), mock.MagicMock()])), \
+         mock.patch.object(bc_mod.plt, "tight_layout", return_value=None), \
+         mock.patch.object(bc_mod.plt, "close", return_value=None), \
+         mock.patch.object(bc_mod.sc.pl, "umap", return_value=None), \
+         mock.patch.object(bc_mod, "get_or_compute_neighbors", _boom):
+        BatchCorrectionModule().run(ctx)
+
+
+def test_w14_postproc_failure_raises_loud_by_default(tmp_path, monkeypatch):
+    """W14: CPU post-processing failure FAILS LOUD by default (no swallow).
+
+    Previously the module logged a warning, kept the stale pre-correction
+    clustering, and still reported status='completed'. The fix raises unless the
+    explicit SC_ALLOW_BATCH_BACKEND_SKIP opt-in is set.
+    """
+    monkeypatch.delenv("SC_ALLOW_BATCH_BACKEND_SKIP", raising=False)
+    adata = _batch_adata()
+    ctx = _BCtx(adata, tmp_path)
+    with pytest.raises(RuntimeError, match="SC_ALLOW_BATCH_BACKEND_SKIP"):
+        _run_batch_correction_with_failing_postproc(adata, ctx)
+    # Must NOT have been marked completed on the loud-failure path.
+    assert ctx.metadata.get("batch_correction_status") != "completed"
+
+
+def test_w14_postproc_failure_optin_uses_distinct_status_and_records_staleness(
+    tmp_path, monkeypatch
+):
+    """W14: with the audited opt-in, the module does NOT report 'completed'.
+
+    It uses a distinct status and records that the clustering is stale relative
+    to the corrected representation.
+    """
+    monkeypatch.setenv("SC_ALLOW_BATCH_BACKEND_SKIP", "1")
+    adata = _batch_adata()
+    ctx = _BCtx(adata, tmp_path)
+    _run_batch_correction_with_failing_postproc(adata, ctx)
+
+    assert ctx.metadata["batch_correction_status"] == (
+        "completed_with_stale_clustering_opt_in"
+    )
+    assert ctx.metadata["batch_correction_status"] != "completed"
+    assert ctx.metadata["batch_post_processing_stale_clustering"] is True
+    assert ctx.metadata["batch_post_processing_skip_opt_in_acknowledged"] is True
+    assert "batch_post_error" in ctx.metadata

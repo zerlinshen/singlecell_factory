@@ -375,6 +375,63 @@ def test_tm9_loud_mode_banner_warns():
     assert any("force-refresh" in n for n in notes)
 
 
+def test_w12_cache_key_folds_each_gate_affecting_param():
+    """W12: changing ANY gate-affecting param must change the cache key digest.
+
+    Previously the key hashed only (data_hash, batch_key, scvi_config,
+    code_version), so two runs differing only in margin_mix / harmony theta etc.
+    aliased to the SAME entry and the second silently replayed a recommendation
+    computed under different parameters. Each param below must perturb the key.
+    """
+    baseline = np.random.default_rng(0).normal(size=(50, 4)).astype(np.float32)
+    base = ic.make_cache_key(
+        baseline, "sample",
+        margin_mix=0.05, harmony_theta=2.0, harmony_sigma=0.1,
+        harmony_max_iter=50, scvi_n_latent=30, n_neighbors=15,
+    )
+
+    perturbations = dict(
+        margin_mix=0.10,
+        harmony_theta=3.0,
+        harmony_sigma=0.2,
+        harmony_max_iter=100,
+        scvi_n_latent=20,
+        n_neighbors=30,
+    )
+    kwargs = dict(
+        margin_mix=0.05, harmony_theta=2.0, harmony_sigma=0.1,
+        harmony_max_iter=50, scvi_n_latent=30, n_neighbors=15,
+    )
+    for param, new_value in perturbations.items():
+        perturbed = dict(kwargs)
+        perturbed[param] = new_value
+        k = ic.make_cache_key(baseline, "sample", **perturbed)
+        assert k.digest() != base.digest(), (
+            f"changing {param} did not change the cache key digest (W12 regression)"
+        )
+
+    # gate_params is surfaced in the serialized key dict for audit.
+    assert "gate_params" in base.as_dict()
+    assert base.as_dict()["gate_params"] != ""
+
+
+def test_w12_cache_key_backcompat_no_gate_params_matches_legacy():
+    """Omitting all gate params reproduces the legacy 4-tuple digest (back-compat).
+
+    Guards that the W12 extension does NOT invalidate caches keyed by callers
+    that pass none of the new params.
+    """
+    baseline = np.random.default_rng(0).normal(size=(50, 4)).astype(np.float32)
+    legacy = ic.CacheKey(
+        data_hash=ic.compute_data_hash(baseline),
+        batch_key="sample",
+        scvi_config="seeds=0,1,2",
+    )
+    new_no_params = ic.make_cache_key(baseline, "sample")
+    assert new_no_params.gate_params == ""
+    assert new_no_params.digest() == legacy.digest()
+
+
 # ==========================================================================
 # TM-11 — audit JSON records provenance
 # ==========================================================================

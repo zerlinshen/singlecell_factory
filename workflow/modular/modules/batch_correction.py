@@ -309,12 +309,39 @@ class BatchCorrectionModule:
                 )
                 post_processing_ok = True
             except Exception as exc:
-                # Keep prior clustering outputs rather than failing the module.
-                logger.warning(
-                    "CPU batch post-processing failed (%s); keeping existing UMAP/leiden.",
-                    exc,
-                )
+                # W14 fix: previously this swallowed the failure (warning + keep
+                # PRE-correction UMAP/leiden) yet the module still reported
+                # status="completed". That is a silent compromise: the corrected
+                # representation (use_rep) was computed, but neighbors/UMAP/Leiden
+                # on it failed, so the leiden labels + X_umap left behind are
+                # STALE (computed on the pre-correction X_pca). Downstream
+                # annotation/DE would then bind to clusters that do not match the
+                # corrected embedding the run claims to have produced. Fail loud
+                # by default; allow an explicit, audited opt-in via the SAME env
+                # var the backend-failure path uses (SC_ALLOW_BATCH_BACKEND_SKIP).
                 ctx.metadata["batch_post_error"] = str(exc)
+                opt_in_env = "SC_ALLOW_BATCH_BACKEND_SKIP"
+                if os.environ.get(opt_in_env, "").strip() != "1":
+                    raise RuntimeError(
+                        f"batch_correction: CPU post-processing "
+                        f"(neighbors/UMAP/Leiden on use_rep='{use_rep}') failed "
+                        f"({exc!r}). The corrected representation was computed but "
+                        f"clustering on it did NOT run, so leiden/X_umap are STALE "
+                        f"(pre-correction). Refusing to report 'completed' with "
+                        f"stale clustering (Principle 9: no silent compromise). "
+                        f"Set {opt_in_env}=1 to opt in to keeping the stale "
+                        f"clustering (status will be recorded as "
+                        f"'completed_with_stale_clustering_opt_in', NOT "
+                        f"'completed'), or fix the post-processing failure."
+                    ) from exc
+                logger.error(
+                    "CPU batch post-processing failed (%s); %s=1 acknowledged — "
+                    "keeping STALE pre-correction UMAP/leiden. Clustering does NOT "
+                    "reflect the corrected representation '%s'.",
+                    exc, opt_in_env, use_rep,
+                )
+                ctx.metadata["batch_post_processing_stale_clustering"] = True
+                ctx.metadata["batch_post_processing_skip_opt_in_acknowledged"] = True
         ctx.metadata["batch_post_backend"] = "gpu" if use_gpu else "cpu"
         # Non-destructive audit column: snapshot the post-correction leiden so
         # annotation can bind cell_type to the corrected clusters even after a
@@ -325,7 +352,17 @@ class BatchCorrectionModule:
             adata.obs["leiden_corrected"] = adata.obs["leiden"].copy()
             ctx.metadata["leiden_corrected_written"] = True
         ctx.metadata["n_clusters_after_batch"] = int(adata.obs["leiden"].nunique()) if "leiden" in adata.obs else 0
-        ctx.metadata["batch_correction_status"] = "completed"
+        # W14 fix: only report "completed" when the corrected representation was
+        # actually re-clustered. A swallowed post-processing failure (reachable
+        # only via the SC_ALLOW_BATCH_BACKEND_SKIP opt-in above; the default path
+        # raises) leaves stale pre-correction clustering, so it gets a DISTINCT
+        # status instead of the misleading "completed".
+        if post_processing_ok:
+            ctx.metadata["batch_correction_status"] = "completed"
+        else:
+            ctx.metadata["batch_correction_status"] = (
+                "completed_with_stale_clustering_opt_in"
+            )
         ctx.metadata["batch_correction_random_state"] = ctx.random_state
         if post_processing_ok:
             self._write_corrected_resolution_sweep(adata, ctx, use_rep)
@@ -860,9 +897,45 @@ class BatchCorrectionModule:
             return False
         return bool(np.allclose(finite, np.round(finite), atol=1e-6))
 
+    # W11 contract version. Bump when the counts-resolution contract changes so
+    # prior runs are recognizable as having used a different (stale) contract.
+    SCVI_COUNTS_CONTRACT = "scvi-counts-v3-ambient-corrected-rounded-int"
+
+    @staticmethod
+    def _ambient_correction_ran(adata) -> bool:
+        """True iff ambient_correction (DecontX) actually rewrote ``adata.X``.
+
+        Primary signal: ``adata.uns['ambient_correction']['decision'] ==
+        'triggered'`` (set by ambient_correction.py only on the path that
+        replaces ``.X`` with corrected counts). Secondary robust signal: the
+        pre-correction snapshot ``layers['counts_raw_pre_decontx']`` is present
+        (ambient_correction writes it on the SAME line it overwrites ``.X``).
+        Either is sufficient — the snapshot survives even if ``uns`` is dropped
+        by a downstream serialization round-trip.
+        """
+        uns = getattr(adata, "uns", {}) or {}
+        amb = uns.get("ambient_correction")
+        if isinstance(amb, dict) and amb.get("decision") == "triggered":
+            return True
+        layers = getattr(adata, "layers", {}) or {}
+        return "counts_raw_pre_decontx" in layers
+
     @staticmethod
     def _run_scvi(adata, batch_key: str, ctx) -> None:
-        """scVI latent integration (Lopez et al., Nature Methods 2018)."""
+        """scVI latent integration (Lopez et al., Nature Methods 2018).
+
+        W11 fix — counts-source consistency: clustering and DE operate on
+        ``adata.X``, which ambient_correction OVERWRITES with the
+        DecontX-corrected matrix when a trigger fires (preserving the
+        pre-correction raw at ``layers['counts_raw_pre_decontx']``). It does NOT
+        refresh ``layers['counts']``, so the previous "prefer layers['counts']"
+        rule made scVI train on the STALE pre-ambient counts while
+        clustering/DE used the corrected matrix — a silent cross-module
+        inconsistency. The resolver below mirrors the clustering/DE path: when
+        ambient ran, scVI consumes the ambient-corrected ``adata.X``; only when
+        ambient did NOT run does it fall back to ``layers['counts']`` (raw UMI)
+        or an integer-like ``adata.X``. No silent fallback: a non-count-like
+        ``adata.X`` with no usable raw layer still RAISES (Principle 9)."""
         try:
             import scvi
         except ImportError:
@@ -872,7 +945,26 @@ class BatchCorrectionModule:
             )
 
         batch_cfg = ctx.cfg.batch
-        if "counts" in adata.layers:
+        ambient_ran = BatchCorrectionModule._ambient_correction_ran(adata)
+        if ambient_ran:
+            # Consume the SAME corrected signal clustering/DE consumed (the corrected .X),
+            # but scVI's NB/ZINB likelihood requires INTEGER counts and DecontX corrected
+            # counts are fractional (probabilistic redistribution). So round the corrected
+            # matrix to integers into a dedicated layer for scVI: consistency (W11) + NB
+            # count contract honored. We deliberately do NOT route to the stale
+            # layers['counts'] (pre-ambient) here even when it exists.
+            import numpy as _np
+            from scipy import sparse as _sp
+            _xc = adata.X
+            if _sp.issparse(_xc):
+                _xi = _xc.copy().astype(_np.float32)
+                _xi.data = _np.rint(_xi.data)
+            else:
+                _xi = _np.rint(_np.asarray(_xc)).astype(_np.float32)
+            adata.layers["counts_decontx_int"] = _xi
+            layer = "counts_decontx_int"
+            input_source = "adata.X_ambient_corrected_rounded_int"
+        elif "counts" in adata.layers:
             layer = "counts"
             input_source = "layers.counts"
         else:
@@ -884,6 +976,13 @@ class BatchCorrectionModule:
                 )
             input_source = "adata.X"
 
+        # Real (non-mock) integrality guard on whatever scVI actually consumes — NB/ZINB
+        # likelihood requires integer counts. Catches fractional input from any branch.
+        _scvi_mat = adata.layers[layer] if layer is not None else adata.X
+        if not BatchCorrectionModule._matrix_looks_integer_like(_scvi_mat):
+            raise ValueError(
+                f"scVI input ({input_source}) is not integer-like; NB likelihood requires "
+                "integer counts. (DecontX corrected counts must be rounded before scVI.)")
         scvi.model.SCVI.setup_anndata(adata, batch_key=batch_key, layer=layer)
         model = scvi.model.SCVI(adata, n_latent=batch_cfg.scvi_n_latent)
         model.train(
@@ -892,6 +991,13 @@ class BatchCorrectionModule:
         )
         adata.obsm["X_scvi"] = model.get_latent_representation()
         ctx.metadata["scvi_input_source"] = input_source
+        # W11: record both the consumed-counts source and the contract version
+        # so a post-run reviewer can tell which counts scVI actually trained on
+        # and whether the run used the ambient-aware contract.
+        ctx.metadata["scvi_consumed_counts_source"] = input_source
+        ctx.metadata["scvi_counts_contract"] = BatchCorrectionModule.SCVI_COUNTS_CONTRACT
+        ctx.metadata["scvi_ambient_correction_ran"] = bool(ambient_ran)
+        ctx.metadata["scvi_corrected_counts_rounded_to_int"] = bool(ambient_ran)
         ctx.metadata["scvi_train_config"] = {
             "max_epochs": batch_cfg.scvi_max_epochs,
             "n_latent": batch_cfg.scvi_n_latent,

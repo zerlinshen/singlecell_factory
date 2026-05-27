@@ -109,10 +109,27 @@ class IntegrationSelectModule:
         margin_mix = float(cfg_batch.integration_margin_mix)
 
         cache = ic.IntegrationCache(cache_dir)
-        cache_key = ic.make_cache_key(baseline, batch_key, scvi_seeds=scvi_seeds)
+        cache_key = ic.make_cache_key(
+            baseline, batch_key, scvi_seeds=scvi_seeds,
+            margin_mix=margin_mix,
+            harmony_theta=float(cfg_batch.harmony_theta),
+            harmony_sigma=float(cfg_batch.harmony_sigma),
+            harmony_max_iter=int(cfg_batch.harmony_max_iter),
+            scvi_n_latent=int(cfg_batch.scvi_n_latent),
+            n_neighbors=int(ctx.cfg.clustering.n_neighbors),
+        )
         cache_res = cache.lookup(cache_key)
 
         if cache_res.hit and cache_res.payload is not None:
+            # W13 fix: a cache HIT replays a STORED recommendation, but the
+            # engine pins that recommendation was computed under may have
+            # drifted since. The cache-MISS path asserts the pins (below); the
+            # HIT path previously returned the stored verdict WITHOUT
+            # re-asserting, so a drifted Leiden/scib engine could silently serve
+            # a stale recommendation. Re-assert on HIT too and FAIL LOUD on
+            # drift (Principle 9: no silent compromise). Opt-in
+            # SC_ALLOW_SCIB_VERSION_DRIFT=1 is still honored inside the assert.
+            resolved_versions = dm.assert_pinned_discovery_engine()
             chosen = str(cache_res.payload.get("chosen_method", "none"))
             self._apply_choice(ctx, chosen)
             ctx.metadata["integration_select"] = {
@@ -121,6 +138,7 @@ class IntegrationSelectModule:
                 "cache_key": cache_key.digest(),
                 "rule_constants": cache_res.payload.get("rule_constants"),
                 "reason": cache_res.payload.get("reason"),
+                "pins_reasserted_on_hit": resolved_versions,
             }
             ctx.metadata["integration_select_status"] = "completed_cache_hit"
             ctx.status(

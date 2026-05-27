@@ -1879,6 +1879,142 @@ def test_run_scvi_rejects_non_count_like_input(monkeypatch, tmp_path):
         BatchCorrectionModule._run_scvi(adata, "sample", ctx)
 
 
+def test_run_scvi_consumes_corrected_counts_when_ambient_ran(monkeypatch, tmp_path):
+    """W11: when ambient_correction triggered, scVI must consume the
+    ambient-corrected adata.X (same matrix clustering/DE use), NOT the stale
+    layers['counts'] (raw pre-ambient counts).
+
+    This is the regression guard for the silent cross-module inconsistency:
+    ambient_correction overwrites .X with DecontX-corrected counts but does not
+    refresh layers['counts'], so the old "prefer layers['counts']" rule trained
+    scVI on uncorrected counts while clustering/DE used corrected ones.
+    """
+    import sys
+    import types
+    from workflow.modular.modules.batch_correction import BatchCorrectionModule
+    from workflow.modular.context import PipelineContext
+
+    captured = {}
+
+    class _DummySCVI:
+        @staticmethod
+        def setup_anndata(adata, batch_key=None, layer=None):
+            captured["setup_layer"] = layer
+
+        def __init__(self, adata, n_latent=10):
+            self._n_obs = adata.n_obs
+
+        def train(self, **kwargs):
+            return None
+
+        def get_latent_representation(self):
+            return np.ones((self._n_obs, 3), dtype=np.float32)
+
+    monkeypatch.setitem(
+        sys.modules, "scvi",
+        types.SimpleNamespace(model=types.SimpleNamespace(SCVI=_DummySCVI)),
+    )
+
+    rng = np.random.default_rng(0)
+    n_obs, n_vars = 8, 5
+    # Corrected .X is FRACTIONAL DecontX output (distinct from the raw counts).
+    corrected = (rng.poisson(2.0, size=(n_obs, n_vars)).astype(np.float32) * 0.137)
+    raw_counts = rng.poisson(2.0, size=(n_obs, n_vars)).astype(np.float32)
+    adata = AnnData(corrected.copy())
+    adata.obs["sample"] = ["A"] * 4 + ["B"] * 4
+    # Stale raw layer left by cellranger; the fix must NOT consume it here.
+    adata.layers["counts"] = raw_counts.copy()
+    # Ambient-ran signals (both): the pre-correction snapshot + the uns decision.
+    adata.layers["counts_raw_pre_decontx"] = raw_counts.copy()
+    adata.uns["ambient_correction"] = {"engine": "decontx", "decision": "triggered"}
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        batch=BatchConfig(method="scvi", scvi_n_latent=11),
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=adata,
+    )
+
+    BatchCorrectionModule._run_scvi(adata, "sample", ctx)
+
+    # scVI was set up on the ROUNDED-INTEGER corrected layer (same corrected signal as
+    # clustering/DE, but integerized for scVI's NB likelihood), NOT the stale counts layer.
+    assert captured["setup_layer"] == "counts_decontx_int"
+    assert "counts_decontx_int" in adata.layers
+    _consumed = adata.layers["counts_decontx_int"]
+    _arr = _consumed.toarray() if hasattr(_consumed, "toarray") else np.asarray(_consumed)
+    assert np.allclose(_arr, np.rint(_arr)), "scVI input must be integer-valued (NB contract)"
+    assert ctx.metadata["scvi_input_source"] == "adata.X_ambient_corrected_rounded_int"
+    assert ctx.metadata["scvi_consumed_counts_source"] == "adata.X_ambient_corrected_rounded_int"
+    assert ctx.metadata["scvi_ambient_correction_ran"] is True
+    assert ctx.metadata["scvi_corrected_counts_rounded_to_int"] is True
+    assert ctx.metadata["scvi_counts_contract"] == (
+        BatchCorrectionModule.SCVI_COUNTS_CONTRACT
+    )
+
+
+def test_run_scvi_uses_counts_layer_when_ambient_did_not_run(monkeypatch, tmp_path):
+    """W11 back-compat: with NO ambient correction, scVI still prefers the raw
+    layers['counts'] (unchanged behavior; guards against over-correcting the fix)."""
+    import sys
+    import types
+    from workflow.modular.modules.batch_correction import BatchCorrectionModule
+    from workflow.modular.context import PipelineContext
+
+    captured = {}
+
+    class _DummySCVI:
+        @staticmethod
+        def setup_anndata(adata, batch_key=None, layer=None):
+            captured["setup_layer"] = layer
+
+        def __init__(self, adata, n_latent=10):
+            self._n_obs = adata.n_obs
+
+        def train(self, **kwargs):
+            return None
+
+        def get_latent_representation(self):
+            return np.ones((self._n_obs, 3), dtype=np.float32)
+
+    monkeypatch.setitem(
+        sys.modules, "scvi",
+        types.SimpleNamespace(model=types.SimpleNamespace(SCVI=_DummySCVI)),
+    )
+
+    rng = np.random.default_rng(1)
+    adata = AnnData((rng.poisson(2.0, size=(8, 5)).astype(np.float32) * 0.137))
+    adata.obs["sample"] = ["A"] * 4 + ["B"] * 4
+    adata.layers["counts"] = rng.poisson(2.0, size=(8, 5)).astype(np.float32)
+    # No ambient signals -> layers['counts'] remains the canonical raw source.
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        batch=BatchConfig(method="scvi"),
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=adata,
+    )
+
+    BatchCorrectionModule._run_scvi(adata, "sample", ctx)
+    assert captured["setup_layer"] == "counts"
+    assert ctx.metadata["scvi_input_source"] == "layers.counts"
+    assert ctx.metadata["scvi_ambient_correction_ran"] is False
+
+
 def test_annotation_reference_mapping_overrides_labels(monkeypatch, tmp_path):
     from workflow.modular.modules.annotation import AnnotationModule
     import workflow.modular.modules.annotation as ann_mod
