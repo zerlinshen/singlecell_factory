@@ -3,15 +3,16 @@
 "Per-run" means "per dataset VERSION". A literal per-run scVI retrain (3 seeds x
 3600s on large LUSC cohorts) is infeasible, so the cache IS the per-run
 semantics: a recommendation is keyed on
-``(data_hash, batch_key, scVI_config, code_version, gate_params)``. A cache HIT
-returns the prior recommendation with NO scVI retrain; a MISS triggers a fresh
-evaluation.
+``(data_hash, batch_key, batch_state_hash, scVI_config, code_version,
+gate_params)``. A cache HIT returns the prior recommendation with NO scVI
+retrain; a MISS triggers a fresh evaluation.
 
 ``gate_params`` (W12) folds in the parameters that change the gate's
 RECOMMENDATION — ``margin_mix``, Harmony ``theta``/``sigma``/``max_iter``,
-``scvi_n_latent``, and ``n_neighbors`` — so a run that differs ONLY in one of
-those does NOT alias to a stale recommendation. When none are supplied the
-digest is identical to the legacy 4-tuple key (back-compat).
+scVI ``max_epochs``/``n_latent``/``early_stopping``, and ``n_neighbors`` — so a
+run that differs ONLY in one of those does NOT alias to a stale recommendation.
+When none are supplied the digest is identical to the legacy 4-tuple key
+(back-compat).
 
 Loud bypasses:
   - ``--force-refresh`` : ignore any cached entry, recompute, overwrite.
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Bump when the gate's metric/selection logic changes so stale recommendations
 # are invalidated (part of the cache key, plan §D7).
-GATE_CODE_VERSION = "discovery-gate-v1"
+GATE_CODE_VERSION = "discovery-gate-v2"
 
 DEFAULT_SCVI_SEEDS: tuple[int, ...] = (0, 1, 2)
 
@@ -47,14 +48,27 @@ def compute_data_hash(X: np.ndarray) -> str:
     return h.hexdigest()
 
 
+def compute_batch_state_hash(batch_labels, obs_names=None) -> str:
+    """Stable hash of the batch labels and row order used by discovery scoring."""
+    labels = [str(x) for x in np.asarray(batch_labels, dtype=object).tolist()]
+    names = None if obs_names is None else [str(x) for x in list(obs_names)]
+    payload = {
+        "batch_labels": labels,
+        "obs_names": names,
+    }
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 @dataclass
 class CacheKey:
-    """The (data_hash, batch_key, scVI_config, gate_params, code_version) cache key (§D7).
+    """The discovery-gate cache key (§D7).
 
     ``gate_params`` (W12 fix) folds the parameters that change the gate's
     RECOMMENDATION into the key: the mixing margin (``margin_mix``), the Harmony
-    candidate's ``theta``/``sigma``/``max_iter``, the scVI latent dimension
-    (``scvi_n_latent``), and the per-batch-Leiden / downstream ``n_neighbors``.
+    candidate's ``theta``/``sigma``/``max_iter``, the scVI training params
+    (``scvi_max_epochs``, ``scvi_n_latent``, ``scvi_early_stopping``), and the
+    per-batch-Leiden / downstream ``n_neighbors``.
     Previously the key hashed only (data_hash, batch_key, scvi_config,
     code_version), so two runs that differed ONLY in (say) ``margin_mix`` or
     ``harmony_theta`` aliased to the SAME cache entry and the second run silently
@@ -68,9 +82,14 @@ class CacheKey:
     scvi_config: str
     code_version: str = GATE_CODE_VERSION
     gate_params: str = ""
+    batch_state_hash: str = ""
 
     def digest(self) -> str:
         parts = [self.data_hash, self.batch_key, self.scvi_config, self.code_version]
+        # Append optional fields only when present so legacy no-extra calls keep
+        # their pre-W12 digest for compatibility tests and old persisted caches.
+        if self.batch_state_hash:
+            parts.append(f"batch_state={self.batch_state_hash}")
         # Append gate_params only when present so the legacy (no-gate-params)
         # digest is byte-identical to the pre-W12 key (back-compat).
         if self.gate_params:
@@ -85,6 +104,7 @@ class CacheKey:
             "scvi_config": self.scvi_config,
             "code_version": self.code_version,
             "gate_params": self.gate_params,
+            "batch_state_hash": self.batch_state_hash,
             "digest": self.digest(),
         }
 
@@ -101,14 +121,18 @@ def make_cache_key(
     harmony_theta: float | None = None,
     harmony_sigma: float | None = None,
     harmony_max_iter: int | None = None,
+    scvi_max_epochs: int | None = None,
     scvi_n_latent: int | None = None,
+    scvi_early_stopping: bool | None = None,
     n_neighbors: int | None = None,
+    batch_labels=None,
+    obs_names=None,
 ) -> CacheKey:
     """Build a CacheKey. scVI config encodes seeds + FAST/skip flags so a FAST
     or skip-scvi recommendation never aliases a full recommendation.
 
     W12 fix: the gate-affecting params (``margin_mix``, Harmony
-    ``theta``/``sigma``/``max_iter``, ``scvi_n_latent``, ``n_neighbors``) are
+    ``theta``/``sigma``/``max_iter``, scVI training params, ``n_neighbors``) are
     folded into the key via ``CacheKey.gate_params`` so a run that changes ANY
     of them gets a fresh recommendation instead of silently replaying a
     recommendation computed under different parameters. Any param left ``None``
@@ -125,7 +149,9 @@ def make_cache_key(
         harmony_theta=harmony_theta,
         harmony_sigma=harmony_sigma,
         harmony_max_iter=harmony_max_iter,
+        scvi_max_epochs=scvi_max_epochs,
         scvi_n_latent=scvi_n_latent,
+        scvi_early_stopping=scvi_early_stopping,
         n_neighbors=n_neighbors,
     )
     return CacheKey(
@@ -134,6 +160,10 @@ def make_cache_key(
         scvi_config=scvi_config,
         code_version=code_version,
         gate_params=gate_params,
+        batch_state_hash=(
+            compute_batch_state_hash(batch_labels, obs_names)
+            if batch_labels is not None else ""
+        ),
     )
 
 
@@ -143,7 +173,9 @@ def _encode_gate_params(
     harmony_theta: float | None,
     harmony_sigma: float | None,
     harmony_max_iter: int | None,
+    scvi_max_epochs: int | None,
     scvi_n_latent: int | None,
+    scvi_early_stopping: bool | None,
     n_neighbors: int | None,
 ) -> str:
     """Encode the gate-affecting params as a stable, order-fixed string.
@@ -161,8 +193,12 @@ def _encode_gate_params(
         fields.append(f"hs={round(float(harmony_sigma), 6)}")
     if harmony_max_iter is not None:
         fields.append(f"hmi={int(harmony_max_iter)}")
+    if scvi_max_epochs is not None:
+        fields.append(f"sme={int(scvi_max_epochs)}")
     if scvi_n_latent is not None:
         fields.append(f"snl={int(scvi_n_latent)}")
+    if scvi_early_stopping is not None:
+        fields.append(f"ses={int(bool(scvi_early_stopping))}")
     if n_neighbors is not None:
         fields.append(f"nn={int(n_neighbors)}")
     return ";".join(fields)

@@ -98,11 +98,12 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
         layer="latent_structure",
         description=(
             "Per-run discovery integration-selection gate. Scores baseline/"
-            "Harmony/scVI label-free after clustering and SETS cfg.batch.method "
-            "(routing Harmony to the working harmonypy-direct backend) before "
-            "batch_correction. OPT-IN via --select-integration (runs an "
-            "expensive scVI seed sweep; cache-bounded). Never writes inside the "
-            "factory tree."
+            "Harmony/scVI/shuffle candidates after clustering and SETS "
+            "cfg.batch.method (routing Harmony to the working harmonypy-direct "
+            "backend) before batch_correction. Fails loud on degraded "
+            "candidates or a non-firing shuffle control. OPT-IN via "
+            "--select-integration (runs an expensive scVI seed sweep; "
+            "cache-bounded). Never writes inside the factory tree."
         ),
     ),
     "batch_correction": ModuleSpec(

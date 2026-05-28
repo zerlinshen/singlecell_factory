@@ -31,6 +31,13 @@ for deep operational steps.
 - Do not treat the observed `2026-04-25` sparse-exact probe directories as
   successful canonical runs unless `final_adata.h5ad`, `run_manifest.json`, and
   `module_status.csv` are present.
+- Current integration-biology/multiomics validation truth is under
+  `/home/zerlinshen/projects/pipeline-validation-20260527/` and the matching
+  `.omx/ultragoal/ledger-integration-biology-multiomics-validation-20260527.jsonl`.
+  Preserve the explicit flags for mixing/rare-population purity, marker/embedding
+  negative-control evidence, raw-count-compatible G005 sample exclusions,
+  dataset-dominated LUSC DE, and H3K27ac HiChIP low-information 3D-genome boundaries.
+  The final registered verdict is `PASS_SUPPORTED_NOT_FINAL`.
 
 ## Architecture (2026-05+): Factory-Project Separation
 

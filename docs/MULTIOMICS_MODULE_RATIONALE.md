@@ -83,11 +83,18 @@ Supporting contracts:
 - `workflow/modular/modules/hic_ingest.py` reads `.cool/.mcool` via optional
   `cooler` or validated TSV contact-pairs, keeps contacts sparse, and records
   resolution/format metadata.
-- `workflow/modular/modules/hic_tad.py` writes insulation-score boundaries and
-  first-eigenvector A/B compartment tables with `position` coordinates. It
-  records `hic_tad_metadata` so zero-contact or near-zero-variance chromosomes
-  are marked as `low_information` and receive deterministic zero compartment
-  scores plus `low_information` labels rather than unstable A/B calls.
+- `workflow/modular/modules/hic_tad.py` writes cross-boundary insulation-score
+  boundaries and first-eigenvector A/B compartment tables with `position`
+  coordinates. It records `hic_tad_metadata` so zero-contact or
+  near-zero-variance chromosomes are marked as `low_information`; sparse
+  non-variable tails inside otherwise informative chromosomes are excluded from
+  eigendecomposition and labeled `low_information` without downgrading the
+  whole chromosome.
+- 2026-05-28 real ground-truth check: GM12878 Rao DpnII unbiased Hi-C chr19
+  A/B compartments pass against published subcompartments
+  (`concordance=0.814`, sign-fixed), but the current lightweight TAD boundary
+  caller remains below null on B35T1NC Micro-C author TADs. Use factory TAD
+  calls as exploratory QC until a stronger caller is integrated.
 - `scripts/export_singlecell_r_bundle.py::maybe_export_hic(...)` writes
   `extensions/hic/{bins,contacts,boundaries,compartments}.parquet` only when
   `--schema-version v2.2 --include-hic` is requested. It carries

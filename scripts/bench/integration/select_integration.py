@@ -220,6 +220,17 @@ def check_controls_fire(
     return out
 
 
+def require_required_controls_fire(controls: dict[str, Any]) -> None:
+    """Fail loud unless the required shuffle falsifiability anchor fired."""
+    if controls.get("shuffle_control_present") and controls.get("shuffle_fired"):
+        return
+    raise RuntimeError(
+        "integration_select: required shuffle falsifiability control is absent "
+        "or did not fire; refusing to apply a recommendation from an unfalsified "
+        "metric set."
+    )
+
+
 # ==========================================================================
 # Recommendation (§D4)
 # ==========================================================================
@@ -423,6 +434,7 @@ def build_recommendation_json(
     *,
     batch_key: str,
     cache_key: str | None = None,
+    n_neighbors: int | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
@@ -441,7 +453,9 @@ def build_recommendation_json(
         "leiden_params": {
             "resolution": dm.LEIDEN_RESOLUTION,
             "random_state": dm.LEIDEN_RANDOM_STATE,
-            "n_neighbors": dm.LEIDEN_N_NEIGHBORS,
+            "n_neighbors": (
+                int(n_neighbors) if n_neighbors is not None else dm.LEIDEN_N_NEIGHBORS
+            ),
             "flavor": dm.LEIDEN_FLAVOR,
         },
         "pinned_versions": resolved_versions,
@@ -483,7 +497,7 @@ def write_audit_md(payload: dict[str, Any], path: Path) -> None:
     lines.append("")
     lines.append("## Per-candidate gate pass/fail")
     lines.append("")
-    lines.append("| method | mixing | dist | iso | mix_floor | dist_floor | iso_floor | survived |")
+    lines.append("| method | mixing | dist | iso | mix_pass | dist_pass | iso_pass | survived |")
     lines.append("|---|---|---|---|---|---|---|---|")
     for m, g in payload["gate_results"].items():
         lines.append(
@@ -562,6 +576,7 @@ def run_gate(
     baseline_method: str = BASELINE_METHOD,
     global_lref: np.ndarray | None = None,
     margin_mix: float = MARGIN_MIX,
+    n_neighbors: int = dm.LEIDEN_N_NEIGHBORS,
 ) -> tuple[Recommendation, list[dm.DiscoveryMetrics], dm.PerBatchReference, dict[str, Any]]:
     """Score embeddings, check controls, produce the recommendation.
 
@@ -575,8 +590,10 @@ def run_gate(
             "the per-batch reference (shared X_pca) and the mixing floor.")
     X_pca_baseline = embeddings[baseline_method]
     results, ref = dm.score_all_embeddings_discovery(
-        embeddings, X_pca_baseline, batch, global_lref=global_lref)
+        embeddings, X_pca_baseline, batch, global_lref=global_lref,
+        n_neighbors=int(n_neighbors))
     controls = check_controls_fire(results, baseline_method=baseline_method)
+    require_required_controls_fire(controls)
     rec = recommend(results, baseline_method=baseline_method, margin_mix=margin_mix)
     return rec, results, ref, controls
 

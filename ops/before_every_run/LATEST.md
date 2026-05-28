@@ -1,3 +1,77 @@
+# Pipeline Validation Real-Science Follow-Up - 2026-05-28
+
+- Objective: finish the remaining real-data scientific validation and cleanup
+  reproducible bulky intermediates.
+- Evidence root:
+  `/home/zerlinshen/projects/pipeline-validation-20260528/`.
+- Current verdict: `PASS_SUPPORTED_NOT_FINAL_WITH_REVIEW_FLAGS`.
+- Supported:
+  - targeted sensitivity passes for LUSC AT1, LUSC cDC2, Trevino inhibitory
+    interneuron, and Trevino intermediate progenitor;
+  - LUSC origin DE has a true-count-compatible matched/dataset-aware sanity pass
+    on 43 samples across 5 datasets, with permutation q<0.1 = 0 and 12/12
+    sentinel directions correct;
+  - GM12878 unbiased Hi-C chr19 A/B compartments pass published-subcompartment
+    concordance (`0.814`, sign-fixed).
+- Still review/conditional:
+  - LUSC DC mature targeted sensitivity;
+  - LUSC tumor-stage DE, because the usable contrast is single-dataset only;
+  - factory TAD boundaries, because B35T1NC Micro-C author-TAD concordance is
+    below null (`F1=0.049`, `recall_over_null=0.40` best tested).
+- Code/docs updated:
+  `workflow/modular/modules/hic_tad.py`,
+  `tests/test_wave2b_hic_smoke.py`, `README.md`,
+  `docs/MULTIOMICS_MODULE_RATIONALE.md`, and `AGENTS.md`.
+- Verification:
+  `python3 -m py_compile` pass; `jq empty` pass on all validation summary JSONs;
+  no `NaN`/`Infinity` in summary JSON; `pytest --no-cov -q
+  tests/test_wave2b_hic_smoke.py` = 14 passed; `git diff --check` pass.
+- Cleanup:
+  generated contact TSVs and Trevino `.checkpoints/*.h5ad` were deleted after
+  compact evidence was retained. Validation root is 1.8M and `/home/zerlinshen`
+  has 168G available.
+- Carry-forward:
+  do not claim final TAD biology until a stronger TAD caller is integrated and
+  validated on the retained B35T1NC/cooltools-style ground truth.
+- Full journal:
+  `journal/2026-05-28-pipeline-validation-real-science-followup.md`.
+
+---
+
+# Pipeline Validation Post-Review Reconciliation - 2026-05-28
+
+- Objective: fix the G008 review blockers in the integration-biology/multiomics
+  validation round without weakening the real-data requirement.
+- Evidence root:
+  `/home/zerlinshen/projects/pipeline-validation-20260527/`.
+- Scripts rerun:
+  - `scripts/run_lusc_g002_g003_marker_mixing.py`
+  - `scripts/run_trevino_g002_g003_g004_marker_mixing.py`
+  - `scripts/run_lusc_g005_annotation_de_sanity.py`
+  - `scripts/run_g006_hicstraw_factory_bridge.py`
+- Current results:
+  - G002 marker retention: LUSC 23/23 and Trevino 9/9 marker panels pass; all
+    marker label-shuffle negative controls pass.
+  - G003/G004: embedding negative controls fire on LUSC 24/24 and Trevino 9/9
+    labels, but purity/rare-population flags remain and must not be hidden.
+  - G005: pseudobulk DE no longer falls back to normalized/log expression. It
+    uses only 71/87 raw-count-compatible samples after excluding 16 fractional
+    count samples from `Guo_Zhang_2018` and `Maynard_Bivona_2020`; origin and
+    tumor-stage contrasts remain dataset-confounded.
+  - G006: the real LUSC H3K27ac HiChIP `.hic` bridge now requires and passes all
+    7 Python/R technical gates; R-side `load_hic_extension` is `ok`.
+  - G008: independent code review approved the fixes; architect/science status is
+    `WATCH`; final registered verdict is `PASS_SUPPORTED_NOT_FINAL`.
+- Carry-forward:
+  - Do not round fractional-count samples for DE. Exclude or recover true raw
+    counts.
+  - Do not upgrade G003/G004 to clean passes; preserve flagged labels.
+  - Do not claim unbiased 3D-genome biology from the H3K27ac HiChIP chr21 bridge.
+  - Downstream summaries must use `PASS_SUPPORTED_NOT_FINAL`, not a clean global
+    pass.
+
+---
+
 # Q22 v2 — Production change re-run (extreme-theta in `_compute_embeddings`) — 2026-05-27
 
 - Trigger: lead added the extreme-theta over-corrector control to
@@ -1059,3 +1133,134 @@
 - Evidence audit: 17 JSON files, 53 panel statuses, 0 missing referenced paths, 0 hash mismatches, 0 unexpected false checks.
 - Pipeline viability: public RNA pipeline run has all modules `ok` and final AnnData under `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458/final_adata.h5ad`.
 - Boundary: not FASTQ/raw-fragment parity; Figure 7 exact BPNet denominators/model tracks and image-only panels remain honest resource gaps.
+
+## Current pipeline validation G002/G003 LUSC update — 2026-05-27 23:25 CST
+
+- Started next repo-native ultragoal round because the hidden Codex goal slot is still occupied by the previous completed objective.
+- G001 claim ledger created under `/home/zerlinshen/projects/pipeline-validation-20260527/`:
+  - `claim_ledger.tsv`
+  - `evidence_index.json`
+  - `G001_claim_ledger_report.md`
+- G002/G003/G004 LUSC real-data validation completed on the 92,430-cell / 9-dataset LUSC Q22 h5ad.
+- Outputs:
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/marker_retention.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/embedding_label_purity.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/cell_type_mixing.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/rare_population_preservation.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g002_g003_summary.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/G002_G003_lusc_marker_mixing_report.md`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/G004_lusc_rare_population_report.md`
+- Result:
+  - Marker retention LUSC pass: 23/23 canonical/edge marker panels passed, marker coverage via `var.feature_name`, minimum AUROC 0.743973.
+  - Cell-type mixing LUSC partial pass: Harmony improved same-batch neighbor fraction for 18/24 labels.
+  - Purity flags for G004: `Alveolar cell type 1`, `DC mature`, and `cDC2` lost >0.10 same-label neighbor purity after Harmony.
+  - Rare/edge preservation LUSC partial pass: 13/19 pass; review labels are `Alveolar cell type 1`, `DC mature`, `T cell regulatory`, `cDC1`, `cDC2`, `other`.
+- Next: repeat G002/G003/G004 on Trevino before declaring global pass.
+
+## Current pipeline validation G002/G003/G004 Trevino update — 2026-05-27 23:43 CST
+
+- Ralph sequential validation continued with Trevino public RNA real data:
+  - `/home/zerlinshen/projects/wave5-trevino/runs/2026-05-17T2004Z-13c2c88/python/wave5_trevino_public_rna_20260518_040458/final_adata.h5ad`
+  - 55,653 cells, 25,519 genes, 8 samples, 9 `cell_type` labels.
+- Outputs:
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/trevino_g002_g003_g004/trevino_marker_retention.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/trevino_g002_g003_g004/trevino_embedding_label_purity.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/trevino_g002_g003_g004/trevino_cell_type_mixing.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/trevino_g002_g003_g004/trevino_rare_population_preservation.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/trevino_g002_g003_g004/trevino_g002_g003_g004_summary.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/trevino_g002_g003_g004/G002_G003_G004_trevino_marker_mixing_report.md`
+- Result:
+  - Trevino marker retention pass: 9/9 canonical brain marker panels passed.
+  - Trevino cell-type mixing partial pass: Harmony improved same-sample neighbor fraction by >0.05 for 8/9 labels.
+  - Trevino rare/edge preservation partial pass: 5/7 labels passed.
+  - Review labels: `Inhibitory interneuron` and `Intermediate progenitor` lost >0.10 same-label neighbor purity after Harmony.
+- Validation: script `py_compile` passed; JSON parsed; TSV column integrity passed.
+- Current combined status: G002 marker retention passed across LUSC and Trevino; G003/G004 are validation-complete but retain real biological purity/rare-population flags.
+- Next: G005 downstream annotation and sample-level DE sanity on LUSC.
+
+## Current pipeline validation G005 LUSC annotation/DE update — 2026-05-27 23:47 CST
+
+- Ralph sequential validation completed downstream annotation/DE sanity on:
+  - `/home/zerlinshen/projects/lusc-integration-gate-20260527/prepared/lusc_squamous_dataset_axis.h5ad`
+  - 92,430 cells, 17,764 genes, 87 samples, 41 donors, 9 datasets.
+- Outputs:
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_annotation_summary.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_pseudobulk_sample_metadata.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_de_origin_tumor_primary_vs_normal_adjacent.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_de_tumor_stage_advanced_vs_early.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_sentinel_gene_checks.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_dataset_confounding.tsv`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/g005_summary.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g005_annotation_de_sanity/G005_lusc_annotation_de_sanity_report.md`
+- Result:
+  - Annotation marker/sample/dataset support: 23/24 labels pass; `other` remains review-only.
+  - Annotation confidence column is unavailable in this LUSC object, so confidence cannot be claimed.
+  - Origin sentinel direction sanity: 10/11 expected tumor/normal marker directions passed; `AQP5` mismatched.
+  - Sample-level DE is computable but not final-claim safe: origin and tumor-stage contrasts both show top-DE dataset domination.
+  - `origin:tumor_primary_vs_normal_adjacent`: top50 DE genes with dataset eta2 >0.50 = 0.82.
+  - `tumor_stage:advanced_vs_early`: dataset/group Cramer's V = 0.893208 and top50 DE dataset eta2 fraction = 1.0.
+- Validation: script `py_compile` passed; JSON parsed; all six TSV outputs passed column-count integrity checks.
+- Current status: G005 is `conditional_pass_annotation_de_sanity_with_dataset_confounding_flags`.
+- Next: G006 real 3D genome / Hi-C factory bridge validation.
+
+## Current pipeline validation G006 Hi-C bridge update — 2026-05-27 23:55 CST
+
+- Ralph sequential validation completed a real 3D contact factory bridge using:
+  - `/home/zerlinshen/projects/ng2025-3d-genome/data/open/hic_lung/TCGA_HiChIP_hic/LUSC_H3K27ac.allValidPairs.hic`
+  - hicstraw extraction: chr21 at 100 kb.
+- Outputs:
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/LUSC_H3K27ac_chr21_100000bp.contacts.tsv.gz`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/factory_run/hic_ingest/hic_summary.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/factory_run/hic_tad/tad_summary.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/g006_real_hic_factory_bridge.h5ad`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/singlecell_r_bundle_v22_hic_real/bundle_manifest.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/g006_summary.json`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/G006_hic_factory_bridge_report.md`
+- Result:
+  - hicstraw records/total count: 49,616 / 1,766,659.
+  - `hic_ingest` and `hic_tad` completed with status `ok`.
+  - Bundle schema is `singlecell_r_bundle_v2.2`, Hi-C extension status `active`.
+  - Reference checks passed: bundle contacts equal matrix nnz, and ingest total contacts equal hicstraw total contacts.
+  - Existing Hi-C/bundle regression checks: `13 passed in 0.54s` with `--no-cov`.
+- R-side load:
+  - Passed using `/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript`.
+  - stdout: `STATUS=active`, `CONTACTS_NROW=98860`, `COMPARTMENT_STATUS=low_information`.
+- Scientific boundary:
+  - Source is H3K27ac HiChIP, not unbiased Hi-C; TAD/compartment calls are technical module-contract evidence, not final 3D-genome biology claims.
+  - Compartment status is `low_information` for chr21.
+- Current status: G006 is `passed_with_hichip_scientific_boundary`.
+- Next: G007 cross-factory handoff and documentation sync.
+
+## Current pipeline validation G007 doc-sync update — 2026-05-28 00:02 CST
+
+- Cross-factory documentation sync completed for:
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`
+  - `/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory`
+- Outputs:
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/G007_cross_factory_doc_sync_report.md`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g007_doc_sync_summary.json`
+- Updated singlecell surfaces: `README.md`, `AGENTS.md`, `AI_AGENT_PROTOCOL.md`, `CODEX.md`, `CLAUDE.md`, `PROTOCOL.md`, and this run memory.
+- Updated R-side surfaces: `README.md`, `AGENTS.md`, `AI_AGENT_PROTOCOL.md`, `CODEX_PROFILE.md`, `CLAUDE.md`.
+- Verification:
+  - `repo-doc-sync --strict` for `singlecell_factory`: NO DRIFT.
+  - `repo-doc-sync --strict` for `r_multiomics_factory`: NO DRIFT.
+  - `git diff --check` passed for touched docs in both repos.
+  - `py_compile` passed for all three validation scripts.
+- Current status: G007 passed.
+- Next: G008 final independent code and science review.
+
+## Current pipeline validation G008 final review update — 2026-05-28 00:40 CST
+
+- Final artifacts:
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/G008_final_code_science_review_report.md`
+  - `/home/zerlinshen/projects/pipeline-validation-20260527/g008_final_review_summary.json`
+- Independent review:
+  - Code-review lane: `APPROVE`.
+  - Architect/science lane: `WATCH`.
+- Registered verdict: `PASS_SUPPORTED_NOT_FINAL`.
+- Meaning:
+  - Supported: tested marker retention, bounded integration behavior with flags,
+    raw-count-compatible DE computation with confounding flags, and real
+    H3K27ac HiChIP bundle handoff.
+  - Not final-ready: clean rare/edge preservation across all labels, final LUSC
+    DE biology, unbiased Hi-C TAD/compartment biology, and global generalization.

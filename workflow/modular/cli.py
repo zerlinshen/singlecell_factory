@@ -292,13 +292,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--harmony-backend",
         default="auto",
-        choices=["auto", "cpu", "gpu"],
+        choices=["auto", "cpu", "gpu", "direct"],
         help=(
             "Harmony backend selection (Plan F-Harmony, G-C0 v3). 'auto' uses "
-            "rapids-singlecell GPU if importable else harmonypy CPU. 'cpu' "
-            "forces harmonypy via scanpy_external. 'gpu' forces rsc (raises "
-            "if unavailable). Non-convergence raises unless "
-            "SC_ALLOW_HARMONY_NON_CONVERGENCE=1 opt-in."
+            "the proven harmonypy direct path on this environment. 'direct' "
+            "calls harmonypy.run_harmony. 'cpu' forces harmonypy via "
+            "scanpy_external. 'gpu' forces rsc (raises if unavailable). "
+            "Non-convergence raises unless SC_ALLOW_HARMONY_NON_CONVERGENCE=1 "
+            "opt-in."
         ),
     )
     parser.add_argument(
@@ -329,11 +330,12 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Opt-in: run the per-run discovery integration-selection gate "
             "(integration_select module) after clustering and before "
-            "batch_correction. It scores baseline/Harmony/scVI label-free and "
-            "SETS cfg.batch.method (routing a Harmony pick to the working "
-            "harmonypy-direct backend). Runs an expensive scVI seed sweep "
-            "(cache-bounded); NOT default-on. Adds integration_select to the "
-            "requested modules."
+            "batch_correction. It requires baseline/Harmony/scVI/shuffle "
+            "candidates, fails loud on degraded candidates or a non-firing "
+            "shuffle control, and SETS cfg.batch.method (routing a Harmony "
+            "pick to the working harmonypy-direct backend). Runs an expensive "
+            "scVI seed sweep (cache-bounded); NOT default-on. Adds "
+            "integration_select to the requested modules."
         ),
     )
     parser.add_argument(

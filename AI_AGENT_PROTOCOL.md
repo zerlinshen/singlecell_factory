@@ -175,6 +175,28 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
+## Current State (2026-05-27)
+
+The current integration-biology/multiomics validation round is recorded at
+`/home/zerlinshen/projects/pipeline-validation-20260527/` and
+`.omx/ultragoal/ledger-integration-biology-multiomics-validation-20260527.jsonl`.
+Use these artifacts before making final scientific claims:
+
+- G002 marker retention passed on real LUSC and Trevino data with explicit
+  marker label-shuffle negative controls.
+- G003/G004 cell-type-specific mixing and rare-population preservation are
+  validation-complete with embedding-shuffle negative controls, but have real
+  purity/rare-population flags.
+- G005 downstream annotation/DE sanity is conditional: annotation marker support
+  is strong for 23/24 LUSC labels, but sample-level DE uses only 71/87
+  raw-count-compatible samples after excluding 16 fractional-count samples and
+  remains dataset-dominated and not final-claim safe.
+- G006 real 3D contact bridge passed Python factory modules, v2.2 bundle export,
+  R-side `load_hic_extension`, and all 7 technical gates; keep the H3K27ac
+  HiChIP / `low_information` compartment boundary explicit.
+- G008 final registered verdict is `PASS_SUPPORTED_NOT_FINAL`; do not claim
+  global final-readiness from this validation round.
+
 ## Current State (2026-05-25)
 
 The current validation stack has two distinct tiers:

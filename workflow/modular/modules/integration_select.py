@@ -14,9 +14,10 @@ Harmony backends are broken in the sc_gpu env — see batch_correction
 ``_run_harmony_direct``).
 
 Cost control (plan §D7): the scVI seed sweep is expensive, so the per-run cost
-is bounded by a default-ON filesystem cache keyed on
-``(data_hash, batch_key, scVI_config, code_version)``. A cache HIT replays the
-prior recommendation with NO scVI retrain.
+is bounded by a default-ON filesystem cache keyed on the baseline embedding,
+batch-label state, scVI config, gate params, and gate code version. A cache HIT
+replays the prior recommendation with NO scVI retrain after validating the
+cached payload and re-asserting engine version pins.
 
 Reuses (never reimplements) the reviewed engine in scripts/bench/integration:
 ``methods`` (production-backed embedding helpers + _CtxShim),
@@ -41,6 +42,9 @@ logger = logging.getLogger(__name__)
 
 # Factory tree root (workflow/modular/modules/integration_select.py -> repo root).
 _FACTORY_ROOT = Path(__file__).resolve().parents[3]
+_ALLOWED_BATCH_METHODS = {
+    "none", "harmony", "bbknn", "combat", "scanorama", "scvi", "mnn", "fastmnn",
+}
 
 
 class IntegrationSelectModule:
@@ -52,6 +56,8 @@ class IntegrationSelectModule:
     """
 
     name = "integration_select"
+    fail_pipeline_on_error = True
+    runs_before_mutating_modules = True
     # NOTE: intentionally NO framework-level `requires_keys` for X_pca. Declaring
     # it would make _run_module SKIP this module (logger.warning + _SkipModule)
     # when X_pca is absent, silently falling through to the default
@@ -115,8 +121,12 @@ class IntegrationSelectModule:
             harmony_theta=float(cfg_batch.harmony_theta),
             harmony_sigma=float(cfg_batch.harmony_sigma),
             harmony_max_iter=int(cfg_batch.harmony_max_iter),
+            scvi_max_epochs=int(cfg_batch.scvi_max_epochs),
             scvi_n_latent=int(cfg_batch.scvi_n_latent),
+            scvi_early_stopping=bool(cfg_batch.scvi_early_stopping),
             n_neighbors=int(ctx.cfg.clustering.n_neighbors),
+            batch_labels=batch,
+            obs_names=adata.obs_names,
         )
         cache_res = cache.lookup(cache_key)
 
@@ -130,7 +140,7 @@ class IntegrationSelectModule:
             # drift (Principle 9: no silent compromise). Opt-in
             # SC_ALLOW_SCIB_VERSION_DRIFT=1 is still honored inside the assert.
             resolved_versions = dm.assert_pinned_discovery_engine()
-            chosen = str(cache_res.payload.get("chosen_method", "none"))
+            chosen = self._choice_from_cache_payload(cache_res.payload)
             self._apply_choice(ctx, chosen)
             ctx.metadata["integration_select"] = {
                 "chosen_method": chosen,
@@ -149,30 +159,60 @@ class IntegrationSelectModule:
             )
             return
 
+        # --- Cache MISS: fail loud on engine drift before expensive compute.
+        resolved_versions = dm.assert_pinned_discovery_engine()
+
         # --- Cache MISS: compute candidate embeddings on the production backends.
         embeddings, candidates_failed = self._compute_embeddings(
             adata, batch_key, scvi_seeds,
-            scvi_max_epochs=cfg_batch.scvi_max_epochs)
+            harmony_theta=float(cfg_batch.harmony_theta),
+            harmony_sigma=float(cfg_batch.harmony_sigma),
+            harmony_max_iter=int(cfg_batch.harmony_max_iter),
+            scvi_max_epochs=cfg_batch.scvi_max_epochs,
+            scvi_n_latent=int(cfg_batch.scvi_n_latent),
+            scvi_early_stopping=bool(cfg_batch.scvi_early_stopping),
+        )
+        try:
+            self._validate_required_candidates(
+                embeddings, candidates_failed, scvi_seeds,
+            )
+        except RuntimeError:
+            ctx.metadata["integration_select_status"] = "failed_degraded_candidates"
+            ctx.metadata["integration_select"] = {
+                "source": "computed",
+                "cache_key": cache_key.digest(),
+                "candidates_failed": candidates_failed,
+            }
+            raise
 
         # Score + recommend via the reviewed gate.
         results, ref = dm.score_all_embeddings_discovery(
-            embeddings, embeddings[sel.BASELINE_METHOD], batch
+            embeddings, embeddings[sel.BASELINE_METHOD], batch,
+            n_neighbors=int(ctx.cfg.clustering.n_neighbors),
         )
         controls = sel.check_controls_fire(results)
-        rec = sel.recommend(results, margin_mix=margin_mix)
-
         try:
-            resolved_versions = dm.assert_pinned_discovery_engine()
-        except Exception as exc:  # noqa: BLE001 — record drift, do not crash the gate write
-            resolved_versions = {"version_assert_error": str(exc)}
+            sel.require_required_controls_fire(controls)
+        except RuntimeError:
+            ctx.metadata["integration_select_status"] = "failed_shuffle_control"
+            ctx.metadata["integration_select"] = {
+                "source": "computed",
+                "cache_key": cache_key.digest(),
+                "controls": controls,
+                "candidates_failed": candidates_failed,
+            }
+            raise
+        rec = sel.recommend(results, margin_mix=margin_mix)
 
         payload = sel.build_recommendation_json(
             rec, ref, resolved_versions, batch_key=batch_key,
             cache_key=cache_key.digest(),
+            n_neighbors=int(ctx.cfg.clustering.n_neighbors),
             extra={
                 "controls": controls,
                 "n_batches": n_batches,
                 "scvi_seeds": list(scvi_seeds),
+                "candidates_failed": candidates_failed,
             },
         )
         sel.write_recommendation_json(payload, out_dir / "integration_recommendation.json")
@@ -196,10 +236,6 @@ class IntegrationSelectModule:
             # candidate set rather than only a buried log line (review LOW).
             "candidates_failed": candidates_failed,
         }
-        if candidates_failed:
-            payload["candidates_failed"] = candidates_failed
-            (out_dir / "integration_audit.json").write_text(
-                json.dumps(payload, indent=2) + "\n")
         ctx.metadata["integration_select_status"] = "completed"
         ctx.status(
             self.name,
@@ -234,7 +270,12 @@ class IntegrationSelectModule:
     @staticmethod
     def _compute_embeddings(
         adata, batch_key: str, scvi_seeds: tuple[int, ...],
+        harmony_theta: float = 2.0,
+        harmony_sigma: float = 0.1,
+        harmony_max_iter: int = 50,
         scvi_max_epochs: int | None = None,
+        scvi_n_latent: int | None = None,
+        scvi_early_stopping: bool | None = None,
     ) -> tuple[dict, list[dict]]:
         """Build the candidate embeddings dict via the production-backed helpers.
 
@@ -252,7 +293,12 @@ class IntegrationSelectModule:
         }
         failed: list[dict] = []
 
-        harmony = M.compute_harmonypy_direct(adata, batch_key)
+        harmony = M.compute_harmonypy_direct(
+            adata, batch_key,
+            theta=harmony_theta,
+            sigma=harmony_sigma,
+            max_iter_harmony=harmony_max_iter,
+        )
         if harmony.X is not None:
             embeddings[M.HARMONY_METHOD] = np.asarray(harmony.X, dtype=np.float64)
         else:
@@ -262,8 +308,12 @@ class IntegrationSelectModule:
                 "candidate excluded from the gate.", harmony.error,
             )
 
-        scvi_runs = M.compute_scvi_seed_sweep(adata, batch_key, seeds=scvi_seeds,
-                                              scvi_max_epochs=scvi_max_epochs)
+        scvi_runs = M.compute_scvi_seed_sweep(
+            adata, batch_key, seeds=scvi_seeds,
+            scvi_max_epochs=scvi_max_epochs,
+            scvi_n_latent=scvi_n_latent,
+            scvi_early_stopping=scvi_early_stopping,
+        )
         for run in scvi_runs:
             if run.X is not None:
                 embeddings[run.method] = np.asarray(run.X, dtype=np.float64)
@@ -273,6 +323,12 @@ class IntegrationSelectModule:
                     "integration_select: scVI %s failed (%s); excluded.",
                     run.method, run.error,
                 )
+
+        neg = M.compute_neg_control(adata, batch_key)
+        if neg.X is not None:
+            embeddings[M.NEG_CONTROL_METHOD] = np.asarray(neg.X, dtype=np.float64)
+        else:
+            failed.append({"method": M.NEG_CONTROL_METHOD, "error": str(neg.error)})
 
         shuffle = M.compute_shuffle_label_control(adata, batch_key, seed=0)
         if shuffle.X is not None:
@@ -285,6 +341,51 @@ class IntegrationSelectModule:
                            "error": str(shuffle.error)})
 
         return embeddings, failed
+
+    @staticmethod
+    def _choice_from_cache_payload(payload: dict) -> str:
+        """Validate and extract the cached method choice."""
+        schema = payload.get("schema_version")
+        if schema not in {None, "discovery-integration-gate-v1"}:
+            raise RuntimeError(
+                f"integration_select cache entry has unsupported schema_version={schema!r}"
+            )
+        chosen = payload.get("chosen_method", payload.get("cfg.batch.method"))
+        if chosen is None:
+            raise RuntimeError(
+                "integration_select cache entry is missing chosen_method/"
+                "cfg.batch.method; refusing silent method='none' fallback."
+            )
+        chosen = str(chosen)
+        if chosen not in _ALLOWED_BATCH_METHODS:
+            raise RuntimeError(
+                f"integration_select cache entry has invalid chosen_method={chosen!r}"
+            )
+        return chosen
+
+    @staticmethod
+    def _validate_required_candidates(
+        embeddings: dict,
+        failed: list[dict],
+        scvi_seeds: tuple[int, ...],
+    ) -> None:
+        """Require the promised production candidate set before recommending."""
+        from scripts.bench.integration import methods as M
+        from scripts.bench.integration import select_integration as sel
+
+        required = {M.BASELINE_METHOD, M.HARMONY_METHOD, sel.SHUFFLE_CONTROL_METHOD}
+        required.update(f"{M.SCVI_METHOD}_seed{int(seed)}" for seed in scvi_seeds)
+        missing = sorted(required - set(embeddings))
+        if missing:
+            failed_methods = {
+                str(item.get("method")): str(item.get("error", ""))
+                for item in failed
+            }
+            raise RuntimeError(
+                "integration_select: required candidate embeddings missing "
+                f"{missing}; failed={failed_methods}. Refusing to apply/cache a "
+                "recommendation from a degraded candidate set."
+            )
 
     @staticmethod
     def _apply_choice(ctx: PipelineContext, chosen_method: str) -> None:

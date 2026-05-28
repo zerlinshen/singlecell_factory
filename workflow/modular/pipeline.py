@@ -51,6 +51,11 @@ def _discover_mutating(registry: dict) -> set[str]:
     return discovered | MUTATING_MODULES
 
 
+def _is_fatal_module_error(mod, module_name: str, mandatory: set[str]) -> bool:
+    """Return true when a module exception must abort the pipeline."""
+    return module_name in mandatory or bool(getattr(mod, "fail_pipeline_on_error", False))
+
+
 def _normalize_status(value: str) -> str:
     token = (value or "").strip().lower()
     if token in {"ok", "completed", "success"}:
@@ -614,7 +619,7 @@ def _run_sequential(
         except Exception as exc:
             status, message = "failed", str(exc)
             ctx.status(stage, False, str(exc))
-            if stage in mandatory:
+            if _is_fatal_module_error(mod, stage, mandatory):
                 raise
         finally:
             elapsed = perf_counter() - t0
@@ -632,11 +637,19 @@ def _execute_tier(
 ) -> None:
     """Execute a tier of modules, potentially in parallel."""
     _mutating_set = mutating_modules if mutating_modules is not None else _MUTATING_MODULES_FALLBACK
-    # Split into mutating (must run sequentially) and appending (can parallelize).
-    mutating = [m for m in tier if m in _mutating_set]
-    appending = [m for m in tier if m not in _mutating_set]
+    # Split into main-context pre-gates, mutating modules, and appending modules.
+    # Main-context pre-gates are not structural mutators, but they must update
+    # cfg/metadata before a mutating module in the same tier consumes the choice
+    # (integration_select -> batch_correction).
+    pre_mutating = [
+        m for m in tier
+        if getattr(registry.get(m), "runs_before_mutating_modules", False)
+    ]
+    mutating = [m for m in tier if m in _mutating_set and m not in pre_mutating]
+    appending = [m for m in tier if m not in _mutating_set and m not in pre_mutating]
 
-    # Run mutating modules sequentially first.
+    # Run main-context pre-gates and mutating modules sequentially first.
+    _run_sequential(pre_mutating, registry, ctx, mandatory)
     _run_sequential(mutating, registry, ctx, mandatory)
 
     # Run appending modules.
@@ -816,8 +829,15 @@ def _run_parallel_appending(
         _ledger_record_module(ctx, mod_name, ok, msg, elapsed)
         ctx.save_checkpoint(mod_name)
 
-        if ok != "ok" and mod_name in mandatory:
+        mod = registry.get(mod_name)
+        if mod_name in mandatory and ok != "ok":
             raise RuntimeError(f"Mandatory module {mod_name} failed: {msg}")
+        if (
+            mod is not None
+            and ok == "failed"
+            and getattr(mod, "fail_pipeline_on_error", False)
+        ):
+            raise RuntimeError(f"Fatal module {mod_name} failed: {msg}")
 
 
 # ---------------------------------------------------------------------------

@@ -117,17 +117,50 @@ canonical detail in `docs/SCIENTIFIC_AUDIT_2026-05-15.md`:
 - scVI now consumes the SAME ambient-corrected signal as clustering/DE (was STALE pre-ambient
   counts), rounded to integers for the NB likelihood, with a fail-loud integrality guard
   (contract `scvi-counts-v3-ambient-corrected-rounded-int`).
-- `integration_select` cache key folds all gate-affecting params; the cache-HIT path re-asserts
-  engine version pins (fail loud on drift).
+- `integration_select` requires baseline/Harmony/scVI/shuffle candidates; a degraded candidate
+  set or non-firing shuffle falsifiability control fails loud. The cache key folds
+  batch-label state plus all gate/scVI-affecting params, and the cache-HIT path
+  re-asserts engine version pins (fail loud on drift).
 - `batch_correction` CPU post-processing failure fails loud by default (audited
   `SC_ALLOW_BATCH_BACKEND_SKIP` opt-in → a distinct non-"completed" status), never silently keeping
   pre-correction clustering.
+
+Integration-biology and multiomics validation artifacts now live under
+`/home/zerlinshen/projects/pipeline-validation-20260527/` with the durable
+ledger at `.omx/ultragoal/ledger-integration-biology-multiomics-validation-20260527.jsonl`.
+Current claim posture:
+
+- G002 marker retention passed on real LUSC and Trevino data with explicit
+  marker label-shuffle negative controls.
+- G003/G004 mixing and rare-population preservation are validation-complete with
+  real purity/rare-population review flags and embedding-shuffle negative controls;
+  do not collapse them into a clean pass.
+- G005 annotation/DE sanity is conditional because LUSC sample-level origin and
+  tumor-stage DE top genes are dataset-dominated; DE now uses only 71/87
+  raw-count-compatible samples after excluding 16 fractional-count samples.
+- G006 passed the real `.hic` -> `hic_ingest`/`hic_tad` -> v2.2 bundle -> R
+  `load_hic_extension` bridge with all 7 technical gates, but the source is
+  H3K27ac HiChIP and chr21 compartment status is `low_information`, so it is not
+  unbiased Hi-C biology proof.
+- 2026-05-28 follow-up evidence lives under
+  `/home/zerlinshen/projects/pipeline-validation-20260528/`: targeted
+  sensitivity passes for LUSC AT1/cDC2 and both Trevino flagged populations,
+  while LUSC DC mature remains review; LUSC origin DE has a matched
+  dataset-aware sanity pass on true-count-compatible samples, while tumor-stage
+  DE is conditional single-dataset evidence; GM12878 unbiased Hi-C chr19 A/B
+  compartments pass published-subcompartment concordance after sparse-tail
+  handling fixes, but the current factory TAD boundary caller still fails
+  B35T1NC Micro-C author TAD concordance and must remain exploratory.
+- Current follow-up verdict is `PASS_SUPPORTED_NOT_FINAL_WITH_REVIEW_FLAGS`:
+  evidence supports bounded tested claims, while LUSC DC mature, LUSC tumor-stage
+  DE, and factory TAD boundary biology remain review/conditional. Downstream
+  reports must keep the non-final claim boundaries.
 
 ## Current State (2026-05-25)
 
 The current suite-level validation posture is intentionally honest:
 
-- The one-command suite gate is an 8-step structure/contract harness, not a
+- The one-command suite gate is a 10-step structure/contract harness, not a
   complete scientific validation harness.
 - Current bounded real-data handoff proof:
   `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`.

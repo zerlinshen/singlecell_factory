@@ -55,43 +55,47 @@ __references__ = {
 
 
 def _insulation_score(mat: sp.csr_matrix, window_bins: int = 5) -> np.ndarray:
-    """Crane-style insulation score: mean contact count within a square window
-    centered at each diagonal bin.
+    """Crane-style insulation score: mean contacts crossing each candidate boundary.
 
-    Output is normalized to mean=0 per chromosome chunk by the caller; this
-    function returns raw means.
+    For bin ``i``, score the upstream window ``[i-window, i)`` against the
+    downstream window ``[i, i+window)``. TAD boundaries should have low
+    cross-window contact frequency. Empty windows are marked NaN so sparse
+    unobserved chromosome tails are not called as artificial boundaries.
     """
     n = mat.shape[0]
     scores = np.zeros(n, dtype=np.float32)
     for i in range(n):
-        lo = max(0, i - window_bins)
-        hi = min(n, i + window_bins + 1)
-        if hi - lo <= 1:
+        left_lo = max(0, i - window_bins)
+        left_hi = i
+        right_lo = i
+        right_hi = min(n, i + window_bins)
+        if left_hi - left_lo < 1 or right_hi - right_lo < 1:
             scores[i] = np.nan
             continue
         decision = plan_densify(
-            (hi - lo, hi - lo),
+            (left_hi - left_lo, right_hi - right_lo),
             mat.dtype,
-            reason="Hi-C insulation score diagonal window",
+            reason="Hi-C insulation score cross-boundary window",
         )
         if decision == DensifyDecision.ABORT:
             raise MemoryError(
                 "hic_tad insulation window too large to densify safely; "
-                f"window shape={(hi - lo, hi - lo)}"
+                f"window shape={(left_hi - left_lo, right_hi - right_lo)}"
             )
         if decision == DensifyDecision.CHUNK:
             logger.warning(
                 "hic_tad insulation window is in CHUNK range; proceeding for bounded window shape=%s",
-                (hi - lo, hi - lo),
+                (left_hi - left_lo, right_hi - right_lo),
             )
-        # densify-allowed: bounded diagonal window guarded by plan_densify
-        block = mat[lo:hi, lo:hi].toarray()
-        # Mean of upper-triangle excluding diagonal
-        iu = np.triu_indices(block.shape[0], k=1)
-        if iu[0].size == 0:
+        # densify-allowed: bounded cross-boundary window guarded by plan_densify
+        block = mat[left_lo:left_hi, right_lo:right_hi].toarray()
+        # An unobserved window is NaN (skipped by _detect_boundaries), not a
+        # boundary: this drops a true zero-cross-contact boundary but refuses to
+        # fabricate boundaries on sparse unobserved tails (no silent compromise).
+        if block.sum() <= 1e-8:
             scores[i] = np.nan
             continue
-        scores[i] = float(block[iu].mean())
+        scores[i] = float(block.mean())
     return scores
 
 
@@ -168,11 +172,16 @@ def _ab_compartments(mat: sp.csr_matrix, bins: pd.DataFrame) -> tuple[dict[int, 
         chrom_mat = np.log1p(chrom_mat)
         row_vars = chrom_mat.var(axis=1)
         variable_rows = row_vars > eps
-        if (~variable_rows).any() or int(variable_rows.sum()) < 2:
+        if int(variable_rows.sum()) < 2:
             _mark_low_information(
                 chrom_name, bin_ids, result, status_by_chrom, low_information_chromosomes
             )
             continue
+        variable_bin_ids = bin_ids[variable_rows]
+        nonvariable_bin_ids = bin_ids[~variable_rows]
+        for b in nonvariable_bin_ids:
+            result[int(b)] = float("nan")
+        chrom_mat = chrom_mat[variable_rows][:, variable_rows]
         # Build row correlations directly after screening constant rows; this
         # avoids np.corrcoef runtime warnings on low-information chromosomes.
         centered = chrom_mat - chrom_mat.mean(axis=1, keepdims=True)
@@ -190,7 +199,7 @@ def _ab_compartments(mat: sp.csr_matrix, bins: pd.DataFrame) -> tuple[dict[int, 
                 chrom_name, bin_ids, result, status_by_chrom, low_information_chromosomes
             )
             continue
-        for j, b in enumerate(bin_ids):
+        for j, b in enumerate(variable_bin_ids):
             result[int(b)] = float(ev1[j])
         status_by_chrom[chrom_name] = "confident"
 
@@ -256,6 +265,7 @@ class HiCTADModule:
             lambda row: (
                 "low_information"
                 if status_by_chrom.get(str(row["chrom"])) == "low_information"
+                or pd.isna(row["eigenvector_1"])
                 else ("A" if row["eigenvector_1"] >= 0 else "B")
             ),
             axis=1,

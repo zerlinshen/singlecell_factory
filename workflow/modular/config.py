@@ -128,8 +128,10 @@ class BatchConfig:
     # Per-run discovery integration-selection gate (integration_select module,
     # plan per-run-discovery-integration-gate.md). OPT-IN only: the gate runs an
     # expensive scVI seed sweep, so it is never default-on. When enabled, the
-    # gate scores baseline/harmony/scVI label-free and SETS `method` (and, if it
-    # picks harmony, `harmony_backend="direct"`) before batch_correction runs.
+    # gate requires baseline/harmony/scVI/shuffle candidates, fails loud on
+    # degraded candidates or a non-firing shuffle control, and SETS `method`
+    # (and, if it picks harmony, `harmony_backend="direct"`) before
+    # batch_correction runs.
     select_integration: bool = False
     # Margin the candidate batch-mixing must beat baseline by (gate 1). Mirrors
     # select_integration.MARGIN_MIX; exposed so a run can tune the gate strictness.

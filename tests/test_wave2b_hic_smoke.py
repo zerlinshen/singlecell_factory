@@ -163,6 +163,62 @@ def test_hic_tad_marks_low_information_chromosomes_without_warnings(synthetic_ad
     assert ctx.metadata["hic_tad_status"] == "ok"
 
 
+def test_hic_tad_keeps_informative_chromosome_with_sparse_tail_bins(synthetic_adata, tmp_path):
+    from workflow.modular.modules.hic_tad import HiCTADModule
+
+    bins = pd.DataFrame(
+        {
+            "bin_id": np.arange(7, dtype=np.int64),
+            "chrom": ["chr1"] * 7,
+            "start": np.arange(0, 7000, 1000, dtype=np.int64),
+            "end": np.arange(1000, 8000, 1000, dtype=np.int64),
+        }
+    )
+    contact_matrix = np.array(
+        [
+            [9, 3, 1, 0, 0, 0, 0],
+            [3, 8, 3, 1, 0, 0, 0],
+            [1, 3, 8, 3, 1, 0, 0],
+            [0, 1, 3, 9, 2, 0, 0],
+            [0, 0, 1, 2, 7, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+        ],
+        dtype=np.float32,
+    )
+    synthetic_adata.uns["hic_bins"] = bins
+    synthetic_adata.uns["hic_contact_matrix"] = sp.csr_matrix(contact_matrix)
+
+    cfg = SimpleNamespace(hic_tad_window_bins=1, hic_tad_boundary_k=0.5)
+    ctx = SimpleNamespace(
+        adata=synthetic_adata,
+        cfg=cfg,
+        random_state=42,
+        run_dir=tmp_path,
+        metadata={},
+        status=lambda *a, **k: None,
+    )
+    HiCTADModule().run(ctx)
+
+    meta = synthetic_adata.uns["hic_tad_metadata"]
+    assert meta["compartment_status"] == "confident"
+    assert meta["low_information_chromosomes"] == []
+
+    compartments = synthetic_adata.uns["hic_compartments"]
+    assert set(compartments.loc[compartments["bin_id"] < 5, "compartment"]) <= {"A", "B"}
+    assert set(compartments.loc[compartments["bin_id"] >= 5, "compartment"]) == {"low_information"}
+    assert compartments.loc[compartments["bin_id"] < 5, "eigenvector_1"].notna().all()
+    assert compartments.loc[compartments["bin_id"] >= 5, "eigenvector_1"].isna().all()
+
+
+def test_insulation_score_marks_empty_windows_nan():
+    from workflow.modular.modules.hic_tad import _insulation_score
+
+    mat = sp.csr_matrix((5, 5), dtype=np.float32)
+    scores = _insulation_score(mat, window_bins=1)
+    assert np.isnan(scores).all()
+
+
 def test_hic_tad_marks_eigendecomposition_failure_low_information(synthetic_adata, tmp_path, monkeypatch):
     from workflow.modular.modules.hic_tad import HiCTADModule
 

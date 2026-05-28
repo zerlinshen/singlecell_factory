@@ -13,13 +13,42 @@ AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That
 file is the onboarding index; `AGENTS.md` / `CLAUDE.md` remain runtime-specific
 authorities, and `PROTOCOL.md` remains the deep operational guide.
 
-## Current Validation Status (2026-05-25)
+## Current Validation Status (2026-05-28)
 
 Current factory readiness is split into structural validation and bounded
 real-data proof:
 
+- Current integration-biology/multiomics validation evidence:
+  `/home/zerlinshen/projects/pipeline-validation-20260527/`
+  with durable plan/ledger under `.omx/ultragoal/`.
+  - G002 marker retention passed on real LUSC and Trevino data with explicit
+    marker label-shuffle negative controls (LUSC 23/23, Trevino 9/9 panels).
+  - G003/G004 cell-type mixing and rare-population preservation are validation-complete
+    with embedding-shuffle negative controls, but carry purity/rare-population
+    review flags; do not summarize them as clean passes.
+  - G005 annotation/DE sanity is conditional: LUSC sample-level DE is computed
+    only on 71/87 raw-count-compatible samples after excluding 16 fractional-count
+    samples, and tested origin/tumor-stage contrasts remain dataset-dominated.
+  - G006 real `.hic` bridge passed factory `hic_ingest`, `hic_tad`, v2.2 bundle export,
+    R-side `load_hic_extension`, and all 7 technical gates; scientific boundary
+    remains H3K27ac HiChIP, not unbiased Hi-C TAD/compartment biology.
+  - 2026-05-28 G009/G010/G011 follow-up:
+    targeted sensitivity passes for LUSC AT1, LUSC cDC2, Trevino inhibitory
+    interneuron, and Trevino intermediate progenitor under conservative Harmony
+    settings, but LUSC DC mature remains a purity-vs-mixing review case.
+    Dataset-aware LUSC origin DE is now supported as a sanity gate
+    (43 matched true-count samples across 5 datasets; permutation q<0.1 = 0;
+    12/12 sentinel directions correct), while tumor-stage DE remains
+    conditional single-dataset evidence. GM12878 unbiased Hi-C chr19 A/B
+    compartments pass against published subcompartments after sparse-tail
+    handling fixes (`concordance=0.814`, sign-flipped), but the lightweight
+    factory TAD boundary caller still fails B35T1NC Micro-C author TAD
+    concordance and must not be used as final TAD biology proof.
+  - Current follow-up verdict is
+    `PASS_SUPPORTED_NOT_FINAL_WITH_REVIEW_FLAGS`: supported for bounded tested
+    claims, not final biological claim readiness.
 - Suite gate: `/home/zerlinshen/Bioinformatics Research Pipeline/scripts/run_all_gates.sh`
-  runs 8 structure/contract checks across the three factories.
+  runs 10 structure/contract checks across the three factories.
 - Real-data handoff proof:
   `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`
   exports a retained Round9 LUSC consensus AnnData through the current bundle
@@ -778,7 +807,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 |---|---|---|
 | `clustering` | Normalization, HVG, PCA, UMAP, Leiden clustering | doublet_detection |
 | `cell_cycle` | Cell cycle scoring (S/G2M), optional regression | clustering |
-| `integration_select` | **Opt-in** per-run discovery integration-selection gate. Scores baseline/Harmony/scVI label-free after clustering and SETS `cfg.batch.method` (routing a Harmony pick to the working `harmonypy`-direct backend) before `batch_correction`. Expensive scVI seed sweep, cache-bounded. Enable with `--select-integration`. | clustering |
+| `integration_select` | **Opt-in** per-run discovery integration-selection gate. Scores required baseline/Harmony/scVI/shuffle candidates after clustering and SETS `cfg.batch.method` (routing a Harmony pick to the working `harmonypy`-direct backend) before `batch_correction`. Fails loud on a degraded candidate set or non-firing shuffle control. Expensive scVI seed sweep; cache key includes baseline embedding, batch-label state, scVI config/training params, gate params, and gate code version. Enable with `--select-integration`. | clustering |
 | `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama/scVI/MNN/fastMNN-style). `harmony_backend` accepts `auto`/`cpu`/`gpu`/`direct` (`direct` = canonical `harmonypy.run_harmony`, the proven-working path). | clustering |
 | `differential_expression` | Cluster marker genes (`wilcoxon` default, configurable), significance filtering | clustering |
 | `annotation` | Marker-based cell type annotation with confidence scores | clustering |
@@ -1221,19 +1250,42 @@ Known extension keys:
 v2.2 still reserves `vdj` and `ribo` in `contracts/bundle_schema.yaml`. HIC is
 active only when the source AnnData carries `hic_contact_matrix` + `hic_bins`
 from `hic_ingest`, and optional `hic_tad_boundaries` / `hic_compartments` from
-`hic_tad`. `hic_tad` also writes `hic_tad_metadata` with
+`hic_tad`. `hic_tad` computes insulation as upstream-window by
+downstream-window cross-boundary contact frequency, not a diagonal coverage
+block. It also writes `hic_tad_metadata` with
 `compartment_status` (`confident`, `partial_low_information`,
 `low_information`, or exporter-only `unknown_or_unvalidated`) so low-contact
 chromosomes or legacy/manual compartment tables are carried as explicit claim
 limits instead of silent A/B compartment calls. Low-information chromosomes are
 also labeled `low_information` in the compartments table so downstream figures
-cannot infer A from a zero eigenvector. `.hic`, `.cool/.mcool`, and sparse TSV
+cannot infer A from a zero eigenvector. Sparse tails inside otherwise
+informative chromosomes are ignored for eigendecomposition rather than
+downgrading the whole chromosome. `.hic`, `.cool/.mcool`, and sparse TSV
 formats are not treated as interchangeable: the production ingest reads
 `.cool/.mcool` via optional `cooler` or validated TSV contact-pairs, while
 `.hic` must be converted or handled in an isolated paper-reproduction lane
 first. Module rationale and
 literature support for active and reserved multi-omics slots are recorded in
 [docs/MULTIOMICS_MODULE_RATIONALE.md](docs/MULTIOMICS_MODULE_RATIONALE.md).
+
+2026-05-27 real-contact bridge evidence is available at
+`/home/zerlinshen/projects/pipeline-validation-20260527/g006_hic_factory_bridge/`.
+It extracts chr21 100 kb contacts from
+`LUSC_H3K27ac.allValidPairs.hic`, validates `hic_ingest`/`hic_tad`, exports
+`singlecell_r_bundle_v2.2`, and confirms R-side `load_hic_extension` with
+`r_multiomics_arrow` (`STATUS=active`, `CONTACTS_NROW=98860`). Treat this as
+factory I/O and bundle wiring evidence. Because the source is H3K27ac HiChIP
+and the module reports `compartment_status=low_information`, it is not final
+unbiased Hi-C TAD/compartment biological validation.
+
+2026-05-28 ground-truth validation is available at
+`/home/zerlinshen/projects/pipeline-validation-20260528/genome3d/`.
+GM12878 Rao DpnII unbiased Hi-C chr19 compartments pass against published
+subcompartments (`543` bins compared, sign-fixed A/B concordance `0.814`).
+B35T1NC Micro-C chr19 TAD boundary concordance remains below null after
+cross-boundary insulation repair (`F1=0.049`, `recall_over_null=0.40` best
+tested setting). Until a stronger TAD caller is integrated, treat factory TAD
+boundaries as exploratory/visual QC, not final biological TAD evidence.
 
 Public Python API for registering an extension:
 
@@ -1556,7 +1608,7 @@ This preserves `.checkpoints/after_<module>.json` status/metadata sidecars while
 | `--batch-key` | sample | Batch column in adata.obs |
 | `--batch-method` | harmony | Method: harmony/bbknn/combat/scanorama/scvi/mnn/fastmnn |
 | `--harmony-backend` | auto | Harmony backend: `auto`/`cpu`/`gpu`/`direct`. `direct` calls canonical `harmonypy.run_harmony` and transposes `Z_corr` to `(n_cells, n_pcs)` — the proven-working path when the rapids/scanpy wrappers are broken. The `integration_select` gate auto-selects `direct` when it picks Harmony. |
-| `--select-integration` | false | **Opt-in**: run the `integration_select` discovery gate after clustering to pick `--batch-method` automatically (label-free baseline/Harmony/scVI scoring). Adds `integration_select` to the requested modules; runs an expensive scVI seed sweep (cache-bounded). |
+| `--select-integration` | false | **Opt-in**: run the `integration_select` discovery gate after clustering to pick `--batch-method` automatically. It requires baseline/Harmony/scVI/shuffle candidates, fails loud if the shuffle falsifiability control is absent/non-firing, and uses a cache key that includes batch-label state plus gate/scVI params. |
 | `--integration-margin-mix` | 0.05 | Margin the candidate batch-mixing must beat baseline by in the `integration_select` gate. |
 | `--scvi-max-epochs` | 200 | Max epochs for scVI training when `--batch-method scvi` |
 | `--scvi-n-latent` | 30 | Latent dimension for scVI embedding |

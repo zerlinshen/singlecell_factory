@@ -29,6 +29,17 @@ documentation for the R-side contracts (renv bootstrap, schema hard-error,
 SHA mismatch warning). See `ops/governance_records/2026-05-18-three-factory-trifurcation/ADR.md`
 for the trifurcation decision record.
 
+**Current validation ledger (2026-05-27):** The latest integration-biology and
+multiomics validation artifacts are under
+`/home/zerlinshen/projects/pipeline-validation-20260527/`, with repo-native
+progress tracked in `.omx/ultragoal/ledger-integration-biology-multiomics-validation-20260527.jsonl`.
+Use those reports and `ops/before_every_run/LATEST.md` before claiming marker
+retention, mixing, rare-population preservation, annotation/DE, or 3D-genome
+readiness. The current post-review state includes explicit marker/embedding
+negative controls, G005 raw-count-compatible sample exclusions, and the G006
+H3K27ac HiChIP low-information boundary. The final registered verdict is
+`PASS_SUPPORTED_NOT_FINAL`.
+
 ### Remote Factory/Project Governance
 
 Remote governance is implemented in `singlecell_factory` before any local Mac
@@ -341,7 +352,7 @@ Mandatory:
 Optional (23):
 - `clustering`
 - `cell_cycle`
-- `integration_select` (opt-in via `--select-integration`; per-run discovery gate that sets `--batch-method` automatically and routes a Harmony pick to `harmony_backend=direct`)
+- `integration_select` (opt-in via `--select-integration`; per-run discovery gate that sets `--batch-method` automatically, routes a Harmony pick to `harmony_backend=direct`, and fails loud on degraded candidates or a non-firing shuffle control)
 - `batch_correction`
 - `differential_expression`
 - `annotation`
@@ -571,8 +582,9 @@ Interpretation note:
   - Principle 9 preserved: non-convergence raises unless `SC_ALLOW_HARMONY_NON_CONVERGENCE=1`
 
 - `--select-integration` (opt-in; default off)
-  - runs the `integration_select` discovery gate after clustering and BEFORE `batch_correction`; it scores baseline/Harmony/scVI label-free and SETS `cfg.batch.method` for THIS dataset (a Harmony pick also sets `harmony_backend=direct`)
-  - expensive scVI seed sweep, so it is NOT default-on; the per-run cost is bounded by a default-ON cache keyed on `(data_hash, batch_key, scVI_config, code_version)`
+  - runs the `integration_select` discovery gate after clustering and BEFORE `batch_correction`; it scores required baseline/Harmony/scVI/shuffle candidates and SETS `cfg.batch.method` for THIS dataset (a Harmony pick also sets `harmony_backend=direct`)
+  - fails loud if the required candidate set is degraded or the shuffle falsifiability control is absent/non-firing; extreme-theta is reported but not gating
+  - expensive scVI seed sweep, so it is NOT default-on; the per-run cost is bounded by a default-ON cache keyed on baseline embedding, batch-label state, scVI config/training params, gate params, and gate code version
   - outputs (`integration_recommendation.json`, `integration_scoreboard.csv`, `integration_audit.md`) land under the run's `integration_select/` module dir, never inside the factory tree
   - tune the mixing gate with `--integration-margin-mix` (default 0.05)
 

@@ -14,7 +14,9 @@ pass) if the engine is unavailable.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
@@ -165,7 +167,7 @@ def test_tm10_gate_then_batch_correction_e2e(tmp_path, monkeypatch):
     import scripts.bench.integration.methods as M
     import scripts.bench.integration.select_integration as sel
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, **kwargs):
         emb = {
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
@@ -173,6 +175,10 @@ def test_tm10_gate_then_batch_correction_e2e(tmp_path, monkeypatch):
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
         }
+        for seed in scvi_seeds:
+            emb[f"{M.SCVI_METHOD}_seed{int(seed)}"] = np.asarray(
+                fx.embeddings["baseline"], dtype=np.float64
+            )
         return emb, []
 
     monkeypatch.setattr(
@@ -224,14 +230,19 @@ def test_two_batch_selects_non_none_and_sets_cfg(tmp_path, monkeypatch):
     import scripts.bench.integration.methods as M
     import scripts.bench.integration.select_integration as sel
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
-        return ({
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, **kwargs):
+        emb = {
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
             sel.SHUFFLE_CONTROL_METHOD: np.asarray(
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
-        }, [])
+        }
+        for seed in scvi_seeds:
+            emb[f"{M.SCVI_METHOD}_seed{int(seed)}"] = np.asarray(
+                fx.embeddings["baseline"], dtype=np.float64
+            )
+        return emb, []
 
     monkeypatch.setattr(
         IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
@@ -293,14 +304,19 @@ def test_cache_hit_replays_recommendation(tmp_path, monkeypatch):
     import scripts.bench.integration.methods as M
     import scripts.bench.integration.select_integration as sel
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
-        return ({
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, **kwargs):
+        emb = {
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
             sel.SHUFFLE_CONTROL_METHOD: np.asarray(
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
-        }, [])
+        }
+        for seed in scvi_seeds:
+            emb[f"{M.SCVI_METHOD}_seed{int(seed)}"] = np.asarray(
+                fx.embeddings["baseline"], dtype=np.float64
+            )
+        return emb, []
 
     monkeypatch.setattr(
         IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
@@ -337,14 +353,19 @@ def test_w13_cache_hit_reasserts_engine_pins_and_fails_loud_on_drift(
     import scripts.bench.integration.select_integration as sel
     from scripts.bench.integration import discovery_metrics as dm
 
-    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, scvi_max_epochs=None):
-        return ({
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, **kwargs):
+        emb = {
             M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
             M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
             sel.SHUFFLE_CONTROL_METHOD: np.asarray(
                 fx.embeddings["neg_control_shuffle_label"], dtype=np.float64
             ),
-        }, [])
+        }
+        for seed in scvi_seeds:
+            emb[f"{M.SCVI_METHOD}_seed{int(seed)}"] = np.asarray(
+                fx.embeddings["baseline"], dtype=np.float64
+            )
+        return emb, []
 
     monkeypatch.setattr(
         IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
@@ -371,3 +392,148 @@ def test_w13_cache_hit_reasserts_engine_pins_and_fails_loud_on_drift(
     ctx2 = _make_ctx(adata2, tmp_path)  # same cache dir -> HIT
     with pytest.raises(RuntimeError, match="Leiden-engine version gate FAILED"):
         IntegrationSelectModule().run(ctx2)
+
+
+def test_cache_hit_rejects_malformed_payload(tmp_path):
+    """A malformed cache entry must not silently become method='none'."""
+    fx = fixtures.make_f1_batch_split()
+    adata = _adata_from_fixture(fx)
+    ctx = _make_ctx(adata, tmp_path)
+
+    import scripts.bench.integration.integration_cache as ic
+
+    batch = adata.obs["sample"].astype(str).to_numpy()
+    key = ic.make_cache_key(
+        np.asarray(adata.obsm["X_pca"], dtype=np.float64),
+        "sample",
+        scvi_seeds=ctx.cfg.batch.integration_scvi_seeds,
+        margin_mix=ctx.cfg.batch.integration_margin_mix,
+        harmony_theta=ctx.cfg.batch.harmony_theta,
+        harmony_sigma=ctx.cfg.batch.harmony_sigma,
+        harmony_max_iter=ctx.cfg.batch.harmony_max_iter,
+        scvi_max_epochs=ctx.cfg.batch.scvi_max_epochs,
+        scvi_n_latent=ctx.cfg.batch.scvi_n_latent,
+        scvi_early_stopping=ctx.cfg.batch.scvi_early_stopping,
+        n_neighbors=ctx.cfg.clustering.n_neighbors,
+        batch_labels=batch,
+        obs_names=adata.obs_names,
+    )
+    cache_dir = tmp_path / "run" / "integration_select" / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / f"{key.digest()}.json").write_text(
+        json.dumps({"schema_version": "discovery-integration-gate-v1"}) + "\n"
+    )
+
+    with pytest.raises(RuntimeError, match="missing chosen_method"):
+        IntegrationSelectModule().run(ctx)
+
+
+def test_degraded_required_candidates_fail_loud(tmp_path, monkeypatch):
+    """Harmony/scVI/shuffle are the required candidate set for a completed gate."""
+    fx = fixtures.make_f1_batch_split()
+    adata = _adata_from_fixture(fx)
+    ctx = _make_ctx(adata, tmp_path)
+
+    import scripts.bench.integration.methods as M
+
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, **kwargs):
+        return ({
+            M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
+            M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
+        }, [{"method": "scvi_seed0", "error": "boom"}])
+
+    monkeypatch.setattr(
+        IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
+    )
+
+    with pytest.raises(RuntimeError, match="degraded candidate set"):
+        IntegrationSelectModule().run(ctx)
+    assert ctx.metadata["integration_select_status"] == "failed_degraded_candidates"
+
+
+def test_shuffle_control_must_fire_before_recommendation(tmp_path, monkeypatch):
+    """A present but non-firing shuffle control invalidates the gate."""
+    fx = fixtures.make_f1_batch_split()
+    adata = _adata_from_fixture(fx)
+    ctx = _make_ctx(adata, tmp_path)
+
+    import scripts.bench.integration.methods as M
+    import scripts.bench.integration.select_integration as sel
+
+    def _fake_embeddings(adata_arg, batch_key, scvi_seeds, **kwargs):
+        emb = {
+            M.BASELINE_METHOD: np.asarray(fx.embeddings["baseline"], dtype=np.float64),
+            M.HARMONY_METHOD: np.asarray(fx.embeddings["harmony"], dtype=np.float64),
+            # Non-firing control: identical to baseline instead of structure-destroying.
+            sel.SHUFFLE_CONTROL_METHOD: np.asarray(
+                fx.embeddings["baseline"], dtype=np.float64
+            ),
+        }
+        for seed in scvi_seeds:
+            emb[f"{M.SCVI_METHOD}_seed{int(seed)}"] = np.asarray(
+                fx.embeddings["baseline"], dtype=np.float64
+            )
+        return emb, []
+
+    monkeypatch.setattr(
+        IntegrationSelectModule, "_compute_embeddings", staticmethod(_fake_embeddings)
+    )
+
+    with pytest.raises(RuntimeError, match="shuffle falsifiability control"):
+        IntegrationSelectModule().run(ctx)
+    assert ctx.metadata["integration_select_status"] == "failed_shuffle_control"
+
+
+def test_compute_embeddings_propagates_gate_params(monkeypatch):
+    """Params included in the cache key must also reach the actual computation."""
+    import anndata as ad
+    import scripts.bench.integration.methods as M
+    import scripts.bench.integration.select_integration as sel
+
+    rng = np.random.default_rng(0)
+    adata = ad.AnnData(rng.poisson(1.0, size=(12, 5)).astype(np.float32))
+    adata.layers["counts"] = adata.X.copy()
+    adata.obs["sample"] = ["a"] * 6 + ["b"] * 6
+    adata.obsm["X_pca"] = rng.normal(size=(12, 4)).astype(np.float32)
+    captured = {}
+
+    def fake_harmony(adata_arg, batch_key, **kwargs):
+        captured["harmony"] = kwargs
+        return SimpleNamespace(method=M.HARMONY_METHOD, X=adata_arg.obsm["X_pca"], error=None)
+
+    def fake_scvi(adata_arg, batch_key, *, seeds, **kwargs):
+        captured["scvi"] = kwargs
+        return [
+            SimpleNamespace(method=f"{M.SCVI_METHOD}_seed{int(seed)}",
+                            X=adata_arg.obsm["X_pca"], error=None)
+            for seed in seeds
+        ]
+
+    def fake_neg(adata_arg, batch_key):
+        return SimpleNamespace(method=M.NEG_CONTROL_METHOD, X=None, error="singular")
+
+    def fake_shuffle(adata_arg, batch_key, seed=0):
+        return SimpleNamespace(method=sel.SHUFFLE_CONTROL_METHOD,
+                               X=adata_arg.obsm["X_pca"], error=None)
+
+    monkeypatch.setattr(M, "compute_harmonypy_direct", fake_harmony)
+    monkeypatch.setattr(M, "compute_scvi_seed_sweep", fake_scvi)
+    monkeypatch.setattr(M, "compute_neg_control", fake_neg)
+    monkeypatch.setattr(M, "compute_shuffle_label_control", fake_shuffle)
+
+    IntegrationSelectModule._compute_embeddings(
+        adata, "sample", (0, 1, 2),
+        harmony_theta=4.0,
+        harmony_sigma=0.25,
+        harmony_max_iter=99,
+        scvi_max_epochs=42,
+        scvi_n_latent=17,
+        scvi_early_stopping=False,
+    )
+
+    assert captured["harmony"]["theta"] == 4.0
+    assert captured["harmony"]["sigma"] == 0.25
+    assert captured["harmony"]["max_iter_harmony"] == 99
+    assert captured["scvi"]["scvi_max_epochs"] == 42
+    assert captured["scvi"]["scvi_n_latent"] == 17
+    assert captured["scvi"]["scvi_early_stopping"] is False

@@ -297,6 +297,15 @@ def test_tm8_run_gate_missing_baseline_fails_loud(f1):
         sel.run_gate(emb, f1["fx"].batch)
 
 
+def test_tm8_run_gate_requires_shuffle_control(f1):
+    emb = {
+        "baseline": f1["fx"].embeddings["baseline"],
+        "harmony": f1["fx"].embeddings["harmony"],
+    }
+    with pytest.raises(RuntimeError, match="shuffle falsifiability control"):
+        sel.run_gate(emb, f1["fx"].batch)
+
+
 def test_tm8_cli_emits_outputs(tmp_path):
     import anndata as ad
     f = fixtures.make_f1_batch_split()
@@ -359,6 +368,10 @@ def test_tm9_cache_key_distinguishes_fast_and_skip(tmp_path):
     assert len(digests) == 3  # a FAST/skip result never aliases a full one
 
 
+def test_tm9_gate_code_version_invalidates_old_gate_semantics():
+    assert ic.GATE_CODE_VERSION == "discovery-gate-v2"
+
+
 def test_tm9_cache_key_changes_with_data(tmp_path):
     rng = np.random.default_rng(0)
     a = rng.normal(size=(50, 4)).astype(np.float32)
@@ -366,6 +379,31 @@ def test_tm9_cache_key_changes_with_data(tmp_path):
     assert ic.make_cache_key(a, "sample").digest() != ic.make_cache_key(b, "sample").digest()
     # Same data, different batch_key -> different key.
     assert ic.make_cache_key(a, "sample").digest() != ic.make_cache_key(a, "donor").digest()
+
+
+def test_tm9_cache_key_changes_with_batch_label_state():
+    baseline = np.random.default_rng(0).normal(size=(50, 4)).astype(np.float32)
+    batch_a = np.array(["a"] * 25 + ["b"] * 25)
+    batch_b = np.array(["a", "b"] * 25)
+    same_payload = dict(
+        margin_mix=0.05,
+        harmony_theta=2.0,
+        harmony_sigma=0.1,
+        harmony_max_iter=50,
+        scvi_max_epochs=200,
+        scvi_n_latent=30,
+        scvi_early_stopping=True,
+        n_neighbors=15,
+        obs_names=[f"cell{i}" for i in range(50)],
+    )
+    key_a = ic.make_cache_key(
+        baseline, "sample", batch_labels=batch_a, **same_payload,
+    )
+    key_b = ic.make_cache_key(
+        baseline, "sample", batch_labels=batch_b, **same_payload,
+    )
+    assert key_a.digest() != key_b.digest()
+    assert key_a.batch_state_hash != ""
 
 
 def test_tm9_loud_mode_banner_warns():
@@ -387,7 +425,8 @@ def test_w12_cache_key_folds_each_gate_affecting_param():
     base = ic.make_cache_key(
         baseline, "sample",
         margin_mix=0.05, harmony_theta=2.0, harmony_sigma=0.1,
-        harmony_max_iter=50, scvi_n_latent=30, n_neighbors=15,
+        harmony_max_iter=50, scvi_max_epochs=200, scvi_n_latent=30,
+        scvi_early_stopping=True, n_neighbors=15,
     )
 
     perturbations = dict(
@@ -395,12 +434,15 @@ def test_w12_cache_key_folds_each_gate_affecting_param():
         harmony_theta=3.0,
         harmony_sigma=0.2,
         harmony_max_iter=100,
+        scvi_max_epochs=42,
         scvi_n_latent=20,
+        scvi_early_stopping=False,
         n_neighbors=30,
     )
     kwargs = dict(
         margin_mix=0.05, harmony_theta=2.0, harmony_sigma=0.1,
-        harmony_max_iter=50, scvi_n_latent=30, n_neighbors=15,
+        harmony_max_iter=50, scvi_max_epochs=200, scvi_n_latent=30,
+        scvi_early_stopping=True, n_neighbors=15,
     )
     for param, new_value in perturbations.items():
         perturbed = dict(kwargs)
@@ -822,3 +864,38 @@ def test_p3a_scvi_max_epochs_none_keeps_default(monkeypatch):
     assert all(ep == 200 for ep in captured_epochs), (
         f"Default scvi_max_epochs should be 200 when None; got {captured_epochs}"
     )
+
+
+def test_p3a_scvi_training_params_propagate_to_ctx(monkeypatch):
+    """scVI training params in the gate cache key must reach production scVI."""
+    from scripts.bench.integration import methods as M
+
+    captured: list[tuple[int, int, bool]] = []
+
+    def fake_run_scvi(adata, batch_key, ctx):
+        captured.append((
+            ctx.cfg.batch.scvi_max_epochs,
+            ctx.cfg.batch.scvi_n_latent,
+            ctx.cfg.batch.scvi_early_stopping,
+        ))
+
+    Backend = M._import_backend()
+    monkeypatch.setattr(Backend, "_run_scvi", fake_run_scvi)
+
+    import anndata as ad
+    rng = np.random.default_rng(8)
+    n_cells, n_genes = 60, 20
+    X = rng.integers(0, 50, size=(n_cells, n_genes)).astype(np.float32)
+    a = ad.AnnData(X)
+    a.obs["batch"] = (["A"] * 30 + ["B"] * 30)
+    a.obsm["X_pca"] = rng.normal(size=(n_cells, 10)).astype(np.float32)
+
+    M.compute_scvi_seed_sweep(
+        a, "batch",
+        seeds=(0, 1, 2),
+        scvi_max_epochs=42,
+        scvi_n_latent=17,
+        scvi_early_stopping=False,
+    )
+
+    assert captured == [(42, 17, False)] * 3

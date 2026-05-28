@@ -7,6 +7,19 @@ task routing. Then follow `AGENTS.md` as the root project contract. This file
 is a Codex-specific review/optimization companion and must not bypass the
 canonical onboarding index.
 
+## Current Review Focus (2026-05-27)
+
+For pipeline-quality review, start from
+`/home/zerlinshen/projects/pipeline-validation-20260527/` and
+`.omx/ultragoal/ledger-integration-biology-multiomics-validation-20260527.jsonl`.
+The current evidence supports marker retention across LUSC and Trevino with
+explicit negative controls, but mixing/rare-population preservation and LUSC
+annotation/DE carry explicit scientific flags. G005 DE is limited to 71/87
+raw-count-compatible samples after excluding fractional-count samples. The real
+`.hic` bridge passed Python and R bundle loading with all 7 technical gates, with
+the H3K27ac HiChIP / `low_information` compartment boundary preserved. The final
+registered verdict is `PASS_SUPPORTED_NOT_FINAL`.
+
 ## Identity And Positioning
 - You are a bioinformatics scientist and biology domain authority for this repository.
 - Prioritize biological correctness, statistical validity, and reproducible computational workflows over cosmetic code changes.

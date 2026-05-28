@@ -64,6 +64,25 @@ def test_modular_cli_parse(monkeypatch):
     assert args.project == "x"
 
 
+def test_modular_cli_accepts_harmony_direct(monkeypatch):
+    import workflow.modular.cli as mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--project",
+            "x",
+            "--sample-root",
+            "/tmp/s",
+            "--harmony-backend",
+            "direct",
+        ],
+    )
+    args = mod.parse_args()
+    assert args.harmony_backend == "direct"
+
+
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
@@ -317,6 +336,149 @@ def test_dependency_resolution_auto_includes():
     # Verify correct ordering
     assert order.index("clustering") < order.index("annotation")
     assert order.index("annotation") < order.index("immune_phenotyping")
+
+
+def test_parallel_tier_runs_integration_select_before_batch_correction(tmp_path):
+    import workflow.modular.pipeline as pipe
+    from workflow.modular.pipeline import _compute_tiers, _resolve_execution_order
+
+    mandatory = ["cellranger", "qc", "ambient_correction", "doublet_detection"]
+    optional = ["clustering", "integration_select", "batch_correction"]
+    order = _resolve_execution_order(mandatory, optional)
+    assert order.index("integration_select") < order.index("batch_correction")
+
+    completed = {
+        "cellranger",
+        "qc",
+        "ambient_correction",
+        "doublet_detection",
+        "clustering",
+    }
+    tiers = _compute_tiers(order, completed)
+    tier_of = {m: i for i, tier in enumerate(tiers) for m in tier}
+    assert tier_of["integration_select"] == tier_of["batch_correction"]
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="gate_order",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(
+                sample_root=tmp_path / "dataset",
+                outs_dir=tmp_path / "dataset" / "outs",
+            ),
+            optional_modules=[],
+        ),
+        run_dir=run_dir,
+        figure_dir=run_dir,
+        table_dir=run_dir,
+        adata=AnnData(np.ones((4, 2), dtype=np.float32)),
+    )
+    order_seen: list[str] = []
+
+    class Gate:
+        name = "integration_select"
+        runs_before_mutating_modules = True
+
+        def run(self, ctx):
+            order_seen.append("integration_select")
+
+    class BatchCorrection:
+        name = "batch_correction"
+
+        def run(self, ctx):
+            order_seen.append("batch_correction")
+
+    pipe._execute_tier(
+        ["integration_select", "batch_correction"],
+        {"integration_select": Gate(), "batch_correction": BatchCorrection()},
+        ctx,
+        mandatory=set(),
+        max_workers=2,
+        mutating_modules={"batch_correction"},
+    )
+    assert order_seen == ["integration_select", "batch_correction"]
+
+
+def test_integration_select_exception_aborts_optional_sequential(tmp_path):
+    import workflow.modular.pipeline as pipe
+
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="fatal_gate",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(
+                sample_root=tmp_path / "dataset",
+                outs_dir=tmp_path / "dataset" / "outs",
+            ),
+            optional_modules=[],
+        ),
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+    )
+
+    called: list[str] = []
+
+    class FailingGate:
+        name = "integration_select"
+        fail_pipeline_on_error = True
+
+        def run(self, ctx):
+            raise RuntimeError("gate rejected")
+
+    class BatchCorrection:
+        name = "batch_correction"
+
+        def run(self, ctx):
+            called.append("batch_correction")
+
+    with pytest.raises(RuntimeError, match="gate rejected"):
+        pipe._run_sequential(
+            ["integration_select", "batch_correction"],
+            {"integration_select": FailingGate(), "batch_correction": BatchCorrection()},
+            ctx,
+            mandatory=set(),
+        )
+
+    assert called == []
+
+
+def test_integration_select_exception_aborts_optional_parallel_appending(tmp_path):
+    import workflow.modular.pipeline as pipe
+
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="fatal_gate",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(
+                sample_root=tmp_path / "dataset",
+                outs_dir=tmp_path / "dataset" / "outs",
+            ),
+            optional_modules=[],
+        ),
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=AnnData(np.ones((4, 2), dtype=np.float32)),
+    )
+
+    class FailingGate:
+        name = "integration_select"
+        fail_pipeline_on_error = True
+
+        def run(self, ctx):
+            raise RuntimeError("gate rejected")
+
+    with pytest.raises(RuntimeError, match="Fatal module integration_select failed"):
+        pipe._run_parallel_appending(
+            ["integration_select"],
+            {"integration_select": FailingGate()},
+            ctx,
+            mandatory=set(),
+            max_workers=1,
+        )
 
 
 def test_dependency_resolution_cycle_detection(monkeypatch):
