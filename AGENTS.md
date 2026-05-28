@@ -155,6 +155,16 @@ Current claim posture:
   evidence supports bounded tested claims, while LUSC DC mature, LUSC tumor-stage
   DE, and factory TAD boundary biology remain review/conditional. Downstream
   reports must keep the non-final claim boundaries.
+- 2026-05-29 Round 3 suite evidence at
+  `/home/zerlinshen/projects/pipeline-validation-20260528/` updates the
+  remaining data asks: Liu BEP2D TP63 CUT&Tag count-FDR is now real-data
+  supported within the GSE272822/SRP521453 claim boundary; external
+  differential A/B flip scoring remains blocked by matched-contact data
+  availability/storage; LUSC late-stage UICC DE remains blocked by
+  multi-dataset early/late balance failure. Use
+  `SUITE_LEVEL_PIPELINE_OPTIMIZATION_REPORT_R3.md`,
+  `ULTRAGOAL_FINAL_QUALITY_GATE_R3.json`, and ledger key
+  `round_3_2026_05_29_codex_followup`.
 
 ## Current State (2026-05-25)
 

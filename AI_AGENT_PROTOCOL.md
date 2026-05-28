@@ -197,6 +197,15 @@ Use these artifacts before making final scientific claims:
 - G008 final registered verdict is `PASS_SUPPORTED_NOT_FINAL`; do not claim
   global final-readiness from this validation round.
 
+Round 3 suite evidence is recorded at
+`/home/zerlinshen/projects/pipeline-validation-20260528/` with report
+`SUITE_LEVEL_PIPELINE_OPTIMIZATION_REPORT_R3.md`, final-gate JSON
+`ULTRAGOAL_FINAL_QUALITY_GATE_R3.json`, and ledger key
+`round_3_2026_05_29_codex_followup`. The Liu BEP2D TP63 CUT&Tag
+count-FDR claim is supported on real GSE272822/SRP521453 SRA data within its
+claim boundary. External differential A/B flip scoring and LUSC late-stage UICC
+DE remain blocked with named data asks.
+
 ## Current State (2026-05-25)
 
 The current validation stack has two distinct tiers:

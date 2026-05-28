@@ -18,6 +18,15 @@ authorities, and `PROTOCOL.md` remains the deep operational guide.
 Current factory readiness is split into structural validation and bounded
 real-data proof:
 
+- Round 3 evidence is recorded under
+  `/home/zerlinshen/projects/pipeline-validation-20260528/`:
+  `SUITE_LEVEL_PIPELINE_OPTIMIZATION_REPORT_R3.md`,
+  `ULTRAGOAL_FINAL_QUALITY_GATE_R3.json`, and ledger key
+  `round_3_2026_05_29_codex_followup`. It lifts the Liu BEP2D TP63 CUT&Tag
+  count-FDR blocker using real GSE272822/SRP521453 SRA data, retained integer
+  peak counts, DESeq2 `~ replicate + condition`, paired-label directional
+  null, and TP63 motif enrichment. External differential A/B flip scoring and
+  LUSC late-stage UICC DE remain blocked by named external data constraints.
 - Current integration-biology/multiomics validation evidence:
   `/home/zerlinshen/projects/pipeline-validation-20260527/`
   with durable plan/ledger under `.omx/ultragoal/`.

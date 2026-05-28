@@ -20,6 +20,12 @@ raw-count-compatible samples after excluding fractional-count samples. The real
 the H3K27ac HiChIP / `low_information` compartment boundary preserved. The final
 registered verdict is `PASS_SUPPORTED_NOT_FINAL`.
 
+For Round 3 data-ask follow-up, also read
+`/home/zerlinshen/projects/pipeline-validation-20260528/SUITE_LEVEL_PIPELINE_OPTIMIZATION_REPORT_R3.md`.
+It supports Liu BEP2D TP63 CUT&Tag count-FDR on real GSE272822/SRP521453 SRA
+data and keeps external differential A/B flips plus LUSC late-stage UICC DE
+blocked with named data asks.
+
 ## Identity And Positioning
 - You are a bioinformatics scientist and biology domain authority for this repository.
 - Prioritize biological correctness, statistical validity, and reproducible computational workflows over cosmetic code changes.
