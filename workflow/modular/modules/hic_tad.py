@@ -4,6 +4,19 @@ Memory-safe: operates on the sparse contact matrix from hic_ingest. Insulation
 score is computed per bin via a fixed-width window slide; A/B compartments via
 the first eigenvector of the per-chromosome correlation matrix.
 
+Scope of claims (validated 2026-05-28 against retained B35T1NC Micro-C author
+TADs and GM12878 published subcompartments):
+  - A/B compartments here are SUPPORTED on unbiased Hi-C (GM12878 chr19
+    concordance 0.814 vs published subcompartments).
+  - The insulation TAD boundaries here are VISUAL-QC / quick-look ONLY. This
+    lightweight caller scores below a permuted null on the matched B35T1NC
+    chr19 author TADs (best F1=0.049, recall_over_null=0.40), and observed/
+    expected normalization does not lift it above null. Authoritative TAD /
+    insulation biology routes to the cooltools-backed r_multiomics_factory/bulk
+    lane (genome-wide F1=0.516, recall_over_null=6.84; chr19 matched-GT
+    F1=0.25, recall_over_null=3.0). Do not present these boundaries as final
+    TAD biology.
+
 Outputs:
   adata.uns["hic_tad_boundaries"]  DataFrame: bin_id, chrom, position, insulation, is_boundary
   adata.uns["hic_compartments"]    DataFrame: bin_id, chrom, position, eigenvector_1, compartment ("A"|"B"|"low_information")
