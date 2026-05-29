@@ -181,8 +181,9 @@ The current suite-level validation posture is intentionally honest:
 - Failed exploratory raw-input rerun:
   `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`.
   It hung after scaffold creation and is not validation evidence.
-- `r_multiomics_arrow` is the working R environment for parquet v2 bundle
-  plotting. The default `r_multiomics` env is missing R package `arrow`.
+- Both `r_multiomics` and `r_multiomics_arrow` can read/plot v2/v2.1/v2.2
+  parquet bundles as of 2026-05-29. `r_multiomics` now has `r-arrow=24.0.0`;
+  `r_multiomics_arrow` remains the renv-pinned reference env.
 
 This does not prove NG2025 end-to-end reproduction or full raw-input pipeline
 correctness. Treat restored real-data and curated figure-parity gates as open

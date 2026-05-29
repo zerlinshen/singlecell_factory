@@ -216,16 +216,19 @@ The current validation stack has two distinct tiers:
 - `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`
   is the current bounded real-data cross-factory proof. It exports a retained
   Round9 LUSC consensus AnnData with current `singlecell_factory`, reads and
-  renders it with `r_multiomics_factory` in `r_multiomics_arrow`, and exercises
-  plotting helpers through the governed bridge.
+  renders it with `r_multiomics_factory`, and exercises plotting helpers through
+  the governed bridge.
 
 Do not cite `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`
 as validation evidence; it is a recorded failed exploratory scaffold from a
 hung HGMM raw-input rerun.
 
-Environment caveat: the default `r_multiomics` env lacks R package `arrow` for
-v2 parquet bundle plotting; use `r_multiomics_arrow` until the canonical env is
-repaired.
+Environment note: the 2026-05-25 Round9 render used `r_multiomics_arrow` because
+the default `r_multiomics` env lacked R package `arrow` at that time. Fixed
+2026-05-29: default `r_multiomics` now has `r-arrow=24.0.0` and can read/plot
+v2/v2.1/v2.2 parquet bundles; `r_multiomics_arrow` remains the renv-pinned
+reference env. See
+`/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/docs/ENVIRONMENT_REPRODUCIBILITY.md`.
 
 ## Historical State (2026-05-20)
 

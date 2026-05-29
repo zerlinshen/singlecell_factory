@@ -18,9 +18,9 @@ def rscript_path():
 
     Resolution order:
       1. ``RSCRIPT_BIN`` environment variable (honored verbatim if executable)
-      2. ``r_multiomics_arrow`` conda env (production default; matches
+      2. ``r_multiomics_arrow`` conda env (production reference; matches
          bridges/local_r_pipeline_macbook/scripts/run_remote_bundle_plot.sh)
-      3. ``r_multiomics`` conda env (legacy fallback)
+      3. ``r_multiomics`` conda env (parquet-capable fallback as of 2026-05-29)
       4. ``Rscript`` on PATH (last resort)
 
     Tests are skipped when no candidate is executable, or when the chosen
@@ -33,7 +33,7 @@ def rscript_path():
         rscript = env_override
     else:
         # H3: pin r_multiomics_arrow first so the test suite tracks the
-        # production runner (run_remote_bundle_plot.sh) by default.
+        # renv-pinned production runner (run_remote_bundle_plot.sh) by default.
         candidates = [
             "/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript",
             "/home/zerlinshen/conda/envs/r_multiomics/bin/Rscript",

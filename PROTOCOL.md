@@ -96,9 +96,10 @@ unknown extension '<name>'` message for forward-compat.
 
 `tests/conftest.py` honors the `RSCRIPT_BIN` environment variable for
 Python-to-R subprocess parity tests (`tests/test_python_r_parity.py`,
-`tests/test_r_bundle_contract.py`). Default resolution is the conda env
-`r_multiomics_arrow` for production parity. Override when running tests
-against a non-default Rscript:
+`tests/test_r_bundle_contract.py`). Default resolution remains the renv-pinned
+`r_multiomics_arrow` env for production parity, while `r_multiomics` is also
+parquet-capable as of 2026-05-29 (`r-arrow=24.0.0`) and can be selected
+explicitly. Override when running tests against a non-default Rscript:
 
 ```
 RSCRIPT_BIN=/path/to/Rscript pytest -q tests/test_python_r_parity.py

@@ -681,14 +681,16 @@ as part of the NC2024 abort cleanup.
     available, so R can draw publication-style large-cohort figures without
     repeatedly loading the full expression matrix.
 - Remote R environment hardening:
-  - default v2 parquet plotting environment:
+  - current v2/v2.1/v2.2 parquet plotting environments:
+    `/home/zerlinshen/conda/envs/r_multiomics` and
     `/home/zerlinshen/conda/envs/r_multiomics_arrow`
-  - legacy rollback environment:
-    `/home/zerlinshen/conda/envs/r_multiomics`
-  - `r_multiomics_arrow` is a clone of `r_multiomics` with conda-forge
-    `r-arrow 24.0.0` / `libarrow 24.0.0`; it was validated on `2026-04-30`
-    against both NC2024 v2 bundles through `read_bundle()` and
-    `scripts/plot_remote_bundle_large.R`.
+  - `r_multiomics_arrow` was validated on `2026-04-30` against both NC2024 v2
+    bundles through `read_bundle()` and `scripts/plot_remote_bundle_large.R`.
+  - `r_multiomics` was upgraded on `2026-05-29` with `r-arrow 24.0.0` /
+    `libarrow 24.0.0` and verified by a parquet write/read roundtrip. Use
+    `r_multiomics_arrow` when the full renv-pinned reference environment is
+    required; otherwise either env is valid for current compact-bundle parquet
+    reading.
   - installed and validated for NC2024 reporting:
     `Seurat 5.4.0`, `SeuratObject 5.4.0`, `readr`, `ggrastr`,
     `scattermore`, `pheatmap`, `ComplexHeatmap`, `circlize`, `hdf5r`,
@@ -1324,7 +1326,8 @@ the modality level until per-modality validation exists.
 - **h5ad backend order**: `zellkonverter` -> `SeuratDisk` ->
   `Seurat::ReadH5AD` (last; opt-in via `options(h5ad.allow_seurat_legacy = TRUE)`).
 - **Test override**: `RSCRIPT_BIN` env var overrides the default Rscript binary
-  in `tests/conftest.py` (default `r_multiomics_arrow` for production parity).
+  in `tests/conftest.py` (default `r_multiomics_arrow` for production parity;
+  `r_multiomics` is also parquet-capable as of 2026-05-29).
 
 #### Bundle export CLI flags (new)
 
