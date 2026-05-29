@@ -1,3 +1,26 @@
+# Suite Optimization (env + figure-parity gate, no run) - 2026-05-29
+
+- Doc/code optimization round; NO pipeline run executed. Evidence:
+  `/home/zerlinshen/projects/pipeline-optimization-20260529/`
+  (`ASSESSMENT.md`, `ROUND3_BLOCKER_SHARPENING.md`,
+  `preflight/SUNDARAM_143GB_PREFLIGHT.md`, human conclusion under `ledger/`).
+- ENV CHANGE (affects future remote runs): the default `r_multiomics` conda env
+  now has `r-arrow=24.0.0` installed (renv-pin match) and it is declared in
+  `r_multiomics_factory/envs/r_multiomics.yml`. Parquet roundtrip verified TRUE.
+  Either `r_multiomics` or `r_multiomics_arrow` can now read/plot v2/v2.1/v2.2
+  parquet bundles. Doc: `r_multiomics_factory/docs/ENVIRONMENT_REPRODUCIBILITY.md`.
+- Suite gate is now 11 gates: figure-parity gate re-wired (gate 10,
+  conditional-tolerant; output->/tmp). Active registry
+  `governance/figure_parity_references_2026-05-29.json` (22 produced figures
+  header/existence-validated; reference parity pending curation - NOT parity proof).
+- Did NOT start the 143.6 GB Sundaram download (preflight plan only) or any
+  >30 GB staging. Round-3 external blockers remain open with sharpened data asks.
+- Verification: `bash scripts/run_all_gates.sh` -> 11/11 ALL GATES PASS;
+  repo-doc-sync strict NO DRIFT (suite root + r_multiomics_factory);
+  independent code-reviewer APPROVE + verifier VERIFIED.
+
+---
+
 # Pipeline Validation Real-Science Follow-Up - 2026-05-28
 
 - Objective: finish the remaining real-data scientific validation and cleanup
