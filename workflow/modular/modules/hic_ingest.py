@@ -59,19 +59,27 @@ def _load_chromsizes(path: Path | None) -> pd.DataFrame | None:
 
 
 def _build_bins(chromsizes: pd.DataFrame, resolution: int) -> pd.DataFrame:
-    rows = []
-    bin_id = 0
+    chroms: list[str] = []
+    starts: list[np.ndarray] = []
     for _, r in chromsizes.iterrows():
-        starts = np.arange(0, int(r["length"]), resolution, dtype=int)
-        for s in starts:
-            rows.append({
-                "bin_id": bin_id,
-                "chrom": r["chrom"],
-                "start": int(s),
-                "end": int(min(s + resolution, r["length"])),
-            })
-            bin_id += 1
-    return pd.DataFrame(rows)
+        s = np.arange(0, int(r["length"]), resolution, dtype=int)
+        chroms.append(np.repeat(np.asarray(r["chrom"], dtype=object), s.shape[0]))
+        starts.append(s)
+    if not starts:
+        return pd.DataFrame(columns=["bin_id", "chrom", "start", "end"])
+    chrom_col = np.concatenate(chroms)
+    start_col = np.concatenate(starts)
+    # ``length`` is per-chromosome; align it to each bin so the end is clamped
+    # to chromosome length exactly as the row-wise version did.
+    length_per_chrom = chromsizes.set_index("chrom")["length"]
+    length_col = length_per_chrom.reindex(chrom_col).to_numpy().astype(int)
+    end_col = np.minimum(start_col + resolution, length_col)
+    return pd.DataFrame({
+        "bin_id": np.arange(start_col.shape[0], dtype=int),
+        "chrom": chrom_col,
+        "start": start_col.astype(int),
+        "end": end_col.astype(int),
+    })
 
 
 def _load_contacts_tsv(path: Path) -> pd.DataFrame:
@@ -88,29 +96,48 @@ def _load_contacts_tsv(path: Path) -> pd.DataFrame:
 
 
 def _binize_contacts(contacts: pd.DataFrame, bins: pd.DataFrame, resolution: int) -> sp.csr_matrix:
-    """Sum contact counts into bin × bin sparse matrix."""
-    bin_lookup: dict[tuple[str, int], int] = {}
-    for _, r in bins.iterrows():
-        bin_lookup[(r["chrom"], int(r["start"]) // resolution)] = int(r["bin_id"])
+    """Sum contact counts into bin × bin sparse matrix.
 
-    n_bins = bins.shape[0]
-    rows: list[int] = []
-    cols: list[int] = []
-    data: list[float] = []
-    for _, c in contacts.iterrows():
-        b1 = bin_lookup.get((c["chrom1"], int(c["pos1"]) // resolution))
-        b2 = bin_lookup.get((c["chrom2"], int(c["pos2"]) // resolution))
-        if b1 is None or b2 is None:
-            continue
-        rows.append(b1)
-        cols.append(b2)
-        data.append(float(c["count"]))
-        # Symmetric: also store (b2, b1) when b1 != b2
-        if b1 != b2:
-            rows.append(b2)
-            cols.append(b1)
-            data.append(float(c["count"]))
-    return sp.csr_matrix((data, (rows, cols)), shape=(n_bins, n_bins), dtype=np.float32)
+    Vectorized equivalent of a per-row ``iterrows`` accumulation: contacts whose
+    endpoints both map to a known bin contribute ``(b1, b2, count)`` and, when
+    ``b1 != b2``, also the mirrored ``(b2, b1, count)``. Duplicate ``(row, col)``
+    pairs are summed by ``coo_matrix`` exactly as the original ``csr_matrix``
+    constructor did, and the diagonal is never double-counted.
+    """
+    n_bins = int(bins.shape[0])
+    # Bin lookup keyed by (chrom, pos // resolution); identical key construction
+    # to the row-wise version (bin starts are multiples of ``resolution``).
+    bin_key = bins["start"].to_numpy() // resolution
+    lookup = pd.Series(
+        bins["bin_id"].to_numpy().astype(np.int64),
+        index=pd.MultiIndex.from_arrays([bins["chrom"].to_numpy(), bin_key]),
+    )
+
+    if contacts.shape[0] == 0:
+        return sp.csr_matrix((n_bins, n_bins), dtype=np.float32)
+
+    key1 = pd.MultiIndex.from_arrays(
+        [contacts["chrom1"].to_numpy(), contacts["pos1"].to_numpy() // resolution]
+    )
+    key2 = pd.MultiIndex.from_arrays(
+        [contacts["chrom2"].to_numpy(), contacts["pos2"].to_numpy() // resolution]
+    )
+    b1 = lookup.reindex(key1).to_numpy()  # NaN where bin missing
+    b2 = lookup.reindex(key2).to_numpy()
+    count = contacts["count"].to_numpy().astype(np.float64)
+
+    valid = ~(np.isnan(b1) | np.isnan(b2))
+    b1 = b1[valid].astype(np.int64)
+    b2 = b2[valid].astype(np.int64)
+    count = count[valid]
+
+    off_diag = b1 != b2
+    rows = np.concatenate([b1, b2[off_diag]])
+    cols = np.concatenate([b2, b1[off_diag]])
+    data = np.concatenate([count, count[off_diag]])
+
+    coo = sp.coo_matrix((data, (rows, cols)), shape=(n_bins, n_bins), dtype=np.float32)
+    return coo.tocsr()
 
 
 class HiCIngestModule:

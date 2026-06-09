@@ -786,12 +786,40 @@ def _run_parallel_appending(
 
         if ok == "ok" and mod_name in branch_contexts:
             branch_ctx = branch_contexts[mod_name]
-            # Merge new obs columns.
+            # MED fix (finding #6): the branch ran on ctx.adata.copy(); merging
+            # obs/obsm by raw position (`.values`) silently mis-aligns if a
+            # future appending module ever reorders/subsets cells. Guard the
+            # cell SET (catches add/drop) and align obs by barcode (catches
+            # reorder). obsm has no per-cell index, so it requires exact order.
+            if not branch_ctx.adata.obs_names.equals(ctx.adata.obs_names):
+                if set(branch_ctx.adata.obs_names) != set(ctx.adata.obs_names):
+                    raise RuntimeError(
+                        f"parallel-appending merge-back: module '{mod_name}' "
+                        f"changed the cell set on its branch "
+                        f"({branch_ctx.adata.n_obs} cells vs {ctx.adata.n_obs} "
+                        f"canonical); appending modules must preserve all cells."
+                    )
+                logger.warning(
+                    "parallel-appending merge-back: module '%s' reordered cells; "
+                    "realigning obs columns by barcode (obsm requires original order).",
+                    mod_name,
+                )
+            # Merge new obs columns, aligning by barcode (not position).
             new_cols = set(branch_ctx.adata.obs.columns) - main_obs_cols
             for col in new_cols:
-                ctx.adata.obs[col] = branch_ctx.adata.obs[col].values
-            # Merge new obsm entries.
+                ctx.adata.obs[col] = (
+                    branch_ctx.adata.obs[col].reindex(ctx.adata.obs_names)
+                )
+            # Merge new obsm entries. obsm arrays carry no per-cell index, so a
+            # positional copy is only valid when the branch preserved cell order.
             new_obsm = set(branch_ctx.adata.obsm.keys()) - main_obsm_keys
+            if new_obsm and not branch_ctx.adata.obs_names.equals(ctx.adata.obs_names):
+                raise RuntimeError(
+                    f"parallel-appending merge-back: module '{mod_name}' added "
+                    f"obsm keys {sorted(new_obsm)} but reordered cells relative to "
+                    f"the canonical adata; positional obsm merge would scramble "
+                    f"rows. Appending modules must preserve cell order for obsm."
+                )
             for key in new_obsm:
                 ctx.adata.obsm[key] = branch_ctx.adata.obsm[key]
             # Merge new uns entries.

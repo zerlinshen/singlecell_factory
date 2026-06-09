@@ -481,6 +481,104 @@ def test_integration_select_exception_aborts_optional_parallel_appending(tmp_pat
         )
 
 
+def test_parallel_appending_merge_realigns_shuffled_obs_by_barcode(tmp_path):
+    """MED fix (finding #6): merge-back must align obs by barcode, not position.
+
+    A branch that returns obs in a SHUFFLED order must not write a positionally
+    scrambled annotation column into the canonical final_adata.
+    """
+    import workflow.modular.pipeline as pipe
+
+    adata = AnnData(np.ones((4, 2), dtype=np.float32))
+    adata.obs_names = ["c0", "c1", "c2", "c3"]
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="shuffle",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(
+                sample_root=tmp_path / "dataset",
+                outs_dir=tmp_path / "dataset" / "outs",
+            ),
+            optional_modules=[],
+        ),
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=adata,
+    )
+
+    class ShufflingModule:
+        name = "shuffler"
+
+        def run(self, ctx):
+            # Branch ran on ctx.adata.copy(); reorder its cells and attach a
+            # label keyed to each barcode. Correct merge-back must restore the
+            # canonical order, mapping label by barcode.
+            shuffled = ctx.adata[["c2", "c0", "c3", "c1"]].copy()
+            shuffled.obs["branch_label"] = [
+                f"label_{bc}" for bc in shuffled.obs_names
+            ]
+            ctx.adata = shuffled
+
+    pipe._run_parallel_appending(
+        ["shuffler"],
+        {"shuffler": ShufflingModule()},
+        ctx,
+        mandatory=set(),
+        max_workers=1,
+    )
+
+    # Barcode-aligned: each cell keeps the label that matches its own barcode.
+    assert ctx.adata.obs_names.tolist() == ["c0", "c1", "c2", "c3"]
+    assert ctx.adata.obs["branch_label"].tolist() == [
+        "label_c0",
+        "label_c1",
+        "label_c2",
+        "label_c3",
+    ]
+
+
+def test_parallel_appending_merge_rejects_changed_cell_set(tmp_path):
+    """MED fix (finding #6): a branch that drops/adds cells must raise, not
+    silently write a mis-aligned column into the canonical adata."""
+    import workflow.modular.pipeline as pipe
+
+    adata = AnnData(np.ones((4, 2), dtype=np.float32))
+    adata.obs_names = ["c0", "c1", "c2", "c3"]
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="subset",
+            output_dir=tmp_path / "out",
+            cellranger=CellRangerConfig(
+                sample_root=tmp_path / "dataset",
+                outs_dir=tmp_path / "dataset" / "outs",
+            ),
+            optional_modules=[],
+        ),
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+        adata=adata,
+    )
+
+    class SubsettingModule:
+        name = "subsetter"
+
+        def run(self, ctx):
+            subset = ctx.adata[["c0", "c1", "c2"]].copy()
+            subset.obs["branch_label"] = ["a", "b", "c"]
+            ctx.adata = subset
+
+    with pytest.raises(RuntimeError, match="changed the cell set"):
+        pipe._run_parallel_appending(
+            ["subsetter"],
+            {"subsetter": SubsettingModule()},
+            ctx,
+            mandatory={"subsetter"},
+            max_workers=1,
+        )
+
+
 def test_dependency_resolution_cycle_detection(monkeypatch):
     import workflow.modular.pipeline as pipe
 
@@ -1099,6 +1197,35 @@ def test_de_fallback_correction_honors_bonferroni():
 
     assert np.allclose(corrected, np.array([0.03, 0.6, 1.0]))
     assert DifferentialExpressionModule._normalise_correction_method("bonf") == "bonferroni"
+
+
+def test_de_fallback_logfc_uses_linear_scale():
+    """LOW fix (finding #8): the dense Welch fallback computed log2FC directly on
+    log1p-normalized X, which is not a fold change. It must take expm1 first so
+    the value matches scanpy's convention: log2(expm1(mean_in)) - log2(expm1(mean_out)).
+    """
+    from workflow.modular.modules.differential_expression import DifferentialExpressionModule
+
+    # Single gene; group "0" has log1p values [2, 2], group "1" has [1, 1].
+    X = np.array([[2.0], [2.0], [1.0], [1.0]], dtype=float)
+    adata = AnnData(X)
+    adata.var_names = ["G0"]
+    adata.obs["leiden"] = ["0", "0", "1", "1"]
+
+    df = DifferentialExpressionModule._fallback_rank_genes_groups_df(
+        adata=adata, groupby="leiden", n_genes=1
+    )
+
+    row = df[df["group"] == "0"].iloc[0]
+    eps = 1e-9
+    # scanpy convention: fold change on the linear (expm1) scale.
+    expected = np.log2((np.expm1(2.0) + eps) / (np.expm1(1.0) + eps))
+    assert np.isclose(row["logfoldchanges"], expected)
+    assert np.isclose(row["scores"], expected)
+    # The corrected value must differ from the old buggy log-of-log result (1.0).
+    buggy = np.log2((2.0 + eps) / (1.0 + eps))
+    assert not np.isclose(expected, buggy)
+    assert np.isclose(buggy, 1.0)
 
 
 def test_de_memory_guard_error_does_not_retry(monkeypatch, tmp_path):

@@ -59,7 +59,11 @@ class CompositionModule:
         # Try pertpy scCODA first, fall back to scipy tests
         test_results = self._try_pertpy(adata, group_key)
         if test_results is None:
-            test_results = self._fallback_test(count_df, prop_df)
+            # Thread the canonical AC-10 seed (ctx.random_state) into the
+            # permutation fallback so enrichment z-scores honor --random-state
+            # (issue #20).
+            random_state = int(getattr(ctx, "random_state", 42))
+            test_results = self._fallback_test(count_df, prop_df, random_state)
 
         test_results.to_csv(ctx.table_dir / "composition_test_results.csv", index=False)
 
@@ -104,8 +108,14 @@ class CompositionModule:
             return None
 
     @staticmethod
-    def _fallback_test(count_df: pd.DataFrame, prop_df: pd.DataFrame) -> pd.DataFrame:
-        """Statistical testing of composition differences using scipy."""
+    def _fallback_test(
+        count_df: pd.DataFrame, prop_df: pd.DataFrame, random_state: int = 42
+    ) -> pd.DataFrame:
+        """Statistical testing of composition differences using scipy.
+
+        ``random_state`` seeds the single-group permutation enrichment so the
+        z-scores are reproducible under ``--random-state`` (issue #20).
+        """
         from scipy import stats
         from statsmodels.stats.multitest import multipletests
 
@@ -118,7 +128,7 @@ class CompositionModule:
             logger.warning("Only 1 group found; computing permutation-based enrichment z-scores.")
             total_cells = count_df.values.sum()
             observed_props = count_df.iloc[0] / count_df.iloc[0].sum()
-            rng = np.random.default_rng(42)
+            rng = np.random.default_rng(random_state)
             all_labels = []
             for ct, cnt in count_df.iloc[0].items():
                 all_labels.extend([ct] * cnt)

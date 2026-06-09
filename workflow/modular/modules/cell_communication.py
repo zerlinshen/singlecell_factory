@@ -161,11 +161,23 @@ class CellCommunicationModule:
         gene_indices = [gene_to_idx[g] for g in needed_genes]
         gene_col_map = {g: i for i, g in enumerate(needed_genes)}
 
-        # Pre-compute mean expression matrix: (n_cell_types, n_needed_genes)
+        # Pre-compute mean expression matrix: (n_cell_types, n_needed_genes).
+        # The sparse path (single-pass indicator-matrix groupby) and the dense
+        # path produce numerically identical means; pick sparse whenever X is
+        # sparse (the post-QC default) to avoid per-cell-type densification.
+        # SC_CELLCOMM_ENGINE overrides: "sparse" forces sparse, "dense" forces dense.
         import os
-        engine = os.environ.get("SC_CELLCOMM_ENGINE", "dense").lower()
+        import scipy.sparse as _sp
+        engine = os.environ.get("SC_CELLCOMM_ENGINE", "auto").lower()
+        x_is_sparse = _sp.issparse(expr.X) or hasattr(expr.X, "tocsr")
+        if engine == "sparse":
+            use_sparse = True
+        elif engine == "dense":
+            use_sparse = False
+        else:  # "auto" (default): sparse when X is sparse
+            use_sparse = x_is_sparse
         ct_list = []
-        if engine == "sparse" and hasattr(expr.X, "tocsr"):
+        if use_sparse and hasattr(expr.X, "tocsr"):
             from .._sparse_utils import sparse_groupby_mean
             X_sub = expr.X[:, gene_indices]
             valid_cts = [ct for ct in cell_types

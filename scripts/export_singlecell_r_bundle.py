@@ -1254,17 +1254,19 @@ def write_marker_expr_mtx(adata, cell_idx: np.ndarray, markers_present: list[str
 
 def write_marker_expr_parquet(adata, cell_idx: np.ndarray, markers_present: list[str],
                               config: ExportConfig) -> tuple[Path, dict[str, object]]:
-    """Write marker expression as parquet (dense float32)."""
+    """Write marker expression as parquet (dense float32).
+
+    Single-slice materialization: the marker matrix is the cell subset × the
+    (small) marker gene set, so it fits in memory in one shot. Chunk-then-concat
+    gave no memory benefit while issuing repeated backed-slice reads, so we read
+    the full slice once. Output is byte/content-identical to the chunked path:
+    same column order (``markers_present``), float32 dtype, row order, and the
+    literal ``cell`` index name handled by ``_write_parquet``.
+    """
     cells = adata.obs_names[cell_idx].astype(str)
-    first = True
-    chunks = []
-    for start in range(0, len(cell_idx), config.marker_chunk_size):
-        stop = min(start + config.marker_chunk_size, len(cell_idx))
-        rows = cell_idx[start:stop]
-        block = materialize_small_matrix(adata[rows, markers_present].X)
-        block = block.astype(np.float32, copy=False)
-        chunks.append(pd.DataFrame(block, index=cells[start:stop], columns=markers_present))
-    df = pd.concat(chunks, axis=0)
+    block = materialize_small_matrix(adata[cell_idx, markers_present].X)
+    block = block.astype(np.float32, copy=False)
+    df = pd.DataFrame(block, index=cells, columns=markers_present)
     df.index.name = "cell"
     path = config.output_dir / "marker_expr.parquet"
     _write_parquet(df, path)

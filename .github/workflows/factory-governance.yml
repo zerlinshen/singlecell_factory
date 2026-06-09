@@ -1,20 +1,24 @@
 name: Factory governance gates
 
+# Repaired 2026-06-10: the previous workflow referenced five files deleted in
+# commit 04eeb39 (NC2024 reproduction abort) and would have failed at step 1.
+# This workflow runs only CURRENTLY-EXISTING, child-runnable, DATA-FREE gates.
+# GitHub runners check out ONLY singlecell_factory (no sibling repos, no suite
+# root, no real data), so every step here must be self-contained or guarded.
+
 on:
   pull_request:
     paths:
       - "scripts/export_singlecell_r_bundle.py"
       - "scripts/validate_*.py"
-      - "scripts/run_cleanroom_minimal_realdata.py"
+      - "scripts/ci/cross_factory_contract_gate.sh"
       - "tests/test_*validator.py"
-      - "tests/test_nc2024_architecture_contract.py"
       - "tests/test_singlecell_r_bundle_export.py"
-      - "tests/test_pipeline_hardening_gates.py"
+      - "contracts/**"
       - "README.md"
       - "AI_AGENT_PROTOCOL.md"
       - "AGENTS.md"
       - "docs/OWNER_BY_PRIMARY_OUTPUT_GOVERNANCE.md"
-      - "contracts/**"
       - ".github/workflows/factory-governance.yml"
   workflow_dispatch:
 
@@ -28,16 +32,53 @@ jobs:
           python-version: "3.11"
       - name: Install test dependencies
         run: |
-          python -m pip install --upgrade pip pytest
-      - name: CI governance check
-        run: python scripts/validate_ci_governance.py --repo-root . --r-repo . --plotting-repo .
-      - name: Figure parity gate unit coverage
-        run: python scripts/validate_figure_parity_gate.py --allow-conditional --allow-missing-produced --output /tmp/figure_parity_gate.json
-      - name: Clean-room harness unit coverage
-        run: python scripts/run_cleanroom_minimal_realdata.py --no-run-validators --allow-missing-inputs --output /tmp/cleanroom_minimal_realdata.json
-      - name: Focused hardening tests
+          python -m pip install --upgrade pip pytest pyyaml
+
+      # cross_factory_contract_gate.sh verifies schema parity + bridge symlinks
+      # ACROSS the three sibling repos. On a GitHub runner only singlecell_factory
+      # is checked out, so the sibling repos it needs (../r_multiomics_factory,
+      # ../plotting_factory) are absent and the gate would exit 2. Guard it: run
+      # only when the siblings are present, otherwise skip with a clear note.
+      # The gate runs for real in the local pre-push hook where siblings exist.
+      - name: Cross-factory contract gate (skipped without siblings)
+        run: |
+          parent="$(dirname "$GITHUB_WORKSPACE")"
+          if [ -d "$parent/r_multiomics_factory" ] && [ -d "$parent/plotting_factory" ]; then
+            bash scripts/ci/cross_factory_contract_gate.sh
+          else
+            echo "SKIP cross_factory_contract_gate.sh — sibling repos not present on CI runner."
+            echo "  (this cross-repo gate runs in the local pre-push suite gate where siblings exist)"
+          fi
+
+      - name: Figure parity gate unit coverage (data-free)
+        run: |
+          python scripts/validate_figure_parity_gate.py \
+            --allow-conditional \
+            --allow-missing-produced \
+            --output /tmp/figure_parity_gate.json
+
+      - name: R-bundle export focused test (data-free)
         run: |
           pytest --no-cov -q \
-            tests/test_pipeline_hardening_gates.py \
-            tests/test_two_realdata_final_validator.py \
-            tests/test_nc2024_architecture_contract.py
+            "tests/test_singlecell_r_bundle_export.py::test_export_cli_output_not_required_with_project_root"
+
+      # The two real-data gates below are authored this round. They have CI-safe
+      # data-free modes (--allow-missing-run / --allow-missing-gt) so they do not
+      # require local data. They are guarded by existence so this workflow stays
+      # valid regardless of merge ordering; they additionally run in the local
+      # pre-push suite gate (scripts/run_all_gates.sh) where real data exists.
+      - name: Real-data parity gate (data-free mode)
+        run: |
+          if [ -f scripts/validate_realdata_parity_gate.py ]; then
+            python scripts/validate_realdata_parity_gate.py --allow-missing-run
+          else
+            echo "SKIP validate_realdata_parity_gate.py — not present in this checkout yet."
+          fi
+
+      - name: Real-data science assertion gate (data-free mode)
+        run: |
+          if [ -f scripts/validate_realdata_science_assertion.py ]; then
+            python scripts/validate_realdata_science_assertion.py --allow-missing-gt
+          else
+            echo "SKIP validate_realdata_science_assertion.py — not present in this checkout yet."
+          fi

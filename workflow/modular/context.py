@@ -127,15 +127,15 @@ class PipelineContext:
         elif path.exists():
             path.unlink()
 
-    def _write_adata_checkpoint(self, module_name: str, cp_dir: Path) -> None:
-        if self.adata is None:
+    def _write_adata_checkpoint(self, module_name: str, cp_dir: Path, adata: ad.AnnData) -> None:
+        if adata is None:
             return
 
         h5ad_path = cp_dir / f"after_{module_name}.h5ad"
 
         def _write_h5ad() -> None:
             try:
-                self.adata.write(h5ad_path)
+                adata.write(h5ad_path)
             except (NotImplementedError, ValueError, TypeError) as exc:
                 if self._is_unsupported_lazy_checkpoint_error(exc):
                     self._remove_partial_checkpoint(h5ad_path)
@@ -149,7 +149,7 @@ class PipelineContext:
 
         zarr_path = cp_dir / f"after_{module_name}.zarr"
         try:
-            self.adata.write_zarr(zarr_path)
+            adata.write_zarr(zarr_path)
         except NotImplementedError as exc:
             if self._is_unsupported_lazy_checkpoint_error(exc):
                 self._remove_partial_checkpoint(zarr_path)
@@ -160,16 +160,27 @@ class PipelineContext:
             # Zarr rejects keys with forward slashes; fall back to h5ad.
             _write_h5ad()
 
-    def _compact_adata_for_checkpoint(self) -> None:
+    def _compact_adata_for_checkpoint(self) -> ad.AnnData | None:
+        """Return a float32-compacted COPY of ``self.adata`` for on-disk checkpoints.
+
+        Copy-on-write: the live ``self.adata`` is never mutated. Downcasting the
+        checkpoint in place would silently change the dtypes the *next* module
+        computes on, so with ``--checkpoint`` a run would diverge from a
+        non-checkpoint run after the first checkpoint. We build a shallow AnnData
+        copy and downcast only its float64 arrays, so subsequent modules keep
+        operating on the original (float64) live object.
+        """
         if self.adata is None:
-            return
+            return None
         adata = self.adata
 
         def _compact_value(value):
             if sparse.issparse(value):
                 return value.astype(np.float32) if value.dtype == np.float64 else value
             if isinstance(value, np.ndarray) and value.dtype == np.float64:
-                return value.astype(np.float32, copy=False)
+                # copy=True: never alias the live array; the live object must
+                # retain float64 even though the checkpoint is downcast.
+                return value.astype(np.float32, copy=True)
             return value
 
         def _compact_uns(value):
@@ -179,16 +190,24 @@ class PipelineContext:
                 return [_compact_uns(v) for v in value]
             return _compact_value(value)
 
-        adata.X = _compact_value(adata.X)
-        for key in list(adata.layers.keys()):
-            adata.layers[key] = _compact_value(adata.layers[key])
-        for attr in ("obsm", "varm", "obsp", "varp"):
-            store = getattr(adata, attr, None)
-            if store is None:
-                continue
-            for key in list(store.keys()):
-                store[key] = _compact_value(store[key])
-        adata.uns = _compact_uns(dict(adata.uns))
+        # Build the checkpoint object directly rather than ``adata.copy()`` +
+        # overwrite: a full copy would deep-copy every array to float64 first and
+        # then allocate the float32 downcasts on top, transiently doubling memory.
+        # Constructing in place downcasts each large numeric array exactly once;
+        # non-float64 arrays are shared by reference (read-only on the write path).
+        compacted = ad.AnnData(
+            X=_compact_value(adata.X),
+            obs=adata.obs,
+            var=adata.var,
+            uns=_compact_uns(dict(adata.uns)),
+            layers={k: _compact_value(adata.layers[k]) for k in adata.layers},
+            obsm={k: _compact_value(adata.obsm[k]) for k in adata.obsm},
+            varm={k: _compact_value(adata.varm[k]) for k in adata.varm},
+            obsp={k: _compact_value(adata.obsp[k]) for k in adata.obsp},
+            varp={k: _compact_value(adata.varp[k]) for k in adata.varp},
+            raw=adata.raw,
+        )
+        return compacted
 
     def save_checkpoint(self, module_name: str) -> None:
         """Save adata + metadata after a module completes successfully.
@@ -200,8 +219,10 @@ class PipelineContext:
         cp_dir = self._checkpoint_dir
         cp_dir.mkdir(parents=True, exist_ok=True)
         if self.adata is not None and self._should_save_adata_checkpoint(module_name):
-            self._compact_adata_for_checkpoint()
-            self._write_adata_checkpoint(module_name, cp_dir)
+            # Copy-on-write: compaction returns a float32 COPY; self.adata keeps
+            # its original dtypes so later modules do not diverge onto float32.
+            compacted = self._compact_adata_for_checkpoint()
+            self._write_adata_checkpoint(module_name, cp_dir, compacted)
         elif self.adata is not None:
             self._record_skipped_adata_checkpoint(
                 module_name,

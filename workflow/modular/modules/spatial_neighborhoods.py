@@ -205,17 +205,12 @@ class SpatialNeighborhoodsModule:
             hv = adata.var.index[adata.var["highly_variable"].astype(bool)].tolist()
             if hv:
                 return hv[:n_top_genes]
-        # Fallback: top genes by mean expression. Avoid densifying X by working
-        # via a per-column sum where possible.
+        # Fallback: top genes by mean expression. ``X.mean(axis=0)`` is
+        # sparse-safe for scipy sparse matrices and numpy arrays alike (both
+        # expose ``.mean``), yielding a 1D vector of size n_genes without ever
+        # densifying the full cell × gene matrix.
         try:
-            from scipy import sparse
-
-            if sparse.issparse(adata.X):
-                # densify-allowed: row mean across all cells produces a 1D vector of size n_genes,
-                # which is small (10s of thousands) regardless of cell count.
-                means = np.asarray(adata.X.mean(axis=0)).ravel()
-            else:
-                means = np.asarray(adata.X).mean(axis=0)
+            means = np.asarray(adata.X.mean(axis=0)).ravel()
         except Exception:
             return list(adata.var_names[:n_top_genes])
         order = np.argsort(-means)[:n_top_genes]

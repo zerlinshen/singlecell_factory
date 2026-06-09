@@ -13,7 +13,7 @@ from ._scanpy_compat import import_scanpy_or_stub
 
 sc = import_scanpy_or_stub()
 from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
-from scipy.spatial.distance import pdist
+from scipy.spatial.distance import cdist, pdist
 
 from ..context import PipelineContext
 from .._densify_policy import plan_densify, DensifyDecision
@@ -70,7 +70,10 @@ class EvolutionModule:
             )
 
         # --- Step 1: Clonal clustering from CNV profiles ---
-        clones, n_clones = self._cluster_clones(adata)
+        # Thread the canonical AC-10 seed (ctx.random_state) into the CNV
+        # subsample so clone assignment honors --random-state (issue #20).
+        random_state = int(getattr(ctx, "random_state", 42))
+        clones, n_clones = self._cluster_clones(adata, random_state)
         adata.obs["clone"] = clones
 
         # --- Step 2: Tables ---
@@ -108,8 +111,13 @@ class EvolutionModule:
         self._plot_cnv_by_clone(adata, ctx)
 
     @staticmethod
-    def _cluster_clones(adata) -> tuple[np.ndarray, int]:
-        """Cluster cells into clones based on CNV profiles."""
+    def _cluster_clones(adata, random_state: int = 42) -> tuple[np.ndarray, int]:
+        """Cluster cells into clones based on CNV profiles.
+
+        ``random_state`` seeds the >10k-cell subsample used to drive
+        hierarchical clustering; it is threaded from ``ctx.random_state`` so
+        clone assignment is reproducible under ``--random-state`` (issue #20).
+        """
         if "X_cnv" in adata.obsm:
             cnv_mat = adata.obsm["X_cnv"]
             if hasattr(cnv_mat, "toarray"):
@@ -133,7 +141,7 @@ class EvolutionModule:
             # Hierarchical clustering on CNV profiles
             if cnv_mat.shape[0] > 10000:
                 # Subsample for distance computation, assign rest by nearest centroid
-                rng = np.random.RandomState(42)
+                rng = np.random.RandomState(random_state)
                 sub_idx = rng.choice(cnv_mat.shape[0], 5000, replace=False)
                 dist = pdist(cnv_mat[sub_idx], metric="correlation")
                 Z = linkage(dist, method="ward")
@@ -149,11 +157,12 @@ class EvolutionModule:
                 all_labels[sub_idx] = sub_labels
                 other_idx = np.setdiff1d(np.arange(cnv_mat.shape[0]), sub_idx)
                 if len(other_idx) > 0:
-                    dists = np.array([
-                        np.linalg.norm(cnv_mat[other_idx] - c, axis=1)
-                        for c in centroids
-                    ])
-                    all_labels[other_idx] = dists.argmin(axis=0) + 1
+                    # cdist gives (n_other, k) euclidean distances directly;
+                    # row-wise argmin matches the prior per-centroid broadcast
+                    # loop (argmin axis=0 over stacked rows) without
+                    # materializing k full (n_other × n_feat) temporaries (#24).
+                    dists = cdist(cnv_mat[other_idx], centroids, metric="euclidean")
+                    all_labels[other_idx] = dists.argmin(axis=1) + 1
                 labels = all_labels
             else:
                 dist = pdist(cnv_mat, metric="correlation")

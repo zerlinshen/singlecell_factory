@@ -388,9 +388,15 @@ class DifferentialExpressionModule:
                 continue
             in_x = X[in_mask]
             out_x = X[out_mask]
-            mean_in = in_x.mean(axis=0) + 1e-9
-            mean_out = out_x.mean(axis=0) + 1e-9
-            logfc = np.log2(mean_in / mean_out)
+            # Fallback-only path (scanpy unavailable / SC_ALLOW_WELCH_FALLBACK).
+            # X is log1p-normalized at DE time, so the log fold change must be
+            # taken on the LINEAR scale (expm1) to match scanpy's convention;
+            # log2(mean_log_in / mean_log_out) is not a fold change. eps guards
+            # against log2(0) for genes absent in one group.
+            eps = 1e-9
+            mean_in = in_x.mean(axis=0)
+            mean_out = out_x.mean(axis=0)
+            logfc = np.log2((np.expm1(mean_in) + eps) / (np.expm1(mean_out) + eps))
             try:
                 _, pvals = stats.ttest_ind(
                     in_x,
@@ -456,9 +462,14 @@ class DifferentialExpressionModule:
             except Exception as exc:
                 logger.warning("sparse_welch_t failed for group %s: %s — skipping", group, exc)
                 continue
-            mean_in = np.asarray(mean_in, dtype=float) + 1e-9
-            mean_out = np.asarray(mean_out, dtype=float) + 1e-9
-            logfc = np.log2(mean_in / mean_out)
+            # Fallback-only path (scanpy unavailable / SC_ALLOW_WELCH_FALLBACK).
+            # X is log1p-normalized at DE time, so the log fold change must be
+            # taken on the LINEAR scale (expm1) to match scanpy's convention;
+            # log2 of a ratio of means of log values is not a fold change.
+            eps = 1e-9
+            mean_in = np.asarray(mean_in, dtype=float)
+            mean_out = np.asarray(mean_out, dtype=float)
+            logfc = np.log2((np.expm1(mean_in) + eps) / (np.expm1(mean_out) + eps))
             pvals = np.nan_to_num(np.asarray(pvals_raw, dtype=float), nan=1.0, posinf=1.0, neginf=1.0)
             pvals_adj = DifferentialExpressionModule._adjust_pvals(pvals, corr_method)
             order = np.lexsort((-np.abs(logfc), pvals_adj))

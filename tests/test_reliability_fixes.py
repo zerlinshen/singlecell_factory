@@ -72,6 +72,60 @@ def test_checkpoint_roundtrip_restores_module_dirs(monkeypatch, tmp_path):
     assert ctx2.module_output_dir("differential_expression") == de_dir
 
 
+def test_checkpoint_does_not_downcast_live_adata(monkeypatch, tmp_path):
+    """save_checkpoint must write float32 to disk WITHOUT mutating the live adata.
+
+    Regression for finding #2 (HIGH): compaction used to downcast ``ctx.adata``
+    in place, so after the first checkpoint every subsequent module computed on
+    float32 and a ``--checkpoint`` run diverged from a non-checkpoint run.
+    """
+    import anndata as ad
+
+    cfg = PipelineConfig(
+        project="p",
+        output_dir=tmp_path / "out",
+        cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
+        checkpoint=True,
+    )
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    X = np.ones((4, 3), dtype=np.float64)
+    adata = AnnData(X)
+    adata.layers["norm"] = np.full((4, 3), 2.0, dtype=np.float64)
+    adata.obsm["X_pca"] = np.full((4, 2), 3.0, dtype=np.float64)
+    adata.uns["scalar64"] = np.float64(7.0)
+
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=run_dir,
+        figure_dir=run_dir,
+        table_dir=run_dir,
+        adata=adata,
+    )
+    # Force h5ad path (deterministic, no zarr dependency).
+    monkeypatch.setattr(PipelineContext, "_use_zarr_checkpoints", lambda self: False)
+
+    ctx.save_checkpoint("qc")
+
+    # 1) The LIVE object must be untouched (still float64 on every numeric slot).
+    assert ctx.adata.X.dtype == np.float64
+    assert ctx.adata.layers["norm"].dtype == np.float64
+    assert ctx.adata.obsm["X_pca"].dtype == np.float64
+    assert ctx.adata is adata
+
+    # 2) The on-disk checkpoint must be downcast to float32.
+    cp_h5ad = run_dir / ".checkpoints" / "after_qc.h5ad"
+    assert cp_h5ad.exists()
+    disk = ad.read_h5ad(cp_h5ad)
+    assert disk.X.dtype == np.float32
+    assert disk.layers["norm"].dtype == np.float32
+    assert disk.obsm["X_pca"].dtype == np.float32
+    # Values preserved through the downcast.
+    np.testing.assert_allclose(disk.X, 1.0)
+    np.testing.assert_allclose(disk.layers["norm"], 2.0)
+
+
 def test_checkpoint_skips_lazy_dataset2d_notimplemented(monkeypatch, tmp_path):
     cfg = PipelineConfig(
         project="p",
