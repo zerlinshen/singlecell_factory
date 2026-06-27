@@ -2315,7 +2315,7 @@ def test_annotation_reference_mapping_overrides_labels(monkeypatch, tmp_path):
     monkeypatch.setattr(ann_mod.plt, "close", lambda *a, **kw: None)
     monkeypatch.setattr(AnnotationModule, "_plot_composition", staticmethod(lambda adata, ctx: None))
 
-    def _fake_score_genes(ad, genes, score_name, use_raw=False):
+    def _fake_score_genes(ad, genes, score_name, use_raw=False, **kwargs):
         ad.obs[score_name] = 0.0  # Force marker labels to collapse into first class.
 
     monkeypatch.setattr(ann_mod.sc.tl, "score_genes", _fake_score_genes)
@@ -2377,7 +2377,7 @@ def test_annotation_reference_mapping_missing_file_skips(monkeypatch, tmp_path):
     monkeypatch.setattr(ann_mod.plt, "close", lambda *a, **kw: None)
     monkeypatch.setattr(AnnotationModule, "_plot_composition", staticmethod(lambda adata, ctx: None))
 
-    def _fake_score_genes(ad, genes, score_name, use_raw=False):
+    def _fake_score_genes(ad, genes, score_name, use_raw=False, **kwargs):
         ad.obs[score_name] = 0.0
 
     monkeypatch.setattr(ann_mod.sc.tl, "score_genes", _fake_score_genes)
@@ -2424,7 +2424,7 @@ def test_annotation_reference_mapping_conservative_preserves_high_conf_marker(mo
         "score_TypeB": np.array([0.1, 0.1, 4.5, 4.5], dtype=float),
     }
 
-    def _fake_score_genes(ad, genes, score_name, use_raw=False):
+    def _fake_score_genes(ad, genes, score_name, use_raw=False, **kwargs):
         ad.obs[score_name] = scores[score_name]
 
     monkeypatch.setattr(ann_mod.sc.tl, "score_genes", _fake_score_genes)
@@ -2492,7 +2492,7 @@ def test_annotation_reference_mapping_all_overrides_high_conf_marker(monkeypatch
         "score_TypeB": np.array([0.1, 0.1, 4.5, 4.5], dtype=float),
     }
 
-    def _fake_score_genes(ad, genes, score_name, use_raw=False):
+    def _fake_score_genes(ad, genes, score_name, use_raw=False, **kwargs):
         ad.obs[score_name] = scores[score_name]
 
     monkeypatch.setattr(ann_mod.sc.tl, "score_genes", _fake_score_genes)

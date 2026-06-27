@@ -96,9 +96,22 @@ def run_standard_workflow(cfg: StandardWorkflowConfig) -> Path:
     adata = adata[adata.obs["n_genes_by_counts"] > 200, :].copy()
     adata = adata[adata.obs["pct_counts_mt"] < 5, :].copy()
     scanpy.pp.filter_genes(adata, min_cells=3)
+    # HVG flavor. Default "seurat" matches the modular workflow's GT-validated
+    # default (suite hgmm GT: seurat ARI 0.293 >= seurat_v3; real-run 2026-06-27,
+    # governance/external_references/audits/round5_realrun_validation_singlecell_2026-06-27.md).
+    # "seurat_v3" (Stuart 2019; Heumos 2023) is opt-in via cfg.hvg_flavor and runs
+    # the VST on RAW COUNTS, so counts are snapshotted before normalization.
+    hvg_flavor = getattr(cfg, "hvg_flavor", "seurat")
+    if hvg_flavor == "seurat_v3" and "counts" not in adata.layers:
+        adata.layers["counts"] = adata.X.copy()
     scanpy.pp.normalize_total(adata, target_sum=1e4)
     scanpy.pp.log1p(adata)
-    scanpy.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=2000)
+    if hvg_flavor == "seurat_v3" and "counts" in adata.layers:
+        scanpy.pp.highly_variable_genes(
+            adata, flavor="seurat_v3", layer="counts", n_top_genes=2000,
+        )
+    else:
+        scanpy.pp.highly_variable_genes(adata, flavor=hvg_flavor, n_top_genes=2000)
     adata.raw = adata
     adata = adata[:, adata.var["highly_variable"]].copy()
     scanpy.pp.scale(adata, max_value=10)

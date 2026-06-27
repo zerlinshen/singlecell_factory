@@ -35,14 +35,25 @@ def baseline_clustering(
     n_pcs: int,
     resolution: float,
     random_state: int,
+    hvg_flavor: str = "seurat_v3",
+    leiden_n_iterations: int = -1,
 ):
     """Baseline clustering implementation before PCA memory optimization."""
     import scanpy as sc
 
+    # seurat_v3 selects HVGs on RAW COUNTS (Stuart 2019); snapshot counts before
+    # normalization so the VST runs on integer counts, never log data.
+    if hvg_flavor == "seurat_v3" and "counts" not in getattr(adata, "layers", {}):
+        adata.layers["counts"] = adata.X.copy()
     sc.pp.normalize_total(adata, target_sum=target_sum)
     sc.pp.log1p(adata)
     adata.raw = adata
-    sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=n_top_genes)
+    if hvg_flavor == "seurat_v3" and "counts" in adata.layers:
+        sc.pp.highly_variable_genes(
+            adata, flavor="seurat_v3", layer="counts", n_top_genes=n_top_genes,
+        )
+    else:
+        sc.pp.highly_variable_genes(adata, flavor=hvg_flavor, n_top_genes=n_top_genes)
     adata_hvg = adata[:, adata.var["highly_variable"]].copy()
     sc.pp.scale(adata_hvg, max_value=10)
     sc.tl.pca(adata_hvg, svd_solver="arpack")
@@ -56,6 +67,7 @@ def baseline_clustering(
         flavor="igraph",
         directed=False,
         random_state=random_state,
+        n_iterations=leiden_n_iterations,  # -1 = run to convergence (Traag 2019)
     )
     return adata
 

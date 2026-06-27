@@ -59,16 +59,35 @@ class QCModule:
                     qc_vars=["mt", "ribo", "hb"],
                     inplace=True,
                     log1p=False,
-                    percent_top=None,
+                    # percent_top must include 50 so pct_counts_in_top_50 is
+                    # computed; ambient_correction._evaluate_triggers gates the T1
+                    # DecontX trigger on it (Luecken & Theis 2019; scanpy percent_top QC).
+                    percent_top=[20, 50],
                 )
             except Exception:
                 self._calculate_qc_metrics_fallback(adata)
         else:
             self._calculate_qc_metrics_fallback(adata)
 
-        # Drop verbose columns to save memory
+        # scanpy names the percent_top column 'pct_counts_in_top_50_genes'; the
+        # ambient_correction T1 trigger (and the whole repo) gates on the shorter
+        # 'pct_counts_in_top_50'. Normalize so the trigger is live and the
+        # keep-column logic below matches (the fallback already writes the short name).
+        if (
+            "pct_counts_in_top_50_genes" in adata.obs.columns
+            and "pct_counts_in_top_50" not in adata.obs.columns
+        ):
+            adata.obs["pct_counts_in_top_50"] = adata.obs["pct_counts_in_top_50_genes"]
+
+        # Drop verbose columns to save memory. KEEP pct_counts_in_top_50: the
+        # ambient_correction T1 DecontX trigger gates on it (Luecken & Theis 2019).
         self._ensure_axis_tables_support_drop(adata)
-        obs_drop = [c for c in adata.obs.columns if c.startswith("log1p") or c.startswith("total_counts_") or c.startswith("pct_counts_in_top_")]
+        obs_drop = [
+            c for c in adata.obs.columns
+            if c.startswith("log1p")
+            or c.startswith("total_counts_")
+            or (c.startswith("pct_counts_in_top_") and c != "pct_counts_in_top_50")
+        ]
         adata.obs.drop(columns=obs_drop, inplace=True, errors="ignore")
         var_drop = [c for c in adata.var.columns if c.startswith("log1p") or c.startswith("pct_dropout") or "total_counts" in c or c.startswith("mean_counts") or c.startswith("n_cells_by") or c in ["mt", "ribo", "hb"]]
         adata.var.drop(columns=var_drop, inplace=True, errors="ignore")
@@ -248,6 +267,37 @@ class QCModule:
         adata.obs["pct_counts_mt"] = mt_counts / denom * 100.0
         adata.obs["pct_counts_ribo"] = ribo_counts / denom * 100.0
         adata.obs["pct_counts_hb"] = hb_counts / denom * 100.0
+        # pct_counts_in_top_50: % of a cell's counts in its 50 highest-expressed
+        # genes. Mirrors scanpy percent_top=[50]; the ambient_correction T1
+        # DecontX trigger gates on this column (Luecken & Theis 2019).
+        adata.obs["pct_counts_in_top_50"] = QCModule._pct_counts_in_top_n(x, total_counts, 50)
+
+    @staticmethod
+    def _pct_counts_in_top_n(x, total_counts, n_top: int) -> np.ndarray:
+        """Per-cell percentage of counts contained in the top-n expressed genes."""
+        denom = np.clip(np.asarray(total_counts, dtype=float), 1e-9, None)
+        if sparse.issparse(x):
+            x = x.tocsr()
+            n_obs = x.shape[0]
+            top_counts = np.zeros(n_obs, dtype=float)
+            for i in range(n_obs):
+                row = x.data[x.indptr[i]:x.indptr[i + 1]]
+                if row.size == 0:
+                    continue
+                if row.size > n_top:
+                    # Top n_top values (partition is O(nnz), not full sort).
+                    top_counts[i] = np.partition(row, row.size - n_top)[row.size - n_top:].sum()
+                else:
+                    top_counts[i] = row.sum()
+        else:
+            arr = np.asarray(x, dtype=float)
+            k = min(n_top, arr.shape[1])
+            if k <= 0:
+                top_counts = np.zeros(arr.shape[0], dtype=float)
+            else:
+                part = np.partition(arr, arr.shape[1] - k, axis=1)[:, arr.shape[1] - k:]
+                top_counts = part.sum(axis=1)
+        return top_counts / denom * 100.0
 
     @staticmethod
     def _filter_genes_fallback(adata, min_cells: int):

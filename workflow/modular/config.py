@@ -38,6 +38,12 @@ class DoubletConfig:
     """Configuration for doublet detection stage."""
 
     expected_doublet_rate: float = 0.06
+    # Cell-count-scaled expected doublet rate. 10x Chromium multiplet rate is
+    # ~0.8% per 1000 cells loaded (10x v3 User Guide; scDblFinder, Germain 2021),
+    # so a fixed 6% is wrong off ~6-7k cells. When True, per-sample (per-batch when
+    # grouped) rate = min(0.08, 0.008 * n_obs/1000); expected_doublet_rate above
+    # acts as the floor when scaling is disabled.
+    scale_expected_doublet_rate: bool = True
     remove_doublets: bool = True
     n_prin_comps: int = 30  # Scrublet internal PCA; paper uses 30
     backend: str = "scrublet"  # scrublet, doubletfinder, scdblfinder, consensus
@@ -96,6 +102,24 @@ class ClusteringConfig:
     leiden_resolution_sweep: tuple[float, ...] = ()
     random_state: int = 0
     scale_data: bool = False
+    # HVG flavor (configurable; previously hardcoded "seurat"). Default stays
+    # "seurat" because the suite's own hgmm species-mixing GT shows the
+    # dispersion-based "seurat" flavor recovers the 2-population structure at
+    # least as well as "seurat_v3" (ARI 0.293 vs ~0.27 at res=0.5; 0.173 vs
+    # 0.127 at res=1.0 — real-run 2026-06-27:
+    # governance/external_references/audits/round5_realrun_validation_singlecell_2026-06-27.md,
+    # corroborating clustering_scoreboard.csv). "seurat_v3" (variance-stabilizing
+    # HVG on RAW COUNTS; Stuart 2019, Heumos 2023 Nat Rev Genet) is exposed as an
+    # option and is generally preferred for complex multi-batch tissue, but it is
+    # NOT the GT-validated default on the local benchmark, so it is opt-in. When
+    # "seurat_v3" is selected it MUST run on a raw-count layer; if none is
+    # available at HVG time the call falls back to "seurat" and records a loud
+    # hvg_flavor_fallback status (no silent log-data use).
+    hvg_flavor: str = "seurat"
+    # Leiden iterations. -1 = run to convergence (Traag 2019). The igraph default
+    # (2 passes) may not converge and differs from the rapids GPU default,
+    # breaking CPU/GPU parity; pinning this aligns both lanes.
+    leiden_n_iterations: int = -1
 
 
 @dataclass

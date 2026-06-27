@@ -63,14 +63,35 @@ class CellCycleModule:
             ctx.status("cell_cycle", "skipped", "Insufficient cell cycle genes found")
             return
 
-        sc.tl.score_genes_cell_cycle(adata, s_genes=s_genes, g2m_genes=g2m_genes)
+        # random_state: score_genes_cell_cycle's control-bin sampling is
+        # RNG-dependent (Tirosh 2016); propagate the canonical seed.
+        sc.tl.score_genes_cell_cycle(
+            adata, s_genes=s_genes, g2m_genes=g2m_genes,
+            random_state=getattr(ctx, "random_state", 0),
+        )
 
         # Record phase distribution
         phase_counts = adata.obs["phase"].value_counts().to_dict()
         ctx.metadata["cell_cycle_phases"] = phase_counts
 
-        # Optionally regress out cell cycle effects
+        # Optionally regress out cell cycle effects.
         if ctx.cfg.regress_cell_cycle:
+            # Guard (Luecken & Theis 2019): this module runs AFTER clustering
+            # (module_catalog depends_on=("clustering",)), which already computed
+            # PCA/neighbors/UMAP/Leiden. regress_out only rewrites adata.X, so the
+            # existing embedding/clustering will NOT change — the regression is a
+            # no-op for the embedding the run already produced. Recording this
+            # loudly (Principle 9: no silent compromise) rather than reordering the
+            # pipeline in this round.
+            msg = (
+                "regress_cell_cycle=True but cell_cycle runs after clustering; "
+                "regress_out rewrites adata.X only and CANNOT affect the already-"
+                "computed PCA/UMAP/Leiden embedding. To regress cell cycle into "
+                "the embedding, run regression before clustering."
+            )
+            ctx.status("cell_cycle", "warning", msg)
+            ctx.metadata["cell_cycle_regress_out_embedding_effect"] = "none_runs_after_clustering"
+            ctx.metadata["cell_cycle_regress_out_warning"] = msg
             sc.pp.regress_out(adata, ["S_score", "G2M_score"])
 
         # Save per-cell scores

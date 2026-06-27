@@ -95,6 +95,29 @@ class DoubletDetectionModule:
         return max(2, min(30, n_obs - 1, n_vars - 1))
 
     @staticmethod
+    def _resolved_expected_rate(cfg, n_obs: int) -> float:
+        """Cell-count-scaled expected doublet rate.
+
+        10x Chromium multiplet rate ~= 0.8% per 1000 cells (10x v3 User Guide;
+        scDblFinder, Germain 2021). When cfg.scale_expected_doublet_rate is True,
+        rate = min(0.08, 0.008 * n_obs/1000) — this is the point of the fix: a
+        fixed 6% over-calls on ~6-7k-cell samples. When scaling is disabled the
+        fixed cfg.expected_doublet_rate (default 0.06) is used as the floor/default.
+        """
+        if not bool(getattr(cfg, "scale_expected_doublet_rate", False)):
+            return float(getattr(cfg, "expected_doublet_rate", 0.06))
+        return min(0.08, 0.008 * float(n_obs) / 1000.0)
+
+    @classmethod
+    def _record_expected_rate(cls, ctx, cfg, n_obs: int, key: str) -> float:
+        rate = cls._resolved_expected_rate(cfg, n_obs)
+        ctx.metadata[key] = round(float(rate), 6)
+        ctx.metadata["doublet_rate_scaling_enabled"] = bool(
+            getattr(cfg, "scale_expected_doublet_rate", False)
+        )
+        return rate
+
+    @staticmethod
     def _materialize_counts_matrix(x):
         """Return a CPU CSR matrix, materializing lazy/dask/GPU arrays."""
         if sparse.issparse(x):
@@ -214,17 +237,49 @@ class DoubletDetectionModule:
         except Exception:
             pass
 
+    @staticmethod
+    def _clone_for_gpu_lite(adata, extra_obs_cols=()):
+        """Minimal AnnData carrying only X (+ requested obs cols) for GPU Scrublet.
+
+        Scrublet (Wolock 2019) only consumes the counts matrix; a full
+        ``adata.copy()`` duplicates obs/var/obsm/layers into RAM/VRAM needlessly.
+        Analogous to (not identical to) clustering.ClusteringModule._clone_for_gpu_lite:
+        that clone shares obsm/varm/uns/layers by reference, whereas this one carries
+        ONLY a deep-copied X (rsc mutates it on device) + var_names + the obs columns
+        Scrublet needs (e.g. the grouped batch_key), since Scrublet consumes nothing
+        else. Scores are unchanged.
+        """
+        import anndata as ad
+        import pandas as pd
+
+        X = adata.X
+        if X is None:
+            X_clone = None
+        elif sparse.issparse(X):
+            X_clone = X.copy()
+        else:
+            X_clone = np.array(X, copy=True)
+        obs = pd.DataFrame(index=adata.obs_names)
+        for col in extra_obs_cols:
+            if col is not None and col in adata.obs.columns:
+                obs[col] = adata.obs[col].values
+        var = pd.DataFrame(index=adata.var_names)
+        return ad.AnnData(X=X_clone, obs=obs, var=var)
+
     def _run_rsc_scrublet_whole(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, float | None]:
         """Run rsc.pp.scrublet on the full dataset."""
         import rapids_singlecell as rsc
         bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
 
-        adata_gpu = adata.copy()
+        expected_rate = self._record_expected_rate(
+            ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
+        )
+        adata_gpu = self._clone_for_gpu_lite(adata)
         try:
             rsc.get.anndata_to_GPU(adata_gpu)
             rsc.pp.scrublet(
                 adata_gpu,
-                expected_doublet_rate=cfg.expected_doublet_rate,
+                expected_doublet_rate=expected_rate,
                 n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
                 random_state=ctx.random_state,
                 verbose=False,
@@ -247,13 +302,27 @@ class DoubletDetectionModule:
         if sample_key is None:
             raise ValueError("grouped scrublet requested without sample labels")
 
-        adata_gpu = adata.copy()
+        # rsc.pp.scrublet(batch_key=...) applies one expected rate across batches.
+        # Scale by the median per-sample cell count so the grouped rate reflects
+        # per-sample sizes (10x v3 multiplet rate ~0.8%/1000; Germain 2021), and
+        # record per-sample rates for audit.
+        sample_sizes = adata.obs[sample_key].value_counts()
+        median_sample_n = int(sample_sizes.median()) if len(sample_sizes) else adata.n_obs
+        expected_rate = self._record_expected_rate(
+            ctx, cfg, median_sample_n, "doublet_expected_rate_used"
+        )
+        if bool(getattr(cfg, "scale_expected_doublet_rate", False)):
+            ctx.metadata["doublet_expected_rate_per_sample"] = {
+                str(s): round(float(self._resolved_expected_rate(cfg, int(n))), 6)
+                for s, n in sample_sizes.items()
+            }
+        adata_gpu = self._clone_for_gpu_lite(adata, extra_obs_cols=(sample_key,))
         try:
             rsc.get.anndata_to_GPU(adata_gpu)
             rsc.pp.scrublet(
                 adata_gpu,
                 batch_key=sample_key,
-                expected_doublet_rate=cfg.expected_doublet_rate,
+                expected_doublet_rate=expected_rate,
                 n_prin_comps=self._n_prin_comps(adata.n_obs, adata.n_vars),
                 random_state=ctx.random_state,
                 verbose=False,
@@ -286,12 +355,16 @@ class DoubletDetectionModule:
             "min_gene_variability_pctl": 85,
             "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
         }
+        per_sample_rates: dict[str, float] = {}
         for group in labels.unique():
             idx = np.where(labels.values == group)[0]
             if len(idx) < 20:
                 continue
+            # Per-sample cell-count-scaled rate (10x v3 ~0.8%/1000; Germain 2021).
+            group_rate = self._resolved_expected_rate(cfg, len(idx))
+            per_sample_rates[str(group)] = round(float(group_rate), 6)
             subX = self._materialize_counts_matrix(adata.X[idx])
-            scrub = scrublet_cls(subX, expected_doublet_rate=cfg.expected_doublet_rate, random_state=random_state)
+            scrub = scrublet_cls(subX, expected_doublet_rate=group_rate, random_state=random_state)
             try:
                 s, p = scrub.scrub_doublets(**{**scrublet_params, "n_prin_comps": self._n_prin_comps(len(idx), adata.n_vars)})
                 scores[idx] = s.astype(np.float32, copy=False)
@@ -304,6 +377,10 @@ class DoubletDetectionModule:
         ctx.metadata["doublet_grouped_key"] = sample_key
         ctx.metadata["doublet_grouped_thresholds"] = thresholds
         ctx.metadata["doublet_method"] = "scrublet_grouped"
+        ctx.metadata["doublet_rate_scaling_enabled"] = bool(
+            getattr(cfg, "scale_expected_doublet_rate", False)
+        )
+        ctx.metadata["doublet_expected_rate_per_sample"] = per_sample_rates
         return scores, predicted, None
 
     # ------------------------------------------------------------------
@@ -758,9 +835,12 @@ class DoubletDetectionModule:
         import scrublet as scr
         if use_grouped:
             return self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
+        expected_rate = self._record_expected_rate(
+            ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
+        )
         scrub = scr.Scrublet(
             self._materialize_counts_matrix(adata.X),
-            expected_doublet_rate=cfg.expected_doublet_rate,
+            expected_doublet_rate=expected_rate,
             random_state=random_state,
         )
         scores, predicted = scrub.scrub_doublets(
@@ -976,9 +1056,12 @@ class DoubletDetectionModule:
                                 adata, scr.Scrublet, cfg, ctx
                             )
                         else:
+                            expected_rate = self._record_expected_rate(
+                                ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
+                            )
                             scrub = scr.Scrublet(
                                 self._materialize_counts_matrix(adata.X),
-                                expected_doublet_rate=cfg.expected_doublet_rate,
+                                expected_doublet_rate=expected_rate,
                                 random_state=random_state,
                             )
                             scrublet_params = {
@@ -1012,9 +1095,12 @@ class DoubletDetectionModule:
                 if use_grouped:
                     doublet_scores, predicted_doublets, threshold = self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
                 else:
+                    expected_rate = self._record_expected_rate(
+                        ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
+                    )
                     scrub = scr.Scrublet(
                         self._materialize_counts_matrix(adata.X),
-                        expected_doublet_rate=cfg.expected_doublet_rate,
+                        expected_doublet_rate=expected_rate,
                         random_state=random_state,
                     )
                     scrublet_params = {

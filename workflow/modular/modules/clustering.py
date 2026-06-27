@@ -106,6 +106,68 @@ class ClusteringModule:
         )
 
     @staticmethod
+    def _run_hvg(adata, cfg, ctx) -> None:
+        """Run sc.pp.highly_variable_genes honoring cfg.hvg_flavor.
+
+        Default flavor is "seurat" (GT-validated on the suite's hgmm species-mixing
+        benchmark: seurat ARI 0.293 >= seurat_v3 at res<=0.5; real-run 2026-06-27).
+        "seurat_v3" (Stuart 2019; Heumos 2023) selects HVGs on RAW COUNTS via a
+        variance-stabilizing transform, so it MUST run on a raw-count source. By HVG
+        time adata.X is already normalized+log1p'd, so seurat_v3 uses layer="counts"
+        when present. If seurat_v3 is requested but no raw-count layer is available,
+        fall back to "seurat" on the log data and record a loud hvg_flavor_fallback
+        status — never silently feed log data to seurat_v3 (Principle 9: no silent
+        compromise). batch_key is passed when a batch column with >1 level exists so
+        HVG selection is batch-aware.
+        """
+        flavor = str(getattr(cfg, "hvg_flavor", "seurat"))
+        kwargs = {"n_top_genes": cfg.n_top_genes}
+
+        # Batch-aware HVG: only when the run has a batch column with >1 level.
+        batch_key = getattr(getattr(ctx.cfg, "batch", None), "batch_key", None)
+        if (
+            batch_key
+            and batch_key in adata.obs.columns
+            and adata.obs[batch_key].nunique() > 1
+        ):
+            kwargs["batch_key"] = batch_key
+            ctx.metadata["hvg_batch_key"] = batch_key
+
+        if flavor == "seurat_v3":
+            raw_layer = "counts" if "counts" in getattr(adata, "layers", {}) else None
+            if raw_layer is None:
+                # No raw-count source -> do NOT run seurat_v3 on log data.
+                ctx.metadata["hvg_flavor_requested"] = "seurat_v3"
+                ctx.metadata["hvg_flavor_actually_used"] = "seurat"
+                ctx.metadata["hvg_flavor_fallback"] = (
+                    "seurat_v3 requested but no raw-count layer ('counts') available "
+                    "at HVG time; fell back to 'seurat' on log data."
+                )
+                ctx.status("clustering", "warning", ctx.metadata["hvg_flavor_fallback"])
+                sc.pp.highly_variable_genes(adata, flavor="seurat", **kwargs)
+                return
+            sc.pp.highly_variable_genes(adata, flavor="seurat_v3", layer=raw_layer, **kwargs)
+            ctx.metadata["hvg_flavor_actually_used"] = "seurat_v3"
+            ctx.metadata["hvg_seurat_v3_layer"] = raw_layer
+            return
+
+        sc.pp.highly_variable_genes(adata, flavor=flavor, **kwargs)
+        ctx.metadata["hvg_flavor_actually_used"] = flavor
+
+    @staticmethod
+    def _rapids_leiden_n_iterations(cfg) -> int:
+        """Resolve n_iterations for the rapids/cuGraph Leiden lane.
+
+        CPU scanpy/igraph interprets n_iterations=-1 as "run to convergence"
+        (Traag 2019), but cuGraph's Leiden requires a positive max_iter (passing
+        -1 raises "can't convert negative value to size_t"). Map -1 to cuGraph's
+        own default (100), which is effectively convergence for typical graphs, so
+        the GPU lane still tracks the convergence intent without crashing.
+        """
+        n = int(getattr(cfg, "leiden_n_iterations", -1))
+        return 100 if n < 0 else n
+
+    @staticmethod
     def _log_rss(ctx, tag: str) -> None:
         """Log peak resident set size (MB) at tag points for Hotspot 1 diagnosis.
 
@@ -335,7 +397,7 @@ class ClusteringModule:
             adata.X = self._materialize_matrix(adata.X)
             if cfg.scale_data:
                 sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
-            sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
+            self._run_hvg(adata, cfg, ctx)
             sc.tl.pca(
                 adata,
                 n_comps=cfg.n_pcs,
@@ -356,7 +418,12 @@ class ClusteringModule:
                 compute_fn=lambda: rsc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, n_pcs=cfg.n_pcs, use_rep="X_pca"),
             )
             rsc.tl.umap(adata, random_state=cfg.random_state)
-            rsc.tl.leiden(adata, resolution=cfg.leiden_resolution, random_state=cfg.random_state)
+            rsc.tl.leiden(
+                adata,
+                resolution=cfg.leiden_resolution,
+                random_state=cfg.random_state,
+                n_iterations=self._rapids_leiden_n_iterations(cfg),  # -1 -> cuGraph default 100; CPU/GPU parity (Traag 2019)
+            )
             ctx.metadata["clustering_hybrid_reason"] = "gpu_pca_unstable_cpu_pca_gpu_graph"
             return True
         except Exception as exc:
@@ -420,7 +487,7 @@ class ClusteringModule:
         if cfg.scale_data:
             # zero_center=False to preserve sparsity (scanpy.pp.scale contract).
             sc.pp.scale(adata, max_value=10, zero_center=False)
-        sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
+        self._run_hvg(adata, cfg, ctx)
         sc.tl.pca(
             adata,
             n_comps=cfg.n_pcs,
@@ -454,6 +521,7 @@ class ClusteringModule:
             flavor="igraph",
             directed=False,
             random_state=cfg.random_state,
+            n_iterations=int(getattr(cfg, "leiden_n_iterations", -1)),  # -1 = converge (Traag 2019)
         )
 
         # F-2 provenance — lane_manifest.json (G-C0) reads these.
@@ -478,7 +546,7 @@ class ClusteringModule:
         adata.X = self._materialize_matrix(adata.X)
         if cfg.scale_data:
             sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
-        sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
+        self._run_hvg(adata, cfg, ctx)
         sc.tl.pca(
             adata,
             n_comps=cfg.n_pcs,
@@ -511,6 +579,7 @@ class ClusteringModule:
             flavor="igraph",
             directed=False,
             random_state=cfg.random_state,
+            n_iterations=int(getattr(cfg, "leiden_n_iterations", -1)),  # -1 = converge (Traag 2019)
         )
 
     def _run_gpu(self, adata, cfg, ctx) -> None:
@@ -529,7 +598,7 @@ class ClusteringModule:
         self._log_rss(ctx, "hotspot1:_run_gpu:after_materialize_X")
         if cfg.scale_data:
             sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
-        sc.pp.highly_variable_genes(adata, flavor="seurat", n_top_genes=cfg.n_top_genes)
+        self._run_hvg(adata, cfg, ctx)
 
         # GPU-accelerated PCA, neighbors, UMAP
         rsc.pp.pca(adata, n_comps=cfg.n_pcs, mask_var="highly_variable")
@@ -547,7 +616,12 @@ class ClusteringModule:
             compute_fn=lambda: rsc.pp.neighbors(adata, n_neighbors=cfg.n_neighbors, n_pcs=cfg.n_pcs, use_rep="X_pca"),
         )
         rsc.tl.umap(adata, random_state=cfg.random_state)
-        rsc.tl.leiden(adata, resolution=cfg.leiden_resolution, random_state=cfg.random_state)
+        rsc.tl.leiden(
+            adata,
+            resolution=cfg.leiden_resolution,
+            random_state=cfg.random_state,
+            n_iterations=self._rapids_leiden_n_iterations(cfg),  # -1 -> cuGraph default 100; CPU/GPU parity (Traag 2019)
+        )
 
     @staticmethod
     def _plot_pca_variance(adata, ctx: PipelineContext, n_pcs: int) -> None:

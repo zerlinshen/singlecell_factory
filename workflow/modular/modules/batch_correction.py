@@ -807,6 +807,10 @@ class BatchCorrectionModule:
 
         if "X_pca" not in adata.obsm:
             raise ValueError("Scanorama requires PCA (run clustering first).")
+        # Determinism: Scanorama uses randomized SVD internally (Hie 2019); seed
+        # numpy from ctx.random_state for reproducible alignment.
+        np.random.seed(ctx.random_state)
+        ctx.metadata["scanorama_seed"] = int(ctx.random_state)
         batches = adata.obs[batch_key].unique().tolist()
         adatas = [adata[adata.obs[batch_key] == b].copy() for b in batches]
         scanorama.integrate_scanpy(adatas)
@@ -823,6 +827,10 @@ class BatchCorrectionModule:
         """MNN correction via scanpy.external.pp.mnn_correct (Haghverdi et al., 2018)."""
         if "X_pca" not in adata.obsm:
             raise ValueError("MNN requires PCA (run clustering first).")
+        # Determinism: MNN/fastMNN PCA + matching are stochastic (Haghverdi 2018);
+        # seed numpy from ctx.random_state for reproducible correction.
+        np.random.seed(ctx.random_state)
+        ctx.metadata["mnn_seed"] = int(ctx.random_state)
         try:
             _ = sc.external.pp.mnn_correct
         except (AttributeError, ImportError):
@@ -983,6 +991,13 @@ class BatchCorrectionModule:
             raise ValueError(
                 f"scVI input ({input_source}) is not integer-like; NB likelihood requires "
                 "integer counts. (DecontX corrected counts must be rounded before scVI.)")
+        # Determinism: scVI is stochastic (Lopez 2018; scvi-tools reproducibility
+        # docs). Seed from the canonical ctx.random_state before setup_anndata so
+        # repeated runs with the same seed are reproducible. Guard on settings
+        # presence so older scvi-tools layouts don't break.
+        if hasattr(scvi, "settings"):
+            scvi.settings.seed = int(ctx.random_state)
+        ctx.metadata["scvi_seed"] = int(ctx.random_state)
         scvi.model.SCVI.setup_anndata(adata, batch_key=batch_key, layer=layer)
         model = scvi.model.SCVI(adata, n_latent=batch_cfg.scvi_n_latent)
         model.train(

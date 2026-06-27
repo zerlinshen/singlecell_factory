@@ -438,7 +438,7 @@ def test_annotation_handles_single_available_marker_set(monkeypatch, tmp_path):
     adata.obs["leiden"] = ["0", "0", "1"]
     adata.obsm["X_umap"] = np.zeros((3, 2), dtype=np.float32)
 
-    def fake_score_genes(a, genes, score_name, use_raw=False):
+    def fake_score_genes(a, genes, score_name, use_raw=False, **kwargs):
         a.obs[score_name] = np.array([0.5, 0.4, 0.6], dtype=np.float32)
 
     monkeypatch.setattr(ann_mod.sc.tl, "score_genes", fake_score_genes)

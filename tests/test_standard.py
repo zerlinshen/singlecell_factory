@@ -22,7 +22,7 @@ class DummyScanpy:
             pass
 
         @staticmethod
-        def highly_variable_genes(adata, flavor="seurat", n_top_genes=2000):
+        def highly_variable_genes(adata, flavor="seurat", n_top_genes=2000, layer=None, **kwargs):
             adata.var["highly_variable"] = True
 
         @staticmethod

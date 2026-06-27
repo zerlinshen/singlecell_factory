@@ -111,8 +111,14 @@ class AnnotationModule:
 
         # Score genes on full adata (per cell) — populates score_* obs columns and
         # provides per-cell confidence used by reference mapping conservative gate.
+        # random_state: control-bin sampling in score_genes is RNG-dependent
+        # (Tirosh 2016); propagate the canonical seed for reproducibility.
+        score_seed = getattr(ctx, "random_state", 0)
         for cell_type, genes in available.items():
-            sc.tl.score_genes(adata, genes, score_name=f"score_{cell_type}", use_raw=False)
+            sc.tl.score_genes(
+                adata, genes, score_name=f"score_{cell_type}",
+                use_raw=False, random_state=score_seed,
+            )
 
         score_cols = [f"score_{cell_type}" for cell_type in available]
         score_mat = adata.obs[score_cols].copy()

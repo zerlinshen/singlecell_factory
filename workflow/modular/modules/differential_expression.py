@@ -201,6 +201,17 @@ class DifferentialExpressionModule:
         sig_mask = markers["pvals_adj"] < ctx.cfg.de_pval_threshold
         if markers["logfoldchanges"].notna().any():
             sig_mask &= markers["logfoldchanges"].abs() > ctx.cfg.de_logfc_threshold
+        # Minimum within-group detection filter (Seurat min.pct, Stuart 2019):
+        # suppress genes detected in a negligible fraction of the group's cells
+        # that can otherwise show extreme apparent LFC. pts=True populates
+        # pct_nz_group (fraction 0-1); guard on column presence so fallback DE
+        # paths (which lack it) are unaffected.
+        de_min_pct = float(getattr(ctx.cfg, "de_min_pct", 0.10))
+        if "pct_nz_group" in markers.columns and de_min_pct > 0:
+            sig_mask &= markers["pct_nz_group"] >= de_min_pct
+            ctx.metadata["de_min_pct_applied"] = de_min_pct
+        else:
+            ctx.metadata["de_min_pct_applied"] = None
         sig_markers = markers[sig_mask].copy()
         sig_markers.to_csv(ctx.table_dir / "marker_genes.csv", index=False)
 

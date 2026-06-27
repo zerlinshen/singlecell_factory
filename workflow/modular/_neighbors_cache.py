@@ -5,13 +5,16 @@ preserving current behavior bit-for-bit.
 
 Cache key (tight 9-tuple):
   (backend_id, method, metric, n_pcs, n_neighbors, use_rep, knn, random_state,
-   sha256(X.data.tobytes()))
+   sha256(shape || X.indices || X.indptr || X.data))  # sparse
+   sha256(shape || X.tobytes())                        # dense
 
 backend_id must be one of {"scanpy", "rapids"}. Any other value raises ValueError.
 
-Hash caveat: sha256 covers nonzero VALUES only (X.data), not indices. If two
-sparse matrices share identical nonzero values at different coordinates the hash
-collides. Post-PCA this is vanishingly rare in practice.
+Hash coverage: sha256 covers the matrix shape AND, for sparse inputs, the
+coordinate arrays (indices/indptr) in addition to the nonzero values (X.data).
+A coordinate-blind hash (values only) could return a stale/wrong cached graph
+when two sparse matrices share nonzero values at different positions; including
+indices/indptr/shape tightens correctness.
 
 LRU cap: 32 entries. Beyond 32 unique keys the oldest entry is evicted (LRU
 order). In typical pipelines <=5 unique tight-key combinations appear per run;
@@ -78,12 +81,21 @@ def _compute_key(
         )
     X = adata.obsm.get(use_rep) if use_rep and use_rep in adata.obsm else adata.X
     with _timed():
+        hasher = hashlib.sha256()
         if sparse.issparse(X):
-            data_bytes = X.data.tobytes()
+            # Hash coordinates (indices/indptr) + shape alongside values, not just
+            # X.data: a coordinate-blind hash can return a stale/wrong cached graph
+            # when two sparse matrices share nonzero values at different positions.
+            Xc = X.tocsr()
+            hasher.update(np.asarray(Xc.shape, dtype=np.int64).tobytes())
+            hasher.update(Xc.indices.tobytes())
+            hasher.update(Xc.indptr.tobytes())
+            hasher.update(Xc.data.tobytes())
         else:
             arr = np.asarray(X)
-            data_bytes = arr.tobytes()
-        data_hash = hashlib.sha256(data_bytes).hexdigest()
+            hasher.update(np.asarray(arr.shape, dtype=np.int64).tobytes())
+            hasher.update(arr.tobytes())
+        data_hash = hasher.hexdigest()
     return (backend_id, method, metric, n_pcs, n_neighbors, use_rep, knn, random_state, data_hash)
 
 
