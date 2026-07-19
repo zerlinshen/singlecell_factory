@@ -45,6 +45,13 @@ def bounded_zarr_operation(label: str, seconds: float = 15.0):
         signal.signal(signal.SIGALRM, previous_handler)
 
 
+@pytest.fixture(autouse=True)
+def bound_every_emtab_test(request):
+    """Bound setup, test body, and teardown for every test in this file."""
+    with bounded_zarr_operation(request.node.nodeid, seconds=4.0):
+        yield
+
+
 def test_build_sample_meta_yields_required_columns(tmp_path):
     module = load_prepare_module()
     sdrf = tmp_path / "E-MTAB-13526.sdrf.txt"
@@ -123,8 +130,7 @@ def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Pa
         obs=pd.concat([part.obs for part in parts], axis=0),
         var=var.copy(),
     )
-    with bounded_zarr_operation("toy CSR Zarr write"):
-        merged_adata.write_zarr(merged)
+    merged_adata.write_zarr(merged)
     return merged
 
 
@@ -161,14 +167,9 @@ def write_summary_json(
 
 def test_validate_prepared_input_passes_on_toy_csr_zarr_parts(tmp_path):
     module = load_prepare_module()
-    with bounded_zarr_operation("toy CSR Zarr positive validation"):
-        merged = make_valid_merged_zarr(tmp_path)
-        summary = write_summary_json(
-            tmp_path, merged, n_samples=2, retained_barcodes_total=4
-        )
-        payload = module.validate_prepared_input(
-            merged, expected_n_samples=2, summary_path=summary
-        )
+    merged = make_valid_merged_zarr(tmp_path)
+    summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
+    payload = module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
     assert payload["n_samples"] == 2
     assert payload["prepared_summary"]["retained_barcodes_total"] == 4
     assert payload["x_encoding"] == "csr_matrix"
