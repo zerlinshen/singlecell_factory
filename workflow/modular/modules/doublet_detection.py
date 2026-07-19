@@ -109,13 +109,60 @@ class DoubletDetectionModule:
         return min(0.08, 0.008 * float(n_obs) / 1000.0)
 
     @classmethod
-    def _record_expected_rate(cls, ctx, cfg, n_obs: int, key: str) -> float:
-        rate = cls._resolved_expected_rate(cfg, n_obs)
-        ctx.metadata[key] = round(float(rate), 6)
+    def _resolve_expected_rate_contract(cls, ctx, cfg, adata) -> float:
+        """Resolve the sample-aware prior once and persist its audit contract.
+
+        Backends that operate on the combined matrix accept one scalar prior.
+        Resolve each sample's cell-count-aware candidate first, then use their
+        cell-weighted mean as the single effective prior supplied to every
+        backend, rank consensus, and the under-call diagnostic.
+        """
+        requested = float(getattr(cfg, "expected_doublet_rate", 0.06))
+        if "sample" in adata.obs.columns:
+            sample_sizes = adata.obs["sample"].astype(str).value_counts(sort=False)
+        else:
+            sample_sizes = pd.Series({"__all__": int(adata.n_obs)}, dtype="int64")
+
+        resolved_per_sample = {
+            str(sample): cls._resolved_expected_rate(cfg, int(n_obs))
+            for sample, n_obs in sample_sizes.items()
+        }
+        total_cells = int(sample_sizes.sum())
+        if total_cells > 0:
+            effective = sum(
+                int(sample_sizes[sample]) * resolved_per_sample[str(sample)]
+                for sample in sample_sizes.index
+            ) / total_cells
+        else:
+            effective = requested
+
+        effective = round(float(effective), 6)
+        ctx.metadata["doublet_expected_rate_requested"] = round(requested, 6)
+        ctx.metadata["doublet_expected_rate_resolved_per_sample"] = {
+            sample: round(float(rate), 6)
+            for sample, rate in resolved_per_sample.items()
+        }
+        ctx.metadata["doublet_expected_rate_effective"] = effective
         ctx.metadata["doublet_rate_scaling_enabled"] = bool(
             getattr(cfg, "scale_expected_doublet_rate", False)
         )
-        return rate
+        return effective
+
+    @staticmethod
+    def _record_backend_expected_rate(ctx, backend: str) -> float:
+        """Record and return the already-resolved prior used by ``backend``."""
+        if "doublet_expected_rate_effective" not in ctx.metadata:
+            raise RuntimeError(
+                "doublet expected-rate contract must be resolved before backend execution"
+            )
+        requested = float(ctx.metadata["doublet_expected_rate_requested"])
+        effective = float(ctx.metadata["doublet_expected_rate_effective"])
+        ctx.metadata.setdefault("doublet_expected_rate_by_backend", {})[backend] = {
+            "requested": round(requested, 6),
+            "effective": round(effective, 6),
+        }
+        ctx.metadata["doublet_expected_rate_used"] = round(effective, 6)
+        return effective
 
     @staticmethod
     def _materialize_counts_matrix(x):
@@ -271,9 +318,7 @@ class DoubletDetectionModule:
         import rapids_singlecell as rsc
         bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
 
-        expected_rate = self._record_expected_rate(
-            ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
-        )
+        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
         adata_gpu = self._clone_for_gpu_lite(adata)
         try:
             rsc.get.anndata_to_GPU(adata_gpu)
@@ -302,20 +347,13 @@ class DoubletDetectionModule:
         if sample_key is None:
             raise ValueError("grouped scrublet requested without sample labels")
 
-        # rsc.pp.scrublet(batch_key=...) applies one expected rate across batches.
-        # Scale by the median per-sample cell count so the grouped rate reflects
-        # per-sample sizes (10x v3 multiplet rate ~0.8%/1000; Germain 2021), and
-        # record per-sample rates for audit.
+        # rsc.pp.scrublet(batch_key=...) accepts one scalar across batches. Use
+        # the sample-aware, cell-weighted effective prior resolved once in run().
         sample_sizes = adata.obs[sample_key].value_counts()
-        median_sample_n = int(sample_sizes.median()) if len(sample_sizes) else adata.n_obs
-        expected_rate = self._record_expected_rate(
-            ctx, cfg, median_sample_n, "doublet_expected_rate_used"
-        )
-        if bool(getattr(cfg, "scale_expected_doublet_rate", False)):
-            ctx.metadata["doublet_expected_rate_per_sample"] = {
-                str(s): round(float(self._resolved_expected_rate(cfg, int(n))), 6)
-                for s, n in sample_sizes.items()
-            }
+        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
+        ctx.metadata["doublet_expected_rate_applied_per_sample"] = {
+            str(sample): round(expected_rate, 6) for sample in sample_sizes.index
+        }
         adata_gpu = self._clone_for_gpu_lite(adata, extra_obs_cols=(sample_key,))
         try:
             rsc.get.anndata_to_GPU(adata_gpu)
@@ -355,13 +393,13 @@ class DoubletDetectionModule:
             "min_gene_variability_pctl": 85,
             "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
         }
+        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
         per_sample_rates: dict[str, float] = {}
         for group in labels.unique():
             idx = np.where(labels.values == group)[0]
             if len(idx) < 20:
                 continue
-            # Per-sample cell-count-scaled rate (10x v3 ~0.8%/1000; Germain 2021).
-            group_rate = self._resolved_expected_rate(cfg, len(idx))
+            group_rate = expected_rate
             per_sample_rates[str(group)] = round(float(group_rate), 6)
             subX = self._materialize_counts_matrix(adata.X[idx])
             scrub = scrublet_cls(subX, expected_doublet_rate=group_rate, random_state=random_state)
@@ -380,7 +418,7 @@ class DoubletDetectionModule:
         ctx.metadata["doublet_rate_scaling_enabled"] = bool(
             getattr(cfg, "scale_expected_doublet_rate", False)
         )
-        ctx.metadata["doublet_expected_rate_per_sample"] = per_sample_rates
+        ctx.metadata["doublet_expected_rate_applied_per_sample"] = per_sample_rates
         return scores, predicted, None
 
     # ------------------------------------------------------------------
@@ -516,6 +554,7 @@ class DoubletDetectionModule:
         Returns (pANN_scores, calls_bool, threshold). Threshold is None because
         DoubletFinder uses top-nExp ranking, not a score threshold.
         """
+        expected_rate = self._record_backend_expected_rate(ctx, "doubletfinder")
         if not shutil.which("conda"):
             raise RuntimeError(
                 "DoubletFinder backend requires conda on PATH to launch the "
@@ -523,7 +562,6 @@ class DoubletDetectionModule:
             )
         driver = self._resolve_doubletfinder_driver()
 
-        expected_rate = float(getattr(cfg, "expected_doublet_rate", 0.06))
         pn = float(getattr(cfg, "doubletfinder_pn", 0.25))
         pk = float(getattr(cfg, "doubletfinder_pk", 0.09))
         pcs = int(getattr(cfg, "doubletfinder_pcs", 20))
@@ -613,6 +651,7 @@ class DoubletDetectionModule:
         ctx,
     ) -> tuple[np.ndarray, np.ndarray, float | None]:
         """Run scDblFinder via the r_multiomics conda env subprocess."""
+        expected_rate = self._record_backend_expected_rate(ctx, "scdblfinder")
         if not shutil.which("conda"):
             raise RuntimeError(
                 "scDblFinder backend requires conda on PATH to launch the "
@@ -620,7 +659,6 @@ class DoubletDetectionModule:
             )
         driver = self._resolve_scdblfinder_driver()
 
-        expected_rate = float(getattr(cfg, "expected_doublet_rate", 0.06))
         samples_col = getattr(cfg, "scdblfinder_samples_col", None)
 
         tmp = tempfile.mkdtemp(prefix="scdblfinder_")
@@ -714,6 +752,7 @@ class DoubletDetectionModule:
 
     def _run_consensus(self, adata, cfg, ctx) -> tuple[np.ndarray, np.ndarray, dict]:
         """Run configured doublet backends and merge calls via consensus_logic."""
+        effective_rate = self._record_backend_expected_rate(ctx, "consensus")
         pair = (
             os.environ.get("SC_DOUBLET_CONSENSUS_PAIR", "").strip().lower()
             or getattr(cfg, "consensus_pair", "scrublet_doubletfinder")
@@ -781,9 +820,7 @@ class DoubletDetectionModule:
         elif logic == "or":
             combined_calls = np.any(call_matrix, axis=0)
         else:
-            n_expected = max(1, int(round(
-                float(getattr(cfg, "expected_doublet_rate", 0.06)) * adata.n_obs
-            )))
+            n_expected = max(1, int(round(effective_rate * adata.n_obs)))
             order = np.argsort(-combined_score, kind="stable")
             combined_calls = np.zeros(adata.n_obs, dtype=bool)
             combined_calls[order[:n_expected]] = True
@@ -835,9 +872,7 @@ class DoubletDetectionModule:
         import scrublet as scr
         if use_grouped:
             return self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
-        expected_rate = self._record_expected_rate(
-            ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
-        )
+        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
         scrub = scr.Scrublet(
             self._materialize_counts_matrix(adata.X),
             expected_doublet_rate=expected_rate,
@@ -864,6 +899,9 @@ class DoubletDetectionModule:
         clean separation. Surfacing this loudly avoids silent quality
         regressions on tumor cohorts.
         """
+        ctx.metadata["doublet_undercall_expected_rate"] = round(
+            float(expected_rate), 6
+        )
         if expected_rate <= 0:
             return
         if call_rate < 0.5 * expected_rate:
@@ -890,6 +928,7 @@ class DoubletDetectionModule:
         cfg = ctx.cfg.doublet
         random_state = ctx.random_state
         threshold = None
+        self._resolve_expected_rate_contract(ctx, cfg, adata)
 
         # Backend selection (default = scrublet, preserves prior behavior).
         # cfg.doublet.backend overridden by SC_DOUBLET_BACKEND env var if set.
@@ -1056,8 +1095,8 @@ class DoubletDetectionModule:
                                 adata, scr.Scrublet, cfg, ctx
                             )
                         else:
-                            expected_rate = self._record_expected_rate(
-                                ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
+                            expected_rate = self._record_backend_expected_rate(
+                                ctx, "scrublet"
                             )
                             scrub = scr.Scrublet(
                                 self._materialize_counts_matrix(adata.X),
@@ -1095,8 +1134,8 @@ class DoubletDetectionModule:
                 if use_grouped:
                     doublet_scores, predicted_doublets, threshold = self._run_cpu_scrublet_grouped(adata, scr.Scrublet, cfg, ctx)
                 else:
-                    expected_rate = self._record_expected_rate(
-                        ctx, cfg, adata.n_obs, "doublet_expected_rate_used"
+                    expected_rate = self._record_backend_expected_rate(
+                        ctx, "scrublet"
                     )
                     scrub = scr.Scrublet(
                         self._materialize_counts_matrix(adata.X),
@@ -1162,7 +1201,7 @@ class DoubletDetectionModule:
         # have yielded ~6% doublets.
         self._check_undercall(
             call_rate=call_rate,
-            expected_rate=float(getattr(cfg, "expected_doublet_rate", 0.06)),
+            expected_rate=float(ctx.metadata["doublet_expected_rate_effective"]),
             ctx=ctx,
             backend=backend,
         )

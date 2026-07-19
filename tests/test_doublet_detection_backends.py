@@ -179,3 +179,148 @@ def test_tiny_dataset_path_records_method_actually_used(tmp_path):
 
     assert ctx.metadata["doublet_method"] == "fallback_all_singlets"
     assert ctx.metadata["doublet_method_actually_used"] == "fallback_all_singlets"
+
+
+def test_sample_aware_expected_rate_contract_is_recorded_once(tmp_path):
+    adata = _adata(n_obs=80)
+    adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
+    cfg = DoubletConfig(
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+
+    effective = DoubletDetectionModule._resolve_expected_rate_contract(
+        ctx, cfg, adata
+    )
+
+    expected_small = DoubletDetectionModule._resolved_expected_rate(cfg, 20)
+    expected_large = DoubletDetectionModule._resolved_expected_rate(cfg, 60)
+    expected_effective = (20 * expected_small + 60 * expected_large) / 80
+    assert effective == expected_effective
+    assert ctx.metadata["doublet_expected_rate_requested"] == 0.06
+    assert ctx.metadata["doublet_expected_rate_resolved_per_sample"] == {
+        "small": round(expected_small, 6),
+        "large": round(expected_large, 6),
+    }
+    assert ctx.metadata["doublet_expected_rate_effective"] == round(
+        expected_effective, 6
+    )
+
+
+def test_all_backends_record_the_same_effective_prior(tmp_path):
+    adata = _adata(n_obs=80)
+    adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
+    cfg = DoubletConfig(
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+    effective = DoubletDetectionModule._resolve_expected_rate_contract(
+        ctx, cfg, adata
+    )
+
+    for backend in ("scrublet", "doubletfinder", "scdblfinder", "consensus"):
+        recorded = DoubletDetectionModule._record_backend_expected_rate(
+            ctx, backend
+        )
+        assert recorded == effective
+
+    priors = ctx.metadata["doublet_expected_rate_by_backend"]
+    assert set(priors) == {
+        "scrublet",
+        "doubletfinder",
+        "scdblfinder",
+        "consensus",
+    }
+    assert {entry["effective"] for entry in priors.values()} == {
+        round(effective, 6)
+    }
+    assert {entry["requested"] for entry in priors.values()} == {0.06}
+
+
+def test_unavailable_r_backend_still_records_attempted_effective_prior(
+    monkeypatch, tmp_path
+):
+    adata = _adata(n_obs=80)
+    cfg = DoubletConfig(
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+    effective = DoubletDetectionModule._resolve_expected_rate_contract(
+        ctx, cfg, adata
+    )
+    monkeypatch.setattr("shutil.which", lambda _name: None)
+
+    with np.testing.assert_raises_regex(RuntimeError, "requires conda"):
+        DoubletDetectionModule()._run_doubletfinder_via_r(adata, cfg, ctx)
+    with np.testing.assert_raises_regex(RuntimeError, "requires conda"):
+        DoubletDetectionModule()._run_scdblfinder_via_r(adata, cfg, ctx)
+
+    assert ctx.metadata["doublet_expected_rate_by_backend"] == {
+        "doubletfinder": {"requested": 0.06, "effective": effective},
+        "scdblfinder": {"requested": 0.06, "effective": effective},
+    }
+
+
+def test_rank_consensus_uses_effective_not_requested_rate(monkeypatch, tmp_path):
+    adata = _adata(n_obs=80)
+    adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
+    cfg = DoubletConfig(
+        backend="consensus",
+        consensus_pair="scrublet_scdblfinder",
+        consensus_logic="rank",
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+    ctx.adata = adata
+    scores = np.linspace(0.0, 1.0, adata.n_obs, dtype=np.float32)
+    calls = np.zeros(adata.n_obs, dtype=bool)
+
+    monkeypatch.setattr(
+        DoubletDetectionModule,
+        "_run_scrublet_only",
+        lambda self, adata_arg, cfg_arg, ctx_arg: (scores, calls, 0.5),
+    )
+    monkeypatch.setattr(
+        DoubletDetectionModule,
+        "_run_scdblfinder_via_r",
+        lambda self, adata_arg, cfg_arg, ctx_arg: (scores**2, calls, None),
+    )
+
+    DoubletDetectionModule().run(ctx)
+
+    effective = ctx.metadata["doublet_expected_rate_effective"]
+    expected_calls = max(1, int(round(effective * adata.n_obs)))
+    assert ctx.adata.obs["predicted_doublet"].sum() == expected_calls
+    assert expected_calls < int(round(cfg.expected_doublet_rate * adata.n_obs))
+
+
+def test_undercall_uses_effective_prior_from_contract(tmp_path):
+    adata = _adata(n_obs=80)
+    adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
+    cfg = DoubletConfig(
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+    effective = DoubletDetectionModule._resolve_expected_rate_contract(
+        ctx, cfg, adata
+    )
+
+    DoubletDetectionModule._check_undercall(
+        call_rate=effective * 0.25,
+        expected_rate=effective,
+        ctx=ctx,
+        backend="scrublet",
+    )
+
+    assert ctx.metadata["doublet_undercall_expected_rate"] == round(effective, 6)
+    assert ctx.metadata["doublet_undercall_ratio"] == 4.0
