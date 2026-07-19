@@ -189,8 +189,8 @@ def parse_args() -> argparse.Namespace:
         default="standard",
         choices=["standard", "large", "massive"],
         help=(
-            "Resource-only dataset-size strategy. Expands only to --lazy-read / "
-            "--doublet-strategy / --clustering-engine / --checkpoint-policy and never "
+            "Resource-only dataset-size strategy. Expands only resource execution "
+            "settings such as --lazy-read / --checkpoint-policy and never "
             "changes HVGs, PCs, neighbors, resolution, DE limits, or module selection."
         ),
     )
@@ -224,14 +224,17 @@ def parse_args() -> argparse.Namespace:
         choices=["", "auto", "grouped", "whole", "skip"],
         help=(
             "Doublet detection strategy: auto (grouped when n_obs>=100k and sample column present), "
-            "grouped, whole, skip. Overrides scale-mode preset."
+            "grouped, whole, skip. Scientific choice independent of --scale-mode."
         ),
     )
     parser.add_argument(
         "--clustering-engine",
         default="",
         choices=["", "auto", "sparse_exact", "css", "gpu"],
-        help="Clustering engine: auto, sparse_exact, css, gpu. Overrides scale-mode preset.",
+        help=(
+            "Clustering engine: auto, sparse_exact, css, gpu. Scientific choice "
+            "independent of --scale-mode."
+        ),
     )
     parser.add_argument(
         "--checkpoint-policy",
@@ -742,28 +745,27 @@ def _parse_resolution_sweep(value: str) -> tuple[float, ...]:
 
 
 def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
-    """Expand a resource-only scale preset into operational capability flags.
+    """Expand a resource-only scale preset into operational resource flags.
 
-    Explicit capability flags (non-empty) always win over the preset bundle.
+    Explicit resource flags (non-empty) always win over the preset bundle.
     Scientific parameters are intentionally untouched.
     """
     # F-4 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md):
     # `--scale-mode massive` previously routed clustering_engine -> "css"
     # (a hard scientific compromise per Principle 2). The preset is now remapped
-    # to clustering_engine -> "auto"; the operational flags (lazy_read=true,
-    # doublet_strategy=grouped) are preserved. Old NC launch scripts that relied
-    # on the implicit CSS activation will silently get auto routing instead —
-    # warn loudly so the change in semantics is visible.
+    # to clustering_engine -> "auto". The subsequent resource/science split
+    # also moved grouped doublet selection behind the explicit
+    # scientific_profile=legacy-massive acknowledgement path.
     if args.scale_mode == "massive":
         import warnings as _warnings
         _warnings.warn(
             "--scale-mode=massive: semantics changed as of 2026-05-19. The "
             "clustering_engine slot of this preset was remapped from 'css' "
             "(removed from production per Plan F-1, Principle 2) to 'auto'. "
-            "I/O and dispatch flags (lazy_read=true, doublet_strategy=grouped, "
-            "checkpoint_policy=full) are preserved. If you were relying on "
-            "CSS clustering, the run will instead use the standard "
-            "scanpy/rapids-singlecell auto path. See "
+            "Resource flags (lazy_read=true, checkpoint_policy=full) are preserved. "
+            "Grouped doublet handling and CSS are scientific/method choices and are "
+            "not selected by scale mode. Use an acknowledged scientific profile for "
+            "non-equivalent method changes. See "
             "~/.omc/plans/nc-cell-clustering-final-strategy-plan.md",
             DeprecationWarning,
             stacklevel=2,
@@ -772,10 +774,6 @@ def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
     preset = scale_mode_to_capabilities(args.scale_mode)
     if not args.lazy_read:
         args.lazy_read = preset["lazy_read"]
-    if not args.doublet_strategy:
-        args.doublet_strategy = preset["doublet_strategy"]
-    if not args.clustering_engine:
-        args.clustering_engine = preset["clustering_engine"]
     if not args.checkpoint_policy:
         args.checkpoint_policy = preset["checkpoint_policy"]
 
@@ -789,6 +787,8 @@ _CANONICAL_SCIENTIFIC_PARAMETERS = {
     "n_neighbors": 15,
     "leiden_resolution": 0.8,
     "de_n_genes": 300,
+    "doublet_strategy": "auto",
+    "clustering_engine": "auto",
 }
 
 _SCIENTIFIC_PROFILE_OVERRIDES = {
@@ -808,6 +808,7 @@ _SCIENTIFIC_PROFILE_OVERRIDES = {
         "n_neighbors": 10,
         "leiden_resolution": 0.4,
         "de_n_genes": 100,
+        "doublet_strategy": "grouped",
     },
 }
 
@@ -815,6 +816,9 @@ _SCIENTIFIC_PROFILE_OVERRIDES = {
 def _apply_scientific_profile(args: argparse.Namespace) -> argparse.Namespace:
     """Resolve scientific parameters and require explicit non-equivalence consent."""
     profile = getattr(args, "scientific_profile", "canonical")
+    for field_name, canonical_value in _CANONICAL_SCIENTIFIC_PARAMETERS.items():
+        if getattr(args, field_name) == "":
+            setattr(args, field_name, canonical_value)
     overrides = _SCIENTIFIC_PROFILE_OVERRIDES[profile]
     for field_name, resolved_value in overrides.items():
         if getattr(args, field_name) == _CANONICAL_SCIENTIFIC_PARAMETERS[field_name]:

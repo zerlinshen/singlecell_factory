@@ -302,11 +302,12 @@ class PipelineConfig:
     resolved_scientific_parameter_diff: dict[str, dict[str, object]] = field(
         default_factory=dict
     )
-    # Capability flags — set explicitly or expanded from scale_mode via scale_mode_to_capabilities()
+    # Resource flags — set explicitly or expanded from scale_mode.
     lazy_read: str = "auto"          # auto, true, false
+    checkpoint_policy: str = "full"  # full
+    # Scientific/method choices — never changed by resource-only scale_mode.
     doublet_strategy: str = "auto"   # auto, grouped, whole, skip
     clustering_engine: str = "auto"  # auto, sparse_exact, css, gpu
-    checkpoint_policy: str = "full"  # full
     # Wave 3 (US-W3-2). Policy for GPU clustering failure post-host-mutation.
     # raise (default): poison adata + raise ClusteringContractViolation.
     # restore-cpu: restore from adata.raw and route to CPU clustering (M2 only).
@@ -332,31 +333,26 @@ class PipelineConfig:
     allow_partial_run: bool = False
 
 
-# Maps scale_mode preset names to their capability flag bundles.
+# Maps scale_mode preset names to resolved flag bundles. Scientific/method
+# fields intentionally remain identical across every resource strategy.
 # "massive" = the canonical preset used by the NC2024 launch script.
 _SCALE_MODE_PRESETS: dict[str, dict[str, str]] = {
     "standard": {
         "lazy_read": "auto",
-        "doublet_strategy": "auto",
-        "clustering_engine": "auto",
         "checkpoint_policy": "full",
     },
     "large": {
         "lazy_read": "auto",
-        "doublet_strategy": "auto",
-        "clustering_engine": "auto",
         "checkpoint_policy": "full",
     },
     # F-4 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
     # `massive` preset previously routed clustering_engine -> "css". CSS is now
     # removed from the production science path; the preset is REMAPPED to
     # route clustering_engine -> "auto" instead. The operational flags
-    # (lazy_read=true, doublet_strategy=grouped, checkpoint_policy=full) are
-    # preserved — they are I/O / dispatch options, not scientific compromises.
+    # Resource settings (lazy_read=true, checkpoint_policy=full) are preserved.
+    # Doublet strategy remains canonical because it is a scientific/method choice.
     "massive": {
         "lazy_read": "true",
-        "doublet_strategy": "grouped",
-        "clustering_engine": "auto",
         "checkpoint_policy": "full",
     },
 }

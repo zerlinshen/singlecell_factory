@@ -4,9 +4,8 @@ Guarantees that scale_mode preset → capability flag bundles match the
 documented contract. Updated 2026-05-19 for F-4 (Plan
 ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2): the
 `massive` preset's clustering_engine slot was remapped from "css" (removed
-from production science path per F-1) to "auto". The operational flags
-(lazy_read=true, doublet_strategy=grouped, checkpoint_policy=full) are
-preserved.
+from production science path per F-1) to "auto". Resource settings preserve
+lazy reading/checkpoint behavior while doublet strategy stays canonical.
 
 Run with:
     pytest -q --no-cov tests/test_scale_mode_preset_compat.py
@@ -62,16 +61,13 @@ def test_massive_preset_bundle_exact():
 
     F-4 (2026-05-19, Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md,
     Principle 2): clustering_engine slot was remapped from "css" → "auto".
-    Operational flags (lazy_read, doublet_strategy, checkpoint_policy) are
-    preserved.
+    Resource flags (lazy_read, checkpoint_policy) are preserved. Scientific
+    choices (doublet strategy and clustering method) remain canonical.
     """
     caps = scale_mode_to_capabilities("massive")
     assert caps["lazy_read"] == "true"
-    assert caps["doublet_strategy"] == "grouped"
-    assert caps["clustering_engine"] == "auto", (
-        "F-4: massive preset clustering_engine must be 'auto' (was 'css' pre-2026-05-19). "
-        "CSS removal is irreversible per Principle 2."
-    )
+    assert "doublet_strategy" not in caps
+    assert "clustering_engine" not in caps
     assert caps["checkpoint_policy"] == "full"
 
 
@@ -82,19 +78,15 @@ def test_massive_preset_bundle_exact():
 def test_massive_preset_does_not_route_to_css():
     """F-1 + F-4 invariant: scale_mode=massive must not activate CSS by any route."""
     caps = scale_mode_to_capabilities("massive")
-    assert caps["clustering_engine"] != "css", (
-        "F-1 / F-4 / Principle 2 violation: scale_mode=massive routed to CSS. "
-        "CSS is removed from the production science path. "
-        "See ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md"
-    )
+    assert "clustering_engine" not in caps
 
 
 # ---------------------------------------------------------------------------
-# Test 2: _apply_scale_mode expands massive into all 4 flags
+# Test 2: _apply_scale_mode expands only resource flags
 # ---------------------------------------------------------------------------
 
-def test_apply_scale_mode_massive_expands_flags():
-    """_apply_scale_mode with massive must set all 4 capability flags per F-4 remap."""
+def test_apply_scale_mode_massive_expands_only_resource_flags():
+    """Massive scale mode must leave scientific/method fields unresolved."""
     args = _minimal_args(scale_mode="massive")
     # F-4 emits a DeprecationWarning when --scale-mode=massive is used.
     import warnings as _warnings
@@ -102,11 +94,9 @@ def test_apply_scale_mode_massive_expands_flags():
         _warnings.simplefilter("ignore", DeprecationWarning)
         result = _apply_scale_mode(args)
     assert result.lazy_read == "true"
-    assert result.doublet_strategy == "grouped"
-    assert result.clustering_engine == "auto", (
-        "F-4 (2026-05-19): massive preset clustering_engine is 'auto', was 'css'."
-    )
     assert result.checkpoint_policy == "full"
+    assert result.doublet_strategy == ""
+    assert result.clustering_engine == ""
     assert result.optional_modules == DEFAULT_OPTIONAL_MODULES
     assert result.n_top_genes == 3000
     assert result.n_pcs == 40
@@ -119,7 +109,7 @@ def test_apply_scale_mode_massive_expands_flags():
 def test_resource_strategy_preserves_all_scientific_parameters(scale_mode):
     args = _minimal_args(scale_mode=scale_mode)
     with pytest.warns(DeprecationWarning) if scale_mode == "massive" else nullcontext():
-        result = _apply_scale_mode(args)
+        result = _apply_scientific_profile(_apply_scale_mode(args))
 
     assert {
         "optional_modules": result.optional_modules,
@@ -128,6 +118,8 @@ def test_resource_strategy_preserves_all_scientific_parameters(scale_mode):
         "n_neighbors": result.n_neighbors,
         "leiden_resolution": result.leiden_resolution,
         "de_n_genes": result.de_n_genes,
+        "doublet_strategy": result.doublet_strategy,
+        "clustering_engine": result.clustering_engine,
     } == {
         "optional_modules": DEFAULT_OPTIONAL_MODULES,
         "n_top_genes": 3000,
@@ -135,7 +127,10 @@ def test_resource_strategy_preserves_all_scientific_parameters(scale_mode):
         "n_neighbors": 15,
         "leiden_resolution": 0.8,
         "de_n_genes": 300,
+        "doublet_strategy": "auto",
+        "clustering_engine": "auto",
     }
+    assert result.resolved_scientific_parameter_diff == {}
 
 
 def test_scientific_change_requires_non_equivalence_acknowledgement():
@@ -160,6 +155,10 @@ def test_acknowledged_scientific_profile_records_resolved_diff():
     assert result.resolved_scientific_parameter_diff["optional_modules"] == {
         "canonical": DEFAULT_OPTIONAL_MODULES,
         "resolved": "clustering",
+    }
+    assert result.resolved_scientific_parameter_diff["doublet_strategy"] == {
+        "canonical": "auto",
+        "resolved": "grouped",
     }
 
 
@@ -189,34 +188,31 @@ def test_apply_scale_mode_massive_emits_deprecation_warning():
 # Test 3: explicit flag overrides the preset bundle
 # ---------------------------------------------------------------------------
 
-def test_explicit_flag_overrides_preset():
-    """An explicit capability flag must win over the scale_mode preset."""
-    # Override clustering_engine while keeping massive for everything else.
+def test_scale_mode_does_not_overwrite_explicit_scientific_choice():
+    """Resource resolution must leave an explicit scientific choice untouched."""
     args = _minimal_args(scale_mode="massive", clustering_engine="sparse_exact")
     import warnings as _warnings
     with _warnings.catch_warnings():
         _warnings.simplefilter("ignore", DeprecationWarning)
         result = _apply_scale_mode(args)
     assert result.clustering_engine == "sparse_exact", (
-        "explicit --clustering-engine sparse_exact must override massive preset."
+        "explicit --clustering-engine sparse_exact must be independent of scale mode."
     )
-    # Other flags should still come from the massive preset.
     assert result.lazy_read == "true"
-    assert result.doublet_strategy == "grouped"
+    assert result.doublet_strategy == ""
     assert result.checkpoint_policy == "full"
 
 
 # ---------------------------------------------------------------------------
-# Test 4: standard preset leaves all capability flags at safe defaults
+# Test 4: standard resource preset contains no scientific/method choices
 # ---------------------------------------------------------------------------
 
 def test_standard_preset_safe_defaults():
-    """scale_mode=standard must leave capability flags at their safe defaults."""
+    """scale_mode=standard contains only resource execution settings."""
     caps = scale_mode_to_capabilities("standard")
     assert caps["lazy_read"] == "auto"
-    assert caps["doublet_strategy"] == "auto"
-    assert caps["clustering_engine"] == "auto"
     assert caps["checkpoint_policy"] == "full"
+    assert set(caps) == {"lazy_read", "checkpoint_policy"}
 
 
 # ---------------------------------------------------------------------------

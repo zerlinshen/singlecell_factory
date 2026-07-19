@@ -928,9 +928,8 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
     ctx.metadata["resource_strategy"] = {
         "scale_mode": cfg.scale_mode,
         "lazy_read": cfg.lazy_read,
-        "doublet_strategy": cfg.doublet_strategy,
-        "clustering_engine": cfg.clustering_engine,
         "checkpoint_policy": cfg.checkpoint_policy,
+        "parallel_workers": cfg.parallel_workers,
     }
     ctx.metadata["scientific_profile"] = cfg.scientific_profile
     ctx.metadata["scientific_non_equivalence_acknowledged"] = (
