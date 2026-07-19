@@ -496,7 +496,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pseudobulk-sample-col",
         default="",
-        help="obs column identifying biological samples for pseudobulk DE. Defaults to --batch-key, then sample/batch/donor/patient.",
+        help=(
+            "obs column identifying biological samples for pseudobulk DE. "
+            "Required explicitly for confirmatory contrasts; exploratory mode "
+            "may fall back to --batch-key, then sample/batch/donor/patient."
+        ),
     )
     parser.add_argument(
         "--pseudobulk-group-col",

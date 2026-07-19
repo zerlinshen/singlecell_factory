@@ -101,6 +101,33 @@ def test_rank_backend_is_visibly_nonclaimable(monkeypatch, tmp_path):
     assert not results["claimable"].any()
     metadata = pd.read_csv(tmp_path / "pseudobulk_metadata.csv")
     assert not metadata["claimable"].any()
+    assert PseudobulkDEModule._plot_claim_label(results).startswith("NON-CLAIMABLE:")
+
+
+def test_unsupported_pydeseq2_contrast_api_downgrades_to_rank_backend(
+    monkeypatch, tmp_path
+):
+    ctx = _ctx(tmp_path)
+
+    def _unsupported(*args, **kwargs):
+        raise TypeError("contrast keyword unsupported")
+
+    def _rank(*args, **kwargs):
+        return pd.DataFrame(
+            [{"gene": "g1", "log2FC": 1.0, "pvalue": 0.01, "padj": 0.02}]
+        )
+
+    monkeypatch.setattr(PseudobulkDEModule, "_de_pydeseq2", _unsupported)
+    monkeypatch.setattr(PseudobulkDEModule, "_de_ranktest", _rank)
+    monkeypatch.setattr(PseudobulkDEModule, "_plot_volcano", lambda *a, **k: None)
+    monkeypatch.setattr(PseudobulkDEModule, "_plot_heatmap", lambda *a, **k: None)
+
+    PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+    assert ctx.metadata["pseudobulk_de_status"] == (
+        "completed_nonclaimable_backend_fallback"
+    )
 
 
 def test_confirmatory_contract_requires_explicit_biological_sample_col(tmp_path):
@@ -197,6 +224,59 @@ def test_explicit_contrast_invalid_label_records_then_raises(tmp_path):
         "not_testable_invalid_contrast_labels"
     )
     assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_null_biological_identity_records_then_raises(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.adata.obs.loc[ctx.adata.obs.index[0], "sample"] = None
+
+    with pytest.raises(ValueError, match="non-null and non-blank"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_invalid_biological_identifiers"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_numeric_condition_labels_are_normalized(monkeypatch, tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.adata.obs["condition"] = ctx.adata.obs["condition"].map({"A": 0, "B": 1})
+    ctx.cfg.pseudobulk.contrast_a = "0"
+    ctx.cfg.pseudobulk.contrast_b = "1"
+    _patch_result(monkeypatch, test_used="pydeseq2")
+
+    PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_claimable"] is True
+
+
+def test_result_replicate_counts_are_exact_for_each_cell_group(monkeypatch):
+    pb_meta = pd.DataFrame(
+        {
+            "sample": ["S1", "S2", "S3", "S4", "S1", "S2", "S5", "S3", "S4", "S6"],
+            "cell_type": ["Tumor"] * 4 + ["Stromal"] * 6,
+            "condition": ["A", "A", "B", "B", "A", "A", "A", "B", "B", "B"],
+        }
+    )
+    pb_counts = pd.DataFrame({"g1": np.arange(1, len(pb_meta) + 1)})
+    _patch_result(monkeypatch, test_used="pydeseq2")
+
+    results = PseudobulkDEModule()._run_confirmatory(
+        pb_counts,
+        pb_meta,
+        "sample",
+        "cell_type",
+        "condition",
+        [{"name": "A_vs_B", "contrast_a": "A", "contrast_b": "B"}],
+        min_samples_per_condition=2,
+    )
+
+    counts_by_group = {
+        row.group: (row.n_biological_replicates_a, row.n_biological_replicates_b)
+        for row in results.itertuples()
+    }
+    assert counts_by_group == {"Tumor|A_vs_B": (2, 2), "Stromal|A_vs_B": (3, 3)}
 
 
 def test_json_contrast_col_is_honored_once(monkeypatch, tmp_path):

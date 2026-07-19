@@ -142,6 +142,25 @@ plotting/reporting helpers:
   dependencies, architectural layers, modality tags, ownership, and bridge-ready
   flags. Pipeline compatibility constants are derived from this catalog.
 
+### Scientific defaults and inference boundaries (2026-07-19)
+
+- Universal optional defaults are only
+  `clustering,differential_expression,annotation`; trajectory and
+  pseudo-velocity require explicit opt-in.
+- DPT is claim-capable only with an existing explicit Leiden root cluster and a
+  non-empty biological root justification. Missing/invalid root evidence must
+  remain visibly non-claimable.
+- `pseudo_velocity` is an `exploratory_proxy`, never canonical RNA velocity;
+  canonical velocity claims require the spliced/unspliced `rna_velocity` module.
+- Confirmatory pseudobulk requires an explicit biological sample column, unique
+  sample-to-condition mapping, valid labels, raw counts, and sufficient
+  biological replicates. Only all-pydeseq2 confirmatory output is claimable;
+  backend fallback is visibly exploratory/non-claimable.
+- `--scale-mode` is resource-only. Scientific changes belong to an explicit
+  `--scientific-profile` and require
+  `--acknowledge-scientific-non-equivalence`; agents must inspect the recorded
+  resolved scientific diff before comparing runs.
+
 ## Cross-Repo Bridge (Bundle v2.1)
 
 The `singlecell_factory -> r_multiomics_factory` bundle bridge is now at schema
@@ -365,6 +384,11 @@ For pipeline changes, a statement without artifact paths is not evidence.
 - Do not write real R files into `bridges/local_r_pipeline_macbook/`.
 - Do not demote `PROTOCOL.md`; it is still the deep operational guide.
 - Do not route canonical upstream fixes into `r_multiomics_factory` first.
+- Do not cite fallback-root DPT as a biological trajectory claim.
+- Do not describe `pseudo_velocity` as RNA velocity.
+- Do not cite rank-backend or exploratory pseudobulk as confirmatory inference.
+- Do not use `--scale-mode` as a hidden way to change module scope or scientific
+  parameters.
 
 ## Fast Links
 

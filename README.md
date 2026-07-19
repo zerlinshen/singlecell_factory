@@ -511,7 +511,15 @@ Regenerate with `python scripts/generate_factories_report.py`.
 
 ### Engineering Disciplines (Phase 7+)
 
-**Capability flags** replace the multivalent `--scale-mode` (the old preset is still accepted as a backward-compat bundle):
+**Resource and scientific settings are separate.** `--scale-mode` is now a
+resource-only strategy: it may change lazy I/O and checkpoint behavior, but it
+does not change optional modules, HVGs, PCs, neighbors, Leiden resolution, DE
+limits, doublet strategy, or clustering engine. Non-canonical method changes
+belong to `--scientific-profile legacy-large|legacy-massive` and require
+`--acknowledge-scientific-non-equivalence`; the resolved scientific diff is
+recorded in run metadata.
+
+Explicit capability flags remain available:
 
 - `--lazy-read {auto,true,false}` (auto = file > 5GB)
 - `--doublet-strategy {auto,grouped,whole,skip}` (auto = grouped when n_obs ≥ 100k and a `sample` column is present)
@@ -784,14 +792,14 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 
 ## Features
 
-- **3 mandatory modules** (cellranger, QC, doublet detection) ensure data quality baseline
-- **22 optional analysis modules** covering the full scRNA-seq workflow
+- **4 mandatory modules** (cellranger, QC, ambient correction, doublet detection) ensure data quality baseline
+- **23 optional analysis modules** covering the full scRNA-seq workflow
 - Automatic topological dependency resolution — just list what you want, dependencies are auto-included
 - **GPU acceleration** — auto-detected rapids-singlecell backend for clustering, batch post-processing, DE ranking, and evolution clone markers
 - **Categorized output** — each module's figures and tables in its own subfolder
 - **Checkpoint & resume** — zarr-accelerated checkpoints with h5ad fallback; `--resume-from` reuses the latest checkpointed run for the same project and backtracks to the nearest available checkpoint
 - **Checkpoint policy** — use `--checkpoint-policy full` (or `--scale-mode massive`) with `--checkpoint` to save full AnnData checkpoints at every module.
-- **Large-dataset modes** — `--scale-mode large|massive` selects safer defaults for 100k+ and several-hundred-thousand+ cell datasets without changing the underlying biological model family
+- **Large-dataset modes** — `--scale-mode large|massive` changes resource execution only (lazy I/O/checkpoint behavior); scientific parameters and module selection stay canonical
 - **Parallel execution** — thread-safe parallel tiers with cost-aware scheduling, merge-back safety warnings for structural mutations
 - **Module contracts** — `requires_keys` / `provides_keys` declarations enable pre-flight validation; missing upstream data skips optional modules gracefully instead of crashing
 - **Normalized status tracking** — module results are recorded as `ok` / `skipped` / `failed` in both `run_manifest.json` and `module_status.csv`
@@ -830,8 +838,8 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 | `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama/scVI/MNN/fastMNN-style). `harmony_backend` accepts `auto`/`cpu`/`gpu`/`direct` (`direct` = canonical `harmonypy.run_harmony`, the proven-working path). | clustering |
 | `differential_expression` | Cluster marker genes (`wilcoxon` default, configurable), significance filtering | clustering |
 | `annotation` | Marker-based cell type annotation with confidence scores | clustering |
-| `trajectory` | PAGA trajectory graph + DPT pseudotime + gene expression dynamics | clustering |
-| `pseudo_velocity` | Pseudo-RNA velocity with arrow/stream plots (vectorized) | trajectory |
+| `trajectory` | **Opt-in** PAGA + DPT. Claim-capable pseudotime requires an existing Leiden `--trajectory-root-cluster` and a non-empty `--trajectory-root-justification`; otherwise outputs are explicitly non-claimable. | clustering |
+| `pseudo_velocity` | **Opt-in exploratory proxy only.** Neighbour-gradient arrows/streams are labeled `exploratory_proxy` and are never canonical RNA velocity. | trajectory |
 | `rna_velocity` | Real RNA velocity (scVelo: stochastic/dynamical) | clustering |
 | `cnv_inference` | Expression-based CNV inference (infercnvpy / vectorized sliding window) after annotation gate | annotation |
 | `pathway_analysis` | Gene set enrichment (gseapy/decoupler/built-in Hallmark, BH FDR) | differential_expression |
@@ -842,7 +850,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 | `tumor_microenvironment` | TME scoring (CYT/TIS/IFN-gamma/ESTIMATE) + checkpoint profiling | annotation |
 | `gene_signature_scoring` | 10 built-in cancer signatures + custom JSON signatures | clustering |
 | `evolution` | CNV-based clonal clustering, phylogenetic dendrogram, pseudotime-ordered evolution | cnv_inference + trajectory |
-| `pseudobulk_de` | Pseudobulk DE (pydeseq2 / Mann-Whitney fallback) — statistically proper multi-sample comparison | differential_expression |
+| `pseudobulk_de` | Replicate-aware pseudobulk DE. Only valid explicit biological-sample contracts completed entirely with pydeseq2 are claimable; rank-test fallback is visibly exploratory/non-claimable. | differential_expression |
 | `cell_fate` | Probabilistic cell fate mapping (CellRank / diffusion-based fallback) | trajectory |
 | `composition` | Differential cell type composition analysis (pertpy/scCODA / chi-squared fallback) | annotation |
 | `metacell` | Metacell aggregation (SEACells / MiniBatchKMeans fallback) — noise reduction for large datasets | clustering |
@@ -1006,8 +1014,17 @@ Use one of the following copy-paste profiles directly.
 
 Eligibility note:
 - Only include `rna_velocity` when true splicing inputs are available.
+- `trajectory` and `pseudo_velocity` are not universal defaults. For a
+  claim-capable DPT run, pass both `--trajectory-root-cluster` and
+  `--trajectory-root-justification`. `pseudo_velocity` remains an
+  `exploratory_proxy` even when DPT is claim-capable; use `rna_velocity` for
+  spliced/unspliced velocity claims.
 - Only include `pseudobulk_de` as a confirmatory module when an explicit
-  contrast contract is provided. Otherwise treat it as exploratory and enable it
+  contrast contract and an explicit biological `--pseudobulk-sample-col` are
+  provided. Each biological sample must map to one condition, each contrast
+  needs at least two biological replicates per condition, and raw counts must
+  exist. Invalid explicit contracts fail the run after recording a non-claimable
+  inference payload. Otherwise treat pseudobulk as exploratory and enable it
   intentionally.
 
 1. **Full local analysis (recommended, no external network dependency)**
@@ -1045,13 +1062,22 @@ python -m workflow.modular.cli \
 
 ### Large Dataset Modes
 
-Use `--scale-mode` to switch from convenience defaults to memory-safer presets:
+Use `--scale-mode` to select resource execution behavior without silently
+changing the scientific analysis:
 
-| Mode | Intended scale | Default optional modules when not overridden | Key parameter shifts |
+| Mode | Intended scale | Resource behavior | Scientific behavior |
 |---|---|---|---|
-| `standard` | up to ~100k cells | `clustering,differential_expression,annotation,trajectory,pseudo_velocity` | full default behavior |
-| `large` | ~100k-300k cells | `clustering,annotation,differential_expression` | fewer HVGs/PCs, slightly lower graph density |
-| `massive` | ~300k to ~1M cells | `clustering` | clustering-first pass, reduced HVGs/PCs/neighbors, lighter memory footprint; auto-prefers CSS-style representation when sample labels are available |
+| `standard` | up to ~100k cells | `lazy_read=auto`, full checkpoints | canonical parameters and universal defaults |
+| `large` | ~100k-300k cells | `lazy_read=auto`, full checkpoints | identical to `standard` |
+| `massive` | ~300k to ~1M cells | `lazy_read=true`, full checkpoints | identical to `standard` |
+
+The universal optional-module default is
+`clustering,differential_expression,annotation`. Trajectory and
+pseudo-velocity require explicit opt-in. If a legacy reduced scientific profile
+is intentionally required, select `--scientific-profile legacy-large` or
+`legacy-massive` and also pass
+`--acknowledge-scientific-non-equivalence`; the manifest records the exact
+resolved parameter diff.
 
 Examples:
 
@@ -1075,13 +1101,16 @@ Recommended interpretation:
 - `~100k cells` is already a large dataset, but it is not an extreme scale for a 96 GB workstation if runs are staged sensibly.
 - `300k+ cells` is a very large dataset and should usually start with `--scale-mode massive` or a staged subset-first workflow.
 - `~1M cells` is an extreme scale for classic full-object scRNA workflows and should be treated as clustering-first, then subset/refine later.
-- In `--scale-mode massive`, the pipeline now prefers a CSS-style clustering representation when `adata.obs["sample"]` is available; otherwise it automatically falls back to the lighter clustering-first route.
+- `--scale-mode massive` does not select CSS, grouped doublet handling, reduced
+  graph parameters, or a smaller module set. Those are scientific/method choices,
+  not resource settings.
 
 ### Memory Pressure and Swap Guidance
 
 When large runs approach RAM limits:
 
-- Prefer reducing module scope first (`--scale-mode large` or `--scale-mode massive`) before changing hardware assumptions.
+- Reduce module scope explicitly with `--optional-modules` before changing
+  hardware assumptions; `--scale-mode` does not reduce scientific scope.
 - A moderate SSD-backed swapfile (for example `30-40 GB`) can help prevent abrupt OOM kills and make checkpoint-heavy runs more forgiving.
 - On this workstation, Harmony batch correction is intentionally routed to CPU in normal `auto/off` usage because the current `harmonypy` wrapper path was unstable under the previous GPU route; the core Harmony algorithm itself remains valid and was verified separately on both CPU and CUDA.
 - Current GPU reality on this workstation is module-specific rather than globally broken: basic CUDA, PyTorch CUDA, CuPy, and Harmony core all work; the main unstable paths are RAPIDS PCA (`CUSOLVER_STATUS_INTERNAL_ERROR`) and RAPIDS DE (`CUBLAS_STATUS_NOT_INITIALIZED`) on real workloads.
@@ -1517,8 +1546,8 @@ Current module output folders (as implemented):
 - `metacell`: `metacell_assignments.csv`, `metacell_summary.csv`, `metacells.h5ad`, `metacell_size_hist.png`, `metacell_umap.png`
 - `paper_repro`: `paper_repro_registry.csv`, `paper_repro_figures.csv`, `paper_repro_report.json` (and `paper_repro_spec.template.json` when no spec is provided)
 - `pathway_analysis`: `pathway_enrichment.csv`, `pathway_activity_per_cluster.csv`, `pathway_enrichment_bar.png`, `pathway_activity_heatmap.png`
-- `pseudo_velocity`: `pseudo_velocity_speed.csv`, `pseudo_velocity_per_cluster.csv`, `pseudo_velocity_arrows*.png`, `pseudo_velocity_stream*.png`, `pseudo_velocity_speed_umap.png`, `pseudo_velocity_speed_boxplot.png`
-- `pseudobulk_de`: `pseudobulk_counts.csv`, `pseudobulk_de_results.csv`, `pseudobulk_volcano.png`, `pseudobulk_heatmap.png`
+- `pseudo_velocity`: `pseudo_velocity_speed.csv`, `pseudo_velocity_per_cluster.csv`, `pseudo_velocity_arrows*.png`, `pseudo_velocity_stream*.png`, `pseudo_velocity_speed_umap.png`, `pseudo_velocity_speed_boxplot.png` (all visibly labeled `exploratory_proxy`)
+- `pseudobulk_de`: numeric `pseudobulk_counts.csv`, row-aligned `pseudobulk_metadata.csv` with inference fields, `pseudobulk_de_results.csv`, `pseudobulk_volcano.png`, `pseudobulk_heatmap.png`
 - `qc`: `qc_violin_pre_filter.png`, `qc_violin_post_filter.png`, `qc_scatter_pre_filter.png`, `qc_scatter_post_filter.png`, `qc_threshold_audit.json`
 - `rna_velocity`: `velocity_confidence.csv`, `velocity_top_genes.csv`, `velocity_stream_umap.png`, `velocity_grid_umap.png`, `velocity_length_distribution.png` (+ dynamical-mode plots)
 - `trajectory`: `dpt_pseudotime.csv`, `pseudotime_per_cluster.csv`, `pseudotime_top_genes.csv`, `pseudotime_dpt_umap.png`, `paga_trajectory.png`
@@ -1558,7 +1587,9 @@ For NC2024-scale full-cohort runs, prefer:
 python -m workflow.modular.cli ... --scale-mode massive --checkpoint
 ```
 
-This preserves `.checkpoints/after_<module>.json` status/metadata sidecars while skipping full AnnData checkpoint writes in `massive` mode. It does not change numerical analysis results; it only avoids repeated 10GB+ checkpoint writes when disk headroom is more important than full-object resume after every optional module.
+With `--checkpoint`, all scale modes use the explicit `full` checkpoint policy.
+`massive` changes lazy reading to `true`; it does not silently skip AnnData
+checkpoints or change numerical analysis settings.
 
 ### Cell Ranger
 
@@ -1639,7 +1670,8 @@ This preserves `.checkpoints/after_<module>.json` status/metadata sidecars while
 | Parameter | Default | Description |
 |---|---|---|
 | `--regress-cell-cycle` | false | Regress out `S_score` and `G2M_score` after cell-cycle scoring |
-| `--trajectory-root-cluster` | empty | Leiden cluster ID used as DPT root |
+| `--trajectory-root-cluster` | empty | Existing Leiden cluster ID used as DPT root; required with a justification for claim-capable output |
+| `--trajectory-root-justification` | empty | Biological rationale for the selected DPT root; required with the root cluster for claim-capable output |
 | `--cnv-reference-group` | empty | Reference group for CNV normalization |
 | `--cnv-window-size` | 100 | Sliding-window size for CNV smoothing |
 | `--signature-json` | empty | Custom signature JSON for `gene_signature_scoring` |
@@ -1786,7 +1818,10 @@ RNA velocity extraction parallel scaling on the same dataset (strict mode, cold 
 
 1. **Large datasets (>50k cells)**: start with `--parallel-workers 2-4`, then scale up only if RAM headroom is sufficient.
 2. **DE for publication**: keep `--de-method wilcoxon`; use `t-test_overestim_var` only when speed is the top priority.
-3. **Single-sample runs**: `pseudobulk_de` is expected to skip (requires >=2 biological samples).
+3. **Pseudobulk replicates**: exploratory/no-contract paths may skip when
+   untestable. An explicit confirmatory contrast instead fails loud when its
+   biological sample column, raw counts, labels, unique sample-condition mapping,
+   or minimum two replicates per condition are missing.
 4. **Batch correction**: only enable when a real batch column exists; otherwise keep skipped to avoid unnecessary recomputation.
 5. **Runtime tuning loop**: inspect `run_manifest.json -> metadata.module_runtime_sec` and optimize the top 3 slowest modules first.
 6. **RNA velocity repeated runs**: set `SCF_VELOCITY_CACHE_DIR` to a fast local SSD path and reuse it across reruns.
@@ -1962,6 +1997,7 @@ Module coverage check: **25 / 25 core modules documented and citation-aligned**.
 | **Methods** | PAGA trajectory graph + Diffusion Pseudotime (DPT) + gene expression dynamics |
 | **PAGA** | Partition-based graph abstraction — discovers trajectory topology between clusters |
 | **DPT** | Diffusion map embedding + geodesic distance from root cell for temporal ordering |
+| **Claim boundary** | Claim-capable DPT requires both an existing Leiden `--trajectory-root-cluster` and a non-empty biological `--trajectory-root-justification`. Missing/invalid roots or missing justification produce explicit non-claimable provenance and plot/table labels. |
 | **Gene trends** | Top 30 genes correlated with pseudotime, smoothed heatmap visualization |
 | **Implementation** | `scanpy.tl.paga()`, `scanpy.tl.diffmap()`, `scanpy.tl.dpt()` |
 | **References** | **Wolf et al., *Genome Biology*, 2019.** DOI: [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) (PAGA); **Haghverdi et al., *Nature Methods*, 2016.** DOI: [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) (DPT) |
@@ -2044,6 +2080,11 @@ Module coverage check: **25 / 25 core modules documented and citation-aligned**.
 
 ### 16. Pseudo-Velocity (`pseudo_velocity`)
 
+This module is a nearest-neighbour pseudotime-gradient visualization, not a
+spliced/unspliced RNA-velocity model. Every status, CSV, AnnData payload, and
+plot is labeled `exploratory_proxy`; it must never support canonical RNA
+velocity claims. Use `rna_velocity` when canonical velocity evidence is needed.
+
 | Item | Detail |
 |---|---|
 | **Method** | Local pseudotime gradient estimation in UMAP space with full visualization |
@@ -2117,6 +2158,9 @@ Module coverage check: **25 / 25 core modules documented and citation-aligned**.
 | **Fallbacks** | Mann-Whitney U, then Wilcoxon rank-sum |
 | **Multiple testing** | Benjamini-Hochberg FDR (`_bh_adjust`) |
 | **Confirmatory mode** | Requires an explicit contrast contract: `--pseudobulk-contrast-col`, `--pseudobulk-contrast-a`, `--pseudobulk-contrast-b` (or `--pseudobulk-contrast-json`) |
+| **Biological replicate contract** | Also requires an explicit `--pseudobulk-sample-col`, one condition per biological sample, valid contrast labels, raw `adata.layers["counts"]`, and at least two biological replicates per condition. Invalid explicit requests record a non-claimable inference payload and raise `ValueError`. |
+| **Claim boundary** | Only confirmatory results produced entirely by pydeseq2 are claimable. Mann-Whitney/rank fallback is recorded as `completed_nonclaimable_backend_fallback` with `exploratory_nonclaimable_backend_fallback`. |
+| **Tables** | `pseudobulk_counts.csv` remains numeric; aligned sample/group/condition and inference fields are written to `pseudobulk_metadata.csv`; result rows also carry inference class/status/claimability. |
 | **Exploratory mode** | Optional `group_vs_rest` output only when `--pseudobulk-exploratory-group-vs-rest` is explicitly enabled |
 | **Eligibility policy** | Missing counts, missing contrast contract, or too few biological replicates should be recorded as `skipped`, not as silent paper-grade output |
 | **Implementation** | `workflow/modular/modules/pseudobulk_de.py` |

@@ -259,6 +259,7 @@ class PseudobulkDEModule:
                 results = self._run_confirmatory(
                     pb_counts,
                     pb_meta,
+                    sample_col,
                     group_col,
                     contrast_col,
                     explicit_contrasts,
@@ -424,21 +425,6 @@ class PseudobulkDEModule:
         results["inference_status"] = inference_status
         results["claimable"] = claimable
         results["biological_sample_col"] = sample_col
-        if mode == "confirmatory":
-            replicate_evidence = {
-                (item["contrast_a"], item["contrast_b"]): item
-                for item in ctx.metadata["pseudobulk_de_contrast_contract"][
-                    "biological_replicates"
-                ]
-            }
-            results["n_biological_replicates_a"] = [
-                replicate_evidence[(str(a), str(b))]["n_biological_replicates_a"]
-                for a, b in zip(results["contrast_a"], results["contrast_b"])
-            ]
-            results["n_biological_replicates_b"] = [
-                replicate_evidence[(str(a), str(b))]["n_biological_replicates_b"]
-                for a, b in zip(results["contrast_a"], results["contrast_b"])
-            ]
         ctx.metadata["pseudobulk_de_contrast_contract"].update({
             "inference_class": inference_class,
             "inference_status": inference_status,
@@ -504,7 +490,16 @@ class PseudobulkDEModule:
         contrasts: list[dict[str, str]],
         min_samples_per_condition: int,
     ) -> list[dict[str, object]]:
-        mapping = adata.obs[[sample_col, contrast_col]].drop_duplicates()
+        identities = adata.obs[[sample_col, contrast_col]].copy()
+        invalid_identity = identities.isna() | identities.apply(
+            lambda column: column.astype(str).str.strip().eq("")
+        )
+        if invalid_identity.any(axis=None):
+            raise PseudobulkInferenceContractError(
+                "not_testable_invalid_biological_identifiers",
+                "Biological sample and condition identities must be non-null and non-blank.",
+            )
+        mapping = identities.astype(str).drop_duplicates()
         conditions_per_sample = mapping.groupby(sample_col, observed=True)[
             contrast_col
         ].nunique()
@@ -722,6 +717,7 @@ class PseudobulkDEModule:
         self,
         pb_counts: pd.DataFrame,
         pb_meta: pd.DataFrame,
+        sample_col: str,
         group_col: str,
         contrast_col: str,
         contrasts: list[dict[str, str]],
@@ -731,10 +727,21 @@ class PseudobulkDEModule:
         for group in pb_meta[group_col].unique():
             mask = pb_meta[group_col] == group
             group_meta = pb_meta.loc[mask].reset_index(drop=True)
+            group_meta[contrast_col] = group_meta[contrast_col].astype(str)
             group_counts = pb_counts.loc[mask].reset_index(drop=True)
             for spec in contrasts:
                 a = spec["contrast_a"]
                 b = spec["contrast_b"]
+                samples_a = sorted(
+                    group_meta.loc[group_meta[contrast_col] == a, sample_col]
+                    .astype(str)
+                    .unique()
+                )
+                samples_b = sorted(
+                    group_meta.loc[group_meta[contrast_col] == b, sample_col]
+                    .astype(str)
+                    .unique()
+                )
                 res = self._run_de(
                     group_counts,
                     group_meta,
@@ -749,6 +756,10 @@ class PseudobulkDEModule:
                 res["contrast_col"] = contrast_col
                 res["contrast_a"] = a
                 res["contrast_b"] = b
+                res["n_biological_replicates_a"] = len(samples_a)
+                res["n_biological_replicates_b"] = len(samples_b)
+                res["biological_replicate_ids_a"] = ";".join(samples_a)
+                res["biological_replicate_ids_b"] = ";".join(samples_b)
                 results.append(res)
         if not results:
             return None
@@ -860,10 +871,10 @@ class PseudobulkDEModule:
         md[cond_col] = md[cond_col].astype(str)
         dds = DeseqDataSet(counts=ci, metadata=md, design=f"~{cond_col}")
         dds.deseq2()
-        try:
-            sr = DeseqStats(dds, contrast=[cond_col, str(ca), str(cb)])
-        except TypeError:
-            sr = DeseqStats(dds)
+        # Never silently drop the requested contrast: an older/incompatible
+        # PyDESeq2 API must fall through to the explicitly non-claimable rank
+        # backend rather than producing a default coefficient labeled claimable.
+        sr = DeseqStats(dds, contrast=[cond_col, str(ca), str(cb)])
         sr.summary()
         r = sr.results_df.reset_index().rename(
             columns={"index": "gene", "log2FoldChange": "log2FC"}
@@ -926,10 +937,11 @@ class PseudobulkDEModule:
         ax.axhline(-np.log10(0.05), color="grey", ls="--", lw=0.8)
         for v in (-0.5, 0.5):
             ax.axvline(v, color="grey", ls="--", lw=0.8)
+        claim_label = PseudobulkDEModule._plot_claim_label(results)
         ax.set(
             xlabel="Log2 Fold Change",
             ylabel="-log10(adjusted p-value)",
-            title="Pseudobulk DE -- Volcano Plot",
+            title=f"Pseudobulk DE -- Volcano Plot [{claim_label}]",
         )
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudobulk_volcano.png", dpi=160, bbox_inches="tight")
@@ -957,11 +969,30 @@ class PseudobulkDEModule:
         ax.set_xticklabels(avail, rotation=90, fontsize=7)
         ax.set_yticks(range(len(labels)))
         ax.set_yticklabels(labels, fontsize=8)
-        ax.set(ylabel="Sample", title="Top DE Genes -- Pseudobulk (log2 counts)")
+        claim_label = PseudobulkDEModule._plot_claim_label(results)
+        ax.set(
+            ylabel="Sample",
+            title=f"Top DE Genes -- Pseudobulk (log2 counts) [{claim_label}]",
+        )
         plt.colorbar(im, ax=ax, label="log2(count + 1)")
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudobulk_heatmap.png", dpi=160, bbox_inches="tight")
         plt.close()
+
+    @staticmethod
+    def _plot_claim_label(results: pd.DataFrame) -> str:
+        claimable = bool(
+            "claimable" in results.columns
+            and not results.empty
+            and results["claimable"].fillna(False).astype(bool).all()
+        )
+        if claimable:
+            return "CLAIMABLE"
+        if "inference_status" in results.columns and not results.empty:
+            status = str(results["inference_status"].iloc[0])
+        else:
+            status = "unknown_inference_status"
+        return f"NON-CLAIMABLE: {status}"
 
 
 def _bh_adjust(pvals: np.ndarray) -> np.ndarray:

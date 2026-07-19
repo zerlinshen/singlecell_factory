@@ -213,11 +213,15 @@ Cell-type composition aligns with Sanchez-Mejias *Nat Commun* 2024 (doi:10.1038/
 
 ## Key Pipeline Surfaces (current)
 
-- **Capability flags** (replace multivalent `scale_mode`; preset bundle still accepted for backward compat):
-  - `--lazy-read {auto,true,false}` (file >5GB → auto on)
-  - `--doublet-strategy {auto,grouped,whole,skip}` (auto = grouped when n_obs ≥ 100k and `sample` column present)
-  - `--clustering-engine {auto,sparse_exact,css,gpu}`
-  - `--checkpoint-policy {full}`
+- **Resource strategy**: `--scale-mode standard|large|massive` may resolve only
+  `--lazy-read` and `--checkpoint-policy`. It must preserve optional modules,
+  HVGs, PCs, neighbors, Leiden resolution, DE limits, doublet strategy, and
+  clustering engine. Run metadata records `resource_strategy` separately.
+- **Scientific profile**: canonical defaults are
+  `clustering,differential_expression,annotation`. Any
+  `--scientific-profile legacy-large|legacy-massive` change requires
+  `--acknowledge-scientific-non-equivalence`; the exact resolved scientific
+  parameter diff is recorded.
 - **Annotation strategy**: `--annotation-strategy {cluster_voting,cell_argmax}` (default `cluster_voting`; `cell_argmax` retained as fallback). The cell_argmax path drifts on >100k cohorts — do NOT use as default.
 - **Memory enforcement**: `workflow/modular/_mem_guard.py` provides `MemoryEnforcer` (pre-flight budget + watchdog Event + cooperative abort via `SkipModule`). `SC_MEM_GUARD=on SC_MEM_WATCHDOG=on` enables runtime enforcement.
 - **Sparse engines** (env flags): `SC_DE_ENGINE=sparse SC_CNV_ENGINE=chunked SC_CELLCOMM_ENGINE=sparse`.
@@ -282,6 +286,20 @@ for historical project-local skills.
 - Each module writes only within its own module directory via context helpers.
 - `module_status.csv` and `run_manifest.json` are source-of-truth artifacts.
 - Keep output filenames stable unless a documented breaking change is requested.
+- `trajectory` and `pseudo_velocity` are explicit opt-ins, not universal
+  defaults. Claim-capable DPT requires an existing explicit Leiden root cluster
+  plus a non-empty biological justification; otherwise its provenance and
+  artifacts must remain non-claimable.
+- `pseudo_velocity` is always `exploratory_proxy`, never canonical RNA velocity.
+- Explicit confirmatory pseudobulk requires a named biological sample column,
+  one condition per sample, valid labels, raw counts, and sufficient biological
+  replicates. Invalid contracts record non-claimable inference and fail loud.
+  Only an all-pydeseq2 confirmatory result is claimable; rank fallback is
+  exploratory/non-claimable. Keep `pseudobulk_counts.csv` numeric and place
+  sample/group/condition plus inference fields in aligned
+  `pseudobulk_metadata.csv`.
+- Scale/resource strategies must never change scientific parameters or module
+  selection. Use an acknowledged scientific profile for non-equivalent changes.
 - `2026-04-25` sparse-exact probe directories are not canonical successful
   NC2024 evidence unless they contain `final_adata.h5ad`, `run_manifest.json`,
   and `module_status.csv`.

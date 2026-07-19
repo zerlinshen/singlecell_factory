@@ -938,6 +938,16 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
     ctx.metadata["resolved_scientific_parameter_diff"] = (
         cfg.resolved_scientific_parameter_diff
     )
+    ctx.metadata["scientific_parameter_snapshot"] = {
+        "optional_modules": cfg.optional_modules,
+        "n_top_genes": cfg.clustering.n_top_genes,
+        "n_pcs": cfg.clustering.n_pcs,
+        "n_neighbors": cfg.clustering.n_neighbors,
+        "leiden_resolution": cfg.clustering.leiden_resolution,
+        "de_n_genes": cfg.de_n_genes,
+        "doublet_strategy": cfg.doublet_strategy,
+        "clustering_engine": cfg.clustering_engine,
+    }
     if ledger is not None:
         ctx._ledger = ledger
     registry = _build_registry()

@@ -239,7 +239,10 @@ You will:
 
 Pipeline structure:
 - Mandatory modules (always): `cellranger -> qc -> ambient_correction -> doublet_detection`
-- Optional modules (22): selected by `--optional-modules` with auto dependency resolution.
+- Optional modules (23): selected by `--optional-modules` with auto dependency resolution.
+  The universal default is only
+  `clustering,differential_expression,annotation`; trajectory and
+  pseudo-velocity are explicit opt-ins.
 
 Doublet backend discipline:
 - `--doublet-backend scrublet` remains the global default because hgmm species-mix ground truth still favors Scrublet.
@@ -318,14 +321,21 @@ What this gives you:
 python -m workflow.modular.cli \
   --project demo_full_local \
   --sample-root data/raw/<your_sample> \
-  --optional-modules clustering,cell_cycle,batch_correction,differential_expression,annotation,trajectory,pseudo_velocity,rna_velocity,cnv_inference,pathway_analysis,cell_communication,gene_regulatory_network,immune_phenotyping,tumor_microenvironment,gene_signature_scoring,evolution,pseudobulk_de,cell_fate,composition,metacell \
-  --velocity-bam data/raw/<your_sample>/outs/possorted_genome_bam.bam \
-  --transcriptome-dir /path/to/refdata-gex-GRCh38-2024-A
+  --optional-modules clustering,differential_expression,annotation
 ```
 
 Notes:
 - `rna_velocity` needs either `--velocity-loom` OR (`--velocity-bam` + resolvable GTF via `--velocity-gtf` or `--transcriptome-dir`).
 - `validate_cbioportal` is not included above (avoids network dependency).
+- Claim-capable trajectory is a separate explicit choice:
+  `--optional-modules trajectory --trajectory-root-cluster <leiden-id>
+  --trajectory-root-justification "<biological rationale>"`.
+- `pseudo_velocity` is always an exploratory DPT-gradient proxy, never canonical
+  RNA velocity.
+- Confirmatory pseudobulk needs `--pseudobulk-sample-col`, contrast column/A/B
+  (or a consistent-column JSON contract), raw counts, and at least two
+  biological replicates per condition. Supplying contrast flags auto-routes
+  `pseudobulk_de` even when it is absent from `--optional-modules`.
 
 ---
 
@@ -357,8 +367,10 @@ Optional (23):
 - `batch_correction`
 - `differential_expression`
 - `annotation`
-- `trajectory`
-- `pseudo_velocity`
+- `trajectory` (explicit opt-in; claim-capable only with an existing root
+  cluster plus biological justification)
+- `pseudo_velocity` (explicit opt-in `exploratory_proxy`; never canonical RNA
+  velocity)
 - `rna_velocity`
 - `cnv_inference`
 - `pathway_analysis`
@@ -369,7 +381,7 @@ Optional (23):
 - `tumor_microenvironment`
 - `gene_signature_scoring`
 - `evolution`
-- `pseudobulk_de`
+- `pseudobulk_de` (explicit contrast flags auto-route this module)
 - `cell_fate`
 - `composition`
 - `metacell`
@@ -554,7 +566,10 @@ Current verified state for this lane:
 
 Interpretation note:
 - `large` is only a probe here.
-- `massive` is the scale-protective fallback and should be expected when eager full-object loading or standard clustering paths exceed memory.
+- `massive` is the scale-protective resource fallback for eager full-object
+  loading. It changes lazy I/O/checkpoint behavior only; it does not reduce
+  modules or alter HVGs, PCs, neighbors, resolution, DE limits, doublet
+  strategy, or clustering engine.
 
 ---
 
@@ -627,6 +642,10 @@ blocked until these marker and annotation checks are plausible.
 
 ## 12. RNA Velocity (Common Confusion)
 
+`pseudo_velocity` is only an exploratory DPT-gradient visualization. Only
+`rna_velocity`, with spliced/unspliced inputs, can support canonical RNA-velocity
+interpretation.
+
 To enable `rna_velocity`, provide at least one of:
 1. `--velocity-loom`
 2. `--velocity-bam` plus GTF resolution (`--velocity-gtf` or `--transcriptome-dir`)
@@ -646,8 +665,19 @@ export SCF_VELOCITY_CACHE_DIR=/path/to/fast_ssd_cache
 `pseudobulk_de` uses raw UMI counts from `adata.layers["counts"]`.
 
 Current behavior:
-- If counts layer is missing or invalid, module is skipped with explicit status.
-- Single-sample input will skip pseudobulk comparison (expected behavior).
+- Confirmatory mode requires explicit contrast labels/column (or a JSON contract
+  with one consistent `contrast_col`) and an explicit biological
+  `--pseudobulk-sample-col`.
+- Each biological sample must map to exactly one condition, both labels must
+  exist, and each condition needs at least two biological replicates by default.
+- Missing/invalid explicit prerequisites record a non-claimable inference
+  payload and then raise `ValueError`; they are not converted into successful
+  skipped modules. Exploratory no-contract/group-vs-rest paths may still skip.
+- Only an all-pydeseq2 confirmatory result is claimable. Rank-test fallback and
+  group-vs-rest results are explicitly exploratory/non-claimable.
+- `pseudobulk_counts.csv` is numeric-only. Row-aligned sample/group/condition and
+  inference fields are written to `pseudobulk_metadata.csv`; results carry
+  inference class/status/claimability and biological replicate counts.
 
 ---
 
