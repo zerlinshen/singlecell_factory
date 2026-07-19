@@ -361,6 +361,7 @@ def test_pseudobulk_confirmatory_mode_records_contract(tmp_path, monkeypatch):
         output_dir=tmp_path / "out",
         cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
         pseudobulk=PseudobulkConfig(
+            sample_col="sample",
             contrast_col="condition",
             contrast_a="A",
             contrast_b="B",
@@ -390,6 +391,10 @@ def test_pseudobulk_confirmatory_mode_records_contract(tmp_path, monkeypatch):
     assert list(out["group"]) == ["Tumor|A_vs_B"]
     assert ctx.metadata["pseudobulk_de_mode"] == "confirmatory"
     assert ctx.metadata["pseudobulk_de_status"] == "completed"
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "exploratory_nonclaimable_backend_fallback"
+    )
     assert ctx.metadata["pseudobulk_de_contrast_contract"]["contrast_col"] == "condition"
 
 

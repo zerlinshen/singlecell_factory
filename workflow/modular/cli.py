@@ -713,6 +713,18 @@ def _resolve_optional_modules(args: argparse.Namespace) -> list[str]:
     modules = _validate_modules(args.optional_modules)
     if getattr(args, "select_integration", False) and "integration_select" not in modules:
         modules.append("integration_select")
+    contrast_json = getattr(args, "pseudobulk_contrast_json", "")
+    contrast_a = getattr(args, "pseudobulk_contrast_a", "")
+    contrast_b = getattr(args, "pseudobulk_contrast_b", "")
+    contrast_requested = bool(contrast_json or contrast_a or contrast_b)
+    if contrast_requested and not (contrast_json or (contrast_a and contrast_b)):
+        raise SystemExit(
+            "Error: a pseudobulk condition contrast requires both "
+            "--pseudobulk-contrast-a and --pseudobulk-contrast-b, or a "
+            "--pseudobulk-contrast-json contract."
+        )
+    if contrast_requested and "pseudobulk_de" not in modules:
+        modules.append("pseudobulk_de")
     return modules
 
 

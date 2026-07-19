@@ -40,8 +40,6 @@ DEFAULT_OPTIONAL_MODULES: tuple[str, ...] = (
     "clustering",
     "differential_expression",
     "annotation",
-    "trajectory",
-    "pseudo_velocity",
 )
 
 

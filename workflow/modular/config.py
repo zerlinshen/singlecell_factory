@@ -265,8 +265,6 @@ class PipelineConfig:
             "clustering",
             "differential_expression",
             "annotation",
-            "trajectory",
-            "pseudo_velocity",
         ]
     )
     markers: dict[str, list[str]] = field(default_factory=dict)

@@ -34,9 +34,9 @@ def test_mandatory_chain_and_default_optional_modules_are_stable() -> None:
         "clustering",
         "differential_expression",
         "annotation",
-        "trajectory",
-        "pseudo_velocity",
     )
+    assert "trajectory" in MODULE_SPECS
+    assert "pseudo_velocity" in MODULE_SPECS
     assert set(MANDATORY_MODULES).isdisjoint(optional_module_names())
 
 

@@ -32,6 +32,14 @@ MIN_CELLS_PER_SAMPLE = 3
 MIN_SAMPLES_PER_CONDITION = 2
 
 
+class PseudobulkInferenceContractError(ValueError):
+    """Machine-classified failure of the biological replicate contract."""
+
+    def __init__(self, inference_status: str, message: str):
+        super().__init__(message)
+        self.inference_status = inference_status
+
+
 class PseudobulkDEModule:
     """Pseudobulk DE with an explicit contrast contract.
 
@@ -41,6 +49,27 @@ class PseudobulkDEModule:
     """
 
     name = "pseudobulk_de"
+
+    @staticmethod
+    def _record_inference(
+        ctx: PipelineContext,
+        *,
+        inference_class: str,
+        inference_status: str,
+        claimable: bool,
+        **details,
+    ) -> None:
+        payload = {
+            "inference_class": inference_class,
+            "inference_status": inference_status,
+            "claimable": bool(claimable),
+            **details,
+        }
+        ctx.metadata["pseudobulk_de_inference_class"] = inference_class
+        ctx.metadata["pseudobulk_de_inference_status"] = inference_status
+        ctx.metadata["pseudobulk_de_claimable"] = bool(claimable)
+        if ctx.adata is not None:
+            ctx.adata.uns["pseudobulk_de"] = payload
 
     def run(self, ctx: PipelineContext) -> None:
         import os
@@ -65,6 +94,39 @@ class PseudobulkDEModule:
         cfg = getattr(ctx.cfg, "pseudobulk", None)
         min_cells = int(getattr(cfg, "min_cells_per_sample", MIN_CELLS_PER_SAMPLE))
         min_samples = int(getattr(cfg, "min_samples_per_condition", MIN_SAMPLES_PER_CONDITION))
+        self._record_inference(
+            ctx,
+            inference_class="not_tested",
+            inference_status="not_started",
+            claimable=False,
+        )
+
+        explicit_contrasts, contrast_col, contract_message = self._resolve_confirmatory_contract(
+            adata,
+            ctx,
+        )
+        exploratory = bool(getattr(cfg, "exploratory_group_vs_rest", False))
+
+        configured_sample_col = getattr(cfg, "sample_col", None)
+        if explicit_contrasts and (
+            not configured_sample_col or configured_sample_col not in adata.obs.columns
+        ):
+            msg = (
+                "Confirmatory condition contrasts require an explicit biological "
+                "--pseudobulk-sample-col that exists in adata.obs; technical batch "
+                "auto-detection is not claim-safe."
+            )
+            ctx.metadata["pseudobulk_de_status"] = "skipped_missing_biological_sample_col"
+            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class="replicate_aware_pseudobulk",
+                inference_status="not_testable_missing_biological_sample_col",
+                claimable=False,
+                requested_biological_sample_col=configured_sample_col,
+            )
+            ctx.status(self.name, "skipped", msg)
+            return
 
         try:
             sample_col = self._resolve_sample_col(
@@ -79,6 +141,14 @@ class PseudobulkDEModule:
             logger.warning("%s; skipping pseudobulk DE.", exc)
             ctx.metadata["pseudobulk_de_status"] = "skipped_missing_grouping_columns"
             ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk" if explicit_contrasts else "not_tested"
+                ),
+                inference_status="not_testable_missing_grouping_columns",
+                claimable=False,
+            )
             ctx.status(self.name, "skipped", str(exc))
             return
 
@@ -87,6 +157,15 @@ class PseudobulkDEModule:
             logger.warning(msg)
             ctx.metadata["pseudobulk_de_status"] = "skipped_single_sample"
             ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk" if explicit_contrasts else "not_tested"
+                ),
+                inference_status="not_testable_insufficient_biological_replicates",
+                claimable=False,
+                biological_sample_col=sample_col,
+            )
             ctx.status(self.name, "skipped", msg)
             return
 
@@ -95,17 +174,27 @@ class PseudobulkDEModule:
             logger.warning("%s; skipping pseudobulk DE.", msg)
             ctx.metadata["pseudobulk_de_status"] = "skipped_missing_counts_layer"
             ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk" if explicit_contrasts else "not_tested"
+                ),
+                inference_status="not_testable_missing_raw_counts",
+                claimable=False,
+                biological_sample_col=sample_col,
+            )
             ctx.status(self.name, "skipped", msg)
             return
 
-        explicit_contrasts, contrast_col, contract_message = self._resolve_confirmatory_contract(
-            adata,
-            ctx,
-        )
-        exploratory = bool(getattr(cfg, "exploratory_group_vs_rest", False))
-
         try:
             if explicit_contrasts:
+                replicate_contract = self._validate_biological_replicates(
+                    adata,
+                    sample_col=sample_col,
+                    contrast_col=contrast_col,
+                    contrasts=explicit_contrasts,
+                    min_samples_per_condition=min_samples,
+                )
                 pb_counts, pb_meta = self._aggregate(
                     adata,
                     [sample_col, group_col, contrast_col],
@@ -126,6 +215,7 @@ class PseudobulkDEModule:
                     "group_col": group_col,
                     "contrast_col": contrast_col,
                     "contrasts": explicit_contrasts,
+                    "biological_replicates": replicate_contract,
                 }
             elif exploratory:
                 pb_counts, pb_meta = self._aggregate(
@@ -154,30 +244,135 @@ class PseudobulkDEModule:
                 )
                 ctx.metadata["pseudobulk_de_status"] = "skipped_missing_contrast_contract"
                 ctx.metadata["pseudobulk_de_mode"] = "skipped"
+                self._record_inference(
+                    ctx,
+                    inference_class="not_tested",
+                    inference_status="not_testable_missing_contrast_contract",
+                    claimable=False,
+                )
                 ctx.status(self.name, "skipped", msg)
                 return
+        except PseudobulkInferenceContractError as exc:
+            logger.warning("%s; skipping pseudobulk DE.", exc)
+            ctx.metadata["pseudobulk_de_status"] = f"skipped_{exc.inference_status}"
+            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class="replicate_aware_pseudobulk",
+                inference_status=exc.inference_status,
+                claimable=False,
+                biological_sample_col=sample_col,
+                contrast_col=contrast_col,
+            )
+            ctx.status(self.name, "skipped", str(exc))
+            return
         except ValueError as exc:
             logger.warning("%s; skipping pseudobulk DE.", exc)
             ctx.metadata["pseudobulk_de_status"] = "skipped_missing_counts_layer"
             ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk"
+                    if explicit_contrasts
+                    else "exploratory_pseudobulk"
+                ),
+                inference_status="not_testable_invalid_counts_or_grouping",
+                claimable=False,
+            )
             ctx.status(self.name, "skipped", str(exc))
             return
 
         if pb_counts.empty or pb_meta.empty:
             ctx.metadata["pseudobulk_de_status"] = "skipped_no_valid_pseudobulk_groups"
             ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk"
+                    if explicit_contrasts
+                    else "exploratory_pseudobulk"
+                ),
+                inference_status="not_testable_no_valid_pseudobulk_groups",
+                claimable=False,
+            )
             ctx.status(self.name, "skipped", "No pseudobulk groups passed minimum cell threshold.")
             return
-
-        pb_counts.to_csv(ctx.table_dir / "pseudobulk_counts.csv", index=False)
 
         if results is None or results.empty:
             ctx.metadata["pseudobulk_de_status"] = "skipped_no_testable_contrasts"
             ctx.metadata["pseudobulk_de_mode"] = mode
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk"
+                    if mode == "confirmatory"
+                    else "exploratory_pseudobulk"
+                ),
+                inference_status="not_testable_insufficient_biological_replicates",
+                claimable=False,
+            )
+            self._write_annotated_table(
+                pb_counts,
+                ctx.table_dir / "pseudobulk_counts.csv",
+                ctx,
+            )
             ctx.status(self.name, "skipped", "No pseudobulk contrasts met minimum sample requirements.")
             return
 
+        test_used = set(results.get("test_used", pd.Series(dtype=str)).dropna().astype(str))
+        if mode == "confirmatory" and test_used == {"pydeseq2"}:
+            inference_class = "replicate_aware_pseudobulk"
+            inference_status = "supported_confirmatory"
+            claimable = True
+        elif mode == "confirmatory":
+            inference_class = "replicate_aware_pseudobulk_backend_fallback"
+            inference_status = "exploratory_nonclaimable_backend_fallback"
+            claimable = False
+        else:
+            inference_class = "exploratory_pseudobulk_group_vs_rest"
+            inference_status = "exploratory_nonclaimable"
+            claimable = False
+
+        self._record_inference(
+            ctx,
+            inference_class=inference_class,
+            inference_status=inference_status,
+            claimable=claimable,
+            biological_sample_col=sample_col,
+            contrast_col=contrast_col,
+            test_used=sorted(test_used),
+        )
+        results["inference_class"] = inference_class
+        results["inference_status"] = inference_status
+        results["claimable"] = claimable
+        results["biological_sample_col"] = sample_col
+        if mode == "confirmatory":
+            replicate_evidence = {
+                (item["contrast_a"], item["contrast_b"]): item
+                for item in ctx.metadata["pseudobulk_de_contrast_contract"][
+                    "biological_replicates"
+                ]
+            }
+            results["n_biological_replicates_a"] = [
+                replicate_evidence[(str(a), str(b))]["n_biological_replicates_a"]
+                for a, b in zip(results["contrast_a"], results["contrast_b"])
+            ]
+            results["n_biological_replicates_b"] = [
+                replicate_evidence[(str(a), str(b))]["n_biological_replicates_b"]
+                for a, b in zip(results["contrast_a"], results["contrast_b"])
+            ]
+        ctx.metadata["pseudobulk_de_contrast_contract"].update({
+            "inference_class": inference_class,
+            "inference_status": inference_status,
+            "claimable": claimable,
+        })
         results.to_csv(ctx.table_dir / "pseudobulk_de_results.csv", index=False)
+        self._write_annotated_table(
+            pb_counts,
+            ctx.table_dir / "pseudobulk_counts.csv",
+            ctx,
+        )
         n_sig = int((results["padj"] < 0.05).sum()) if "padj" in results.columns else 0
         ctx.metadata["pseudobulk_de_significant_genes"] = n_sig
         ctx.metadata["pseudobulk_de_status"] = "completed"
@@ -201,6 +396,78 @@ class PseudobulkDEModule:
         self._plot_heatmap(results, pb_counts, pb_meta, sample_col, ctx)
 
     # -- contract helpers ------------------------------------------------
+    @staticmethod
+    def _write_annotated_table(
+        table: pd.DataFrame,
+        path: Path,
+        ctx: PipelineContext,
+    ) -> None:
+        annotated = table.copy()
+        annotated["inference_class"] = ctx.metadata["pseudobulk_de_inference_class"]
+        annotated["inference_status"] = ctx.metadata["pseudobulk_de_inference_status"]
+        annotated["claimable"] = ctx.metadata["pseudobulk_de_claimable"]
+        annotated.to_csv(path, index=False)
+
+    @staticmethod
+    def _validate_biological_replicates(
+        adata,
+        *,
+        sample_col: str,
+        contrast_col: str,
+        contrasts: list[dict[str, str]],
+        min_samples_per_condition: int,
+    ) -> list[dict[str, object]]:
+        mapping = adata.obs[[sample_col, contrast_col]].drop_duplicates()
+        conditions_per_sample = mapping.groupby(sample_col, observed=True)[
+            contrast_col
+        ].nunique()
+        ambiguous = conditions_per_sample[conditions_per_sample != 1].index.astype(str).tolist()
+        if ambiguous:
+            raise PseudobulkInferenceContractError(
+                "not_testable_sample_condition_nonunique",
+                "Each biological sample must map to exactly one condition; ambiguous "
+                f"samples: {ambiguous[:5]}",
+            )
+
+        evidence: list[dict[str, object]] = []
+        for spec in contrasts:
+            contrast_a = str(spec["contrast_a"])
+            contrast_b = str(spec["contrast_b"])
+            samples_a = set(
+                mapping.loc[mapping[contrast_col].astype(str) == contrast_a, sample_col]
+                .astype(str)
+            )
+            samples_b = set(
+                mapping.loc[mapping[contrast_col].astype(str) == contrast_b, sample_col]
+                .astype(str)
+            )
+            overlap = sorted(samples_a & samples_b)
+            if overlap:
+                raise PseudobulkInferenceContractError(
+                    "not_testable_overlapping_biological_replicates",
+                    f"Contrast {contrast_a} vs {contrast_b} reuses samples: {overlap[:5]}",
+                )
+            if (
+                len(samples_a) < min_samples_per_condition
+                or len(samples_b) < min_samples_per_condition
+            ):
+                raise PseudobulkInferenceContractError(
+                    "not_testable_insufficient_biological_replicates",
+                    f"Contrast {contrast_a} vs {contrast_b} has {len(samples_a)} vs "
+                    f"{len(samples_b)} biological replicates; requires at least "
+                    f"{min_samples_per_condition} per condition.",
+                )
+            evidence.append(
+                {
+                    "name": str(spec.get("name", f"{contrast_a}_vs_{contrast_b}")),
+                    "contrast_a": contrast_a,
+                    "contrast_b": contrast_b,
+                    "n_biological_replicates_a": len(samples_a),
+                    "n_biological_replicates_b": len(samples_b),
+                }
+            )
+        return evidence
+
     @classmethod
     def _resolve_sample_col(cls, adata, preferred: str) -> str:
         return cls._resolve_col(
