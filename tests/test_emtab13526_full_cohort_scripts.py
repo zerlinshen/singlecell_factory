@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import signal
+from contextlib import contextmanager
 from pathlib import Path
 
 import anndata as ad
@@ -22,6 +24,25 @@ def load_prepare_module():
     assert spec is not None and spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+@contextmanager
+def bounded_zarr_operation(label: str, seconds: float = 15.0):
+    """Fail diagnostically instead of letting a small Zarr fixture hang CI."""
+    if not hasattr(signal, "setitimer"):
+        yield
+        return
+
+    def _timeout(_signum, _frame):
+        raise TimeoutError(f"{label} exceeded {seconds:g}s")
+
+    previous_handler = signal.signal(signal.SIGALRM, _timeout)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def test_build_sample_meta_yields_required_columns(tmp_path):
@@ -46,10 +67,14 @@ def test_build_sample_meta_yields_required_columns(tmp_path):
     assert condition_map["P1_B1"] == "healthy_background"
 
 
-def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Path:
-    parts_root = tmp_path / "parts"
-    parts_root.mkdir(parents=True, exist_ok=True)
+@pytest.mark.skipif(not hasattr(signal, "setitimer"), reason="POSIX timer required")
+def test_bounded_zarr_operation_fails_diagnostically():
+    with pytest.raises(TimeoutError, match="fixture probe exceeded"):
+        with bounded_zarr_operation("fixture probe", seconds=0.01):
+            signal.pause()
 
+
+def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Path:
     var = pd.DataFrame(
         {"gene_symbol": ["g1", "g2", "g3"]},
         index=pd.Index(["g1", "g2", "g3"], name=None),
@@ -87,14 +112,19 @@ def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Pa
                 "tumor_type",
             ]
         ]
-        adata = ad.AnnData(X=x, obs=obs, var=var)
-        adata.write_zarr(parts_root / f"{sample}.zarr")
-        parts.append(adata)
+        parts.append(ad.AnnData(X=x, obs=obs, var=var))
 
     merged = tmp_path / "merged.zarr"
-    # This is a four-cell schema fixture, not a concat_on_disk integration
-    # benchmark. In-memory concat keeps the test bounded and preserves CSR X.
-    ad.concat(parts, axis=0, join="outer").write_zarr(merged)
+    # This is a four-cell schema fixture, not a concat or Zarr throughput test.
+    # Assemble it directly to avoid three redundant writes plus concat machinery,
+    # which intermittently deadlocked after the broader modular test set.
+    merged_adata = ad.AnnData(
+        X=sparse.vstack([part.X for part in parts], format="csr"),
+        obs=pd.concat([part.obs for part in parts], axis=0),
+        var=var.copy(),
+    )
+    with bounded_zarr_operation("toy CSR Zarr write"):
+        merged_adata.write_zarr(merged)
     return merged
 
 
@@ -131,9 +161,14 @@ def write_summary_json(
 
 def test_validate_prepared_input_passes_on_toy_csr_zarr_parts(tmp_path):
     module = load_prepare_module()
-    merged = make_valid_merged_zarr(tmp_path)
-    summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
-    payload = module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
+    with bounded_zarr_operation("toy CSR Zarr positive validation"):
+        merged = make_valid_merged_zarr(tmp_path)
+        summary = write_summary_json(
+            tmp_path, merged, n_samples=2, retained_barcodes_total=4
+        )
+        payload = module.validate_prepared_input(
+            merged, expected_n_samples=2, summary_path=summary
+        )
     assert payload["n_samples"] == 2
     assert payload["prepared_summary"]["retained_barcodes_total"] == 4
     assert payload["x_encoding"] == "csr_matrix"
