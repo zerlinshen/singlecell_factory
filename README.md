@@ -795,6 +795,14 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 - **Parallel execution** — thread-safe parallel tiers with cost-aware scheduling, merge-back safety warnings for structural mutations
 - **Module contracts** — `requires_keys` / `provides_keys` declarations enable pre-flight validation; missing upstream data skips optional modules gracefully instead of crashing
 - **Normalized status tracking** — module results are recorded as `ok` / `skipped` / `failed` in both `run_manifest.json` and `module_status.csv`
+- **Truthful aggregate completion** — `run_manifest.json` and the project-root
+  `manifest.json` record requested, executed, skipped, and failed module lists
+  plus `overall_status`. A requested-module failure exits nonzero by default;
+  `--allow-partial-run` is the explicit recovery-only override and does not hide
+  the recorded failure.
+- **Complete dirty-source provenance** — project-root manifests distinguish
+  unstaged tracked and staged diff hashes from the untracked path inventory and
+  bounded content hash; the legacy `diff_sha256` field remains available.
 - **Module runtime telemetry** — per-module wall-time automatically stored in `run_manifest.json`
 - **Raw-count integrity for pseudobulk** — `cellranger` stores raw UMI matrix in `adata.layers["counts"]`; `pseudobulk_de` consumes this layer only
 - **Reference-aware annotation (optional)** — KNN label transfer from reference `h5ad` can override low-certainty marker labels

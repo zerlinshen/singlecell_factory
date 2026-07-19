@@ -1,5 +1,5 @@
 """Smoke tests for --project-root / --run-id / --allow-dirty CLI flags."""
-import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +29,20 @@ def test_allow_dirty_flag_exists():
     ):
         args = parse_args()
     assert args.allow_dirty is True
+
+
+def test_allow_partial_run_flag_exists():
+    from workflow.modular.cli import parse_args
+    import unittest.mock as mock
+    with mock.patch(
+        "sys.argv",
+        [
+            "cli", "--project", "test", "--sample-root", "/tmp/x",
+            "--allow-partial-run",
+        ],
+    ):
+        args = parse_args()
+    assert args.allow_partial_run is True
 
 
 def test_project_root_flag_exists():
@@ -83,13 +97,12 @@ def test_legacy_invocation_no_project_root():
     assert args.allow_dirty is False
 
 
-def test_sc_require_project_root_unset_legacy_warns():
+def test_sc_require_project_root_unset_legacy_warns(tmp_path):
     """When SC_REQUIRE_PROJECT_ROOT is unset, missing --project-root emits DeprecationWarning."""
     import unittest.mock as mock
     import warnings
 
     # Ensure env var is not set
-    env_patch = {"SC_REQUIRE_PROJECT_ROOT": None}
     with mock.patch.dict("os.environ", {}, clear=False):
         # Remove the key if present
         import os
@@ -125,6 +138,7 @@ def test_sc_require_project_root_unset_legacy_warns():
                 "cli",
                 "--project", "test",
                 "--sample-root", "/tmp/x",
+                "--output-dir", str(tmp_path / "legacy-output"),
             ],
         ):
             with warnings.catch_warnings(record=True) as caught:
@@ -146,8 +160,6 @@ def test_sc_require_project_root_unset_legacy_warns():
 def test_sc_require_project_root_set_hard_errors():
     """When SC_REQUIRE_PROJECT_ROOT=1, missing --project-root must exit with code 2."""
     import unittest.mock as mock
-    import os
-
     with mock.patch.dict("os.environ", {"SC_REQUIRE_PROJECT_ROOT": "1"}):
         from workflow.modular import cli as cli_mod
         import importlib
@@ -172,8 +184,6 @@ def test_project_root_run_ledger_writes_under_run_dir(tmp_path, monkeypatch):
     """With --project-root, RunLedger must live under <run>/ops, not output/ops."""
     import importlib
     import os
-    import unittest.mock as mock
-
     from workflow.modular import cli as cli_mod
     from workflow.modular import manifest_writer
 
@@ -221,6 +231,87 @@ def test_project_root_run_ledger_writes_under_run_dir(tmp_path, monkeypatch):
     ledgers = list((run_dir / "ops" / "run_ledger").glob("*.json"))
     assert ledgers, "expected RunLedger JSON under project-root run dir"
     assert not (tmp_path / "output" / "ops" / "run_ledger").exists()
+
+
+@pytest.mark.parametrize("allow_partial, expected_exit", [(False, 1), (True, 0)])
+def test_real_path_manifest_propagates_failure_and_controls_exit(
+    tmp_path, monkeypatch, allow_partial, expected_exit
+):
+    import os
+    from workflow.modular import cli as cli_mod
+    from workflow.modular import manifest_writer
+
+    project_root = tmp_path / "project"
+    sample_root = tmp_path / "sample"
+    sample_root.mkdir()
+    run_id = "2026-05-14T0001Z-aaaaaaa"
+
+    monkeypatch.setattr(
+        manifest_writer,
+        "factory_git_state",
+        lambda root: {"sha": "aaaaaaa", "dirty": False, "diff_sha256": ""},
+    )
+
+    def fake_run_pipeline(cfg, ledger=None):
+        producer_dir = Path(cfg.output_dir) / "test_20260514_000100"
+        producer_dir.mkdir(parents=True, exist_ok=True)
+        producer = producer_dir / "run_manifest.json"
+        producer.write_text(
+            json.dumps(
+                {
+                    "requested_modules": ["qc", "annotation"],
+                    "planned_modules": ["qc", "annotation"],
+                    "executed_modules": ["qc", "annotation"],
+                    "completed_modules": ["qc"],
+                    "modules_run": ["qc"],
+                    "skipped_modules": [],
+                    "failed_modules": ["annotation"],
+                    "overall_status": "failed",
+                    "bundle_sha256": "abc123",
+                    "factory_python": {
+                        "sha": "aaaaaaa", "dirty": False, "diff_sha256": ""
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return producer
+
+    monkeypatch.setattr(cli_mod, "run_pipeline", fake_run_pipeline)
+    argv = [
+        "cli", "--project", "test", "--sample-root", str(sample_root),
+        "--project-root", str(project_root), "--run-id", run_id, "--allow-dirty",
+    ]
+    if allow_partial:
+        argv.append("--allow-partial-run")
+    monkeypatch.setattr("sys.argv", argv)
+
+    cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        if expected_exit:
+            with pytest.raises(SystemExit) as exc_info:
+                cli_mod.main()
+            assert exc_info.value.code == expected_exit
+        else:
+            cli_mod.main()
+    finally:
+        os.chdir(cwd)
+
+    outer = json.loads((project_root / "runs" / run_id / "manifest.json").read_text())
+    assert outer["modules_run"] == ["qc"]
+    assert outer["requested_modules"] == ["qc", "annotation"]
+    assert outer["planned_modules"] == ["qc", "annotation"]
+    assert outer["executed_modules"] == ["qc", "annotation"]
+    assert outer["completed_modules"] == ["qc"]
+    assert outer["failed_modules"] == ["annotation"]
+    assert outer["overall_status"] == "failed"
+    assert outer["bundle_sha256"] == "abc123"
+    assert outer["factory_python"] == {
+        "sha": "aaaaaaa", "dirty": False, "diff_sha256": ""
+    }
+    assert outer["producer_manifest"].endswith("run_manifest.json")
+    assert outer["extra"]["allow_partial_run"] is allow_partial
 
 
 def test_pack_run_for_mac_project_root_tars_python_bundle(tmp_path):

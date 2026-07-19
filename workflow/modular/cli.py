@@ -635,7 +635,31 @@ def parse_args() -> argparse.Namespace:
             "The diff SHA256 is recorded in manifest.json for forensics."
         ),
     )
+    parser.add_argument(
+        "--allow-partial-run",
+        action="store_true",
+        help=(
+            "Return exit status 0 even when a requested optional module failed. "
+            "Failure remains recorded in both manifests; intended only for "
+            "explicit recovery workflows."
+        ),
+    )
     return parser.parse_args()
+
+
+def _load_pipeline_manifest(result: object) -> tuple[dict, str]:
+    """Normalize the preserved run_pipeline Path contract for CLI consumption."""
+    if isinstance(result, dict):
+        return dict(result), ""
+    if isinstance(result, (str, Path)):
+        path = Path(result)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"pipeline manifest must contain a JSON object: {path}")
+        return payload, str(path)
+    raise TypeError(
+        f"run_pipeline returned unsupported manifest type: {type(result).__name__}"
+    )
 
 
 def _validate_modules(optional_modules_str: str) -> list[str]:
@@ -1000,6 +1024,7 @@ def main() -> None:
         trajectory_root_cluster=args.trajectory_root_cluster,
         checkpoint=args.checkpoint,
         resume_from=args.resume_from,
+        allow_partial_run=args.allow_partial_run,
         parallel_workers=args.parallel_workers,
         de_method=args.de_method,
         de_n_genes=args.de_n_genes,
@@ -1054,23 +1079,42 @@ def main() -> None:
             logging.getLogger(__name__).warning("MemoryWatchdog start failed: %s", _wd_exc)
 
     try:
-        manifest = run_pipeline(cfg, ledger=ledger)
-        print(manifest)
+        manifest_result = run_pipeline(cfg, ledger=ledger)
+        print(manifest_result)
+        manifest, producer_manifest = _load_pipeline_manifest(manifest_result)
         if _run_dir is not None:
             try:
-                modules_run = list(manifest.get("modules_run", [])) if isinstance(manifest, dict) else []
-                bundle_sha256 = manifest.get("bundle_sha256", "") if isinstance(manifest, dict) else ""
+                modules_run = list(manifest.get("modules_run", []))
+                bundle_sha256 = manifest.get("bundle_sha256", "")
                 write_manifest(
                     _run_dir,
                     project_id=args.project,
                     run_id=_run_id,
                     modules_run=modules_run,
                     bundle_sha256=bundle_sha256 or None,
+                    requested_modules=list(manifest.get("requested_modules", modules_run)),
+                    planned_modules=list(manifest.get("planned_modules", modules_run)),
+                    executed_modules=list(manifest.get("executed_modules", modules_run)),
+                    completed_modules=list(manifest.get("completed_modules", modules_run)),
+                    skipped_modules=list(manifest.get("skipped_modules", [])),
+                    failed_modules=list(manifest.get("failed_modules", [])),
+                    overall_status=str(manifest.get("overall_status", "")),
+                    producer_manifest=producer_manifest,
+                    factory_python_state=manifest.get("factory_python"),
                     produced_on=socket.gethostname(),
                     factory_python_path=_FACTORY_ROOT,
+                    extra={"allow_partial_run": bool(args.allow_partial_run)},
                 )
             except Exception as _mf_exc:
                 logging.getLogger(__name__).warning("manifest write failed: %s", _mf_exc)
+                raise RuntimeError("project-root manifest write failed") from _mf_exc
+        if manifest.get("failed_modules") and not args.allow_partial_run:
+            print(
+                "ERROR: requested module failure(s): "
+                + ", ".join(str(name) for name in manifest["failed_modules"]),
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
     finally:
         run_shutdown_cleanup()
 

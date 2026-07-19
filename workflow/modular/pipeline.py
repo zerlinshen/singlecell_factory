@@ -13,8 +13,10 @@ from time import perf_counter
 import pandas as pd
 from scipy import sparse
 
+from ..factory_paths import SINGLECELL_FACTORY_ROOT
 from .config import PipelineConfig
 from .context import PipelineContext
+from .manifest_writer import factory_git_state
 from .module_catalog import MANDATORY_MODULES, module_dependencies, module_runs_after
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ def _normalize_status(value: str) -> str:
     token = (value or "").strip().lower()
     if token in {"ok", "completed", "success"}:
         return "ok"
-    if token in {"skipped", "skip"}:
+    if token.startswith("skip"):
         return "skipped"
     return "failed"
 
@@ -392,10 +394,50 @@ def _prepare_output(cfg: PipelineConfig) -> PipelineContext:
     return PipelineContext(cfg=cfg, run_dir=run_dir, figure_dir=run_dir, table_dir=run_dir)
 
 
-def _save_manifest(ctx: PipelineContext) -> Path:
+def _summarize_run_status(
+    ctx: PipelineContext,
+    requested_modules: list[str],
+    planned_modules: list[str] | None = None,
+) -> dict:
+    """Aggregate the final status of every requested module."""
+    final_by_module: dict[str, str] = {}
+    for entry in ctx.module_status:
+        module = str(entry.get("module", ""))
+        if module:
+            final_by_module[module] = _normalize_status(str(entry.get("status", "failed")))
+    planned = list(planned_modules or requested_modules)
+    executed = [name for name in planned if name in final_by_module]
+    completed = [name for name in planned if final_by_module.get(name) == "ok"]
+    skipped = [name for name in planned if final_by_module.get(name) == "skipped"]
+    failed = [
+        name for name in planned
+        if final_by_module.get(name, "failed") == "failed"
+    ]
+    overall_status = "failed" if failed else ("partial" if skipped else "complete")
+    return {
+        "overall_status": overall_status,
+        "requested_modules": list(requested_modules),
+        "planned_modules": planned,
+        "executed_modules": executed,
+        "completed_modules": completed,
+        "skipped_modules": skipped,
+        "failed_modules": failed,
+    }
+
+
+def _save_manifest(
+    ctx: PipelineContext,
+    requested_modules: list[str] | None = None,
+    planned_modules: list[str] | None = None,
+) -> Path:
     ctx.flush_figures()
     if ctx.adata is not None:
         ctx.adata.write(ctx.run_dir / "final_adata.h5ad")
+    summary = _summarize_run_status(
+        ctx,
+        requested_modules or list(ctx.cfg.optional_modules),
+        planned_modules,
+    )
     manifest = {
         "project": ctx.cfg.project,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -403,6 +445,11 @@ def _save_manifest(ctx: PipelineContext) -> Path:
         "optional_modules": ctx.cfg.optional_modules,
         "module_status": ctx.module_status,
         "metadata": ctx.metadata,
+        **summary,
+        "modules_run": summary["completed_modules"],
+        "bundle_sha256": str(ctx.metadata.get("bundle_sha256", "")),
+        "factory_python": factory_git_state(SINGLECELL_FACTORY_ROOT),
+        "allow_partial_run": bool(ctx.cfg.allow_partial_run),
     }
     manifest_path = ctx.run_dir / "run_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -901,6 +948,8 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
         execution_order = _resolve_execution_order(
             mandatory, cfg.optional_modules, dropped_hints_sink
         )
+        requested_modules = list(dict.fromkeys([*mandatory, *cfg.optional_modules]))
+        planned_modules = list(execution_order)
         if dropped_hints_sink:
             # Loud breadcrumb in run_manifest.json: ordering hints were dropped
             # to avoid a combined-graph stall (annotation/batch_correction
@@ -949,7 +998,7 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
             _run_sequential(execution_order, registry, ctx, mandatory_set)
 
         ctx.metadata["pipeline_wall_seconds"] = round(perf_counter() - pipeline_t0, 3)
-        manifest_path = _save_manifest(ctx)
+        manifest_path = _save_manifest(ctx, requested_modules, planned_modules)
         try:
             ledger = getattr(ctx, "_ledger", None)
             if ledger is not None:

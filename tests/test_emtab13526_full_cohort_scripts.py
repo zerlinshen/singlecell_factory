@@ -3,20 +3,21 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-import shutil
 
 import anndata as ad
-from anndata.experimental import concat_on_disk
 import numpy as np
 import pandas as pd
 import pytest
+import zarr
 from scipy import sparse
 
 
 def load_prepare_module():
     repo_root = Path(__file__).resolve().parents[1]
     module_path = repo_root / "scripts" / "prepare_emtab13526_full_cohort_zarr.py"
-    spec = importlib.util.spec_from_file_location("prepare_emtab13526_full_cohort_zarr", module_path)
+    spec = importlib.util.spec_from_file_location(
+        "prepare_emtab13526_full_cohort_zarr", module_path
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec is not None and spec.loader is not None
     spec.loader.exec_module(module)
@@ -40,13 +41,12 @@ def test_build_sample_meta_yields_required_columns(tmp_path):
 
     meta = module.build_sample_meta(sdrf)
     assert set(module.REQUIRED_OBS_COLUMNS).issubset(meta.columns)
-    condition_map = dict(zip(meta["sample"], meta["condition"]))
+    condition_map = dict(zip(meta["sample"], meta["condition"], strict=True))
     assert condition_map["P1_T1"] == "tumor"
     assert condition_map["P1_B1"] == "healthy_background"
 
 
 def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Path:
-    module = load_prepare_module()
     parts_root = tmp_path / "parts"
     parts_root.mkdir(parents=True, exist_ok=True)
 
@@ -54,6 +54,7 @@ def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Pa
         {"gene_symbol": ["g1", "g2", "g3"]},
         index=pd.Index(["g1", "g2", "g3"], name=None),
     )
+    parts = []
     for idx, sample in enumerate(["S1", "S2"], start=1):
         x = sparse.csr_matrix(np.array([[1, 0, 2], [0, 3, 0]], dtype=np.float32) + idx)
         obs = pd.DataFrame(
@@ -88,18 +89,22 @@ def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Pa
         ]
         adata = ad.AnnData(X=x, obs=obs, var=var)
         adata.write_zarr(parts_root / f"{sample}.zarr")
+        parts.append(adata)
 
     merged = tmp_path / "merged.zarr"
-    concat_on_disk(
-        [parts_root / "S1.zarr", parts_root / "S2.zarr"],
-        merged,
-        axis=0,
-        join="outer",
-    )
+    # This is a four-cell schema fixture, not a concat_on_disk integration
+    # benchmark. In-memory concat keeps the test bounded and preserves CSR X.
+    ad.concat(parts, axis=0, join="outer").write_zarr(merged)
     return merged
 
 
-def write_summary_json(tmp_path: Path, prepared_zarr: Path, *, n_samples: int = 2, retained_barcodes_total: int = 4) -> Path:
+def write_summary_json(
+    tmp_path: Path,
+    prepared_zarr: Path,
+    *,
+    n_samples: int = 2,
+    retained_barcodes_total: int = 4,
+) -> Path:
     summary_path = tmp_path / "prepared_input.summary.json"
     payload = {
         # Required by validate_prepared_input schema check
@@ -107,34 +112,30 @@ def write_summary_json(tmp_path: Path, prepared_zarr: Path, *, n_samples: int = 
         "cell_calling_version": "nc2024_hybrid_knee_qc_v1",
         "method": "samplewise_hybrid_knee_plus_qc",
         "expected_n_samples": n_samples,
-        "retention_fraction": 1.0,
+        "retention_fraction": 0.01,
         # Existing fields
         "prepared_zarr": str(prepared_zarr),
         "n_samples": n_samples,
-        "raw_barcodes_total": retained_barcodes_total,
+        "raw_barcodes_total": retained_barcodes_total * 100,
         "retained_barcodes_total": retained_barcodes_total,
         "nnz_total": retained_barcodes_total,
         # samples list length must equal n_samples (validator checks this)
-        "samples": [{"sample": f"S{i}"} for i in range(n_samples)],
+        "samples": [
+            {"sample": f"S{i}", "retained_barcodes": retained_barcodes_total // n_samples}
+            for i in range(1, n_samples + 1)
+        ],
     }
     summary_path.write_text(json.dumps(payload), encoding="utf-8")
     return summary_path
 
 
-@pytest.mark.xfail(
-    reason="Schema drift: validate_prepared_summary now also enforces "
-    "raw_barcodes_total/retained_barcodes_total relationships against the "
-    "toy adata; toy fixture adata.n_obs may not match retained_barcodes_total. "
-    "Needs make_valid_merged_zarr to be parametrized with cell counts that "
-    "satisfy the validator. Pre-existing before Phase 7."
-)
 def test_validate_prepared_input_passes_on_toy_csr_zarr_parts(tmp_path):
     module = load_prepare_module()
     merged = make_valid_merged_zarr(tmp_path)
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
     payload = module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
     assert payload["n_samples"] == 2
-    assert payload["retained_barcodes_total"] == 4
+    assert payload["prepared_summary"]["retained_barcodes_total"] == 4
     assert payload["x_encoding"] == "csr_matrix"
 
 
@@ -142,7 +143,9 @@ def test_validate_prepared_input_fails_when_x_storage_is_incomplete(tmp_path):
     module = load_prepare_module()
     merged = make_valid_merged_zarr(tmp_path)
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
-    shutil.rmtree(merged / "X" / "indptr")
+    root = zarr.open_group(merged, mode="a")
+    del root["X"]["indptr"]
+    (merged / ".zmetadata").unlink(missing_ok=True)
     with pytest.raises(ValueError, match="missing X/indptr"):
         module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
 
@@ -167,15 +170,11 @@ def test_validate_prepared_input_requires_summary_json(tmp_path):
         )
 
 
-@pytest.mark.xfail(
-    reason="Same schema drift as test_validate_prepared_input_passes — depends on "
-    "toy adata.n_obs matching summary retained_barcodes_total. Pre-existing before Phase 7."
-)
 def test_validate_prepared_input_fails_when_summary_obs_count_mismatches(tmp_path):
     module = load_prepare_module()
     merged = make_valid_merged_zarr(tmp_path)
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=999)
-    with pytest.raises(ValueError, match="obs count mismatch"):
+    with pytest.raises(ValueError, match="retained_barcodes_total mismatch"):
         module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
 
 

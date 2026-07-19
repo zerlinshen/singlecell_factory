@@ -6,8 +6,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from workflow.modular.manifest_writer import factory_git_state, write_manifest
 
 
@@ -50,7 +48,7 @@ def test_factory_git_state_dirty_tree_returns_nonempty_diff_sha256(tmp_path):
                 return sha_mock
             if "status" in args:
                 return status_mock
-            if args[-1:] == ["diff"] or (len(args) >= 2 and args[-1] == "diff"):
+            if "diff" in args and "--cached" not in args:
                 return diff_mock
             return b""
         mock_cmd.side_effect = side_effect
@@ -61,6 +59,39 @@ def test_factory_git_state_dirty_tree_returns_nonempty_diff_sha256(tmp_path):
     assert state["dirty"] is True
     assert len(state["diff_sha256"]) == 64
     assert all(c in "0123456789abcdef" for c in state["diff_sha256"])
+
+
+def test_factory_git_state_records_staged_and_untracked_sources(tmp_path):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "Test"], check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("base\n", encoding="utf-8")
+    unstaged = tmp_path / "unstaged.txt"
+    unstaged.write_text("base\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "tracked.txt", "unstaged.txt"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "base"], check=True)
+
+    tracked.write_text("staged\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "tracked.txt"], check=True)
+    unstaged.write_text("unstaged\n", encoding="utf-8")
+    untracked = tmp_path / "untracked.txt"
+    untracked.write_text("untracked payload\n", encoding="utf-8")
+
+    state = factory_git_state(tmp_path)
+    assert state["dirty"] is True
+    assert len(state["tracked_diff_sha256"]) == 64
+    assert len(state["staged_diff_sha256"]) == 64
+    assert state["untracked_files"] == ["untracked.txt"]
+    assert len(state["untracked_inventory_sha256"]) == 64
+    assert len(state["untracked_content_sha256"]) == 64
+    assert state["untracked_content_hash_complete"] is True
 
 
 def test_factory_git_state_clean_tree_has_empty_diff_sha256(tmp_path):

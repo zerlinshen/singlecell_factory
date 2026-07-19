@@ -323,6 +323,7 @@ class PipelineConfig:
     hic_chromsizes_path: Path | None = None
     hic_tad_window_bins: int = 5
     hic_tad_boundary_k: float = 1.0
+    allow_partial_run: bool = False
 
 
 # Maps scale_mode preset names to their capability flag bundles.

@@ -45,6 +45,44 @@ def test_modular_pipeline_minimal(monkeypatch, tmp_path):
     manifest = run_pipeline(cfg)
     assert manifest.exists()
     assert manifest.name == "run_manifest.json"
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["overall_status"] == "complete"
+    assert payload["failed_modules"] == []
+
+
+def test_run_status_summary_reports_requested_failure_and_skip():
+    from workflow.modular.pipeline import _summarize_run_status
+
+    cfg = PipelineConfig(
+        project="status",
+        output_dir=Path("/tmp/status"),
+        cellranger=CellRangerConfig(
+            sample_root=Path("/tmp/input"),
+            outs_dir=Path("/tmp/input/outs/filtered_feature_bc_matrix"),
+        ),
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=Path("/tmp/status"),
+        figure_dir=Path("/tmp/status"),
+        table_dir=Path("/tmp/status"),
+    )
+    ctx.status("qc", True, "ok")
+    ctx.status("annotation", "skipped_memory", "bounded")
+    ctx.status("differential_expression", False, "boom")
+
+    summary = _summarize_run_status(
+        ctx, ["qc", "annotation", "differential_expression"]
+    )
+    assert summary == {
+        "overall_status": "failed",
+        "requested_modules": ["qc", "annotation", "differential_expression"],
+        "planned_modules": ["qc", "annotation", "differential_expression"],
+        "executed_modules": ["qc", "annotation", "differential_expression"],
+        "completed_modules": ["qc"],
+        "skipped_modules": ["annotation"],
+        "failed_modules": ["differential_expression"],
+    }
 
 
 def test_modular_cli_parse(monkeypatch):
