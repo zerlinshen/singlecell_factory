@@ -56,10 +56,11 @@ def _adaptive_quiver_scale(umap_coords, velocity):
 
 
 class PseudoVelocityModule:
-    """Optional module: pseudo-RNA velocity from local pseudotime gradients.
+    """Optional exploratory proxy from local pseudotime gradients.
 
     Computes velocity vectors in UMAP space from k-NN pseudotime gradients,
     then produces arrow plots, stream plots, speed overlays, and per-cluster stats.
+    This module never produces canonical RNA velocity.
     """
 
     name = "pseudo_velocity"
@@ -89,9 +90,30 @@ class PseudoVelocityModule:
 
         adata.obsm["X_pseudo_velocity"] = full_velocity
         adata.obs["pseudo_velocity_speed"] = full_speed
+        inference_class = "exploratory_proxy"
+        claim_status = "non_claimable_as_canonical_rna_velocity"
+        adata.uns["pseudo_velocity"] = {
+            "engine": "knn_pseudotime_gradient",
+            "inference_class": inference_class,
+            "claim_status": claim_status,
+            "canonical_rna_velocity": False,
+            "requires_spliced_unspliced": False,
+            "caveat": (
+                "Exploratory proxy derived from DPT gradients in UMAP space; "
+                "never canonical RNA velocity."
+            ),
+            "n_obs": int(adata.n_obs),
+            "n_valid": int(valid.sum()),
+        }
 
         # --- Tables ---
-        pd.DataFrame({"barcode": adata.obs_names, "speed": full_speed}).to_csv(
+        pd.DataFrame({
+            "barcode": adata.obs_names,
+            "speed": full_speed,
+            "inference_class": inference_class,
+            "claim_status": claim_status,
+            "canonical_rna_velocity": False,
+        }).to_csv(
             ctx.table_dir / "pseudo_velocity_speed.csv", index=False,
         )
         if "leiden" in adata.obs:
@@ -101,9 +123,21 @@ class PseudoVelocityModule:
                 .agg(["count", "mean", "median", "std"])
                 .reset_index()
             )
+            stats["inference_class"] = inference_class
+            stats["claim_status"] = claim_status
+            stats["canonical_rna_velocity"] = False
             stats.to_csv(ctx.table_dir / "pseudo_velocity_per_cluster.csv", index=False)
 
         ctx.metadata["pseudo_velocity_mean_speed"] = round(float(np.nanmean(speed)), 4)
+        ctx.metadata["pseudo_velocity_status"] = inference_class
+        ctx.metadata["pseudo_velocity_inference_class"] = inference_class
+        ctx.metadata["pseudo_velocity_claim_status"] = claim_status
+        ctx.metadata["pseudo_velocity_canonical_rna_velocity"] = False
+        ctx.status(
+            self.name,
+            "ok",
+            "exploratory_proxy; non-claimable as canonical RNA velocity",
+        )
 
         # --- Visualizations ---
         umap_valid = umap[valid]
@@ -123,8 +157,8 @@ class PseudoVelocityModule:
             adata.obsm["X_umap"][:, 0], adata.obsm["X_umap"][:, 1],
             c=adata.obs["pseudo_velocity_speed"], cmap="YlOrRd", s=3, alpha=0.7,
         )
-        plt.colorbar(sc0, ax=axes[0], label="Speed")
-        axes[0].set_title("Pseudo-velocity Speed")
+        plt.colorbar(sc0, ax=axes[0], label="Exploratory proxy speed")
+        axes[0].set_title("Exploratory proxy — pseudo-velocity speed\nNOT canonical RNA velocity")
         axes[0].set_xlabel("UMAP1"); axes[0].set_ylabel("UMAP2")
 
         sc1 = axes[1].scatter(
@@ -132,7 +166,7 @@ class PseudoVelocityModule:
             c=adata.obs["dpt_pseudotime"], cmap="viridis", s=3, alpha=0.7,
         )
         plt.colorbar(sc1, ax=axes[1], label="Pseudotime")
-        axes[1].set_title("DPT Pseudotime")
+        axes[1].set_title("Exploratory proxy input — DPT pseudotime\nNOT canonical RNA velocity")
         axes[1].set_xlabel("UMAP1"); axes[1].set_ylabel("UMAP2")
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudo_velocity_speed_umap.png", dpi=160, bbox_inches="tight")
@@ -153,7 +187,7 @@ class PseudoVelocityModule:
             angles="xy", scale_units="xy", scale=qscale,
             color="black", alpha=0.6, width=0.002, headwidth=4,
         )
-        ax.set_title("Pseudo-velocity Arrows")
+        ax.set_title("Exploratory proxy — pseudo-velocity arrows\nNOT canonical RNA velocity")
         ax.set_xlabel("UMAP1"); ax.set_ylabel("UMAP2")
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows.png", dpi=160, bbox_inches="tight")
@@ -193,7 +227,7 @@ class PseudoVelocityModule:
                           linewidth=1, density=1.5, arrowsize=1.2)
         except Exception:
             pass
-        ax.set_title("Pseudo-velocity Stream Plot")
+        ax.set_title("Exploratory proxy — pseudo-velocity stream\nNOT canonical RNA velocity")
         ax.set_xlabel("UMAP1"); ax.set_ylabel("UMAP2")
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudo_velocity_stream.png", dpi=160, bbox_inches="tight")
@@ -222,7 +256,10 @@ class PseudoVelocityModule:
             cmap="viridis", alpha=0.8, width=0.002, headwidth=4,
         )
         plt.colorbar(sc_bg, ax=ax, label="Pseudotime")
-        ax.set_title("Pseudo-velocity Arrows (temporal)")
+        ax.set_title(
+            "Exploratory proxy — pseudo-velocity arrows (temporal)\n"
+            "NOT canonical RNA velocity"
+        )
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
@@ -265,7 +302,10 @@ class PseudoVelocityModule:
             color=arrow_colors, alpha=0.7, width=0.002, headwidth=4,
         )
         ax.legend(fontsize=7, loc="best", markerscale=3, framealpha=0.8)
-        ax.set_title(f"Pseudo-velocity Arrows (by {col})")
+        ax.set_title(
+            f"Exploratory proxy — pseudo-velocity arrows (by {col})\n"
+            "NOT canonical RNA velocity"
+        )
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
@@ -322,7 +362,10 @@ class PseudoVelocityModule:
         except Exception:
             pass
         ax.legend(fontsize=7, loc="best", markerscale=3, framealpha=0.8)
-        ax.set_title(f"Pseudo-velocity Stream (by {col})")
+        ax.set_title(
+            f"Exploratory proxy — pseudo-velocity stream (by {col})\n"
+            "NOT canonical RNA velocity"
+        )
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
@@ -339,8 +382,11 @@ class PseudoVelocityModule:
         bp = ax.boxplot(data, labels=clusters, patch_artist=True, showfliers=False)
         for patch in bp["boxes"]:
             patch.set_facecolor("steelblue"); patch.set_alpha(0.6)
-        ax.set_xlabel("Leiden Cluster"); ax.set_ylabel("Speed")
-        ax.set_title("Pseudo-velocity Speed per Cluster")
+        ax.set_xlabel("Leiden Cluster"); ax.set_ylabel("Exploratory proxy speed")
+        ax.set_title(
+            "Exploratory proxy — pseudo-velocity speed per cluster\n"
+            "NOT canonical RNA velocity"
+        )
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudo_velocity_speed_boxplot.png", dpi=160, bbox_inches="tight")
         plt.close()
