@@ -85,6 +85,56 @@ def test_run_status_summary_reports_requested_failure_and_skip():
     }
 
 
+def test_resume_manifest_summarizes_only_current_planned_subset(monkeypatch, tmp_path):
+    import workflow.modular.pipeline as pipe
+
+    output_dir = tmp_path / "out"
+    prior_run = output_dir / "resume_status_prior"
+    (prior_run / ".checkpoints").mkdir(parents=True)
+
+    cfg = PipelineConfig(
+        project="resume_status",
+        output_dir=output_dir,
+        cellranger=CellRangerConfig(
+            sample_root=tmp_path / "input",
+            outs_dir=tmp_path / "input" / "outs" / "filtered_feature_bc_matrix",
+        ),
+        optional_modules=[],
+        resume_from="qc",
+    )
+
+    def fake_load_checkpoint(ctx, module_name):
+        assert module_name == "cellranger"
+        ctx.status("cellranger", True, "completed in prior invocation")
+        return True
+
+    def fake_run_sequential(modules, registry, ctx, mandatory):
+        for module_name in modules:
+            ctx.status(module_name, True, "completed in resumed invocation")
+
+    monkeypatch.setattr(PipelineContext, "load_checkpoint", fake_load_checkpoint)
+    monkeypatch.setattr(pipe, "_run_sequential", fake_run_sequential)
+
+    payload = json.loads(run_pipeline(cfg).read_text(encoding="utf-8"))
+
+    assert payload["requested_modules"] == [
+        "cellranger",
+        "qc",
+        "ambient_correction",
+        "doublet_detection",
+    ]
+    assert payload["planned_modules"] == [
+        "qc",
+        "ambient_correction",
+        "doublet_detection",
+    ]
+    assert payload["executed_modules"] == payload["planned_modules"]
+    assert payload["completed_modules"] == payload["planned_modules"]
+    assert payload["skipped_modules"] == []
+    assert payload["failed_modules"] == []
+    assert payload["overall_status"] == "complete"
+
+
 def test_modular_cli_parse(monkeypatch):
     import workflow.modular.cli as mod
 

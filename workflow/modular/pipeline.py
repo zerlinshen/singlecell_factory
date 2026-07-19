@@ -949,7 +949,6 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
             mandatory, cfg.optional_modules, dropped_hints_sink
         )
         requested_modules = list(dict.fromkeys([*mandatory, *cfg.optional_modules]))
-        planned_modules = list(execution_order)
         if dropped_hints_sink:
             # Loud breadcrumb in run_manifest.json: ordering hints were dropped
             # to avoid a combined-graph stall (annotation/batch_correction
@@ -985,6 +984,8 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
                         f"Run the pipeline with --checkpoint first."
                     )
             execution_order = execution_order[resume_idx:]
+
+        planned_modules = list(execution_order)
 
         # --- Execute ---
         if cfg.parallel_workers > 1:
