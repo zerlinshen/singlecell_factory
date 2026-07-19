@@ -14,6 +14,13 @@ import zarr
 from scipy import sparse
 
 
+# The toy AnnData/Zarr writes normally finish quickly, but async Zarr startup can
+# exceed four seconds when the full suite is under CPU/thread pressure. A
+# one-minute bound remains finite for diagnosing a real hang without firing
+# during normal initialization and poisoning Zarr's shared event-loop thread.
+EMTAB_TEST_TIMEOUT_SECONDS = 60.0
+
+
 def load_prepare_module():
     repo_root = Path(__file__).resolve().parents[1]
     module_path = repo_root / "scripts" / "prepare_emtab13526_full_cohort_zarr.py"
@@ -47,8 +54,11 @@ def bounded_zarr_operation(label: str, seconds: float = 15.0):
 
 @pytest.fixture(autouse=True)
 def bound_every_emtab_test(request):
-    """Bound setup, test body, and teardown for every test in this file."""
-    with bounded_zarr_operation(request.node.nodeid, seconds=4.0):
+    """Bound each EMTAB test without interrupting normal async Zarr startup."""
+    with bounded_zarr_operation(
+        request.node.nodeid,
+        seconds=EMTAB_TEST_TIMEOUT_SECONDS,
+    ):
         yield
 
 
