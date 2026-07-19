@@ -665,6 +665,8 @@ For the GSE162170 processed-matrix Figure 3A reproduction, run
 `--velocity-h5ad`, `--pipeline-h5ad`, and project-owned `--out-dir` paths. The
 producer owns all alignment, sampling, gene selection, scVelo computation,
 velocity embedding/pseudotime, velocity length, and marker-trend binning.
+The CLI requires `--out-dir` to resolve below
+`/home/zerlinshen/projects/<project-id>/...`.
 
 The strict handoff is:
 
@@ -682,11 +684,15 @@ The manifest identifiers are exactly
 `schema_name=singlecell_velocity_figure3a_render` and `schema_version=1.0`.
 
 The bundle validator fails on missing/positional fields, non-finite values,
-invalid pseudotime/length ranges, row/schema drift, or SHA mismatch. Targets are
-write-once; select a new governed run directory for a rerun. Plotting consumers
-must render the named artifacts without loading AnnData or computing velocity,
-statistics, marker trends, or embeddings. This public processed-matrix lane is
-always `exploratory`, not FASTQ-level or confirmatory evidence.
+invalid pseudotime/length ranges, row/schema drift, or SHA mismatch. The
+integrity/reproducibility key hashes every semantic manifest field except the
+key itself. All files are written and validated in a sibling staging directory;
+the complete directory is then published by one same-filesystem atomic rename,
+and staging is removed on failure. Targets are write-once; select a new governed
+run directory for a rerun. Plotting consumers must render the named artifacts
+without loading AnnData or computing velocity, statistics, marker trends, or
+embeddings. This public processed-matrix lane is always `exploratory`, not
+FASTQ-level or confirmatory evidence.
 
 ---
 

@@ -13,7 +13,7 @@ from anndata import AnnData
 from scipy import sparse
 
 from scripts.produce_public_rna_velocity_figure3a_artifacts import (
-    _assert_output_outside_factory,
+    _assert_governed_project_output,
     produce,
 )
 from workflow.modular.velocity_render_contract import (
@@ -96,7 +96,7 @@ def test_choose_cells_is_seed_reproducible_and_sorted():
     assert first == sorted(first)
     assert len(first) == len(set(first)) == 40
     assert sum(cell in set(obs.index[-10:]) for cell in first) == 10
-    assert second == sorted(second)
+    assert second == first
 
 
 def test_producer_writes_strict_named_hash_linked_bundle(tmp_path):
@@ -201,6 +201,16 @@ def test_validator_rejects_value_tampering_by_hash(tmp_path):
             lambda manifest: manifest["software_versions"].pop("scvelo"),
             "missing software versions",
         ),
+        (
+            lambda manifest: manifest.update(
+                {"truth_boundary": "different but still nonblank scientific boundary"}
+            ),
+            "reproducibility_key_sha256 does not match",
+        ),
+        (
+            lambda manifest: manifest["markers"]["missing"].append("NEW_MISSING"),
+            "reproducibility_key_sha256 does not match",
+        ),
     ],
 )
 def test_validator_rejects_incomplete_or_tampered_manifest(tmp_path, mutation, message):
@@ -267,10 +277,74 @@ def test_producer_refuses_to_overwrite_immutable_bundle(tmp_path):
         produce(velocity_path, pipeline_path, output_dir, **kwargs)
 
 
-def test_cli_guard_refuses_factory_tree_output():
+def test_atomic_publication_cleans_partial_staging_and_allows_retry(tmp_path, monkeypatch):
+    import workflow.modular.velocity_render_contract as contract
+
+    velocity_path, pipeline_path = _write_inputs(tmp_path)
+    output_dir = tmp_path / "bundle"
+    kwargs = dict(
+        max_cells=20,
+        top_genes=8,
+        min_shared_counts=1,
+        markers=("SOX2",),
+        scv=_fake_scvelo(),
+    )
+    original_validate = contract.validate_render_bundle
+    monkeypatch.setattr(
+        contract,
+        "validate_render_bundle",
+        lambda bundle_dir: (_ for _ in ()).throw(ValueError("injected validation failure")),
+    )
+    with pytest.raises(ValueError, match="injected validation failure"):
+        produce(velocity_path, pipeline_path, output_dir, **kwargs)
+    assert not output_dir.exists()
+    assert list(tmp_path.glob(".bundle.*.tmp")) == []
+
+    monkeypatch.setattr(contract, "validate_render_bundle", original_validate)
+    produce(velocity_path, pipeline_path, output_dir, **kwargs)
+    assert (output_dir / CELL_ARTIFACT_NAME).is_file()
+    assert (output_dir / MARKER_ARTIFACT_NAME).is_file()
+    assert (output_dir / MANIFEST_NAME).is_file()
+
+
+def test_atomic_publication_cleans_staging_on_source_record_failure(tmp_path, monkeypatch):
+    import workflow.modular.velocity_render_contract as contract
+
+    velocity_path, pipeline_path = _write_inputs(tmp_path)
+    output_dir = tmp_path / "bundle"
+    monkeypatch.setattr(
+        contract,
+        "_file_record",
+        lambda path: (_ for _ in ()).throw(OSError("injected source hash failure")),
+    )
+    with pytest.raises(OSError, match="injected source hash failure"):
+        produce(
+            velocity_path,
+            pipeline_path,
+            output_dir,
+            max_cells=20,
+            top_genes=8,
+            min_shared_counts=1,
+            markers=("SOX2",),
+            scv=_fake_scvelo(),
+        )
+    assert not output_dir.exists()
+    assert list(tmp_path.glob(".bundle.*.tmp")) == []
+
+
+def test_cli_guard_requires_governed_project_run_path():
     factory_output = Path(__file__).resolve().parents[1] / "forbidden-scientific-output"
     with pytest.raises(ValueError, match="governed project run"):
-        _assert_output_outside_factory(factory_output)
+        _assert_governed_project_output(factory_output)
+    with pytest.raises(ValueError, match="governed project run"):
+        _assert_governed_project_output(Path("/tmp/figure3a-output"))
+    with pytest.raises(ValueError, match="governed project run"):
+        _assert_governed_project_output(Path("/home/zerlinshen/projects/project-only"))
+
+    governed = Path(
+        "/home/zerlinshen/projects/wave5-trevino/runs/run-id/python/figure3a_velocity_render"
+    )
+    assert _assert_governed_project_output(governed) is None
 
 
 def test_direct_script_help_bootstraps_repository_imports():

@@ -1523,13 +1523,18 @@ python scripts/produce_public_rna_velocity_figure3a_artifacts.py \
   --out-dir /home/zerlinshen/projects/<project-id>/runs/<run-id>/python/figure3a_velocity_render
 ```
 
-The output directory is immutable: reruns must use a new governed run directory.
-It contains `figure3a_velocity_cells.csv` with exact named coordinates/vectors/
+The CLI accepts output only below
+`/home/zerlinshen/projects/<project-id>/...`. The output directory is immutable:
+all three files are validated in a sibling staging directory and published by
+one atomic directory rename, so failures leave no partial final bundle and a
+retry remains possible. Reruns must use a new governed run directory. The bundle
+contains `figure3a_velocity_cells.csv` with exact named coordinates/vectors/
 statistics, `figure3a_velocity_marker_trends.csv` with exact named pseudotime-bin
 fields, and `figure3a_velocity_render_manifest.json` with source/output SHA256,
-software versions, parameters, seed, completion status, and the
-`exploratory` claim class. Downstream plotting must validate and render these
-artifacts only; it must not reopen AnnData or recompute velocity/statistics.
+software versions, parameters, seed, completion status, and the `exploratory`
+claim class. Its integrity key covers every semantic manifest field except the
+key itself. Downstream plotting must validate and render these artifacts only;
+it must not reopen AnnData or recompute velocity/statistics.
 
 ## Legacy Output Structure (deprecated without `--project-root`)
 

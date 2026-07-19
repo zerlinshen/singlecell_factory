@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shutil
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -72,16 +75,22 @@ def choose_cells(obs: pd.DataFrame, max_cells: int, seed: int) -> list[str]:
         raise ValueError("cell identifiers must be unique")
 
     cell_ids = obs.index.astype(str)
-    if len(obs) <= max_cells:
+    if not cell_ids.is_unique:
+        raise ValueError("cell identifiers must remain unique after string conversion")
+    canonical_order = np.argsort(cell_ids.to_numpy(), kind="stable")
+    canonical_obs = obs.iloc[canonical_order].copy()
+    canonical_obs.index = cell_ids[canonical_order]
+    cell_ids = canonical_obs.index
+    if len(canonical_obs) <= max_cells:
         return sorted(cell_ids.tolist())
 
     rng = np.random.default_rng(seed)
-    if "cell_type" not in obs.columns:
-        picked = rng.choice(len(obs), size=max_cells, replace=False)
+    if "cell_type" not in canonical_obs.columns:
+        picked = rng.choice(len(canonical_obs), size=max_cells, replace=False)
         return sorted(cell_ids[picked].tolist())
 
     chosen: list[str] = []
-    groups = obs.groupby("cell_type", observed=True, sort=True).indices
+    groups = canonical_obs.groupby("cell_type", observed=True, sort=True).indices
     floor = min(250, max(30, max_cells // max(1, len(groups) * 6)))
     remaining = max_cells
     ordered_groups = sorted(groups.items(), key=lambda item: (len(item[1]), str(item[0])))
@@ -250,18 +259,8 @@ def _file_record(path: Path) -> dict[str, Any]:
 
 
 def _reproducibility_payload(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        "schema_name": manifest["schema_name"],
-        "schema_version": manifest["schema_version"],
-        "source_sha256": {name: record["sha256"] for name, record in manifest["sources"].items()},
-        "producer_sha256": manifest["producer"]["sha256"],
-        "parameters": manifest["parameters"],
-        "seed": manifest["seed"],
-        "software_versions": manifest["software_versions"],
-        "artifact_sha256": {
-            name: record["sha256"] for name, record in manifest["artifacts"].items()
-        },
-    }
+    """Return every semantic manifest field except the integrity key itself."""
+    return {key: value for key, value in manifest.items() if key != "reproducibility_key_sha256"}
 
 
 def _reproducibility_key(manifest: Mapping[str, Any]) -> str:
@@ -295,67 +294,77 @@ def write_render_bundle(
     truth_boundary: str,
     n_pseudotime_bins: int = 20,
 ) -> dict[str, Any]:
-    """Write an immutable, hash-linked render bundle and return its manifest."""
+    """Validate in staging, then atomically publish an immutable render bundle."""
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    targets = [
-        output_dir / CELL_ARTIFACT_NAME,
-        output_dir / MARKER_ARTIFACT_NAME,
-        output_dir / MANIFEST_NAME,
-    ]
-    existing = [str(path) for path in targets if path.exists()]
-    if existing:
-        raise FileExistsError(f"immutable render artifact target already exists: {existing}")
+    if output_dir.exists():
+        raise FileExistsError(f"immutable render artifact target already exists: {output_dir}")
 
     cell_table, marker_table, missing_markers = build_render_tables(
         adata, markers, n_pseudotime_bins=n_pseudotime_bins
     )
-    cell_path, marker_path, manifest_path = targets
-    cell_table.to_csv(cell_path, index=False, float_format="%.10g", lineterminator="\n")
-    marker_table.to_csv(marker_path, index=False, float_format="%.10g", lineterminator="\n")
-
-    source_records = {name: _file_record(Path(path)) for name, path in sorted(source_files.items())}
-    producer_record = _file_record(Path(producer_path))
-    artifact_records = {
-        "cells": {
-            "filename": CELL_ARTIFACT_NAME,
-            "sha256": sha256_file(cell_path),
-            "size_bytes": cell_path.stat().st_size,
-            "rows": len(cell_table),
-            "columns": list(CELL_COLUMNS),
-        },
-        "marker_trends": {
-            "filename": MARKER_ARTIFACT_NAME,
-            "sha256": sha256_file(marker_path),
-            "size_bytes": marker_path.stat().st_size,
-            "rows": len(marker_table),
-            "columns": list(MARKER_COLUMNS),
-        },
-    }
-    manifest = {
-        "schema_name": SCHEMA_NAME,
-        "schema_version": SCHEMA_VERSION,
-        "status": "complete",
-        "claim_class": CLAIM_CLASS,
-        "truth_boundary": truth_boundary,
-        "seed": int(seed),
-        "parameters": dict(parameters),
-        "sources": source_records,
-        "producer": producer_record,
-        "software_versions": dict(software_versions),
-        "markers": {
-            "requested": list(markers),
-            "missing": missing_markers,
-            "rendered": sorted(marker_table["marker"].unique().tolist()),
-        },
-        "artifacts": artifact_records,
-    }
-    manifest["reproducibility_key_sha256"] = _reproducibility_key(manifest)
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = Path(
+        tempfile.mkdtemp(prefix=f".{output_dir.name}.", suffix=".tmp", dir=output_dir.parent)
     )
-    validate_render_bundle(output_dir)
-    return manifest
+    published = False
+    try:
+        cell_path = staging_dir / CELL_ARTIFACT_NAME
+        marker_path = staging_dir / MARKER_ARTIFACT_NAME
+        manifest_path = staging_dir / MANIFEST_NAME
+        cell_table.to_csv(cell_path, index=False, float_format="%.10g", lineterminator="\n")
+        marker_table.to_csv(marker_path, index=False, float_format="%.10g", lineterminator="\n")
+
+        source_records = {
+            name: _file_record(Path(path)) for name, path in sorted(source_files.items())
+        }
+        producer_record = _file_record(Path(producer_path))
+        artifact_records = {
+            "cells": {
+                "filename": CELL_ARTIFACT_NAME,
+                "sha256": sha256_file(cell_path),
+                "size_bytes": cell_path.stat().st_size,
+                "rows": len(cell_table),
+                "columns": list(CELL_COLUMNS),
+            },
+            "marker_trends": {
+                "filename": MARKER_ARTIFACT_NAME,
+                "sha256": sha256_file(marker_path),
+                "size_bytes": marker_path.stat().st_size,
+                "rows": len(marker_table),
+                "columns": list(MARKER_COLUMNS),
+            },
+        }
+        manifest = {
+            "schema_name": SCHEMA_NAME,
+            "schema_version": SCHEMA_VERSION,
+            "status": "complete",
+            "claim_class": CLAIM_CLASS,
+            "truth_boundary": truth_boundary,
+            "seed": int(seed),
+            "parameters": dict(parameters),
+            "sources": source_records,
+            "producer": producer_record,
+            "software_versions": dict(software_versions),
+            "markers": {
+                "requested": list(markers),
+                "missing": missing_markers,
+                "rendered": sorted(marker_table["marker"].unique().tolist()),
+            },
+            "artifacts": artifact_records,
+        }
+        manifest["reproducibility_key_sha256"] = _reproducibility_key(manifest)
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        validate_render_bundle(staging_dir)
+        if output_dir.exists():
+            raise FileExistsError(f"immutable render artifact target already exists: {output_dir}")
+        os.rename(staging_dir, output_dir)
+        published = True
+        return manifest
+    finally:
+        if not published and staging_dir.exists():
+            shutil.rmtree(staging_dir)
 
 
 def validate_render_bundle(bundle_dir: Path) -> dict[str, Any]:

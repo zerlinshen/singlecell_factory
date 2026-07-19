@@ -41,13 +41,20 @@ TRUTH_BOUNDARY = (
 )
 
 
-def _assert_output_outside_factory(output_dir: Path) -> None:
-    factory_root = Path(__file__).resolve().parents[1]
+def _assert_governed_project_output(output_dir: Path) -> None:
+    projects_root = Path("/home/zerlinshen/projects")
     resolved_output = output_dir.expanduser().resolve()
-    if resolved_output == factory_root or factory_root in resolved_output.parents:
+    try:
+        relative = resolved_output.relative_to(projects_root)
+    except ValueError:
         raise ValueError(
-            "scientific render artifacts must be written under a governed project run, "
-            "not inside the singlecell_factory tree"
+            "scientific render artifacts must be written under a governed project run "
+            "at /home/zerlinshen/projects/<project>/..."
+        ) from None
+    if len(relative.parts) < 2:
+        raise ValueError(
+            "scientific render artifacts must be written under a governed project run "
+            "at /home/zerlinshen/projects/<project>/..."
         )
 
 
@@ -199,7 +206,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    _assert_output_outside_factory(args.out_dir)
+    _assert_governed_project_output(args.out_dir)
     manifest = produce(
         args.velocity_h5ad,
         args.pipeline_h5ad,
