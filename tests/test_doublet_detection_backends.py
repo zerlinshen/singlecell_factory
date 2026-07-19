@@ -204,12 +204,19 @@ def test_sample_aware_expected_rate_contract_is_recorded_once(tmp_path):
         "small": round(expected_small, 6),
         "large": round(expected_large, 6),
     }
+    assert ctx.metadata["doublet_expected_rate_sample_sizes"] == {
+        "small": 20,
+        "large": 60,
+    }
     assert ctx.metadata["doublet_expected_rate_effective"] == round(
         expected_effective, 6
     )
+    assert ctx.metadata["doublet_expected_rate_aggregation_rule"] == (
+        "cell_weighted_mean_of_resolved_per_sample"
+    )
 
 
-def test_all_backends_record_the_same_effective_prior(tmp_path):
+def test_backends_record_per_sample_or_documented_aggregate_prior(tmp_path):
     adata = _adata(n_obs=80)
     adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
     cfg = DoubletConfig(
@@ -222,9 +229,12 @@ def test_all_backends_record_the_same_effective_prior(tmp_path):
         ctx, cfg, adata
     )
 
-    for backend in ("scrublet", "doubletfinder", "scdblfinder", "consensus"):
+    per_sample = DoubletDetectionModule._record_backend_expected_rate(
+        ctx, "scrublet", mode="per_sample"
+    )
+    for backend in ("doubletfinder", "scdblfinder", "consensus"):
         recorded = DoubletDetectionModule._record_backend_expected_rate(
-            ctx, backend
+            ctx, backend, mode="aggregate"
         )
         assert recorded == effective
 
@@ -235,10 +245,62 @@ def test_all_backends_record_the_same_effective_prior(tmp_path):
         "scdblfinder",
         "consensus",
     }
-    assert {entry["effective"] for entry in priors.values()} == {
+    assert per_sample == ctx.metadata["doublet_expected_rate_resolved_per_sample"]
+    assert priors["scrublet"] == {
+        "requested": 0.06,
+        "mode": "per_sample",
+        "resolved_per_sample": per_sample,
+        "sample_sizes": {"small": 20, "large": 60},
+    }
+    aggregate_records = [
+        priors[name] for name in ("doubletfinder", "scdblfinder", "consensus")
+    ]
+    assert {entry["mode"] for entry in aggregate_records} == {"aggregate"}
+    assert {entry["effective"] for entry in aggregate_records} == {
         round(effective, 6)
     }
-    assert {entry["requested"] for entry in priors.values()} == {0.06}
+    assert {entry["requested"] for entry in aggregate_records} == {0.06}
+    assert {entry["aggregation_rule"] for entry in aggregate_records} == {
+        "cell_weighted_mean_of_resolved_per_sample"
+    }
+
+
+def test_cpu_grouped_scrublet_consumes_exact_resolved_per_sample_rates(tmp_path):
+    adata = _adata(n_obs=80)
+    adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
+    cfg = DoubletConfig(
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+    DoubletDetectionModule._resolve_expected_rate_contract(ctx, cfg, adata)
+    seen = {}
+
+    class FakeScrublet:
+        def __init__(self, matrix, expected_doublet_rate, random_state):
+            self.n_obs = matrix.shape[0]
+            seen[self.n_obs] = expected_doublet_rate
+            self.threshold_ = 0.5
+
+        def scrub_doublets(self, **_kwargs):
+            return np.zeros(self.n_obs), np.zeros(self.n_obs, dtype=bool)
+
+    DoubletDetectionModule()._run_cpu_scrublet_grouped(
+        adata, FakeScrublet, cfg, ctx
+    )
+
+    assert set(seen) == {20, 60}
+    np.testing.assert_allclose(
+        [seen[20], seen[60]],
+        [
+            DoubletDetectionModule._resolved_expected_rate(cfg, 20),
+            DoubletDetectionModule._resolved_expected_rate(cfg, 60),
+        ],
+    )
+    assert ctx.metadata["doublet_expected_rate_by_backend"]["scrublet"][
+        "mode"
+    ] == "per_sample"
 
 
 def test_unavailable_r_backend_still_records_attempted_effective_prior(
@@ -262,8 +324,18 @@ def test_unavailable_r_backend_still_records_attempted_effective_prior(
         DoubletDetectionModule()._run_scdblfinder_via_r(adata, cfg, ctx)
 
     assert ctx.metadata["doublet_expected_rate_by_backend"] == {
-        "doubletfinder": {"requested": 0.06, "effective": effective},
-        "scdblfinder": {"requested": 0.06, "effective": effective},
+        "doubletfinder": {
+            "requested": 0.06,
+            "mode": "aggregate",
+            "effective": effective,
+            "aggregation_rule": "cell_weighted_mean_of_resolved_per_sample",
+        },
+        "scdblfinder": {
+            "requested": 0.06,
+            "mode": "aggregate",
+            "effective": effective,
+            "aggregation_rule": "cell_weighted_mean_of_resolved_per_sample",
+        },
     }
 
 
@@ -324,3 +396,50 @@ def test_undercall_uses_effective_prior_from_contract(tmp_path):
 
     assert ctx.metadata["doublet_undercall_expected_rate"] == round(effective, 6)
     assert ctx.metadata["doublet_undercall_ratio"] == 4.0
+
+    sample_rate = ctx.metadata["doublet_expected_rate_resolved_per_sample"]["small"]
+    DoubletDetectionModule._check_undercall(
+        call_rate=sample_rate * 0.25,
+        expected_rate=sample_rate,
+        ctx=ctx,
+        backend="scrublet",
+        scope="small",
+    )
+    assert ctx.metadata["doublet_undercall_expected_rate_per_sample"] == {
+        "small": sample_rate
+    }
+    assert ctx.metadata["doublet_undercall_ratio_per_sample"] == {"small": 4.0}
+
+
+def test_grouped_finalize_runs_undercall_diagnostics_at_sample_scope(tmp_path):
+    adata = _adata(n_obs=80)
+    adata.obs["sample"] = ["small"] * 20 + ["large"] * 60
+    cfg = DoubletConfig(
+        expected_doublet_rate=0.06,
+        scale_expected_doublet_rate=True,
+        remove_doublets=False,
+    )
+    ctx = _ctx(tmp_path, cfg)
+    module = DoubletDetectionModule()
+    module._resolve_expected_rate_contract(ctx, cfg, adata)
+    module._record_backend_expected_rate(ctx, "scrublet", mode="per_sample")
+
+    module._finalize_doublets(
+        ctx,
+        adata,
+        cfg,
+        "scrublet",
+        11,
+        np.zeros(adata.n_obs, dtype=np.float32),
+        np.zeros(adata.n_obs, dtype=bool),
+        None,
+    )
+
+    assert ctx.metadata["doublet_undercall_expected_rate_per_sample"] == (
+        ctx.metadata["doublet_expected_rate_resolved_per_sample"]
+    )
+    assert set(ctx.metadata["doublet_undercall_warning_per_sample"]) == {
+        "small",
+        "large",
+    }
+    assert "doublet_undercall_expected_rate" not in ctx.metadata

@@ -13,13 +13,18 @@ Run with:
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 import os
 import types
 
 import pytest
 
 from workflow.modular.config import PipelineConfig, scale_mode_to_capabilities, _SCALE_MODE_PRESETS
-from workflow.modular.cli import _apply_scale_mode, DEFAULT_OPTIONAL_MODULES
+from workflow.modular.cli import (
+    DEFAULT_OPTIONAL_MODULES,
+    _apply_scale_mode,
+    _apply_scientific_profile,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -30,6 +35,8 @@ def _minimal_args(**overrides):
     """Return a SimpleNamespace that mimics the default argparse.Namespace."""
     defaults = dict(
         scale_mode="standard",
+        scientific_profile="canonical",
+        acknowledge_scientific_non_equivalence=False,
         lazy_read="",
         doublet_strategy="",
         clustering_engine="",
@@ -100,6 +107,60 @@ def test_apply_scale_mode_massive_expands_flags():
         "F-4 (2026-05-19): massive preset clustering_engine is 'auto', was 'css'."
     )
     assert result.checkpoint_policy == "full"
+    assert result.optional_modules == DEFAULT_OPTIONAL_MODULES
+    assert result.n_top_genes == 3000
+    assert result.n_pcs == 40
+    assert result.n_neighbors == 15
+    assert result.leiden_resolution == 0.8
+    assert result.de_n_genes == 300
+
+
+@pytest.mark.parametrize("scale_mode", ["standard", "large", "massive"])
+def test_resource_strategy_preserves_all_scientific_parameters(scale_mode):
+    args = _minimal_args(scale_mode=scale_mode)
+    with pytest.warns(DeprecationWarning) if scale_mode == "massive" else nullcontext():
+        result = _apply_scale_mode(args)
+
+    assert {
+        "optional_modules": result.optional_modules,
+        "n_top_genes": result.n_top_genes,
+        "n_pcs": result.n_pcs,
+        "n_neighbors": result.n_neighbors,
+        "leiden_resolution": result.leiden_resolution,
+        "de_n_genes": result.de_n_genes,
+    } == {
+        "optional_modules": DEFAULT_OPTIONAL_MODULES,
+        "n_top_genes": 3000,
+        "n_pcs": 40,
+        "n_neighbors": 15,
+        "leiden_resolution": 0.8,
+        "de_n_genes": 300,
+    }
+
+
+def test_scientific_change_requires_non_equivalence_acknowledgement():
+    args = _minimal_args(scientific_profile="legacy-large")
+    with pytest.raises(SystemExit, match="not scientifically equivalent"):
+        _apply_scientific_profile(args)
+
+
+def test_acknowledged_scientific_profile_records_resolved_diff():
+    args = _minimal_args(
+        scientific_profile="legacy-massive",
+        acknowledge_scientific_non_equivalence=True,
+    )
+
+    result = _apply_scientific_profile(args)
+
+    assert result.scientific_non_equivalence_acknowledged is True
+    assert result.resolved_scientific_parameter_diff["n_top_genes"] == {
+        "canonical": 3000,
+        "resolved": 1000,
+    }
+    assert result.resolved_scientific_parameter_diff["optional_modules"] == {
+        "canonical": DEFAULT_OPTIONAL_MODULES,
+        "resolved": "clustering",
+    }
 
 
 # ---------------------------------------------------------------------------

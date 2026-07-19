@@ -142,14 +142,20 @@ class DoubletDetectionModule:
             sample: round(float(rate), 6)
             for sample, rate in resolved_per_sample.items()
         }
+        ctx.metadata["doublet_expected_rate_sample_sizes"] = {
+            str(sample): int(n_obs) for sample, n_obs in sample_sizes.items()
+        }
         ctx.metadata["doublet_expected_rate_effective"] = effective
+        ctx.metadata["doublet_expected_rate_aggregation_rule"] = (
+            "cell_weighted_mean_of_resolved_per_sample"
+        )
         ctx.metadata["doublet_rate_scaling_enabled"] = bool(
             getattr(cfg, "scale_expected_doublet_rate", False)
         )
         return effective
 
     @staticmethod
-    def _record_backend_expected_rate(ctx, backend: str) -> float:
+    def _record_backend_expected_rate(ctx, backend: str, mode: str = "aggregate"):
         """Record and return the already-resolved prior used by ``backend``."""
         if "doublet_expected_rate_effective" not in ctx.metadata:
             raise RuntimeError(
@@ -157,10 +163,26 @@ class DoubletDetectionModule:
             )
         requested = float(ctx.metadata["doublet_expected_rate_requested"])
         effective = float(ctx.metadata["doublet_expected_rate_effective"])
-        ctx.metadata.setdefault("doublet_expected_rate_by_backend", {})[backend] = {
+        if mode == "per_sample":
+            resolved = dict(ctx.metadata["doublet_expected_rate_resolved_per_sample"])
+            record = {
+                "requested": round(requested, 6),
+                "mode": "per_sample",
+                "resolved_per_sample": resolved,
+                "sample_sizes": dict(ctx.metadata["doublet_expected_rate_sample_sizes"]),
+            }
+            ctx.metadata.setdefault("doublet_expected_rate_by_backend", {})[backend] = record
+            ctx.metadata["doublet_expected_rate_used_per_sample"] = resolved
+            return resolved
+        if mode != "aggregate":
+            raise ValueError(f"unknown doublet expected-rate mode: {mode}")
+        record = {
             "requested": round(requested, 6),
+            "mode": "aggregate",
             "effective": round(effective, 6),
+            "aggregation_rule": ctx.metadata["doublet_expected_rate_aggregation_rule"],
         }
+        ctx.metadata.setdefault("doublet_expected_rate_by_backend", {})[backend] = record
         ctx.metadata["doublet_expected_rate_used"] = round(effective, 6)
         return effective
 
@@ -318,7 +340,9 @@ class DoubletDetectionModule:
         import rapids_singlecell as rsc
         bind_cuda_context()  # ensure cuBLAS/cuSOLVER pre-warm before GPU ops (P1 fix; no-op if already warmed in probe)
 
-        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
+        expected_rate = self._record_backend_expected_rate(
+            ctx, "scrublet", mode="aggregate"
+        )
         adata_gpu = self._clone_for_gpu_lite(adata)
         try:
             rsc.get.anndata_to_GPU(adata_gpu)
@@ -350,7 +374,9 @@ class DoubletDetectionModule:
         # rsc.pp.scrublet(batch_key=...) accepts one scalar across batches. Use
         # the sample-aware, cell-weighted effective prior resolved once in run().
         sample_sizes = adata.obs[sample_key].value_counts()
-        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
+        expected_rate = self._record_backend_expected_rate(
+            ctx, "scrublet", mode="aggregate"
+        )
         ctx.metadata["doublet_expected_rate_applied_per_sample"] = {
             str(sample): round(expected_rate, 6) for sample in sample_sizes.index
         }
@@ -393,13 +419,15 @@ class DoubletDetectionModule:
             "min_gene_variability_pctl": 85,
             "n_prin_comps": self._n_prin_comps(adata.n_obs, adata.n_vars),
         }
-        expected_rate = self._record_backend_expected_rate(ctx, "scrublet")
+        expected_rates = self._record_backend_expected_rate(
+            ctx, "scrublet", mode="per_sample"
+        )
         per_sample_rates: dict[str, float] = {}
         for group in labels.unique():
             idx = np.where(labels.values == group)[0]
             if len(idx) < 20:
                 continue
-            group_rate = expected_rate
+            group_rate = float(expected_rates[str(group)])
             per_sample_rates[str(group)] = round(float(group_rate), 6)
             subX = self._materialize_counts_matrix(adata.X[idx])
             scrub = scrublet_cls(subX, expected_doublet_rate=group_rate, random_state=random_state)
@@ -891,7 +919,13 @@ class DoubletDetectionModule:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _check_undercall(call_rate: float, expected_rate: float, ctx, backend: str) -> None:
+    def _check_undercall(
+        call_rate: float,
+        expected_rate: float,
+        ctx,
+        backend: str,
+        scope: str | None = None,
+    ) -> None:
         """Emit WARNING when call rate < 0.5 * expected.
 
         A 0.13% call on a 5%-expected sample (40x undercall) is what surfaced
@@ -899,9 +933,14 @@ class DoubletDetectionModule:
         clean separation. Surfacing this loudly avoids silent quality
         regressions on tumor cohorts.
         """
-        ctx.metadata["doublet_undercall_expected_rate"] = round(
-            float(expected_rate), 6
-        )
+        if scope is None:
+            ctx.metadata["doublet_undercall_expected_rate"] = round(
+                float(expected_rate), 6
+            )
+        else:
+            ctx.metadata.setdefault(
+                "doublet_undercall_expected_rate_per_sample", {}
+            )[scope] = round(float(expected_rate), 6)
         if expected_rate <= 0:
             return
         if call_rate < 0.5 * expected_rate:
@@ -913,8 +952,16 @@ class DoubletDetectionModule:
                 "backend='scdblfinder'/'doubletfinder' for a second opinion."
             )
             logger.warning("DOUBLET_UNDERCALL_DIAGNOSTIC: %s", msg)
-            ctx.metadata["doublet_undercall_warning"] = msg
-            ctx.metadata["doublet_undercall_ratio"] = ratio
+            if scope is None:
+                ctx.metadata["doublet_undercall_warning"] = msg
+                ctx.metadata["doublet_undercall_ratio"] = ratio
+            else:
+                ctx.metadata.setdefault("doublet_undercall_warning_per_sample", {})[
+                    scope
+                ] = msg
+                ctx.metadata.setdefault("doublet_undercall_ratio_per_sample", {})[
+                    scope
+                ] = ratio
 
     # ------------------------------------------------------------------
     # Entry point
@@ -1199,12 +1246,28 @@ class DoubletDetectionModule:
         # surfaced as a real failure on LUSC PS01 where Scrublet's
         # bimodality threshold collapsed at 0.13% on a slice that should
         # have yielded ~6% doublets.
-        self._check_undercall(
-            call_rate=call_rate,
-            expected_rate=float(ctx.metadata["doublet_expected_rate_effective"]),
-            ctx=ctx,
-            backend=backend,
+        backend_prior = ctx.metadata.get("doublet_expected_rate_by_backend", {}).get(
+            backend, {}
         )
+        if backend_prior.get("mode") == "per_sample" and "sample" in adata.obs:
+            sample_labels = adata.obs["sample"].astype(str)
+            for sample, expected_rate in backend_prior["resolved_per_sample"].items():
+                sample_mask = sample_labels == sample
+                sample_call_rate = float(predicted_doublets[sample_mask].mean())
+                self._check_undercall(
+                    call_rate=sample_call_rate,
+                    expected_rate=float(expected_rate),
+                    ctx=ctx,
+                    backend=backend,
+                    scope=sample,
+                )
+        else:
+            self._check_undercall(
+                call_rate=call_rate,
+                expected_rate=float(ctx.metadata["doublet_expected_rate_effective"]),
+                ctx=ctx,
+                backend=backend,
+            )
 
         # Visualize doublet score distribution
         fig, ax = plt.subplots(figsize=(8, 4))

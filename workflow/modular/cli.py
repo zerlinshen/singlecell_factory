@@ -189,10 +189,27 @@ def parse_args() -> argparse.Namespace:
         default="standard",
         choices=["standard", "large", "massive"],
         help=(
-            "Dataset-size execution profile: standard (default), large (safer defaults for ~100k+ cells), "
-            "massive (minimal-memory first-pass for several-hundred-thousand to million-cell runs). "
-            "Acts as a preset bundle that expands to --lazy-read / --doublet-strategy / "
-            "--clustering-engine / --checkpoint-policy. Explicit capability flags override the preset."
+            "Resource-only dataset-size strategy. Expands only to --lazy-read / "
+            "--doublet-strategy / --clustering-engine / --checkpoint-policy and never "
+            "changes HVGs, PCs, neighbors, resolution, DE limits, or module selection."
+        ),
+    )
+    parser.add_argument(
+        "--scientific-profile",
+        default="canonical",
+        choices=["canonical", "legacy-large", "legacy-massive"],
+        help=(
+            "Scientific parameter profile, separate from --scale-mode. Non-canonical "
+            "profiles change the analysis and require "
+            "--acknowledge-scientific-non-equivalence."
+        ),
+    )
+    parser.add_argument(
+        "--acknowledge-scientific-non-equivalence",
+        action="store_true",
+        help=(
+            "Acknowledge that resolved changes to HVGs, PCs, neighbors, Leiden "
+            "resolution, DE limits, or module selection are not scientifically equivalent."
         ),
     )
     parser.add_argument(
@@ -725,9 +742,10 @@ def _parse_resolution_sweep(value: str) -> tuple[float, ...]:
 
 
 def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
-    """Expand scale_mode preset into capability flags, then apply numeric tuning.
+    """Expand a resource-only scale preset into operational capability flags.
 
     Explicit capability flags (non-empty) always win over the preset bundle.
+    Scientific parameters are intentionally untouched.
     """
     # F-4 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md):
     # `--scale-mode massive` previously routed clustering_engine -> "css"
@@ -761,37 +779,69 @@ def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
     if not args.checkpoint_policy:
         args.checkpoint_policy = preset["checkpoint_policy"]
 
-    if args.scale_mode == "standard":
-        return args
+    return args
 
-    if args.scale_mode == "large":
-        if args.optional_modules == DEFAULT_OPTIONAL_MODULES:
-            args.optional_modules = "clustering,annotation,differential_expression"
-        if args.n_top_genes == 3000:
-            args.n_top_genes = 2000
-        if args.n_pcs == 40:
-            args.n_pcs = 30
-        if args.n_neighbors == 15:
-            args.n_neighbors = 12
-        if args.leiden_resolution == 0.8:
-            args.leiden_resolution = 0.6
-        if args.de_n_genes == 300:
-            args.de_n_genes = 200
-        return args
 
-    # massive
-    if args.optional_modules == DEFAULT_OPTIONAL_MODULES:
-        args.optional_modules = "clustering"
-    if args.n_top_genes == 3000:
-        args.n_top_genes = 1000
-    if args.n_pcs == 40:
-        args.n_pcs = 20
-    if args.n_neighbors == 15:
-        args.n_neighbors = 10
-    if args.leiden_resolution == 0.8:
-        args.leiden_resolution = 0.4
-    if args.de_n_genes == 300:
-        args.de_n_genes = 100
+_CANONICAL_SCIENTIFIC_PARAMETERS = {
+    "optional_modules": DEFAULT_OPTIONAL_MODULES,
+    "n_top_genes": 3000,
+    "n_pcs": 40,
+    "n_neighbors": 15,
+    "leiden_resolution": 0.8,
+    "de_n_genes": 300,
+}
+
+_SCIENTIFIC_PROFILE_OVERRIDES = {
+    "canonical": {},
+    "legacy-large": {
+        "optional_modules": "clustering,annotation,differential_expression",
+        "n_top_genes": 2000,
+        "n_pcs": 30,
+        "n_neighbors": 12,
+        "leiden_resolution": 0.6,
+        "de_n_genes": 200,
+    },
+    "legacy-massive": {
+        "optional_modules": "clustering",
+        "n_top_genes": 1000,
+        "n_pcs": 20,
+        "n_neighbors": 10,
+        "leiden_resolution": 0.4,
+        "de_n_genes": 100,
+    },
+}
+
+
+def _apply_scientific_profile(args: argparse.Namespace) -> argparse.Namespace:
+    """Resolve scientific parameters and require explicit non-equivalence consent."""
+    profile = getattr(args, "scientific_profile", "canonical")
+    overrides = _SCIENTIFIC_PROFILE_OVERRIDES[profile]
+    for field_name, resolved_value in overrides.items():
+        if getattr(args, field_name) == _CANONICAL_SCIENTIFIC_PARAMETERS[field_name]:
+            setattr(args, field_name, resolved_value)
+
+    resolved_diff = {}
+    for field_name, canonical_value in _CANONICAL_SCIENTIFIC_PARAMETERS.items():
+        resolved_value = getattr(args, field_name)
+        if resolved_value != canonical_value:
+            resolved_diff[field_name] = {
+                "canonical": canonical_value,
+                "resolved": resolved_value,
+            }
+
+    acknowledged = bool(
+        getattr(args, "acknowledge_scientific_non_equivalence", False)
+    )
+    if resolved_diff and not acknowledged:
+        changed = ", ".join(sorted(resolved_diff))
+        raise SystemExit(
+            "Error: resolved scientific settings differ from the canonical profile "
+            f"({changed}). Re-run with --acknowledge-scientific-non-equivalence "
+            "to record that the analyses are not scientifically equivalent."
+        )
+
+    args.resolved_scientific_parameter_diff = resolved_diff
+    args.scientific_non_equivalence_acknowledged = acknowledged
     return args
 
 
@@ -848,7 +898,7 @@ def main() -> None:
 
     faulthandler.enable()
 
-    args = _apply_scale_mode(parse_args())
+    args = _apply_scientific_profile(_apply_scale_mode(parse_args()))
 
     # Propagate --multimodal-engine to env var the module reads at runtime.
     if args.multimodal_engine is not None and "SC_MULTIMODAL_ENGINE" not in os.environ:
@@ -1049,6 +1099,11 @@ def main() -> None:
         reference_override_mode=args.reference_override_mode,
         gpu_mode=args.gpu_mode,
         scale_mode=args.scale_mode,
+        scientific_profile=args.scientific_profile,
+        scientific_non_equivalence_acknowledged=(
+            args.scientific_non_equivalence_acknowledged
+        ),
+        resolved_scientific_parameter_diff=args.resolved_scientific_parameter_diff,
         lazy_read=args.lazy_read,
         doublet_strategy=args.doublet_strategy,
         clustering_engine=args.clustering_engine,

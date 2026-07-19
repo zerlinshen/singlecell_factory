@@ -925,6 +925,20 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
 
     pipeline_t0 = perf_counter()
     ctx = _prepare_output(cfg)
+    ctx.metadata["resource_strategy"] = {
+        "scale_mode": cfg.scale_mode,
+        "lazy_read": cfg.lazy_read,
+        "doublet_strategy": cfg.doublet_strategy,
+        "clustering_engine": cfg.clustering_engine,
+        "checkpoint_policy": cfg.checkpoint_policy,
+    }
+    ctx.metadata["scientific_profile"] = cfg.scientific_profile
+    ctx.metadata["scientific_non_equivalence_acknowledged"] = (
+        cfg.scientific_non_equivalence_acknowledged
+    )
+    ctx.metadata["resolved_scientific_parameter_diff"] = (
+        cfg.resolved_scientific_parameter_diff
+    )
     if ledger is not None:
         ctx._ledger = ledger
     registry = _build_registry()

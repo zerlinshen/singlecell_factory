@@ -297,6 +297,11 @@ class PipelineConfig:
     random_state: int = 42  # global seed propagated to all stochastic modules via ctx.random_state
     gpu_mode: str = "auto"  # auto, off, force
     scale_mode: str = "standard"  # standard, large, massive — kept as preset bundle for backwards compat
+    scientific_profile: str = "canonical"
+    scientific_non_equivalence_acknowledged: bool = False
+    resolved_scientific_parameter_diff: dict[str, dict[str, object]] = field(
+        default_factory=dict
+    )
     # Capability flags — set explicitly or expanded from scale_mode via scale_mode_to_capabilities()
     lazy_read: str = "auto"          # auto, true, false
     doublet_strategy: str = "auto"   # auto, grouped, whole, skip
