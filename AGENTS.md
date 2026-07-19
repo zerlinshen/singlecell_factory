@@ -170,9 +170,10 @@ Current claim posture:
 
 The current suite-level validation posture is intentionally honest:
 
-- The one-command suite gate is an 11-step structure/contract harness (incl. a
-  conditional-tolerant figure-parity gate as of 2026-05-29), not a complete
-  scientific validation harness.
+- The one-command suite gate is a 20-step structure/contract/science-assertion
+  harness, including render-only, raw-data, documentation, real-data parity,
+  and real-data science-assertion checks. Figure parity remains conditional
+  where declared; the gate is not universal biological validation.
 - Current bounded real-data handoff proof:
   `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`.
   It uses a retained Round9 LUSC consensus AnnData and validates current
