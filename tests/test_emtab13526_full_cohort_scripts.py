@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import multiprocessing
+import os
 import signal
+import time
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Callable
 
 import anndata as ad
 import numpy as np
@@ -14,11 +19,16 @@ import zarr
 from scipy import sparse
 
 
-# The toy AnnData/Zarr writes normally finish quickly, but async Zarr startup can
-# exceed four seconds when the full suite is under CPU/thread pressure. A
-# one-minute bound remains finite for diagnosing a real hang without firing
-# during normal initialization and poisoning Zarr's shared event-loop thread.
-EMTAB_TEST_TIMEOUT_SECONDS = 60.0
+ZARR_FIXTURE_PROCESS_TIMEOUT_SECONDS = 30.0
+PROCESS_CLEANUP_TIMEOUT_SECONDS = 5.0
+
+
+class IsolatedProcessTimeout(TimeoutError):
+    """Timeout raised only after the isolated child has been reaped."""
+
+    def __init__(self, label: str, seconds: float, pid: int):
+        super().__init__(f"{label} exceeded {seconds:g}s (child pid {pid})")
+        self.pid = pid
 
 
 def load_prepare_module():
@@ -52,14 +62,44 @@ def bounded_zarr_operation(label: str, seconds: float = 15.0):
         signal.signal(signal.SIGALRM, previous_handler)
 
 
-@pytest.fixture(autouse=True)
-def bound_every_emtab_test(request):
-    """Bound each EMTAB test without interrupting normal async Zarr startup."""
-    with bounded_zarr_operation(
-        request.node.nodeid,
-        seconds=EMTAB_TEST_TIMEOUT_SECONDS,
-    ):
-        yield
+def run_isolated_process(
+    target: Callable[..., None],
+    args: tuple[object, ...],
+    *,
+    label: str,
+    timeout_seconds: float,
+    error_path: Path | None = None,
+) -> int:
+    """Run a fixture operation in a fresh interpreter and always reap it."""
+    process = multiprocessing.get_context("spawn").Process(
+        target=target,
+        args=args,
+        name=f"pytest-{label}",
+    )
+    process.start()
+    process.join(timeout_seconds)
+    if process.is_alive():
+        pid = process.pid
+        assert pid is not None
+        process.terminate()
+        process.join(PROCESS_CLEANUP_TIMEOUT_SECONDS)
+        if process.is_alive():
+            process.kill()
+            process.join(PROCESS_CLEANUP_TIMEOUT_SECONDS)
+        if process.is_alive():
+            raise RuntimeError(f"failed to reap timed-out {label} child pid {pid}")
+        raise IsolatedProcessTimeout(label, timeout_seconds, pid)
+
+    pid = process.pid
+    assert pid is not None
+    if process.exitcode != 0:
+        details = ""
+        if error_path is not None and error_path.exists():
+            details = f"\n{error_path.read_text(encoding='utf-8')}"
+        raise RuntimeError(
+            f"{label} child pid {pid} exited with code {process.exitcode}{details}"
+        )
+    return pid
 
 
 def test_build_sample_meta_yields_required_columns(tmp_path):
@@ -91,7 +131,31 @@ def test_bounded_zarr_operation_fails_diagnostically():
             signal.pause()
 
 
-def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Path:
+def _block_forever() -> None:
+    while True:
+        time.sleep(60)
+
+
+def test_isolated_process_timeout_fails_loudly_and_reaps_child():
+    with pytest.raises(IsolatedProcessTimeout, match="fixture probe exceeded") as exc:
+        run_isolated_process(
+            _block_forever,
+            (),
+            label="fixture probe",
+            timeout_seconds=0.05,
+        )
+
+    assert all(child.pid != exc.value.pid for child in multiprocessing.active_children())
+    with pytest.raises(ProcessLookupError):
+        os.kill(exc.value.pid, 0)
+
+
+def _write_valid_merged_zarr(
+    merged_path: str,
+    include_condition: bool,
+    error_path: str,
+) -> None:
+    merged = Path(merged_path)
     var = pd.DataFrame(
         {"gene_symbol": ["g1", "g2", "g3"]},
         index=pd.Index(["g1", "g2", "g3"], name=None),
@@ -131,16 +195,31 @@ def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Pa
         ]
         parts.append(ad.AnnData(X=x, obs=obs, var=var))
 
+    try:
+        # This is a four-cell schema fixture, not a concat or throughput test.
+        # Keep Zarr's async runtime in a spawned interpreter so suite-state event
+        # loop contamination cannot hang or poison the pytest process.
+        merged_adata = ad.AnnData(
+            X=sparse.vstack([part.X for part in parts], format="csr"),
+            obs=pd.concat([part.obs for part in parts], axis=0),
+            var=var.copy(),
+        )
+        merged_adata.write_zarr(merged)
+    except BaseException:
+        Path(error_path).write_text(traceback.format_exc(), encoding="utf-8")
+        raise
+
+
+def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Path:
     merged = tmp_path / "merged.zarr"
-    # This is a four-cell schema fixture, not a concat or Zarr throughput test.
-    # Assemble it directly to avoid three redundant writes plus concat machinery,
-    # which intermittently deadlocked after the broader modular test set.
-    merged_adata = ad.AnnData(
-        X=sparse.vstack([part.X for part in parts], format="csr"),
-        obs=pd.concat([part.obs for part in parts], axis=0),
-        var=var.copy(),
+    error_path = tmp_path / "merged.zarr.write-error.txt"
+    run_isolated_process(
+        _write_valid_merged_zarr,
+        (str(merged), include_condition, str(error_path)),
+        label="toy Zarr fixture write",
+        timeout_seconds=ZARR_FIXTURE_PROCESS_TIMEOUT_SECONDS,
+        error_path=error_path,
     )
-    merged_adata.write_zarr(merged)
     return merged
 
 
