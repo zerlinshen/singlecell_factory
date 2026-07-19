@@ -1509,6 +1509,28 @@ If `--transcriptome-dir` is set, `genes.gtf(.gz)` is auto-discovered from:
 `<transcriptome-dir>/genes/genes.gtf(.gz)` (or `<transcriptome-dir>/genes.gtf(.gz)`).
 You can still pass `--velocity-gtf` explicitly to override auto-discovery.
 
+### Public Figure 3A render-only handoff
+
+The public processed-matrix Figure 3A reproduction has a separate upstream
+producer. It performs cell alignment, deterministic stratified sampling, gene
+selection, scVelo moments/velocity/graph/embedding/pseudotime, velocity-length
+calculation, and marker binning inside `singlecell_factory`:
+
+```bash
+python scripts/produce_public_rna_velocity_figure3a_artifacts.py \
+  --velocity-h5ad /home/zerlinshen/projects/<project-id>/inputs/velocity.h5ad \
+  --pipeline-h5ad /home/zerlinshen/projects/<project-id>/runs/<run-id>/python/final_adata.h5ad \
+  --out-dir /home/zerlinshen/projects/<project-id>/runs/<run-id>/python/figure3a_velocity_render
+```
+
+The output directory is immutable: reruns must use a new governed run directory.
+It contains `figure3a_velocity_cells.csv` with exact named coordinates/vectors/
+statistics, `figure3a_velocity_marker_trends.csv` with exact named pseudotime-bin
+fields, and `figure3a_velocity_render_manifest.json` with source/output SHA256,
+software versions, parameters, seed, completion status, and the
+`exploratory` claim class. Downstream plotting must validate and render these
+artifacts only; it must not reopen AnnData or recompute velocity/statistics.
+
 ## Legacy Output Structure (deprecated without `--project-root`)
 
 Current governed runs must use `--project-root` and write scientific artifacts to
@@ -2119,6 +2141,7 @@ velocity claims. Use `rna_velocity` when canonical velocity evidence is needed.
 | **Eligibility policy** | If no spliced/unspliced layers and no usable loom or BAM+GTF source are available, the module should be recorded as `skipped`, not treated as an unexpected failure. |
 | **BAM extraction** | If no loom file is provided, spliced/unspliced counts are extracted directly from Cell Ranger BAM output (`possorted_genome_bam.bam`) using pysam + GTF-based exon/intron classification |
 | **Outputs** | `velocity_stream_umap.png`, `velocity_grid_umap.png`, `velocity_length_distribution.png`, `velocity_confidence.csv`, `velocity_top_genes.csv` (+ `velocity_latent_time_umap.png`, `velocity_phase_portraits.png` in dynamical mode) |
+| **Figure 3A render contract** | `scripts/produce_public_rna_velocity_figure3a_artifacts.py` writes strict, hash-linked `figure3a_velocity_cells.csv`, `figure3a_velocity_marker_trends.csv`, and `figure3a_velocity_render_manifest.json`; the public processed-matrix lane remains `exploratory`. |
 | **Reference** | **Bergen et al., *Nature Biotechnology*, 2020.** DOI: [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) |
 
 ---

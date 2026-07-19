@@ -658,6 +658,36 @@ Helpful details:
 export SCF_VELOCITY_CACHE_DIR=/path/to/fast_ssd_cache
 ```
 
+### 12.1 Public Figure 3A render boundary
+
+For the GSE162170 processed-matrix Figure 3A reproduction, run
+`scripts/produce_public_rna_velocity_figure3a_artifacts.py` with explicit
+`--velocity-h5ad`, `--pipeline-h5ad`, and project-owned `--out-dir` paths. The
+producer owns all alignment, sampling, gene selection, scVelo computation,
+velocity embedding/pseudotime, velocity length, and marker-trend binning.
+
+The strict handoff is:
+
+- `figure3a_velocity_cells.csv`: `cell_id`, `umap1`, `umap2`,
+  `velocity_umap1`, `velocity_umap2`, `velocity_length`,
+  `velocity_pseudotime`, `cell_type`;
+- `figure3a_velocity_marker_trends.csv`: `marker`,
+  `pseudotime_bin_index`, `pseudotime_bin_left`, `pseudotime_bin_right`,
+  `pseudotime_bin_midpoint`, `median_normalized_expression`, `n_cells`;
+- `figure3a_velocity_render_manifest.json`: schema/status/claim class, source
+  and artifact hashes, parameters, seed, software versions, and a reproducibility
+  key.
+
+The manifest identifiers are exactly
+`schema_name=singlecell_velocity_figure3a_render` and `schema_version=1.0`.
+
+The bundle validator fails on missing/positional fields, non-finite values,
+invalid pseudotime/length ranges, row/schema drift, or SHA mismatch. Targets are
+write-once; select a new governed run directory for a rerun. Plotting consumers
+must render the named artifacts without loading AnnData or computing velocity,
+statistics, marker trends, or embeddings. This public processed-matrix lane is
+always `exploratory`, not FASTQ-level or confirmatory evidence.
+
 ---
 
 ## 13. Pseudobulk DE (Accuracy-Critical)

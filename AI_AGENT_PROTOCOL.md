@@ -152,6 +152,12 @@ plotting/reporting helpers:
   remain visibly non-claimable.
 - `pseudo_velocity` is an `exploratory_proxy`, never canonical RNA velocity;
   canonical velocity claims require the spliced/unspliced `rna_velocity` module.
+- The public GSE162170 Figure 3A route is produced upstream by
+  `scripts/produce_public_rna_velocity_figure3a_artifacts.py`. Its two strict
+  named CSV render artifacts and hash-linked provenance manifest are immutable,
+  and its claim class is always `exploratory`. Downstream plotting may validate
+  and render them but must not load AnnData or recompute velocity, pseudotime,
+  marker trends, embeddings, or other biological statistics.
 - Confirmatory pseudobulk requires an explicit biological sample column, unique
   sample-to-condition mapping, valid labels, raw counts, and sufficient
   biological replicates. Only all-pydeseq2 confirmatory output is claimable;

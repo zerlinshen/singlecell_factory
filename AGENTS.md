@@ -291,6 +291,11 @@ for historical project-local skills.
   plus a non-empty biological justification; otherwise its provenance and
   artifacts must remain non-claimable.
 - `pseudo_velocity` is always `exploratory_proxy`, never canonical RNA velocity.
+- The public GSE162170 Figure 3A handoff is a render-only boundary:
+  `scripts/produce_public_rna_velocity_figure3a_artifacts.py` owns all scVelo
+  analysis and emits immutable strict named CSVs plus a hash-linked manifest.
+  Consumers must fail on schema/hash drift and must not recompute analysis; the
+  lane remains `exploratory`.
 - Explicit confirmatory pseudobulk requires a named biological sample column,
   one condition per sample, valid labels, raw counts, and sufficient biological
   replicates. Invalid contracts record non-claimable inference and fail loud.
