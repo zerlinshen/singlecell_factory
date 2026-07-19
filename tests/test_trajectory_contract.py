@@ -1,5 +1,6 @@
 """Tests for trajectory module contract gate (US-W5-8-CONTRACT)."""
 import numpy as np
+import pandas as pd
 import pytest
 import anndata as ad
 
@@ -16,12 +17,13 @@ def _make_adata(**obsm_kwargs):
 
 
 class _MinimalCtx:
-    def __init__(self, adata):
+    def __init__(self, adata, *, root_cluster=None, root_justification=None):
         self.adata = adata
         self.metadata = {}
 
         class _Cfg:
-            trajectory_root_cluster = None
+            trajectory_root_cluster = root_cluster
+            trajectory_root_justification = root_justification
 
         self.cfg = _Cfg()
 
@@ -81,6 +83,8 @@ def test_x_pca_used_when_only_pca_present(monkeypatch):
 
     TrajectoryModule().run(ctx)
     assert ctx.metadata["trajectory_embedding_key"] == "X_pca"
+    assert ctx.metadata["trajectory_claimable"] is False
+    assert adata.uns["trajectory"]["inference_class"] == "exploratory_unrooted_dpt"
 
 
 def test_x_wnn_preferred_over_x_pca(monkeypatch):
@@ -96,3 +100,64 @@ def test_x_wnn_preferred_over_x_pca(monkeypatch):
 
     TrajectoryModule().run(ctx)
     assert ctx.metadata["trajectory_embedding_key"] == "X_wnn"
+
+
+def test_explicit_biologically_justified_root_is_claimable(monkeypatch):
+    pca_vals = np.random.default_rng(1).random((5, 2)).astype(np.float32)
+    adata = _make_adata(X_pca=pca_vals)
+    ctx = _MinimalCtx(
+        adata,
+        root_cluster="1",
+        root_justification="Cluster 1 expresses validated early progenitor markers.",
+    )
+    _patch_scanpy_tl(monkeypatch)
+    monkeypatch.setattr(TrajectoryModule, "_plot_pseudotime_umap", staticmethod(lambda a, c: None))
+    monkeypatch.setattr(TrajectoryModule, "_plot_paga", staticmethod(lambda a, c: None))
+    monkeypatch.setattr(TrajectoryModule, "_plot_gene_trends", staticmethod(lambda a, c: None))
+    monkeypatch.setattr(TrajectoryModule, "_plot_pseudotime_density", staticmethod(lambda a, c: None))
+
+    TrajectoryModule().run(ctx)
+
+    provenance = adata.uns["trajectory"]
+    assert provenance["claimable"] is True
+    assert provenance["root_cluster"] == "1"
+    assert provenance["root_cluster_found"] is True
+    assert provenance["root_justification"].startswith("Cluster 1")
+    assert provenance["inference_class"] == "biologically_rooted_dpt"
+
+
+@pytest.mark.parametrize(
+    ("root_cluster", "root_justification"),
+    [
+        (None, None),
+        ("1", None),
+        ("missing", "Expected early state"),
+    ],
+)
+def test_missing_or_invalid_biological_root_is_non_claimable(
+    monkeypatch, root_cluster, root_justification
+):
+    pca_vals = np.random.default_rng(2).random((5, 2)).astype(np.float32)
+    adata = _make_adata(X_pca=pca_vals)
+    ctx = _MinimalCtx(
+        adata,
+        root_cluster=root_cluster,
+        root_justification=root_justification,
+    )
+    _patch_scanpy_tl(monkeypatch)
+    monkeypatch.setattr(TrajectoryModule, "_plot_pseudotime_umap", staticmethod(lambda a, c: None))
+    monkeypatch.setattr(TrajectoryModule, "_plot_paga", staticmethod(lambda a, c: None))
+    monkeypatch.setattr(TrajectoryModule, "_plot_gene_trends", staticmethod(lambda a, c: None))
+    monkeypatch.setattr(TrajectoryModule, "_plot_pseudotime_density", staticmethod(lambda a, c: None))
+
+    TrajectoryModule().run(ctx)
+
+    provenance = adata.uns["trajectory"]
+    assert provenance["claimable"] is False
+    assert provenance["claim_status"] == "non_claimable_missing_biologically_justified_root"
+    assert provenance["root_selection_method"] == "exploratory_diffmap_minimum_fallback"
+    pseudotime_table = pd.read_csv(ctx.table_dir / "dpt_pseudotime.csv")
+    assert not pseudotime_table["trajectory_claimable"].any()
+    assert set(pseudotime_table["trajectory_claim_status"]) == {
+        "non_claimable_missing_biologically_justified_root"
+    }

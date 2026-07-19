@@ -278,6 +278,7 @@ class PipelineConfig:
     pseudobulk_de: PseudobulkDEConfig = field(default_factory=PseudobulkDEConfig)
     regress_cell_cycle: bool = False
     trajectory_root_cluster: str | None = None
+    trajectory_root_justification: str | None = None
     checkpoint: bool = False
     resume_from: str | None = None
     parallel_workers: int = 1

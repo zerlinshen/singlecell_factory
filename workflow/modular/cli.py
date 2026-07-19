@@ -367,6 +367,14 @@ def parse_args() -> argparse.Namespace:
 
     # Trajectory
     parser.add_argument("--trajectory-root-cluster", default=None, help="Leiden cluster ID for DPT root")
+    parser.add_argument(
+        "--trajectory-root-justification",
+        default=None,
+        help=(
+            "Biological rationale for the DPT root cluster. Both this value and "
+            "--trajectory-root-cluster are required for claim-capable pseudotime."
+        ),
+    )
 
     # CNV inference
     parser.add_argument("--cnv-reference-group", default=None, help="Cell type to use as normal reference for CNV")
@@ -1022,6 +1030,7 @@ def main() -> None:
         pseudobulk_de=PseudobulkDEConfig(),
         regress_cell_cycle=args.regress_cell_cycle,
         trajectory_root_cluster=args.trajectory_root_cluster,
+        trajectory_root_justification=args.trajectory_root_justification,
         checkpoint=args.checkpoint,
         resume_from=args.resume_from,
         allow_partial_run=args.allow_partial_run,

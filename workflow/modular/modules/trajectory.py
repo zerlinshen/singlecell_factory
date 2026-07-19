@@ -96,18 +96,32 @@ class TrajectoryModule:
         sc.tl.diffmap(adata)
 
         root_cluster = ctx.cfg.trajectory_root_cluster
+        root_justification = getattr(ctx.cfg, "trajectory_root_justification", None)
+        root_justification = (
+            str(root_justification).strip() if root_justification is not None else ""
+        )
+        root_cluster_found = False
         if root_cluster is not None and "leiden" in adata.obs:
             cluster_mask = adata.obs["leiden"] == str(root_cluster)
             if cluster_mask.any():
                 dc1 = adata.obsm["X_diffmap"][:, 0]
                 dc1_masked = np.where(cluster_mask, dc1, np.inf)
                 adata.uns["iroot"] = int(np.argmin(np.abs(dc1_masked)))
+                root_cluster_found = True
             else:
                 adata.uns["iroot"] = int(adata.obsm["X_diffmap"][:, 0].argmin())
         else:
             adata.uns["iroot"] = int(adata.obsm["X_diffmap"][:, 0].argmin())
 
         sc.tl.dpt(adata)
+
+        trajectory_claimable = bool(root_cluster_found and root_justification)
+        if trajectory_claimable:
+            claim_status = "claimable_biologically_justified_root"
+            root_selection_method = "explicit_leiden_cluster"
+        else:
+            claim_status = "non_claimable_missing_biologically_justified_root"
+            root_selection_method = "exploratory_diffmap_minimum_fallback"
 
         # M-3 audit fix (2026-05-22): persist trajectory provenance in
         # adata.uns so downstream consumers (cell_fate, pseudo_velocity,
@@ -129,13 +143,29 @@ class TrajectoryModule:
             "root_cluster": (
                 str(root_cluster) if root_cluster is not None else None
             ),
+            "root_cluster_found": root_cluster_found,
+            "root_justification": root_justification or None,
+            "root_selection_method": root_selection_method,
+            "claimable": trajectory_claimable,
+            "claim_status": claim_status,
+            "inference_class": (
+                "biologically_rooted_dpt"
+                if trajectory_claimable
+                else "exploratory_unrooted_dpt"
+            ),
             "n_obs": int(adata.n_obs),
         }
         ctx.metadata["trajectory_engine"] = "scanpy_paga_dpt"
         ctx.metadata["trajectory_method_actually_used"] = "scanpy_paga_dpt"
+        ctx.metadata["trajectory_claimable"] = trajectory_claimable
+        ctx.metadata["trajectory_claim_status"] = claim_status
+        ctx.metadata["trajectory_root_selection_method"] = root_selection_method
 
         # --- Tables ---
-        adata.obs[["dpt_pseudotime"]].to_csv(ctx.table_dir / "dpt_pseudotime.csv")
+        pseudotime_table = adata.obs[["dpt_pseudotime"]].copy()
+        pseudotime_table["trajectory_claimable"] = trajectory_claimable
+        pseudotime_table["trajectory_claim_status"] = claim_status
+        pseudotime_table.to_csv(ctx.table_dir / "dpt_pseudotime.csv")
 
         # Per-cluster pseudotime statistics
         if "leiden" in adata.obs:
@@ -145,6 +175,8 @@ class TrajectoryModule:
                 .agg(["count", "mean", "median", "std", "min", "max"])
                 .reset_index()
             )
+            stats["trajectory_claimable"] = trajectory_claimable
+            stats["trajectory_claim_status"] = claim_status
             stats.to_csv(ctx.table_dir / "pseudotime_per_cluster.csv", index=False)
 
         ctx.metadata["pseudotime_mean"] = round(float(adata.obs["dpt_pseudotime"].mean()), 4)
@@ -159,10 +191,11 @@ class TrajectoryModule:
     @staticmethod
     def _plot_pseudotime_umap(adata, ctx: PipelineContext) -> None:
         """UMAP colored by pseudotime and clusters."""
+        claim_label = TrajectoryModule._claim_label(adata)
         ncols = 3 if "leiden" in adata.obs else 2
         fig, axes = plt.subplots(1, ncols, figsize=(6 * ncols, 5))
         sc.pl.umap(adata, color="dpt_pseudotime", ax=axes[0], show=False, cmap="viridis")
-        axes[0].set_title("DPT Pseudotime")
+        axes[0].set_title(f"DPT Pseudotime{claim_label}")
 
         # Diffusion components
         if "X_diffmap" in adata.obsm:
@@ -170,11 +203,11 @@ class TrajectoryModule:
                 adata, basis="diffmap", color="dpt_pseudotime",
                 components="1,2", ax=axes[1], show=False, cmap="viridis",
             )
-            axes[1].set_title("Diffusion Map (DC1 vs DC2)")
+            axes[1].set_title(f"Diffusion Map (DC1 vs DC2){claim_label}")
 
         if ncols == 3:
             sc.pl.umap(adata, color="leiden", ax=axes[2], show=False, legend_loc="on data")
-            axes[2].set_title("Leiden Clusters")
+            axes[2].set_title(f"Leiden Clusters{claim_label}")
 
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudotime_dpt_umap.png", dpi=160, bbox_inches="tight")
@@ -184,16 +217,17 @@ class TrajectoryModule:
     def _plot_paga(adata, ctx: PipelineContext) -> None:
         """PAGA trajectory graph overlaid on UMAP."""
         try:
+            claim_label = TrajectoryModule._claim_label(adata)
             fig, axes = plt.subplots(1, 2, figsize=(14, 5))
             sc.pl.paga(
                 adata, color="leiden", ax=axes[0], show=False,
                 frameon=False, fontsize=9, node_size_scale=1.5,
             )
-            axes[0].set_title("PAGA Graph (node = cluster)")
+            axes[0].set_title(f"PAGA Graph (node = cluster){claim_label}")
             sc.pl.umap(
                 adata, color="dpt_pseudotime", ax=axes[1], show=False, cmap="viridis",
             )
-            axes[1].set_title("DPT Pseudotime")
+            axes[1].set_title(f"DPT Pseudotime{claim_label}")
             plt.tight_layout()
             plt.savefig(ctx.figure_dir / "paga_trajectory.png", dpi=160, bbox_inches="tight")
             plt.close()
@@ -269,9 +303,12 @@ class TrajectoryModule:
         top_genes = expr_sub.var_names[top_idx].tolist()
 
         # Save gene-pseudotime correlations
+        trajectory = adata.uns.get("trajectory", {})
         corr_df = pd.DataFrame({
             "gene": expr_sub.var_names[top_idx],
             "pseudotime_correlation": corr[top_local_idx],
+            "trajectory_claimable": bool(trajectory.get("claimable", False)),
+            "trajectory_claim_status": trajectory.get("claim_status", "non_claimable_unknown"),
         })
         corr_df.to_csv(ctx.table_dir / "pseudotime_top_genes.csv", index=False)
 
@@ -294,7 +331,9 @@ class TrajectoryModule:
         ax.set_yticks(range(len(top_genes)))
         ax.set_yticklabels(top_genes, fontsize=7)
         ax.set_xlabel("Cells (ordered by pseudotime)")
-        ax.set_title("Top 30 genes correlated with pseudotime")
+        ax.set_title(
+            f"Top 30 genes correlated with pseudotime{TrajectoryModule._claim_label(adata)}"
+        )
         plt.colorbar(im, ax=ax, label="Smoothed expression", shrink=0.6)
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudotime_gene_heatmap.png", dpi=160, bbox_inches="tight")
@@ -315,7 +354,17 @@ class TrajectoryModule:
         ax.set_xticklabels(clusters)
         ax.set_xlabel("Leiden Cluster")
         ax.set_ylabel("DPT Pseudotime")
-        ax.set_title("Pseudotime Distribution per Cluster")
+        ax.set_title(
+            f"Pseudotime Distribution per Cluster{TrajectoryModule._claim_label(adata)}"
+        )
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "pseudotime_violin_per_cluster.png", dpi=160, bbox_inches="tight")
         plt.close()
+
+    @staticmethod
+    def _claim_label(adata) -> str:
+        """Return an explicit plot label when DPT cannot support biological claims."""
+        trajectory = adata.uns.get("trajectory", {})
+        if trajectory.get("claimable") is True:
+            return ""
+        return "\nNON-CLAIMABLE: missing biologically justified root"
