@@ -481,8 +481,9 @@ def test_annotation_handles_single_available_marker_set(monkeypatch, tmp_path):
 
 
 def test_batch_correction_records_skipped_status_when_batch_key_missing(monkeypatch, tmp_path):
-    import sys
     import types
+
+    import workflow.modular.modules.batch_correction as batch_mod
 
     fake_scanpy = types.SimpleNamespace(
         pp=types.SimpleNamespace(),
@@ -490,9 +491,10 @@ def test_batch_correction_records_skipped_status_when_batch_key_missing(monkeypa
         tl=types.SimpleNamespace(),
         external=types.SimpleNamespace(pp=types.SimpleNamespace()),
     )
-    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
-
-    from workflow.modular.modules.batch_correction import BatchCorrectionModule
+    # Patch the already-imported module attribute so pytest restores it after
+    # this test. Injecting fake scanpy through sys.modules before import left
+    # batch_correction cached with the fake and polluted later test files.
+    monkeypatch.setattr(batch_mod, "sc", fake_scanpy)
 
     adata = AnnData(np.ones((6, 4), dtype=np.float32))
     adata.obs["leiden"] = ["0", "0", "1", "1", "2", "2"]
@@ -510,7 +512,7 @@ def test_batch_correction_records_skipped_status_when_batch_key_missing(monkeypa
         adata=adata,
     )
 
-    BatchCorrectionModule().run(ctx)
+    batch_mod.BatchCorrectionModule().run(ctx)
     assert ctx.metadata["batch_correction_status"] == "skipped_missing_batch_key"
     assert ctx.module_status[-1]["module"] == "batch_correction"
     assert ctx.module_status[-1]["status"] == "skipped"
