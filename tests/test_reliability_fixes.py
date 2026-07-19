@@ -390,7 +390,9 @@ def test_pseudobulk_confirmatory_mode_records_contract(tmp_path, monkeypatch):
     out = pd.read_csv(run_dir / "pseudobulk_de_results.csv")
     assert list(out["group"]) == ["Tumor|A_vs_B"]
     assert ctx.metadata["pseudobulk_de_mode"] == "confirmatory"
-    assert ctx.metadata["pseudobulk_de_status"] == "completed"
+    assert ctx.metadata["pseudobulk_de_status"] == (
+        "completed_nonclaimable_backend_fallback"
+    )
     assert ctx.metadata["pseudobulk_de_claimable"] is False
     assert ctx.metadata["pseudobulk_de_inference_status"] == (
         "exploratory_nonclaimable_backend_fallback"

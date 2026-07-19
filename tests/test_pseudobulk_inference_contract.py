@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import anndata as ad
 import numpy as np
 import pandas as pd
+import pytest
 from scipy import sparse
 
 from workflow.modular.config import CellRangerConfig, PipelineConfig, PseudobulkConfig
@@ -77,7 +78,10 @@ def test_pydeseq2_confirmatory_contract_is_claimable(monkeypatch, tmp_path):
     assert set(results["n_biological_replicates_a"]) == {2}
     assert set(results["n_biological_replicates_b"]) == {2}
     counts = pd.read_csv(tmp_path / "pseudobulk_counts.csv")
-    assert counts["claimable"].all()
+    assert all(np.issubdtype(dtype, np.number) for dtype in counts.dtypes)
+    metadata = pd.read_csv(tmp_path / "pseudobulk_metadata.csv")
+    assert len(metadata) == len(counts)
+    assert metadata["claimable"].all()
 
 
 def test_rank_backend_is_visibly_nonclaimable(monkeypatch, tmp_path):
@@ -90,18 +94,22 @@ def test_rank_backend_is_visibly_nonclaimable(monkeypatch, tmp_path):
         "exploratory_nonclaimable_backend_fallback"
     )
     assert ctx.metadata["pseudobulk_de_claimable"] is False
+    assert ctx.metadata["pseudobulk_de_status"] == (
+        "completed_nonclaimable_backend_fallback"
+    )
     results = pd.read_csv(tmp_path / "pseudobulk_de_results.csv")
     assert not results["claimable"].any()
+    metadata = pd.read_csv(tmp_path / "pseudobulk_metadata.csv")
+    assert not metadata["claimable"].any()
 
 
 def test_confirmatory_contract_requires_explicit_biological_sample_col(tmp_path):
     ctx = _ctx(tmp_path, sample_col=None)
 
-    PseudobulkDEModule().run(ctx)
+    with pytest.raises(ValueError, match="explicit biological"):
+        PseudobulkDEModule().run(ctx)
 
-    assert ctx.metadata["pseudobulk_de_status"] == (
-        "skipped_missing_biological_sample_col"
-    )
+    assert ctx.metadata["pseudobulk_de_status"] == "failed_missing_biological_sample_col"
     assert ctx.metadata["pseudobulk_de_inference_status"] == (
         "not_testable_missing_biological_sample_col"
     )
@@ -111,7 +119,8 @@ def test_confirmatory_contract_requires_explicit_biological_sample_col(tmp_path)
 def test_confirmatory_contract_rejects_missing_named_sample_column(tmp_path):
     ctx = _ctx(tmp_path, sample_col="donor_id")
 
-    PseudobulkDEModule().run(ctx)
+    with pytest.raises(ValueError, match="explicit biological"):
+        PseudobulkDEModule().run(ctx)
 
     assert ctx.metadata["pseudobulk_de_inference_status"] == (
         "not_testable_missing_biological_sample_col"
@@ -125,7 +134,8 @@ def test_sample_mapped_to_multiple_conditions_is_rejected(tmp_path):
         sample_condition_pairs=[("S1", "A"), ("S1", "B"), ("S2", "A"), ("S3", "B")],
     )
 
-    PseudobulkDEModule().run(ctx)
+    with pytest.raises(ValueError, match="exactly one condition"):
+        PseudobulkDEModule().run(ctx)
 
     assert ctx.metadata["pseudobulk_de_inference_status"] == (
         "not_testable_sample_condition_nonunique"
@@ -139,10 +149,95 @@ def test_minimum_unique_biological_replicates_is_enforced(tmp_path):
         sample_condition_pairs=[("S1", "A"), ("S2", "B"), ("S3", "B")],
     )
 
-    PseudobulkDEModule().run(ctx)
+    with pytest.raises(ValueError, match="biological replicates"):
+        PseudobulkDEModule().run(ctx)
 
     assert ctx.metadata["pseudobulk_de_inference_status"] == (
         "not_testable_insufficient_biological_replicates"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_explicit_contrast_missing_counts_records_then_raises(tmp_path):
+    ctx = _ctx(tmp_path)
+    del ctx.adata.layers["counts"]
+
+    with pytest.raises(ValueError, match="raw UMI counts"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_status"] == "failed_missing_counts_layer"
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_missing_raw_counts"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_explicit_contrast_missing_grouping_column_records_then_raises(tmp_path):
+    ctx = _ctx(tmp_path)
+    del ctx.adata.obs["cell_type"]
+
+    with pytest.raises(ValueError, match="No grouping column"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_status"] == "failed_missing_grouping_columns"
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_missing_grouping_columns"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_explicit_contrast_invalid_label_records_then_raises(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.cfg.pseudobulk.contrast_b = "missing"
+
+    with pytest.raises(ValueError, match="must both exist"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_invalid_contrast_labels"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_json_contrast_col_is_honored_once(monkeypatch, tmp_path):
+    ctx = _ctx(tmp_path)
+    contract = tmp_path / "contrasts.json"
+    contract.write_text(
+        '[{"name":"A_vs_B","contrast_col":"condition",'
+        '"contrast_a":"A","contrast_b":"B"}]',
+        encoding="utf-8",
+    )
+    ctx.cfg.pseudobulk.contrast_json = contract
+    ctx.cfg.pseudobulk.contrast_a = None
+    ctx.cfg.pseudobulk.contrast_b = None
+    ctx.cfg.pseudobulk.contrast_col = None
+    _patch_result(monkeypatch, test_used="pydeseq2")
+
+    PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_contrast_contract"]["contrast_col"] == "condition"
+    assert ctx.metadata["pseudobulk_de_claimable"] is True
+
+
+def test_json_mixed_contrast_columns_record_then_raise(tmp_path):
+    ctx = _ctx(tmp_path)
+    ctx.adata.obs["disease"] = ctx.adata.obs["condition"]
+    contract = tmp_path / "contrasts.json"
+    contract.write_text(
+        '[{"contrast_col":"condition","contrast_a":"A","contrast_b":"B"},'
+        '{"contrast_col":"disease","contrast_a":"A","contrast_b":"B"}]',
+        encoding="utf-8",
+    )
+    ctx.cfg.pseudobulk.contrast_json = contract
+    ctx.cfg.pseudobulk.contrast_a = None
+    ctx.cfg.pseudobulk.contrast_b = None
+    ctx.cfg.pseudobulk.contrast_col = None
+
+    with pytest.raises(ValueError, match="one consistent contrast_col"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_mixed_contrast_columns"
     )
     assert ctx.metadata["pseudobulk_de_claimable"] is False
 

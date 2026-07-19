@@ -101,10 +101,45 @@ class PseudobulkDEModule:
             claimable=False,
         )
 
-        explicit_contrasts, contrast_col, contract_message = self._resolve_confirmatory_contract(
-            adata,
-            ctx,
+        confirmatory_requested = bool(
+            getattr(cfg, "contrast_json", None)
+            or getattr(cfg, "contrast_a", None)
+            or getattr(cfg, "contrast_b", None)
         )
+        try:
+            explicit_contrasts, contrast_col, contract_message = (
+                self._resolve_confirmatory_contract(adata, ctx)
+            )
+        except PseudobulkInferenceContractError as exc:
+            ctx.metadata["pseudobulk_de_status"] = "failed_invalid_contrast_contract"
+            ctx.metadata["pseudobulk_de_mode"] = "failed"
+            self._record_inference(
+                ctx,
+                inference_class="replicate_aware_pseudobulk",
+                inference_status=exc.inference_status,
+                claimable=False,
+            )
+            raise
+        except ValueError as exc:
+            ctx.metadata["pseudobulk_de_status"] = "failed_invalid_contrast_contract"
+            ctx.metadata["pseudobulk_de_mode"] = "failed"
+            self._record_inference(
+                ctx,
+                inference_class="replicate_aware_pseudobulk",
+                inference_status="not_testable_invalid_contrast_contract",
+                claimable=False,
+            )
+            raise ValueError(str(exc)) from exc
+        if confirmatory_requested and not explicit_contrasts:
+            ctx.metadata["pseudobulk_de_status"] = "failed_invalid_contrast_contract"
+            ctx.metadata["pseudobulk_de_mode"] = "failed"
+            self._record_inference(
+                ctx,
+                inference_class="replicate_aware_pseudobulk",
+                inference_status="not_testable_invalid_contrast_contract",
+                claimable=False,
+            )
+            raise ValueError(contract_message or "Invalid confirmatory pseudobulk contract.")
         exploratory = bool(getattr(cfg, "exploratory_group_vs_rest", False))
 
         configured_sample_col = getattr(cfg, "sample_col", None)
@@ -116,8 +151,8 @@ class PseudobulkDEModule:
                 "--pseudobulk-sample-col that exists in adata.obs; technical batch "
                 "auto-detection is not claim-safe."
             )
-            ctx.metadata["pseudobulk_de_status"] = "skipped_missing_biological_sample_col"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = "failed_missing_biological_sample_col"
+            ctx.metadata["pseudobulk_de_mode"] = "failed"
             self._record_inference(
                 ctx,
                 inference_class="replicate_aware_pseudobulk",
@@ -125,8 +160,7 @@ class PseudobulkDEModule:
                 claimable=False,
                 requested_biological_sample_col=configured_sample_col,
             )
-            ctx.status(self.name, "skipped", msg)
-            return
+            raise ValueError(msg)
 
         try:
             sample_col = self._resolve_sample_col(
@@ -139,8 +173,14 @@ class PseudobulkDEModule:
             )
         except ValueError as exc:
             logger.warning("%s; skipping pseudobulk DE.", exc)
-            ctx.metadata["pseudobulk_de_status"] = "skipped_missing_grouping_columns"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_missing_grouping_columns"
+                if confirmatory_requested
+                else "skipped_missing_grouping_columns"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else "skipped"
+            )
             self._record_inference(
                 ctx,
                 inference_class=(
@@ -149,14 +189,20 @@ class PseudobulkDEModule:
                 inference_status="not_testable_missing_grouping_columns",
                 claimable=False,
             )
+            if confirmatory_requested:
+                raise ValueError(str(exc)) from exc
             ctx.status(self.name, "skipped", str(exc))
             return
 
         if len(adata.obs[sample_col].unique()) < 2:
             msg = f"Only 1 sample in '{sample_col}'; pseudobulk DE needs >= 2. Skipping."
             logger.warning(msg)
-            ctx.metadata["pseudobulk_de_status"] = "skipped_single_sample"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_single_sample" if confirmatory_requested else "skipped_single_sample"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else "skipped"
+            )
             self._record_inference(
                 ctx,
                 inference_class=(
@@ -166,14 +212,22 @@ class PseudobulkDEModule:
                 claimable=False,
                 biological_sample_col=sample_col,
             )
+            if confirmatory_requested:
+                raise ValueError(msg)
             ctx.status(self.name, "skipped", msg)
             return
 
         if "counts" not in adata.layers:
             msg = "Missing adata.layers['counts']; pseudobulk DE requires raw UMI counts."
             logger.warning("%s; skipping pseudobulk DE.", msg)
-            ctx.metadata["pseudobulk_de_status"] = "skipped_missing_counts_layer"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_missing_counts_layer"
+                if confirmatory_requested
+                else "skipped_missing_counts_layer"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else "skipped"
+            )
             self._record_inference(
                 ctx,
                 inference_class=(
@@ -183,6 +237,8 @@ class PseudobulkDEModule:
                 claimable=False,
                 biological_sample_col=sample_col,
             )
+            if confirmatory_requested:
+                raise ValueError(msg)
             ctx.status(self.name, "skipped", msg)
             return
 
@@ -254,8 +310,8 @@ class PseudobulkDEModule:
                 return
         except PseudobulkInferenceContractError as exc:
             logger.warning("%s; skipping pseudobulk DE.", exc)
-            ctx.metadata["pseudobulk_de_status"] = f"skipped_{exc.inference_status}"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = f"failed_{exc.inference_status}"
+            ctx.metadata["pseudobulk_de_mode"] = "failed"
             self._record_inference(
                 ctx,
                 inference_class="replicate_aware_pseudobulk",
@@ -264,12 +320,17 @@ class PseudobulkDEModule:
                 biological_sample_col=sample_col,
                 contrast_col=contrast_col,
             )
-            ctx.status(self.name, "skipped", str(exc))
-            return
+            raise
         except ValueError as exc:
             logger.warning("%s; skipping pseudobulk DE.", exc)
-            ctx.metadata["pseudobulk_de_status"] = "skipped_missing_counts_layer"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_invalid_counts_or_grouping"
+                if confirmatory_requested
+                else "skipped_missing_counts_layer"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else "skipped"
+            )
             self._record_inference(
                 ctx,
                 inference_class=(
@@ -280,12 +341,20 @@ class PseudobulkDEModule:
                 inference_status="not_testable_invalid_counts_or_grouping",
                 claimable=False,
             )
+            if confirmatory_requested:
+                raise
             ctx.status(self.name, "skipped", str(exc))
             return
 
         if pb_counts.empty or pb_meta.empty:
-            ctx.metadata["pseudobulk_de_status"] = "skipped_no_valid_pseudobulk_groups"
-            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_no_valid_pseudobulk_groups"
+                if confirmatory_requested
+                else "skipped_no_valid_pseudobulk_groups"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else "skipped"
+            )
             self._record_inference(
                 ctx,
                 inference_class=(
@@ -296,12 +365,21 @@ class PseudobulkDEModule:
                 inference_status="not_testable_no_valid_pseudobulk_groups",
                 claimable=False,
             )
-            ctx.status(self.name, "skipped", "No pseudobulk groups passed minimum cell threshold.")
+            msg = "No pseudobulk groups passed minimum cell threshold."
+            if confirmatory_requested:
+                raise ValueError(msg)
+            ctx.status(self.name, "skipped", msg)
             return
 
         if results is None or results.empty:
-            ctx.metadata["pseudobulk_de_status"] = "skipped_no_testable_contrasts"
-            ctx.metadata["pseudobulk_de_mode"] = mode
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_no_testable_contrasts"
+                if confirmatory_requested
+                else "skipped_no_testable_contrasts"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else mode
+            )
             self._record_inference(
                 ctx,
                 inference_class=(
@@ -312,12 +390,11 @@ class PseudobulkDEModule:
                 inference_status="not_testable_insufficient_biological_replicates",
                 claimable=False,
             )
-            self._write_annotated_table(
-                pb_counts,
-                ctx.table_dir / "pseudobulk_counts.csv",
-                ctx,
-            )
-            ctx.status(self.name, "skipped", "No pseudobulk contrasts met minimum sample requirements.")
+            self._write_output_tables(pb_counts, pb_meta, ctx)
+            msg = "No pseudobulk contrasts met minimum sample requirements."
+            if confirmatory_requested:
+                raise ValueError(msg)
+            ctx.status(self.name, "skipped", msg)
             return
 
         test_used = set(results.get("test_used", pd.Series(dtype=str)).dropna().astype(str))
@@ -368,14 +445,16 @@ class PseudobulkDEModule:
             "claimable": claimable,
         })
         results.to_csv(ctx.table_dir / "pseudobulk_de_results.csv", index=False)
-        self._write_annotated_table(
-            pb_counts,
-            ctx.table_dir / "pseudobulk_counts.csv",
-            ctx,
-        )
+        self._write_output_tables(pb_counts, pb_meta, ctx)
         n_sig = int((results["padj"] < 0.05).sum()) if "padj" in results.columns else 0
         ctx.metadata["pseudobulk_de_significant_genes"] = n_sig
-        ctx.metadata["pseudobulk_de_status"] = "completed"
+        if mode == "confirmatory" and claimable:
+            module_status = "completed_confirmatory"
+        elif mode == "confirmatory":
+            module_status = "completed_nonclaimable_backend_fallback"
+        else:
+            module_status = "completed_exploratory_nonclaimable"
+        ctx.metadata["pseudobulk_de_status"] = module_status
         ctx.metadata["pseudobulk_de_mode"] = mode
         # H-3 audit fix (2026-05-22): manifest-level summary of which DE
         # test produced the rows. Squair 2021 (the cited pseudobulk paper)
@@ -397,16 +476,24 @@ class PseudobulkDEModule:
 
     # -- contract helpers ------------------------------------------------
     @staticmethod
-    def _write_annotated_table(
-        table: pd.DataFrame,
-        path: Path,
+    def _write_output_tables(
+        counts: pd.DataFrame,
+        metadata: pd.DataFrame,
         ctx: PipelineContext,
     ) -> None:
-        annotated = table.copy()
-        annotated["inference_class"] = ctx.metadata["pseudobulk_de_inference_class"]
-        annotated["inference_status"] = ctx.metadata["pseudobulk_de_inference_status"]
-        annotated["claimable"] = ctx.metadata["pseudobulk_de_claimable"]
-        annotated.to_csv(path, index=False)
+        counts.to_csv(ctx.table_dir / "pseudobulk_counts.csv", index=False)
+        annotated_metadata = metadata.reset_index(drop=True).copy()
+        annotated_metadata["inference_class"] = ctx.metadata[
+            "pseudobulk_de_inference_class"
+        ]
+        annotated_metadata["inference_status"] = ctx.metadata[
+            "pseudobulk_de_inference_status"
+        ]
+        annotated_metadata["claimable"] = ctx.metadata["pseudobulk_de_claimable"]
+        annotated_metadata.to_csv(
+            ctx.table_dir / "pseudobulk_metadata.csv",
+            index=False,
+        )
 
     @staticmethod
     def _validate_biological_replicates(
@@ -441,6 +528,12 @@ class PseudobulkDEModule:
                 mapping.loc[mapping[contrast_col].astype(str) == contrast_b, sample_col]
                 .astype(str)
             )
+            if not samples_a or not samples_b:
+                raise PseudobulkInferenceContractError(
+                    "not_testable_invalid_contrast_labels",
+                    f"Contrast labels {contrast_a!r} and {contrast_b!r} must both "
+                    f"exist in adata.obs[{contrast_col!r}].",
+                )
             overlap = sorted(samples_a & samples_b)
             if overlap:
                 raise PseudobulkInferenceContractError(
@@ -514,7 +607,28 @@ class PseudobulkDEModule:
         else:
             return [], None, "No explicit confirmatory pseudobulk contrast was provided."
 
-        contrast_col = self._resolve_optional_contrast_col(adata, getattr(cfg, "contrast_col", None))
+        json_columns = {
+            spec["contrast_col"] for spec in contrast_specs if spec.get("contrast_col")
+        }
+        configured_contrast_col = getattr(cfg, "contrast_col", None)
+        requested_columns = set(json_columns)
+        if configured_contrast_col:
+            requested_columns.add(str(configured_contrast_col))
+        if len(requested_columns) > 1:
+            raise PseudobulkInferenceContractError(
+                "not_testable_mixed_contrast_columns",
+                "A pseudobulk contrast contract must use one consistent contrast_col; "
+                f"received {sorted(requested_columns)}.",
+            )
+        requested_contrast_col = next(iter(requested_columns), None)
+        if requested_contrast_col:
+            contrast_col = (
+                requested_contrast_col
+                if requested_contrast_col in adata.obs.columns
+                else None
+            )
+        else:
+            contrast_col = self._resolve_optional_contrast_col(adata, None)
         if not contrast_col:
             return [], None, "Requested pseudobulk contrasts but no usable contrast column was found in adata.obs."
 
@@ -527,21 +641,26 @@ class PseudobulkDEModule:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(payload, list):
             raise ValueError("pseudobulk contrast JSON must be a list of contrast specs.")
+        if not payload:
+            raise ValueError("pseudobulk contrast JSON must contain at least one contrast spec.")
         specs: list[dict[str, str]] = []
-        for item in payload:
+        for index, item in enumerate(payload):
             if not isinstance(item, dict):
-                continue
+                raise ValueError(f"pseudobulk contrast JSON item {index} must be an object.")
             a = item.get("contrast_a")
             b = item.get("contrast_b")
             if not a or not b:
-                continue
-            specs.append(
-                {
-                    "name": str(item.get("name") or f"{a}_vs_{b}"),
-                    "contrast_a": str(a),
-                    "contrast_b": str(b),
-                }
-            )
+                raise ValueError(
+                    f"pseudobulk contrast JSON item {index} requires contrast_a and contrast_b."
+                )
+            spec = {
+                "name": str(item.get("name") or f"{a}_vs_{b}"),
+                "contrast_a": str(a),
+                "contrast_b": str(b),
+            }
+            if item.get("contrast_col"):
+                spec["contrast_col"] = str(item["contrast_col"])
+            specs.append(spec)
         return specs
 
     # -- column helpers --------------------------------------------------
