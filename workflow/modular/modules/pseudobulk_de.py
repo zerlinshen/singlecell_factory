@@ -65,6 +65,9 @@ class PseudobulkDEModule:
             "claimable": bool(claimable),
             **details,
         }
+        contrast_contract = ctx.metadata.get("pseudobulk_de_contrast_contract")
+        if isinstance(contrast_contract, dict):
+            payload["contrast_contract"] = json.loads(json.dumps(contrast_contract))
         ctx.metadata["pseudobulk_de_inference_class"] = inference_class
         ctx.metadata["pseudobulk_de_inference_status"] = inference_status
         ctx.metadata["pseudobulk_de_claimable"] = bool(claimable)
@@ -412,6 +415,11 @@ class PseudobulkDEModule:
             inference_status = "exploratory_nonclaimable"
             claimable = False
 
+        ctx.metadata["pseudobulk_de_contrast_contract"].update({
+            "inference_class": inference_class,
+            "inference_status": inference_status,
+            "claimable": claimable,
+        })
         self._record_inference(
             ctx,
             inference_class=inference_class,
@@ -425,11 +433,6 @@ class PseudobulkDEModule:
         results["inference_status"] = inference_status
         results["claimable"] = claimable
         results["biological_sample_col"] = sample_col
-        ctx.metadata["pseudobulk_de_contrast_contract"].update({
-            "inference_class": inference_class,
-            "inference_status": inference_status,
-            "claimable": claimable,
-        })
         results.to_csv(ctx.table_dir / "pseudobulk_de_results.csv", index=False)
         self._write_output_tables(pb_counts, pb_meta, ctx)
         n_sig = int((results["padj"] < 0.05).sum()) if "padj" in results.columns else 0

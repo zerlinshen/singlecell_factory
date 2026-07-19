@@ -378,7 +378,11 @@ def _run_ws1_pipeline(workers, tmp_path, monkeypatch):
     ctx.run_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(pipe, "_prepare_output", lambda _cfg: ctx)
     monkeypatch.setattr(pipe, "_build_registry", _ws1_integration_registry)
-    monkeypatch.setattr(pipe, "_save_manifest", lambda _ctx: _ctx.run_dir / "run_manifest.json")
+    monkeypatch.setattr(
+        pipe,
+        "_save_manifest",
+        lambda _ctx, _requested, _planned: _ctx.run_dir / "run_manifest.json",
+    )
     pipe.run_pipeline(cfg)
     obs = ctx.adata.obs
     mapping = (

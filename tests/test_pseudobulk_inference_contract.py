@@ -72,6 +72,28 @@ def test_pydeseq2_confirmatory_contract_is_claimable(monkeypatch, tmp_path):
     assert ctx.metadata["pseudobulk_de_inference_class"] == "replicate_aware_pseudobulk"
     assert ctx.metadata["pseudobulk_de_inference_status"] == "supported_confirmatory"
     assert ctx.metadata["pseudobulk_de_claimable"] is True
+    contract = ctx.metadata["pseudobulk_de_contrast_contract"]
+    uns_contract = ctx.adata.uns["pseudobulk_de"]["contrast_contract"]
+    assert uns_contract == contract
+    assert uns_contract["contrasts"] == [
+        {
+            "name": "A_vs_B",
+            "contrast_a": "A",
+            "contrast_b": "B",
+            "contrast_col": "condition",
+        }
+    ]
+    assert uns_contract["biological_replicates"] == [
+        {
+            "name": "A_vs_B",
+            "contrast_a": "A",
+            "contrast_b": "B",
+            "n_biological_replicates_a": 2,
+            "n_biological_replicates_b": 2,
+        }
+    ]
+    assert uns_contract["inference_status"] == "supported_confirmatory"
+    assert uns_contract["claimable"] is True
     results = pd.read_csv(tmp_path / "pseudobulk_de_results.csv")
     assert set(results["inference_status"]) == {"supported_confirmatory"}
     assert results["claimable"].all()

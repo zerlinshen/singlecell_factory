@@ -178,13 +178,14 @@ def test_atac_slot_active():
     assert "table" in atac and "lsi_path" in atac["table"]
 
 
-def test_unfinished_modalities_reserved():
-    """VDJ/Ribo/Hi-C remain reserved until they get exporter+reader vertical slices."""
+def test_reserved_and_active_modality_statuses():
+    """VDJ/Ribo remain reserved; Hi-C is active after its vertical slice landed."""
     import yaml
     sf = FACTORY_ROOT / "contracts" / "bundle_schema.yaml"
     doc = yaml.safe_load(sf.read_text())
-    for ext_name in ("vdj", "ribo", "hic"):
+    for ext_name in ("vdj", "ribo"):
         assert doc["extensions_v22"][ext_name]["status"] == "reserved"
+    assert doc["extensions_v22"]["hic"]["status"] == "active"
 
 
 def test_r_extension_registry_includes_atac():
