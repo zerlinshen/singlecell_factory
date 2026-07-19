@@ -2,33 +2,16 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import multiprocessing
-import os
 import signal
-import time
-import traceback
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable
 
 import anndata as ad
 import numpy as np
 import pandas as pd
 import pytest
-import zarr
 from scipy import sparse
-
-
-ZARR_FIXTURE_PROCESS_TIMEOUT_SECONDS = 30.0
-PROCESS_CLEANUP_TIMEOUT_SECONDS = 5.0
-
-
-class IsolatedProcessTimeout(TimeoutError):
-    """Timeout raised only after the isolated child has been reaped."""
-
-    def __init__(self, label: str, seconds: float, pid: int):
-        super().__init__(f"{label} exceeded {seconds:g}s (child pid {pid})")
-        self.pid = pid
 
 
 def load_prepare_module():
@@ -62,46 +45,6 @@ def bounded_zarr_operation(label: str, seconds: float = 15.0):
         signal.signal(signal.SIGALRM, previous_handler)
 
 
-def run_isolated_process(
-    target: Callable[..., None],
-    args: tuple[object, ...],
-    *,
-    label: str,
-    timeout_seconds: float,
-    error_path: Path | None = None,
-) -> int:
-    """Run a fixture operation in a fresh interpreter and always reap it."""
-    process = multiprocessing.get_context("spawn").Process(
-        target=target,
-        args=args,
-        name=f"pytest-{label}",
-    )
-    process.start()
-    process.join(timeout_seconds)
-    if process.is_alive():
-        pid = process.pid
-        assert pid is not None
-        process.terminate()
-        process.join(PROCESS_CLEANUP_TIMEOUT_SECONDS)
-        if process.is_alive():
-            process.kill()
-            process.join(PROCESS_CLEANUP_TIMEOUT_SECONDS)
-        if process.is_alive():
-            raise RuntimeError(f"failed to reap timed-out {label} child pid {pid}")
-        raise IsolatedProcessTimeout(label, timeout_seconds, pid)
-
-    pid = process.pid
-    assert pid is not None
-    if process.exitcode != 0:
-        details = ""
-        if error_path is not None and error_path.exists():
-            details = f"\n{error_path.read_text(encoding='utf-8')}"
-        raise RuntimeError(
-            f"{label} child pid {pid} exited with code {process.exitcode}{details}"
-        )
-    return pid
-
-
 def test_build_sample_meta_yields_required_columns(tmp_path):
     module = load_prepare_module()
     sdrf = tmp_path / "E-MTAB-13526.sdrf.txt"
@@ -131,31 +74,7 @@ def test_bounded_zarr_operation_fails_diagnostically():
             signal.pause()
 
 
-def _block_forever() -> None:
-    while True:
-        time.sleep(60)
-
-
-def test_isolated_process_timeout_fails_loudly_and_reaps_child():
-    with pytest.raises(IsolatedProcessTimeout, match="fixture probe exceeded") as exc:
-        run_isolated_process(
-            _block_forever,
-            (),
-            label="fixture probe",
-            timeout_seconds=0.05,
-        )
-
-    assert all(child.pid != exc.value.pid for child in multiprocessing.active_children())
-    with pytest.raises(ProcessLookupError):
-        os.kill(exc.value.pid, 0)
-
-
-def _write_valid_merged_zarr(
-    merged_path: str,
-    include_condition: bool,
-    error_path: str,
-) -> None:
-    merged = Path(merged_path)
+def _make_valid_prepared_adata(include_condition: bool) -> ad.AnnData:
     var = pd.DataFrame(
         {"gene_symbol": ["g1", "g2", "g3"]},
         index=pd.Index(["g1", "g2", "g3"], name=None),
@@ -195,31 +114,64 @@ def _write_valid_merged_zarr(
         ]
         parts.append(ad.AnnData(X=x, obs=obs, var=var))
 
-    try:
-        # This is a four-cell schema fixture, not a concat or throughput test.
-        # Keep Zarr's async runtime in a spawned interpreter so suite-state event
-        # loop contamination cannot hang or poison the pytest process.
-        merged_adata = ad.AnnData(
-            X=sparse.vstack([part.X for part in parts], format="csr"),
-            obs=pd.concat([part.obs for part in parts], axis=0),
-            var=var.copy(),
-        )
-        merged_adata.write_zarr(merged)
-    except BaseException:
-        Path(error_path).write_text(traceback.format_exc(), encoding="utf-8")
-        raise
-
-
-def make_valid_merged_zarr(tmp_path: Path, include_condition: bool = True) -> Path:
-    merged = tmp_path / "merged.zarr"
-    error_path = tmp_path / "merged.zarr.write-error.txt"
-    run_isolated_process(
-        _write_valid_merged_zarr,
-        (str(merged), include_condition, str(error_path)),
-        label="toy Zarr fixture write",
-        timeout_seconds=ZARR_FIXTURE_PROCESS_TIMEOUT_SECONDS,
-        error_path=error_path,
+    return ad.AnnData(
+        X=sparse.vstack([part.X for part in parts], format="csr"),
+        obs=pd.concat([part.obs for part in parts], axis=0),
+        var=var.copy(),
     )
+
+
+def _write_csr_x_contract(merged: Path, matrix: sparse.csr_matrix) -> None:
+    """Write only the Zarr v2 metadata that validate_prepared_input inspects."""
+    merged.mkdir()
+    (merged / ".zgroup").write_text('{"zarr_format": 2}', encoding="utf-8")
+    x_group = merged / "X"
+    x_group.mkdir()
+    (x_group / ".zgroup").write_text('{"zarr_format": 2}', encoding="utf-8")
+    (x_group / ".zattrs").write_text(
+        json.dumps(
+            {
+                "encoding-type": "csr_matrix",
+                "encoding-version": "0.1.0",
+                "shape": list(matrix.shape),
+            }
+        ),
+        encoding="utf-8",
+    )
+    for key, values in {
+        "data": matrix.data,
+        "indices": matrix.indices,
+        "indptr": matrix.indptr,
+    }.items():
+        array_path = x_group / key
+        array_path.mkdir()
+        (array_path / ".zarray").write_text(
+            json.dumps(
+                {
+                    "chunks": [max(1, len(values))],
+                    "compressor": None,
+                    "dtype": values.dtype.str,
+                    "fill_value": 0,
+                    "filters": None,
+                    "order": "C",
+                    "shape": [len(values)],
+                    "zarr_format": 2,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+
+def make_valid_merged_zarr(
+    tmp_path: Path,
+    module,
+    monkeypatch,
+    include_condition: bool = True,
+) -> Path:
+    merged = tmp_path / "merged.zarr"
+    prepared = _make_valid_prepared_adata(include_condition)
+    _write_csr_x_contract(merged, prepared.X)
+    monkeypatch.setattr(module, "open_prepared_input", lambda _path: prepared)
     return merged
 
 
@@ -254,9 +206,9 @@ def write_summary_json(
     return summary_path
 
 
-def test_validate_prepared_input_passes_on_toy_csr_zarr_parts(tmp_path):
+def test_validate_prepared_input_passes_on_toy_csr_zarr_parts(tmp_path, monkeypatch):
     module = load_prepare_module()
-    merged = make_valid_merged_zarr(tmp_path)
+    merged = make_valid_merged_zarr(tmp_path, module, monkeypatch)
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
     payload = module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
     assert payload["n_samples"] == 2
@@ -264,28 +216,54 @@ def test_validate_prepared_input_passes_on_toy_csr_zarr_parts(tmp_path):
     assert payload["x_encoding"] == "csr_matrix"
 
 
-def test_validate_prepared_input_fails_when_x_storage_is_incomplete(tmp_path):
+def test_validator_fixture_never_calls_async_zarr_io(tmp_path, monkeypatch):
     module = load_prepare_module()
-    merged = make_valid_merged_zarr(tmp_path)
+
+    def fail_async_io(*_args, **_kwargs):
+        pytest.fail("deterministic validator fixture invoked async AnnData/Zarr I/O")
+
+    monkeypatch.setattr(ad.AnnData, "write_zarr", fail_async_io)
+    monkeypatch.setattr(ad, "read_zarr", fail_async_io)
+    if hasattr(ad, "experimental") and hasattr(ad.experimental, "read_lazy"):
+        monkeypatch.setattr(ad.experimental, "read_lazy", fail_async_io)
+
+    merged = make_valid_merged_zarr(tmp_path, module, monkeypatch)
+    summary = write_summary_json(tmp_path, merged)
+    payload = module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
+    assert payload["shape"] == [4, 3]
+
+
+def test_validate_prepared_input_fails_when_x_storage_is_incomplete(
+    tmp_path,
+    monkeypatch,
+):
+    module = load_prepare_module()
+    merged = make_valid_merged_zarr(tmp_path, module, monkeypatch)
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
-    root = zarr.open_group(merged, mode="a")
-    del root["X"]["indptr"]
-    (merged / ".zmetadata").unlink(missing_ok=True)
+    shutil.rmtree(merged / "X" / "indptr")
     with pytest.raises(ValueError, match="missing X/indptr"):
         module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
 
 
-def test_validate_prepared_input_fails_when_required_obs_columns_are_missing(tmp_path):
+def test_validate_prepared_input_fails_when_required_obs_columns_are_missing(
+    tmp_path,
+    monkeypatch,
+):
     module = load_prepare_module()
-    merged = make_valid_merged_zarr(tmp_path, include_condition=False)
+    merged = make_valid_merged_zarr(
+        tmp_path,
+        module,
+        monkeypatch,
+        include_condition=False,
+    )
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=4)
     with pytest.raises(ValueError, match="required obs columns"):
         module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
 
 
-def test_validate_prepared_input_requires_summary_json(tmp_path):
+def test_validate_prepared_input_requires_summary_json(tmp_path, monkeypatch):
     module = load_prepare_module()
-    merged = make_valid_merged_zarr(tmp_path)
+    merged = make_valid_merged_zarr(tmp_path, module, monkeypatch)
     with pytest.raises(FileNotFoundError, match="summary missing"):
         module.validate_prepared_input(
             merged,
@@ -295,9 +273,12 @@ def test_validate_prepared_input_requires_summary_json(tmp_path):
         )
 
 
-def test_validate_prepared_input_fails_when_summary_obs_count_mismatches(tmp_path):
+def test_validate_prepared_input_fails_when_summary_obs_count_mismatches(
+    tmp_path,
+    monkeypatch,
+):
     module = load_prepare_module()
-    merged = make_valid_merged_zarr(tmp_path)
+    merged = make_valid_merged_zarr(tmp_path, module, monkeypatch)
     summary = write_summary_json(tmp_path, merged, n_samples=2, retained_barcodes_total=999)
     with pytest.raises(ValueError, match="retained_barcodes_total mismatch"):
         module.validate_prepared_input(merged, expected_n_samples=2, summary_path=summary)
