@@ -31,6 +31,77 @@ from ..factory_paths import SINGLECELL_FACTORY_ROOT
 DEFAULT_OPTIONAL_MODULES = ",".join(DEFAULT_OPTIONAL_MODULE_NAMES)
 
 
+# ---------------------------------------------------------------------------
+# Canonical scientific profile — the single source of truth for every surface
+# that can start an analysis.
+#
+# Defined ahead of parse_args() on purpose: the argparse defaults below read
+# from this dict rather than repeating the literals, and the config.py dataclass
+# defaults are pinned to it by tests/test_paper_param_alignment.py. Before
+# 2026-07-28 all three were independent copies and two of them disagreed
+# (dataclass n_pcs=15/resolution=1.0 vs CLI 40/0.8), so identical science
+# launched programmatically and via the CLI silently diverged.
+#
+# Departures from canonical are only sanctioned through a NAMED profile in
+# _SCIENTIFIC_PROFILE_OVERRIDES, and cost --acknowledge-scientific-non-equivalence.
+# ---------------------------------------------------------------------------
+_CANONICAL_SCIENTIFIC_PARAMETERS = {
+    "optional_modules": DEFAULT_OPTIONAL_MODULES,
+    "n_top_genes": 3000,
+    # 40 PCs, not the NC2024 paper's 15. Heterogeneous multi-batch tumour tissue
+    # keeps biologically meaningful variance well past the first ~15 components,
+    # and rare populations are exactly what a low truncation discards; the
+    # benchmark guidance is to err high because over-inclusion is much cheaper
+    # than truncation (Luecken & Theis 2019, Mol Syst Biol 15:e8746; Heumos 2023,
+    # Nat Rev Genet 24:550-572).
+    "n_pcs": 40,
+    "n_neighbors": 15,
+    # 0.8 is the long-standing canonical CLI value and was NOT retuned here; the
+    # 2026-07-28 change aligned the dataclass to it. Sweep per cohort with
+    # --leiden-resolution-sweep before overriding.
+    "leiden_resolution": 0.8,
+    "de_n_genes": 300,
+    "doublet_strategy": "auto",
+    "clustering_engine": "auto",
+}
+
+# Named, explicitly non-equivalent departures from canonical. Keys double as the
+# --scientific-profile choices, so a profile can never be advertised without an
+# implementation (or implemented without being reachable).
+_SCIENTIFIC_PROFILE_OVERRIDES = {
+    "canonical": {},
+    "legacy-large": {
+        "optional_modules": "clustering,annotation,differential_expression",
+        "n_top_genes": 2000,
+        "n_pcs": 30,
+        "n_neighbors": 12,
+        "leiden_resolution": 0.6,
+        "de_n_genes": 200,
+    },
+    "legacy-massive": {
+        "optional_modules": "clustering",
+        "n_top_genes": 1000,
+        "n_pcs": 20,
+        "n_neighbors": 10,
+        "leiden_resolution": 0.4,
+        "de_n_genes": 100,
+        "doublet_strategy": "grouped",
+    },
+    # NC2024 reproduction: Leiden at resolution 1.0 on a 15-PC Harmony embedding
+    # (docs/PUBLICATION_READY.md, AUDIT_2026-04-26_v2.md). These were the
+    # ClusteringConfig dataclass defaults until 2026-07-28, where they shadowed
+    # every programmatic caller instead of being opted into. Kept as a named
+    # profile so the reproduction stays selectable, auditable in the resolved
+    # diff, and self-documenting. The paper's DE settings (bonferroni,
+    # min_pct=0.30) stay launcher-level and are deliberately NOT bundled here —
+    # this profile changes clustering geometry only.
+    "paper-15pc": {
+        "n_pcs": 15,
+        "leiden_resolution": 1.0,
+    },
+}
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments for modular workflow."""
     parser = argparse.ArgumentParser(description="Modular single-cell workflow runner")
@@ -164,11 +235,20 @@ def parse_args() -> argparse.Namespace:
         help="obs column to pass to DecontX as --batch (per-sample contamination modelling). Empty = no batch.",
     )
 
-    # Clustering
-    parser.add_argument("--n-top-genes", type=int, default=3000)
-    parser.add_argument("--n-pcs", type=int, default=40)
-    parser.add_argument("--n-neighbors", type=int, default=15)
-    parser.add_argument("--leiden-resolution", type=float, default=0.8)
+    # Clustering. Defaults are read from the canonical profile rather than
+    # re-typed, so the flag and the profile cannot drift apart.
+    parser.add_argument(
+        "--n-top-genes", type=int, default=_CANONICAL_SCIENTIFIC_PARAMETERS["n_top_genes"]
+    )
+    parser.add_argument("--n-pcs", type=int, default=_CANONICAL_SCIENTIFIC_PARAMETERS["n_pcs"])
+    parser.add_argument(
+        "--n-neighbors", type=int, default=_CANONICAL_SCIENTIFIC_PARAMETERS["n_neighbors"]
+    )
+    parser.add_argument(
+        "--leiden-resolution",
+        type=float,
+        default=_CANONICAL_SCIENTIFIC_PARAMETERS["leiden_resolution"],
+    )
     parser.add_argument(
         "--leiden-resolution-sweep",
         default="",
@@ -197,11 +277,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scientific-profile",
         default="canonical",
-        choices=["canonical", "legacy-large", "legacy-massive"],
+        choices=list(_SCIENTIFIC_PROFILE_OVERRIDES),
         help=(
             "Scientific parameter profile, separate from --scale-mode. Non-canonical "
             "profiles change the analysis and require "
-            "--acknowledge-scientific-non-equivalence."
+            "--acknowledge-scientific-non-equivalence. 'paper-15pc' reproduces the "
+            "NC2024 clustering geometry (15-PC Harmony space, Leiden resolution 1.0)."
         ),
     )
     parser.add_argument(
@@ -283,7 +364,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--de-n-genes",
         type=int,
-        default=300,
+        default=_CANONICAL_SCIENTIFIC_PARAMETERS["de_n_genes"],
         help="Maximum number of genes ranked per cluster in DE (default: 300)",
     )
     parser.add_argument(
@@ -794,39 +875,6 @@ def _apply_scale_mode(args: argparse.Namespace) -> argparse.Namespace:
         args.checkpoint_policy = preset["checkpoint_policy"]
 
     return args
-
-
-_CANONICAL_SCIENTIFIC_PARAMETERS = {
-    "optional_modules": DEFAULT_OPTIONAL_MODULES,
-    "n_top_genes": 3000,
-    "n_pcs": 40,
-    "n_neighbors": 15,
-    "leiden_resolution": 0.8,
-    "de_n_genes": 300,
-    "doublet_strategy": "auto",
-    "clustering_engine": "auto",
-}
-
-_SCIENTIFIC_PROFILE_OVERRIDES = {
-    "canonical": {},
-    "legacy-large": {
-        "optional_modules": "clustering,annotation,differential_expression",
-        "n_top_genes": 2000,
-        "n_pcs": 30,
-        "n_neighbors": 12,
-        "leiden_resolution": 0.6,
-        "de_n_genes": 200,
-    },
-    "legacy-massive": {
-        "optional_modules": "clustering",
-        "n_top_genes": 1000,
-        "n_pcs": 20,
-        "n_neighbors": 10,
-        "leiden_resolution": 0.4,
-        "de_n_genes": 100,
-        "doublet_strategy": "grouped",
-    },
-}
 
 
 def _apply_scientific_profile(args: argparse.Namespace) -> argparse.Namespace:

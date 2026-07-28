@@ -220,9 +220,17 @@ Cell-type composition aligns with Sanchez-Mejias *Nat Commun* 2024 (doi:10.1038/
   clustering engine. Run metadata records `resource_strategy` separately.
 - **Scientific profile**: canonical defaults are
   `clustering,differential_expression,annotation`. Any
-  `--scientific-profile legacy-large|legacy-massive` change requires
+  `--scientific-profile legacy-large|legacy-massive|paper-15pc` change requires
   `--acknowledge-scientific-non-equivalence`; the exact resolved scientific
   parameter diff is recorded.
+- **One source of scientific truth**: `cli._CANONICAL_SCIENTIFIC_PARAMETERS` is
+  authoritative. The argparse defaults read from it, and the `config.py`
+  dataclass defaults are pinned to it by
+  `tests/test_paper_param_alignment.py::test_dataclass_defaults_match_canonical_profile`.
+  Never change a scientific default on only one of these surfaces — that is the
+  exact bug fixed on 2026-07-28, where `PipelineConfig()` silently ran
+  `n_pcs=15`/`resolution=1.0` while every CLI run used `40`/`0.8`. Paper-specific
+  values belong in a named `_SCIENTIFIC_PROFILE_OVERRIDES` entry, not in a dataclass default.
 - **Annotation strategy**: `--annotation-strategy {cluster_voting,cell_argmax}` (default `cluster_voting`; `cell_argmax` retained as fallback). The cell_argmax path drifts on >100k cohorts — do NOT use as default.
 - **Memory enforcement**: `workflow/modular/_mem_guard.py` provides `MemoryEnforcer` (pre-flight budget + watchdog Event + cooperative abort via `SkipModule`). `SC_MEM_GUARD=on SC_MEM_WATCHDOG=on` enables runtime enforcement.
 - **Sparse engines** (env flags): `SC_DE_ENGINE=sparse SC_CNV_ENGINE=chunked SC_CELLCOMM_ENGINE=sparse`.

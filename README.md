@@ -515,9 +515,18 @@ Regenerate with `python scripts/generate_factories_report.py`.
 resource-only strategy: it may change lazy I/O and checkpoint behavior, but it
 does not change optional modules, HVGs, PCs, neighbors, Leiden resolution, DE
 limits, doublet strategy, or clustering engine. Non-canonical method changes
-belong to `--scientific-profile legacy-large|legacy-massive` and require
+belong to `--scientific-profile legacy-large|legacy-massive|paper-15pc` and require
 `--acknowledge-scientific-non-equivalence`; the resolved scientific diff is
 recorded in run metadata.
+
+The canonical profile is the single source of truth for scientific defaults. The
+`config.py` dataclass defaults, the argparse defaults, and
+`cli._CANONICAL_SCIENTIFIC_PARAMETERS` all resolve to the same values, so a
+programmatic `PipelineConfig()` caller runs the same science as the equivalent
+CLI invocation. (Before 2026-07-28 the dataclasses carried `n_pcs=15` /
+`leiden_resolution=1.0` while the CLI resolved `40` / `0.8`, so the two
+entrypoints silently disagreed.) `paper-15pc` selects the NC2024 reproduction's
+clustering geometry — Leiden at resolution 1.0 on a 15-PC Harmony embedding.
 
 Explicit capability flags remain available:
 
@@ -1075,7 +1084,8 @@ The universal optional-module default is
 `clustering,differential_expression,annotation`. Trajectory and
 pseudo-velocity require explicit opt-in. If a legacy reduced scientific profile
 is intentionally required, select `--scientific-profile legacy-large` or
-`legacy-massive` and also pass
+`legacy-massive`; for the NC2024 paper's clustering geometry select
+`paper-15pc`. In every non-canonical case also pass
 `--acknowledge-scientific-non-equivalence`; the manifest records the exact
 resolved parameter diff.
 

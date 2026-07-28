@@ -25,6 +25,16 @@ from .._neighbors_cache import get_or_compute_neighbors
 # tumor_microenvironment.py rely on. Deleted once clustering finishes.
 _GPU_RESTORE_LAYER = "_gpu_restore_counts"
 
+# Thread count the CPU neighbour graph runs at when nothing overrides it.
+# Deliberately a constant and NOT os.cpu_count(): the thread count changes the
+# graph, so tying it to the host made the Leiden labels host-dependent at a
+# fixed seed. Rationale and measurements in ClusteringModule._resolve_n_jobs.
+_DEFAULT_CLUSTERING_N_JOBS = 4
+
+# Env var that overrides the default. Named like the module's other switches
+# (SC_CLUSTERING_ENGINE, SC_CHECKPOINT_POLICY).
+_N_JOBS_ENV = "SC_CLUSTERING_N_JOBS"
+
 
 __references__ = {
     "scanpy": {
@@ -175,6 +185,108 @@ class ClusteringModule:
         return 100 if n < 0 else n
 
     @staticmethod
+    def _available_threads() -> int:
+        """Upper bound that pynndescent's ``numba.set_num_threads()`` will accept.
+
+        numba refuses any value above its launch-time cap ("The number of
+        threads must be between 1 and 32"), so a request has to be clamped
+        rather than allowed to raise mid-run on a smaller replay host. The cap
+        is NUMBA_NUM_THREADS, not the core count, because a host can lower it
+        via the env var of the same name.
+        """
+        try:
+            import numba
+            return max(1, int(numba.config.NUMBA_NUM_THREADS))
+        except Exception:  # numba absent (scanpy stub lane) — still resolve a count
+            return max(1, os.cpu_count() or 1)
+
+    @staticmethod
+    def _resolve_n_jobs(ctx) -> int:
+        """Resolve, clamp and RECORD the thread count the neighbour graph runs at.
+
+        The thread count is an INPUT TO THE GRAPH, not just a speed knob.
+        scanpy passes ``settings.n_jobs`` to pynndescent's transformer
+        (scanpy/neighbors/__init__.py:768) and pynndescent wraps its NN-descent
+        fit in ``numba.set_num_threads(n_jobs)`` (pynndescent_.py:818), where
+        every thread carries its own RNG state. Change the thread count and the
+        approximate kNN edges change — at a fixed ``random_state``.
+
+        Measured on this suite's own LUSC PCA (first 20,000 cells x 40 PCs,
+        n_neighbors=15, random_state=42; same host, same input, same seed):
+
+            n_jobs= 1 -> 29 clusters
+            n_jobs= 8 -> 31 clusters
+            n_jobs=32 -> 29 clusters, ARI 0.931 vs n_jobs=1 (i.e. not identical)
+
+        Each thread count is bit-reproducible against itself; they disagree with
+        each other. Binding this to ``os.cpu_count()`` therefore made the
+        cluster count a property of the host while the manifest recorded only
+        ``clustering_random_state`` — the run could not be reproduced from its
+        own record. (Below scanpy's exact-search cutoff — euclidean metric and
+        n_obs < 8192 — the brute-force shortcut runs instead and the result is
+        thread-independent; verified byte-identical at 5,000 cells.)
+
+        Resolution order, every step of it recorded in ``ctx.metadata``:
+          1. ``SC_CLUSTERING_N_JOBS``
+          2. ``cfg.clustering.n_jobs``, should that field ever be added
+          3. ``_DEFAULT_CLUSTERING_N_JOBS``
+
+        The default is a fixed constant rather than the core count because the
+        core count buys nothing: on the full 87,376-cell graph, 32 threads spent
+        26.45 CPU-s to finish in 3.59 s wall while 4 threads spent 5.01 CPU-s to
+        finish in 3.00 s — NN-descent's per-thread work shrinks faster than its
+        merge overhead grows, so the host-dependence was being bought with 5x
+        the CPU and *worse* wall time. 4 is both the measured optimum here and
+        host-independent on any machine with >= 4 cores.
+        """
+        raw = os.environ.get(_N_JOBS_ENV, "").strip()
+        source = f"env:{_N_JOBS_ENV}"
+        if not raw:
+            cfg_n_jobs = getattr(getattr(ctx.cfg, "clustering", None), "n_jobs", None)
+            if cfg_n_jobs is None:
+                raw, source = str(_DEFAULT_CLUSTERING_N_JOBS), "default"
+            else:
+                raw, source = str(cfg_n_jobs), "config:clustering.n_jobs"
+
+        try:
+            requested = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Clustering thread count from {source} is not an integer: {raw!r}."
+            ) from None
+        if requested < 1:
+            # scanpy/joblib spell "every core" as -1, but that is exactly the
+            # host-dependence being removed here: it hides a graph input the
+            # manifest is supposed to pin. Refuse it loudly rather than record a
+            # number that means something different on the next machine.
+            raise ValueError(
+                f"Clustering thread count from {source} must be >= 1, got {requested}. "
+                "Pass an explicit thread count; 'all cores' is not reproducible "
+                "because the neighbour graph depends on it."
+            )
+
+        available = ClusteringModule._available_threads()
+        resolved = min(requested, available)
+
+        ctx.metadata["clustering_n_jobs"] = resolved
+        ctx.metadata["clustering_n_jobs_source"] = source
+        ctx.metadata["clustering_n_jobs_requested"] = requested
+        ctx.metadata["clustering_n_jobs_available"] = available
+        if resolved != requested:
+            # A clamp means this run did NOT reproduce the requested graph, so
+            # it has to be visible in the record rather than inferred from the
+            # replay host's core count.
+            note = (
+                f"requested {requested} threads ({source}) but this host caps at "
+                f"{available}; clustering ran at {resolved}. The neighbour graph "
+                "is thread-dependent, so labels may differ from a run recorded "
+                f"at clustering_n_jobs={requested}."
+            )
+            logger.warning("CLUSTERING_N_JOBS_CLAMPED: %s", note)
+            ctx.metadata["clustering_n_jobs_clamped"] = note
+        return resolved
+
+    @staticmethod
     def _log_rss(ctx, tag: str) -> None:
         """Log peak resident set size (MB) at tag points for Hotspot 1 diagnosis.
 
@@ -224,7 +336,10 @@ class ClusteringModule:
         cfg = ctx.cfg.clustering
         # Canonical seed: ctx.random_state overrides per-module ClusteringConfig.random_state
         cfg.random_state = ctx.random_state
-        sc.settings.n_jobs = max(1, os.cpu_count() or 1)
+        # Resolved and recorded, not inherited from the host: the thread count
+        # feeds pynndescent's NN-descent and so changes the kNN graph and the
+        # Leiden labels at a fixed seed. See _resolve_n_jobs.
+        sc.settings.n_jobs = self._resolve_n_jobs(ctx)
 
         # F-1: CSS removed from production path. Invoke _should_use_css for its
         # side effects (raises on engine=="css", sets css_status/clustering_engine

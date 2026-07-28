@@ -18,6 +18,7 @@ from .config import PipelineConfig
 from .context import PipelineContext
 from .manifest_writer import factory_git_state
 from .module_catalog import MANDATORY_MODULES, module_dependencies, module_runs_after
+from .software_provenance import collect_software_versions
 
 logger = logging.getLogger(__name__)
 
@@ -449,6 +450,11 @@ def _save_manifest(
         "modules_run": summary["completed_modules"],
         "bundle_sha256": str(ctx.metadata.get("bundle_sha256", "")),
         "factory_python": factory_git_state(SINGLECELL_FACTORY_ROOT),
+        # factory_python pins the code; software_versions pins the resolved
+        # scientific stack it ran against. Recorded here (not only in the
+        # project-root manifest) because run_manifest.json is written for every
+        # run, including legacy runs without --project-root.
+        "software_versions": collect_software_versions(),
         "allow_partial_run": bool(ctx.cfg.allow_partial_run),
     }
     manifest_path = ctx.run_dir / "run_manifest.json"

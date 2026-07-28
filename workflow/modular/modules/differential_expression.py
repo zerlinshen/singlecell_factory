@@ -606,6 +606,90 @@ class DifferentialExpressionModule:
             groups = tuple(pd.Categorical(adata.obs["leiden"].astype(str)).categories)
         return max(1, len(groups) * n_genes)
 
+    @classmethod
+    def _write_marker_panel_source_data(cls, adata, ctx: PipelineContext) -> str | None:
+        """Emit centre AND spread for every gene x cluster the top-N panels draw.
+
+        The dot plot encodes a per-cluster MEAN in colour and a detection
+        percentage in size; the heatmap draws per-cell expression. Neither panel
+        carries dispersion, and a centre shown without a defined spread is the
+        most common reason a quantitative panel is sent back — the Nature
+        statistics-legend minimum asks for n, centre, spread, test, correction
+        and a source-data file for every quantitative panel.
+
+        A third visual channel would make a 23-cluster dot plot unreadable, so
+        the spread is delivered as the source data the panels point to: mean, SD,
+        n and detection rate per gene per cluster, on the same log1p-normalised
+        matrix the panels display. Returns the filename for the captions, or None
+        when the ranking is unavailable (a fallback DE frame), so the captions
+        never promise a file that was not written.
+        """
+        try:
+            rec = adata.uns["rank_genes_groups"]["names"]
+        except Exception:
+            return None
+        groups = getattr(getattr(rec, "dtype", None), "names", None)
+        if not groups and isinstance(rec, dict):
+            groups = tuple(rec)
+        if not groups:
+            return None
+
+        ordered: list[str] = []
+        for group in groups:
+            try:
+                top = list(rec[group])[: cls._TOP_N_PER_CLUSTER]
+            except Exception:
+                continue
+            for gene in top:
+                gene = str(gene)
+                if gene not in ordered and gene in set(adata.var_names):
+                    ordered.append(gene)
+        if not ordered:
+            return None
+
+        labels = adata.obs["leiden"].astype(str).to_numpy()
+        matrix = adata[:, ordered].X
+        rows: list[dict] = []
+        for cluster in pd.Categorical(labels).categories:
+            selector = labels == cluster
+            block = matrix[selector]
+            if sparse.issparse(block):
+                # densify-allowed: bounded to ONE cluster's cells x only the plotted genes (adata[:, ordered]), never the full gene axis; largest block on the 87k-cell LUSC cohort is ~11k x 109 float64 = ~10 MB.
+                block = block.toarray()
+            block = np.asarray(block, dtype=float)
+            n_cells = int(block.shape[0])
+            if n_cells == 0:
+                continue
+            mean = block.mean(axis=0)
+            # ddof=1: the cells in a cluster are a sample, and a single-cell
+            # cluster has no defined spread rather than a spread of zero.
+            sd = block.std(axis=0, ddof=1) if n_cells > 1 else np.full(block.shape[1], np.nan)
+            detected = (block > 0).mean(axis=0) * 100.0
+            for index, gene in enumerate(ordered):
+                rows.append({
+                    "gene": gene,
+                    "leiden": str(cluster),
+                    "n_cells": n_cells,
+                    "mean_log1p_normalised": round(float(mean[index]), 6),
+                    "sd_log1p_normalised": round(float(sd[index]), 6),
+                    "pct_cells_detected": round(float(detected[index]), 4),
+                })
+        if not rows:
+            return None
+
+        filename = "marker_panel_source_data.csv"
+        frame = pd.DataFrame(rows)
+        frame.attrs["centre"] = "arithmetic mean"
+        frame.to_csv(ctx.table_dir / filename, index=False)
+        ctx.metadata["marker_panel_source_data"] = filename
+        ctx.metadata["marker_panel_statistics"] = {
+            "centre_statistic": "arithmetic mean of log1p-normalised expression",
+            "spread_interval": "sample SD (ddof=1) across cells within the cluster",
+            "n_definition": "cells assigned to the Leiden cluster",
+            "source_data_file": filename,
+        }
+        return filename
+
     @staticmethod
     def _matrix_has_negative_values(X) -> bool:
         """Whether the plotted matrix is signed (z-scored) or non-negative.
@@ -700,11 +784,21 @@ class DifferentialExpressionModule:
             # whatever the tallest axes turned out to be; bbox_inches="tight"
             # grows the saved image to include it.
             top = max((a.get_position().y1 for a in fig.axes), default=1.0)
+            # Colour is a centre with no dispersion channel, so the panel names
+            # its centre and points at the source data carrying the spread.
+            source = cls._write_marker_panel_source_data(adata, ctx)
+            provenance = (
+                f"\ncolour = mean log1p-normalised expression, min-max scaled per gene; "
+                f"per-cluster mean, SD and n in {source}"
+                if source else
+                "\ncolour = mean log1p-normalised expression, min-max scaled per gene"
+            )
             fig.suptitle(
                 f"Top {cls._TOP_N_PER_CLUSTER} marker genes per Leiden cluster "
                 f"({cls._test_label(ctx)})\n"
                 f"n = {adata.n_obs:,} cells, {n_rows // cls._TOP_N_PER_CLUSTER} clusters, "
-                f"{adata.n_vars:,} genes tested per cluster",
+                f"{adata.n_vars:,} genes tested per cluster"
+                + provenance,
                 fontsize=7, y=max(1.0, top) + 0.008, va="bottom",
             )
             fig.savefig(ctx.figure_dir / "de_dotplot_top5.png", bbox_inches="tight")

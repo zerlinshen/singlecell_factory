@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from workflow.factory_paths import R_MULTIOMICS_FACTORY_ROOT, SINGLECELL_FACTORY_ROOT
+from workflow.modular.software_provenance import collect_software_versions
 
 _MAX_UNTRACKED_HASH_BYTES = 16 * 1024 * 1024
 _MAX_UNTRACKED_FILE_HASH_BYTES = 1024 * 1024
@@ -162,6 +163,11 @@ def write_manifest(
         ),
         "factory_r": r_state,
         "r_factory_sha_at_manifest_write": r_state["sha"],
+        # The git SHAs above pin the *code*; software_versions pins the stack it
+        # ran against. Both are needed: the environment files intentionally leave
+        # most of the scientific stack unpinned, so the same SHA can produce
+        # different numbers on two hosts. See software_provenance.py.
+        "software_versions": collect_software_versions(),
         "modules_run": list(modules_run),
         "requested_modules": list(requested_modules or modules_run),
         "planned_modules": list(planned_modules or requested_modules or modules_run),

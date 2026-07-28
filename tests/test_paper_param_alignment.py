@@ -1,4 +1,12 @@
-"""Tests verifying NC2024 paper-aligned parameter defaults and cohort subset behavior."""
+"""Tests verifying NC2024 paper-aligned parameter defaults and cohort subset behavior.
+
+Rewritten 2026-07-28. The paper's clustering geometry (15-PC Harmony space,
+Leiden resolution 1.0) used to be asserted on the *dataclass defaults*, which is
+how those values ended up shadowing every programmatic `PipelineConfig()` caller
+while the CLI resolved the canonical 40 PCs / resolution 0.8. The paper values
+are now asserted through the named `paper-15pc` scientific profile, and
+`test_dataclass_defaults_match_canonical_profile` guards the divergence itself.
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -18,13 +26,173 @@ def test_doublet_config_paper_defaults():
 
 
 # ---------------------------------------------------------------------------
-# 2. ClusteringConfig: n_pcs=15, leiden_resolution=1.0
+# 2. ClusteringConfig carries the CANONICAL profile, not the paper's numbers.
+#
+# 40 PCs / resolution 0.8 is what the CLI has always resolved. The dataclass
+# used to carry the paper's 15 / 1.0, so `PipelineConfig()` in a notebook or a
+# test ran a different analysis than the identical CLI invocation, with nothing
+# in the manifest saying so. Rationale for 40 over 15: rare populations in
+# heterogeneous multi-batch tumour tissue carry signal past the first ~15
+# components, and over-inclusion costs far less than truncation (Luecken & Theis
+# 2019, Mol Syst Biol 15:e8746; Heumos 2023, Nat Rev Genet 24:550-572).
 # ---------------------------------------------------------------------------
-def test_clustering_config_paper_defaults():
+def test_clustering_config_canonical_defaults():
     from workflow.modular.config import ClusteringConfig
     cfg = ClusteringConfig()
-    assert cfg.n_pcs == 15, "Paper clusters on 15-PC Harmony space"
-    assert cfg.leiden_resolution == 1.0, "Paper uses Leiden resolution=1.0"
+    assert cfg.n_pcs == 40, "Programmatic default must be the canonical 40-PC space"
+    assert cfg.leiden_resolution == 0.8, "Programmatic default must be canonical resolution=0.8"
+
+
+# ---------------------------------------------------------------------------
+# 2b. THE drift guard.
+#
+# Every dataclass default that has a canonical-profile counterpart must equal
+# it. This is the test that would have caught the 15/1.0 vs 40/0.8 split at the
+# moment it was introduced, and it catches the next one regardless of which
+# side moves. The explicit mapping is also a coverage gate: adding a key to
+# _CANONICAL_SCIENTIFIC_PARAMETERS without wiring it to a config field fails
+# here rather than silently going unguarded.
+# ---------------------------------------------------------------------------
+def _canonical_to_dataclass_values():
+    """Return {canonical_key: value read off the config dataclass defaults}."""
+    from workflow.modular.config import ClusteringConfig, PipelineConfig
+
+    clustering = ClusteringConfig()
+    pipeline = PipelineConfig(project="x", output_dir=Path("/tmp"), cellranger=None)
+    return {
+        # CLI carries optional_modules as a comma-joined string; the dataclass
+        # carries the parsed list. Compare in the CLI's shape.
+        "optional_modules": ",".join(pipeline.optional_modules),
+        "n_top_genes": clustering.n_top_genes,
+        "n_pcs": clustering.n_pcs,
+        "n_neighbors": clustering.n_neighbors,
+        "leiden_resolution": clustering.leiden_resolution,
+        "de_n_genes": pipeline.de_n_genes,
+        "doublet_strategy": pipeline.doublet_strategy,
+        "clustering_engine": pipeline.clustering_engine,
+    }
+
+
+def test_dataclass_defaults_match_canonical_profile():
+    from workflow.modular.cli import _CANONICAL_SCIENTIFIC_PARAMETERS
+
+    observed = _canonical_to_dataclass_values()
+
+    assert set(observed) == set(_CANONICAL_SCIENTIFIC_PARAMETERS), (
+        "A canonical scientific parameter has no mapped config dataclass field "
+        "(or vice versa). Wire it into _canonical_to_dataclass_values so the "
+        "programmatic and CLI entrypoints stay pinned to the same science."
+    )
+    assert observed == dict(_CANONICAL_SCIENTIFIC_PARAMETERS), (
+        "config.py dataclass defaults diverged from the canonical scientific "
+        "profile. A programmatic PipelineConfig() caller would silently run a "
+        "different analysis than the same run launched through the CLI."
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2c. The CLI's argparse defaults must also resolve to canonical (third copy).
+# ---------------------------------------------------------------------------
+def test_cli_defaults_match_canonical_profile(monkeypatch):
+    import workflow.modular.cli as cli_mod
+
+    monkeypatch.setattr("sys.argv", ["prog", "--project", "x", "--sample-root", "/tmp"])
+    args = cli_mod._apply_scientific_profile(cli_mod.parse_args())
+
+    for field_name, canonical_value in cli_mod._CANONICAL_SCIENTIFIC_PARAMETERS.items():
+        assert getattr(args, field_name) == canonical_value, (
+            f"CLI default for {field_name} drifted from the canonical profile"
+        )
+    assert args.resolved_scientific_parameter_diff == {}
+
+
+# ---------------------------------------------------------------------------
+# 2d. The paper's clustering geometry stays reachable — through a NAMED profile.
+#
+# Source: docs/PUBLICATION_READY.md — Harmony on 15 PCs, Leiden resolution 1.0.
+# ---------------------------------------------------------------------------
+def test_paper_profile_reaches_paper_clustering_geometry(monkeypatch):
+    import workflow.modular.cli as cli_mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--project", "x",
+            "--sample-root", "/tmp",
+            "--scientific-profile", "paper-15pc",
+            "--acknowledge-scientific-non-equivalence",
+        ],
+    )
+    args = cli_mod._apply_scientific_profile(cli_mod.parse_args())
+
+    assert args.n_pcs == 15, "paper-15pc must cluster on the 15-PC Harmony space"
+    assert args.leiden_resolution == 1.0, "paper-15pc must use Leiden resolution=1.0"
+    # The departure has to be auditable in the manifest, not just applied.
+    assert args.resolved_scientific_parameter_diff == {
+        "n_pcs": {"canonical": 40, "resolved": 15},
+        "leiden_resolution": {"canonical": 0.8, "resolved": 1.0},
+    }
+    assert args.scientific_non_equivalence_acknowledged is True
+    # Clustering geometry only: DE thresholds stay canonical/launcher-level.
+    assert args.de_n_genes == 300
+    assert args.n_top_genes == 3000
+
+
+def test_paper_profile_requires_non_equivalence_acknowledgement(monkeypatch):
+    import workflow.modular.cli as cli_mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog",
+            "--project", "x",
+            "--sample-root", "/tmp",
+            "--scientific-profile", "paper-15pc",
+        ],
+    )
+    with pytest.raises(SystemExit, match="not scientifically equivalent"):
+        cli_mod._apply_scientific_profile(cli_mod.parse_args())
+
+
+def _profile_names():
+    from workflow.modular.cli import _SCIENTIFIC_PROFILE_OVERRIDES
+    return list(_SCIENTIFIC_PROFILE_OVERRIDES)
+
+
+@pytest.mark.parametrize("profile", _profile_names())
+def test_every_implemented_profile_is_selectable(profile, monkeypatch):
+    """Advertised choices and the override table must be the same list.
+
+    A profile that exists in the table but is not accepted by --scientific-profile
+    is unreachable; one accepted but missing from the table KeyErrors inside
+    _apply_scientific_profile. Deriving `choices` from the table makes both
+    impossible, and this test pins that wiring.
+    """
+    import workflow.modular.cli as cli_mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog", "--project", "x", "--sample-root", "/tmp",
+            "--scientific-profile", profile,
+            "--acknowledge-scientific-non-equivalence",
+        ],
+    )
+    args = cli_mod._apply_scientific_profile(cli_mod.parse_args())
+    assert args.scientific_profile == profile
+
+
+def test_unknown_scientific_profile_is_rejected(monkeypatch):
+    import workflow.modular.cli as cli_mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["prog", "--project", "x", "--sample-root", "/tmp",
+         "--scientific-profile", "paper-99pc"],
+    )
+    with pytest.raises(SystemExit):
+        cli_mod.parse_args()
 
 
 # ---------------------------------------------------------------------------

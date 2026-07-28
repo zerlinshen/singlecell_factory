@@ -96,9 +96,28 @@ class ClusteringConfig:
 
     n_top_genes: int = 3000
     target_sum: float = 1e4
-    n_pcs: int = 15  # paper: 15-PC Harmony space for Leiden clustering
+    # n_pcs/leiden_resolution below are pinned to the CANONICAL scientific
+    # profile (cli._CANONICAL_SCIENTIFIC_PARAMETERS), NOT to any single paper.
+    # Until 2026-07-28 they carried the NC2024 reproduction's 15/1.0 while the
+    # CLI resolved 40/0.8, so a programmatic `PipelineConfig()` caller (test,
+    # notebook, library use) silently ran a *different* analysis than the same
+    # run launched through `python -m workflow.modular.cli`, with nothing in the
+    # manifest flagging the divergence. Any change here must move in lockstep
+    # with the canonical dict; tests/test_paper_param_alignment.py fails
+    # otherwise. The paper values remain selectable as
+    # `--scientific-profile paper-15pc`.
+    #
+    # 40 PCs: 15 was a paper-specific truncation. For heterogeneous multi-batch
+    # tumour tissue the guidance is to err high, because rare populations carry
+    # their signal in later components and over-inclusion costs far less than
+    # truncation (Luecken & Theis 2019, Mol Syst Biol 15:e8746; Heumos 2023,
+    # Nat Rev Genet 24:550-572).
+    n_pcs: int = 40
     n_neighbors: int = 15
-    leiden_resolution: float = 1.0  # paper: Leiden resolution=1.0
+    # 0.8: the canonical CLI value, unchanged — this field was aligned, not
+    # retuned. Audit granularity per cohort with --leiden-resolution-sweep
+    # before overriding it.
+    leiden_resolution: float = 0.8
     leiden_resolution_sweep: tuple[float, ...] = ()
     random_state: int = 0
     scale_data: bool = False

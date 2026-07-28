@@ -46,6 +46,15 @@ de_min_pct=0.30) are justified against the source paper in
 AUDIT_2026-04-26_v2.md."
 ```
 
+> **These are NOT the pipeline defaults.** As of 2026-07-28 the canonical
+> profile is `n_pcs=40`, `leiden_resolution=0.8` on both the CLI and the
+> `config.py` dataclasses. Reproduce the clustering geometry above with
+> `--scientific-profile paper-15pc --acknowledge-scientific-non-equivalence`;
+> `de_correction=bonferroni` / `de_min_pct=0.30` remain launcher-level flags
+> (`--de-correction`, `--de-min-pct`). Confirm against the run's
+> `resolved_scientific_parameter_diff` before quoting any of these in a
+> manuscript.
+
 ---
 
 ## References

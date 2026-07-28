@@ -1,3 +1,11 @@
+# Version constraints here are deliberately sparse: the RAPIDS/CUDA solve must
+# stay free to track the driver on each host. The floors that ARE stated below
+# each name the API in this repo that requires them.
+#
+# Because the solve is not reproducible from this file alone, every run records
+# the versions it actually resolved into the `software_versions` block of
+# run_manifest.json / manifest.json (workflow/modular/software_provenance.py).
+# Read that block, not this file, when reproducing a specific run.
 name: sc_gpu
 channels:
   - rapidsai
@@ -21,11 +29,22 @@ dependencies:
   - h5py
   - numba
   # scRNA-seq core
-  - scanpy
+  # scanpy>=1.10: `sc.pp.pca(mask_var="highly_variable")` (clustering.py:507,
+  # 599, 672, 728) and `sc.tl.leiden(flavor="igraph")` (clustering.py:625, 698,
+  # 913, 921) are both hard requirements of the production clustering lane, and
+  # neither parameter exists before 1.10.0. Measured against upstream sources:
+  # `mask_var` appears 0x in scanpy 1.9.8 preprocessing/_pca.py and 20x in
+  # 1.10.0; `flavor` appears 0x in 1.9.8 tools/_leiden.py and 7x in 1.10.0.
+  # No upper bound: 1.11/1.12 are both exercised by this factory.
+  - scanpy>=1.10
   - anndata
   - umap-learn
-  - python-igraph
-  - leidenalg
+  # Floors required by `sc.tl.leiden(flavor="igraph", ...)`. Conda installs these
+  # as plain dependencies, so scanpy's own `leiden` extra is never enforced; the
+  # floors are copied from that extra (scanpy 1.11.5 pyproject.toml:137,
+  # `leiden = [ "igraph>=0.10.8", "leidenalg>=0.9.0" ]`).
+  - python-igraph>=0.10.8
+  - leidenalg>=0.9.0
   - scvelo
   - loompy
   - requests

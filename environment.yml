@@ -1,3 +1,11 @@
+# Version constraints here are deliberately sparse: most of the stack is left to
+# the solver so it can pick a working BLAS/CUDA combination per host. The floors
+# that ARE stated below each name the API in this repo that requires them.
+#
+# Because the solve is not reproducible from this file alone, every run records
+# the versions it actually resolved into the `software_versions` block of
+# run_manifest.json / manifest.json (workflow/modular/software_provenance.py).
+# Read that block, not this file, when reproducing a specific run.
 name: sc10x
 channels:
   - conda-forge
@@ -17,8 +25,13 @@ dependencies:
   - scanpy=1.11.5
   - anndata
   - umap-learn
-  - python-igraph
-  - leidenalg
+  # Floors required by `sc.tl.leiden(flavor="igraph", ...)` — clustering.py:625,
+  # 698, 913, 921 and batch_correction.py:303. Conda installs these as plain
+  # dependencies, so scanpy's own `leiden` extra is never enforced; the floors
+  # are copied from that extra (scanpy 1.11.5 pyproject.toml:137,
+  # `leiden = [ "igraph>=0.10.8", "leidenalg>=0.9.0" ]`).
+  - python-igraph>=0.10.8
+  - leidenalg>=0.9.0
   - numba
   - scvelo=0.3.*
   - loompy=3.0.*
