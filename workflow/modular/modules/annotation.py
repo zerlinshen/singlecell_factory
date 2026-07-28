@@ -67,6 +67,24 @@ DEFAULT_MARKERS = {
 
 EPITHELIAL_QC_MARKERS = ("EPCAM", "KRT8", "KRT18")
 
+# Label written by the confidence gates for cells whose marker evidence did not
+# clear ``annotation_confidence_threshold``.
+UNASSIGNED_LABEL = "Unknown"
+
+# Theme token ``defaults.missing_value_color`` (nature_high_impact.yaml).
+# "Unknown" is the annotation declining to assign an identity, not a cell type:
+# giving it a categorical hue alongside the real types both consumes a colour
+# and implies a biological identity that was never called, so it is held out of
+# the qualitative allocation and drawn in the theme's missing-value grey.
+UNASSIGNED_COLOR = "#CFCFCF"
+
+# Theme token ``palettes.continuous_viridis`` (low #440154 / mid #21918C /
+# high #FDE725) is viridis. It is the theme's only continuous ramp usable on a
+# scatter panel: ``sequential_expression`` and ``qc_sequential`` start at
+# near-white (#F7FBFF / #F7FCF5), which would make the lowest-value cells
+# invisible against the white canvas instead of merely low.
+SEQUENTIAL_CMAP = "viridis"
+
 logger = logging.getLogger(__name__)
 
 
@@ -195,23 +213,48 @@ class AnnotationModule:
         self._write_epithelial_marker_qc(adata, ctx)
 
         # --- Visualizations ---
-        sc.pl.umap(adata, color=["cell_type"], show=False, legend_loc="on data")
-        plt.savefig(ctx.figure_dir / "umap_cell_type.png", bbox_inches="tight")
-        plt.close()
-
-        # Confidence UMAP
-        sc.pl.umap(adata, color=["annotation_confidence"], show=False, cmap="viridis")
-        plt.savefig(ctx.figure_dir / "umap_annotation_confidence.png", bbox_inches="tight")
-        plt.close()
+        self._plot_label_umap(
+            adata, ctx,
+            key="cell_type",
+            filename="umap_cell_type.png",
+            what="Marker-based cell type",
+            palette_token="cell_type_qualitative",
+            label_noun="cell types",
+        )
+        self._plot_score_umap(
+            adata, ctx,
+            key="annotation_confidence",
+            filename="umap_annotation_confidence.png",
+            what="Marker annotation confidence",
+            # The number is a margin between two marker scores, so it means
+            # nothing without saying which two; an unlabelled ramp is the
+            # single most common reviewer complaint about a colour-coded panel.
+            cbar_label="Marker-score margin (best − runner-up, a.u.)",
+        )
 
         if "reference_cell_type" in adata.obs:
-            sc.pl.umap(adata, color=["reference_cell_type"], show=False, legend_loc="on data")
-            plt.savefig(ctx.figure_dir / "umap_reference_cell_type.png", bbox_inches="tight")
-            plt.close()
+            self._plot_label_umap(
+                adata, ctx,
+                key="reference_cell_type",
+                filename="umap_reference_cell_type.png",
+                what="Reference label transfer",
+                palette_token="cell_type_qualitative",
+                label_noun="reference labels",
+            )
         if "reference_confidence" in adata.obs:
-            sc.pl.umap(adata, color=["reference_confidence"], show=False, cmap="magma")
-            plt.savefig(ctx.figure_dir / "umap_reference_confidence.png", bbox_inches="tight")
-            plt.close()
+            neighbours = ctx.metadata.get("reference_mapping_k", getattr(ctx.cfg, "reference_k", None))
+            k_text = f"k = {int(neighbours)}" if neighbours is not None else "k nearest"
+            self._plot_score_umap(
+                adata, ctx,
+                key="reference_confidence",
+                filename="umap_reference_confidence.png",
+                what="Reference label transfer confidence",
+                cbar_label=f"Neighbour vote fraction ({k_text})",
+                # A vote fraction is bounded by construction. Autoscaling it to
+                # the observed range would paint a 0.95-1.00 panel across the
+                # whole ramp and imply a spread that is not there.
+                vlimits=(0.0, 1.0),
+            )
 
         # Stacked bar: cell type composition per cluster
         self._plot_composition(adata, ctx)
@@ -340,17 +383,216 @@ class AnnotationModule:
         )
 
     @staticmethod
-    def _plot_composition(adata, ctx: PipelineContext) -> None:
+    def _label_palette(adata, key: str, palette_token: str) -> tuple[list[str], list[str]]:
+        """Return (categories, one distinct colour per category) for a label column.
+
+        The colours are keyed by category so the SAME cell type keeps the SAME
+        colour in every panel of the module (UMAP and composition bars); a type
+        that changes colour between two panels of one run reads as two types.
+
+        ``qualitative_colors`` is used rather than indexing a fixed palette
+        modulo its length, which would hand two cell types the identical colour
+        while the legend still lists both.
+        """
+        from .._figure_theme import qualitative_colors
+
+        series = adata.obs[key]
+        counts = series.astype(str).value_counts()
+        # scanpy plots categories in ``cat.categories`` order, so the palette has
+        # to be built in that order for colour i to land on category i.
+        categories = (
+            [str(c) for c in series.cat.categories]
+            if hasattr(series, "cat")
+            else sorted(str(c) for c in counts.index)
+        )
+        # Only labels that some cell carries take a hue. A categorical column
+        # keeps levels no cell carries (a marker panel entry that never won a
+        # cluster), and spending palette entries on them pushes real types
+        # towards the ambiguous tail of the ramp for nothing.
+        assignable = [c for c in categories if c != UNASSIGNED_LABEL and int(counts.get(c, 0)) > 0]
+        hues = qualitative_colors(palette_token, len(assignable))
+        if len(hues) != len(assignable):
+            # Theme unavailable (sibling repo absent) — let scanpy pick, rather
+            # than pass a short palette it would silently wrap.
+            return categories, []
+        hue_of = dict(zip(assignable, hues))
+        colours = [hue_of.get(c, UNASSIGNED_COLOR) for c in categories]
+        return categories, colours
+
+    @classmethod
+    def _plot_label_umap(
+        cls, adata, ctx: PipelineContext, *,
+        key: str, filename: str, what: str, palette_token: str,
+        label_noun: str = "labels",
+    ) -> None:
+        """Draw a categorical annotation UMAP at journal geometry.
+
+        rcParams cannot reach this panel: ``sc.pl.umap`` supplies its own
+        palette, figure size and title, so a themed run still produced scanpy's
+        default hues on an arbitrary canvas titled with the obs key. Two further
+        defects are specific to a label panel — scanpy's right-margin legend
+        lists every level of the categorical, including levels no cell carries
+        (a legend row pointing at nothing), and it reports no cell counts. The
+        legend is therefore rebuilt here from the observed labels, carrying n
+        per label.
+        """
+        from .._figure_theme import journal_figure_size
+        from matplotlib.lines import Line2D
+
+        counts = adata.obs[key].astype(str).value_counts()
+        categories, palette = cls._label_palette(adata, key, palette_token)
+
+        # Same geometry as the cluster UMAP (clustering._plot_umap_clusters) so
+        # the label panel and the cluster panel register point-for-point when a
+        # reader compares them.
+        fig, ax = plt.subplots(
+            figsize=journal_figure_size("double", height_mm=110.0), constrained_layout=True
+        )
+        sc.pl.umap(
+            adata,
+            color=[key],
+            palette=palette or None,
+            show=False,
+            legend_loc=None,        # rebuilt below with counts and live labels only
+            frameon=False,          # UMAP axes carry no units; a box implies scale
+            size=3,
+            ax=ax,
+        )
+        present = [c for c in categories if int(counts.get(c, 0)) > 0]
+        ax.set_title(f"{what} (n = {adata.n_obs:,} cells, {len(present)} {label_noun})")
+
+        # scanpy records the colours it actually used, which is the only safe
+        # source for the swatches when the theme palette was not applied.
+        used = [str(c) for c in adata.uns.get(f"{key}_colors", [])] or palette
+        if len(used) >= len(categories):
+            colour_of = dict(zip(categories, used))
+            handles = [
+                Line2D(
+                    [], [], marker="o", linestyle="none", markersize=3,
+                    markerfacecolor=colour_of[label], markeredgecolor="none",
+                    label=f"{label} ({int(counts[label]):,})",
+                )
+                for label in present
+            ]
+            # "outside" reserves the legend's space inside the canvas, so the
+            # saved figure stays at the journal column width instead of being
+            # widened by the tight bounding box.
+            fig.legend(
+                handles=handles, loc="outside right upper", frameon=False,
+                handletextpad=0.3, labelspacing=0.35, borderaxespad=0.0,
+                title="cells",
+            )
+        fig.savefig(ctx.figure_dir / filename)
+        plt.close(fig)
+
+    @staticmethod
+    def _plot_score_umap(
+        adata, ctx: PipelineContext, *,
+        key: str, filename: str, what: str, cbar_label: str,
+        vlimits: tuple[float, float] | None = None,
+    ) -> None:
+        """Draw a continuous annotation UMAP with a colourbar that states its units."""
+        from .._figure_theme import journal_figure_size
+
+        fig, ax = plt.subplots(
+            figsize=journal_figure_size("double", height_mm=110.0), constrained_layout=True
+        )
+        limits = {} if vlimits is None else {"vmin": vlimits[0], "vmax": vlimits[1]}
+        pre_existing = set(fig.axes)
+        sc.pl.umap(
+            adata,
+            color=[key],
+            cmap=SEQUENTIAL_CMAP,
+            show=False,
+            frameon=False,
+            size=3,
+            ax=ax,
+            **limits,
+        )
+        ax.set_title(f"{what} (n = {adata.n_obs:,} cells)")
+        # scanpy creates the colourbar as an extra axes; label whichever axes the
+        # call added, since an unlabelled ramp does not say what the number is.
+        for cax in (axis for axis in fig.axes if axis not in pre_existing):
+            cax.set_ylabel(cbar_label)
+        fig.savefig(ctx.figure_dir / filename)
+        plt.close(fig)
+
+    @classmethod
+    def _plot_composition(cls, adata, ctx: PipelineContext) -> None:
+        """Stacked cell-type composition per cluster.
+
+        Previously a 12x5 inch pandas bar plot in ``tab20`` (which wraps after 20
+        categories and is not the theme palette), titled "Fraction" against bare
+        cluster ids: a reader could not tell whether a bar stood for 47 cells or
+        13,000, and cell types kept different colours than the same types on the
+        UMAP. Composition is a per-group proportion, so the group size is the
+        first thing needed to judge it.
+        """
+        from .._figure_theme import journal_figure_size
+
         ct_counts = adata.obs.groupby(["leiden", "cell_type"], observed=True).size().unstack(fill_value=0)
         ct_frac = ct_counts.div(ct_counts.sum(axis=1), axis=0)
-        ct_frac.plot(kind="bar", stacked=True, figsize=(12, 5), colormap="tab20")
-        plt.ylabel("Fraction")
-        plt.xlabel("Leiden cluster")
-        plt.title("Cell type composition per cluster")
-        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "cell_type_composition.png", bbox_inches="tight")
-        plt.close()
+
+        # A cell type no cell carries must not become a legend entry with nothing
+        # to point at. Whether the unstack keeps such a level depends on the
+        # pandas version's handling of unused categoricals, so drop it here
+        # explicitly. This cannot change ct_frac: the denominator is the row sum,
+        # to which an all-zero column contributes nothing.
+        live = [column for column in ct_counts.columns if int(ct_counts[column].sum()) > 0]
+        empty = [str(column) for column in ct_counts.columns if column not in live]
+        ct_counts, ct_frac = ct_counts[live], ct_frac[live]
+        if empty:
+            logger.info("Composition plot: omitting cell types with no cells: %s", ", ".join(empty))
+
+        categories, palette = cls._label_palette(adata, "cell_type", "cell_type_qualitative")
+        colour_of = dict(zip(categories, palette)) if palette else {}
+
+        cluster_sizes = ct_counts.sum(axis=1)
+        clusters = [str(c) for c in ct_frac.index]
+        positions = np.arange(len(clusters), dtype=float)
+
+        fig, ax = plt.subplots(
+            figsize=journal_figure_size("double", height_mm=74.0), constrained_layout=True
+        )
+        bottom = np.zeros(len(clusters))
+        for column in ct_frac.columns:
+            values = ct_frac[column].to_numpy(dtype=float)
+            ax.bar(
+                positions, values, bottom=bottom, width=0.82, linewidth=0,
+                color=colour_of.get(str(column)), label=str(column),
+            )
+            bottom += values
+
+        ax.set_xticks(positions)
+        # n per cluster sits under its own bar: the fraction axis alone hides a
+        # 47-cell cluster and a 13,000-cell cluster behind identical bars.
+        ax.set_xticklabels(
+            [f"{cluster}\n{int(cluster_sizes.iloc[i]):,}" for i, cluster in enumerate(clusters)],
+            fontsize=5, linespacing=1.1,
+        )
+        ax.set_xlim(-0.6, len(clusters) - 0.4)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xlabel("Leiden cluster (cells per cluster below the label)")
+        ax.set_ylabel("Fraction of cluster")
+        title = (
+            f"Cell-type composition per cluster "
+            f"(n = {adata.n_obs:,} cells in {len(clusters)} clusters)"
+        )
+        # Under cluster-level voting every cell in a cluster carries the cluster's
+        # label, so every bar is one full-height block. Say that, instead of
+        # leaving a reader to wonder whether a uniform panel is a finding.
+        if len(clusters) and float(ct_frac.max(axis=1).min()) >= 1.0:
+            title += "\nevery cluster resolves to a single type — composition is the cluster-level assignment"
+        ax.set_title(title)
+        # "outside" keeps the legend inside the canvas, so the saved figure stays
+        # at the journal column width instead of being widened by the tight
+        # bounding box around a legend hanging off the axes.
+        fig.legend(
+            loc="outside center right", frameon=False,
+            handlelength=0.9, handletextpad=0.4, labelspacing=0.35, borderaxespad=0.0,
+        )
+        fig.savefig(ctx.figure_dir / "cell_type_composition.png")
+        plt.close(fig)
 
     @staticmethod
     def _marker_expression_frame(adata, markers: list[str]) -> pd.DataFrame:
@@ -433,9 +675,53 @@ class AnnotationModule:
         )
 
         if "X_umap" in adata.obsm:
-            sc.pl.umap(adata, color=present, show=False, cmap="viridis")
-            plt.savefig(
-                ctx.figure_dir / "umap_epithelial_markers.png",
-                bbox_inches="tight",
+            cls._plot_marker_umaps(adata, ctx, present)
+
+    @staticmethod
+    def _plot_marker_umaps(adata, ctx: PipelineContext, markers: list[str]) -> None:
+        """One UMAP panel per epithelial QC marker, on one journal-width canvas.
+
+        ``sc.pl.umap(color=[...])`` builds its own multi-panel grid at its own
+        size and titles each panel with the bare gene symbol, leaving the reader
+        no way to know what the colour encodes — counts, scaled values, which
+        matrix. The panel exists to check that the epithelial call is supported
+        by epithelial markers, so the matrix behind the colour has to be named.
+        """
+        from .._figure_theme import journal_figure_size
+
+        # A lone panel belongs in a single column; two or three need the double.
+        column = "single" if len(markers) == 1 else "double"
+        fig, axes = plt.subplots(
+            1, len(markers),
+            figsize=journal_figure_size(column, height_mm=66.0),
+            constrained_layout=True, squeeze=False,
+        )
+        for ax, gene in zip(axes[0], markers):
+            sc.pl.umap(
+                adata,
+                color=[gene],
+                cmap=SEQUENTIAL_CMAP,
+                show=False,
+                frameon=False,      # UMAP axes carry no units; a box implies scale
+                size=3,
+                ax=ax,
             )
-            plt.close()
+            ax.set_title(gene, style="italic")   # gene symbols are set in italic
+
+        # sc.pl.umap reads adata.raw when it exists (scanpy's use_raw default), so
+        # the caption must name that matrix rather than assume adata.X. The
+        # clustering module records what adata.raw holds; fall back to the
+        # unqualified word when it did not.
+        source = "adata.raw" if adata.raw is not None else "adata.X"
+        semantics = str(ctx.metadata.get("raw_semantics", "")) if adata.raw is not None else ""
+        unit = "log-normalised expression" if semantics == "normalized_log1p_all_genes" else "expression"
+        # Each panel keeps its own colour range (scanpy's per-gene default), so
+        # say so: identical yellow in two panels is not identical expression.
+        scaling = ", scaled per panel" if len(markers) > 1 else ""
+        fig.suptitle(
+            f"Epithelial QC markers — colour = {unit} ({source}){scaling}; "
+            f"n = {adata.n_obs:,} cells",
+            fontsize=7,
+        )
+        fig.savefig(ctx.figure_dir / "umap_epithelial_markers.png")
+        plt.close(fig)

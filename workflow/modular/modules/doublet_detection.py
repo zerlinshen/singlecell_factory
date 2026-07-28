@@ -1222,6 +1222,224 @@ class DoubletDetectionModule:
         # row-subset happen in run() AFTER the .X swap is restored.
         return doublet_scores, predicted_doublets, threshold, backend
 
+    # ------------------------------------------------------------------
+    # Visualization
+    # ------------------------------------------------------------------
+
+    # Colour roles for the doublet panel, taken from the theme's qualitative
+    # ramp so the diagnostic and the manuscript figures speak one palette:
+    # index 0 = the retained population, index 1 = the cutoff and the cells it
+    # removes. The literal pair is only a fallback for a missing theme file.
+    _PANEL_FALLBACK_COLOURS = ("#0072B2", "#D55E00")
+    _PANEL_MUTED = "#666666"
+    # A solid histogram leaves no clear space, so in-panel notes get a
+    # translucent white plate rather than being drawn over the bars.
+    _PANEL_NOTE_PLATE = {"facecolor": "white", "alpha": 0.85, "edgecolor": "none",
+                         "boxstyle": "square,pad=0.25"}
+
+    @staticmethod
+    def _fmt_pct(pct: float) -> str:
+        """Percentage with enough precision to stay truthful near zero.
+
+        The interesting case is a pre-filtered atlas: 4 of 87,380 cells is
+        0.0046%, which ``%.2f`` renders as "0.00%" — i.e. as exactly none, which
+        is a different claim from "a handful".
+        """
+        if pct <= 0:
+            return "0%"
+        return f"{pct:.2g}%" if pct < 0.01 else f"{pct:.2f}%"
+
+    @classmethod
+    def _plot_doublet_scores(
+        cls, ctx, adata, scores, predicted, threshold, *,
+        n_doublets: int, call_rate: float, backend: str,
+    ) -> None:
+        """Draw the score distribution against the prior the caller applied.
+
+        rcParams cannot fix this panel. It used to be an 8x4 inch canvas (no
+        journal column fits it) holding a 50-bin linear histogram titled with
+        the backend name, which on a real cohort is unreadable in three
+        independent ways. The score axis spans three decades (LUSC atlas:
+        median 0.010, max 0.58), so every singlet collapses into the first bin.
+        The count axis is linear, so the handful of cells the threshold
+        actually removes is a flat line at zero. And the panel never states
+        what the caller expected, so a 529x under-call on a pre-filtered atlas
+        looks exactly like a clean run with a genuinely low doublet rate.
+
+        So the panel reports the decision rather than only the scores: the
+        distribution on log axes with the applied cutoff drawn (a), and the
+        resulting call rate beside the prior it must be judged against (b).
+        Every number is read from ``ctx.metadata`` or from arrays already
+        computed upstream; nothing here is recomputed.
+        """
+        from .._figure_theme import journal_figure_size, qualitative_colors
+
+        palette = qualitative_colors("group_qualitative", 2)
+        keep_colour, call_colour = (
+            palette if len(palette) == 2 else list(cls._PANEL_FALLBACK_COLOURS)
+        )
+
+        scores = np.asarray(scores, dtype=float)
+        called = np.asarray(predicted, dtype=bool)
+        finite = np.isfinite(scores)
+        method = str(ctx.metadata.get("doublet_method", backend))
+        expected_rate = ctx.metadata.get("doublet_expected_rate_effective")
+        observed_pct = float(call_rate) * 100.0
+
+        values = scores[finite]
+        # A constant score has no distribution to draw, so panel (a) degrades to a
+        # one-line statement. Shrink the canvas with it instead of shipping a
+        # journal-width figure that is mostly empty.
+        degenerate = bool(values.size == 0 or np.nanmax(values) == np.nanmin(values))
+        fig, axes = plt.subplots(
+            1, 2,
+            figsize=journal_figure_size("double", height_mm=42.0 if degenerate else 62.0),
+            gridspec_kw={"width_ratios": [1.4, 1.0] if degenerate else [3.0, 1.0]},
+            constrained_layout=True,
+        )
+        ax, ax_rate = axes[0], axes[1]
+        for idx, panel_ax in enumerate((ax, ax_rate)):
+            panel_ax.text(-0.02, 1.12, chr(ord("a") + idx), transform=panel_ax.transAxes,
+                          ha="right", va="top", fontweight="bold", fontsize=8)
+
+        # --- (a) score distribution with the applied cutoff ---------------
+        drawable_threshold = False
+        if degenerate:
+            # A constant score says nothing about doublets. Declare that, rather
+            # than drawing one bar on an autoscaled axis that implies a model was
+            # fitted — the all-singlets fallback lands exactly here.
+            constant = float(values[0]) if values.size else float("nan")
+            ax.text(0.5, 0.5,
+                    f"no score variation\nevery cell scored {constant:g}\n"
+                    f"no doublet model was fitted ({method})",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=7, color=cls._PANEL_MUTED)
+            ax.set_axis_off()
+        else:
+            # Bin geometrically when the scores span decades, so the singlet mode
+            # is resolved instead of being packed into the first linear bin. Log
+            # bins need strictly positive values, and a zero score is a real
+            # backend output, so fall back to linear rather than dropping cells.
+            use_log_x = bool(values.min() > 0 and values.max() / values.min() >= 100.0)
+            edges = (np.geomspace(values.min(), values.max(), 51) if use_log_x
+                     else np.linspace(values.min(), values.max(), 51))
+            keep_mask = finite & ~called
+            ax.hist(scores[keep_mask], bins=edges, color=keep_colour, linewidth=0,
+                    label=f"Retained (n = {int(keep_mask.sum()):,})")
+            if n_doublets:
+                # Called cells sit inside the same tail as the retained ones;
+                # without this overlay they cannot be told apart.
+                ax.hist(scores[finite & called], bins=edges, color=call_colour,
+                        linewidth=0, zorder=3,
+                        label=f"Called doublet (n = {n_doublets:,})")
+            if use_log_x:
+                ax.set_xscale("log")
+            # Bin counts span ~4 decades between the singlet mode and the tail the
+            # threshold acts on. On a linear count axis that tail — i.e. every cell
+            # this module removes — is indistinguishable from zero.
+            ax.set_yscale("log")
+            ax.set_ylim(bottom=0.5)
+            ax.set_xlabel("Doublet score" + (" (log scale)" if use_log_x else ""))
+            ax.set_ylabel("Cells per bin (log scale)")
+
+            drawable_threshold = (
+                threshold is not None
+                and np.isfinite(float(threshold))
+                and (float(threshold) > 0 or not use_log_x)
+            )
+            notes: list[tuple[str, str]] = []
+            if drawable_threshold:
+                ax.axvline(float(threshold), color=call_colour, linewidth=0.6,
+                           linestyle="--", label=f"Threshold = {float(threshold):.3f}")
+                ax.set_title("Score distribution and applied cutoff")
+            else:
+                # Rank-based backends (DoubletFinder top-nExp) and the per-sample
+                # grouped lanes expose no single global cutoff. Say so in the title
+                # too, so a missing line is not read as one that was forgotten.
+                ax.set_title("Score distribution (no global cutoff)")
+                notes.append(("cutoff is rank- or per-sample-calibrated",
+                              cls._PANEL_MUTED))
+            if not n_doublets:
+                # The pre-filtered-atlas case. Without this the panel is just a
+                # tidy distribution and the reader has to notice the absent
+                # overlay to learn that the module removed nothing.
+                notes.append(("no cell was called a doublet", call_colour))
+            handles, _ = ax.get_legend_handles_labels()
+            if len(handles) > 1:
+                # Same plate as the notes: the theme's borderless legend is the
+                # right publication default, but the threshold rule can land on
+                # top of the labels, so give it an opaque (still borderless) bed.
+                ax.legend(loc="upper right", fontsize=5.5, handlelength=1.2,
+                          frameon=True, framealpha=0.85, edgecolor="none",
+                          borderpad=0.3)
+            for row, (text, colour) in enumerate(notes):
+                ax.text(0.02, 0.97 - 0.08 * row, text, transform=ax.transAxes,
+                        ha="left", va="top", fontsize=5.5, color=colour,
+                        bbox=cls._PANEL_NOTE_PLATE)
+
+        # --- (b) realised call rate against the prior that was applied ----
+        ax_rate.set_title("Call rate vs prior")
+        if expected_rate is None:
+            ax_rate.text(0.5, 0.5, "expected rate\nnot recorded", ha="center", va="center",
+                         transform=ax_rate.transAxes, fontsize=6, color=cls._PANEL_MUTED)
+            ax_rate.set_axis_off()
+        else:
+            expected_pct = float(expected_rate) * 100.0
+            ax_rate.bar([0], [observed_pct], width=0.6, color=call_colour)
+            # The prior is an assumption, not a measurement: drawn open so it can
+            # never be read as a second observed quantity.
+            ax_rate.bar([1], [expected_pct], width=0.6, facecolor="none",
+                        edgecolor=cls._PANEL_MUTED, linewidth=0.6, linestyle="--")
+            ax_rate.set_xticks([0, 1])
+            ax_rate.set_xticklabels(["called", "expected"])
+            ax_rate.set_ylabel("% of cells")
+            headroom = max(observed_pct, expected_pct)
+            ax_rate.set_ylim(0, headroom * 1.35 if headroom > 0 else 1.0)
+            for x, pct in ((0, observed_pct), (1, expected_pct)):
+                # Both bars carry their value because the interesting case is the
+                # one where the called bar is ~500x shorter than the prior and
+                # would otherwise render as an unreadable zero-height stub.
+                ax_rate.text(x, pct + max(headroom, 1e-9) * 0.04, cls._fmt_pct(pct),
+                             ha="center", va="bottom", fontsize=5.5)
+            note = cls._undercall_note(ctx)
+            if note:
+                ax_rate.text(0.03, 0.97, note, transform=ax_rate.transAxes,
+                             ha="left", va="top", fontsize=5.5, color=call_colour)
+
+        # Second suptitle line defines only the encodings this run actually drew,
+        # so it never explains a threshold line or a prior bar that is absent.
+        key = []
+        if drawable_threshold:
+            key.append("a: dashed line = applied threshold")
+        if expected_rate is not None:
+            key.append("b: open bar = expected rate (a prior, not a measurement)")
+        fig.suptitle(
+            f"Doublet detection — {method}; n = {adata.n_obs:,} cells, "
+            f"{n_doublets:,} called ({cls._fmt_pct(observed_pct)})"
+            + ("\n" + ".   ".join(key) if key else ""),
+            fontsize=7,
+        )
+        fig.savefig(ctx.figure_dir / "doublet_scores.png")
+        plt.close(fig)
+
+    @staticmethod
+    def _undercall_note(ctx) -> str | None:
+        """One-line restatement of the under-call diagnostic already in metadata.
+
+        The diagnostic is the reason this panel exists on tumour cohorts, so it
+        belongs on the figure and not only in the manifest. Reads whichever scope
+        ``_check_undercall`` populated; computes nothing.
+        """
+        ratio = ctx.metadata.get("doublet_undercall_ratio")
+        if ratio:
+            return f"under-called {float(ratio):.0f}-fold vs prior"
+        per_sample = ctx.metadata.get("doublet_undercall_ratio_per_sample") or {}
+        if per_sample:
+            resolved = ctx.metadata.get("doublet_expected_rate_resolved_per_sample") or {}
+            total = len(resolved) or len(per_sample)
+            return f"{len(per_sample)}/{total} samples under-called"
+        return None
+
     def _finalize_doublets(
         self, ctx, adata, cfg, backend, random_state,
         doublet_scores, predicted_doublets, threshold,
@@ -1273,22 +1491,10 @@ class DoubletDetectionModule:
             )
 
         # Visualize doublet score distribution
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.hist(doublet_scores, bins=50, edgecolor="black", linewidth=0.5)
-        if threshold is not None:
-            ax.axvline(
-                threshold, color="red", linestyle="--",
-                label=f"Threshold ({threshold:.3f})",
-            )
-        ax.set_xlabel("Doublet score")
-        ax.set_ylabel("Count")
-        display_method = str(ctx.metadata.get("doublet_method", backend))
-        ax.set_title(f"{display_method} doublet scores (detected {n_doublets} doublets)")
-        if threshold is not None:
-            ax.legend()
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "doublet_scores.png", bbox_inches="tight")
-        plt.close()
+        self._plot_doublet_scores(
+            ctx, adata, doublet_scores, predicted_doublets, threshold,
+            n_doublets=n_doublets, call_rate=call_rate, backend=backend,
+        )
 
         if cfg.remove_doublets:
             before = adata.n_obs

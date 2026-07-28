@@ -236,32 +236,16 @@ class DifferentialExpressionModule:
 
         # --- Visualizations ---
         # Dot plot of top markers per cluster
-        try:
-            sc.pl.rank_genes_groups_dotplot(
-                adata, n_genes=5, show=False, standard_scale="var",
-            )
-            plt.savefig(
-                ctx.figure_dir / "de_dotplot_top5.png", bbox_inches="tight",
-            )
-            plt.close()
-        except Exception:
-            plt.close("all")
+        self._plot_marker_dotplot(adata, ctx)
 
         # Heatmap of top markers
-        try:
-            sc.pl.rank_genes_groups_heatmap(
-                adata, n_genes=5, show=False, show_gene_labels=True,
-                use_raw=False, swap_axes=True, vmin=-3, vmax=3,
-            )
-            plt.savefig(
-                ctx.figure_dir / "de_heatmap_top5.png", bbox_inches="tight",
-            )
-            plt.close()
-        except Exception:
-            plt.close("all")
+        self._plot_marker_heatmap(adata, ctx)
 
-        # Volcano plot (all clusters combined)
-        self._volcano_plot(sig_markers, ctx)
+        # Volcano plot (all clusters combined). The full tested set plus the
+        # significance mask computed above are handed over so the panel can
+        # contrast passing against non-passing tests and state both counts;
+        # nothing is re-tested or re-thresholded here.
+        self._volcano_plot(markers, ctx, sig_mask=sig_mask)
 
     @staticmethod
     def _rapids_singlecell_version() -> str:
@@ -542,29 +526,445 @@ class DifferentialExpressionModule:
         out[order] = np.clip(adjusted, 0.0, 1.0)
         return out
 
+    # --- Figure tokens ---
+    # The suite theme (plotting_factory/theme/nature_high_impact.yaml) builds
+    # its continuous ramps out of ColorBrewer scales, so these matplotlib names
+    # ARE the theme tokens rather than a second, drifting copy of the hexes:
+    #   sequential_expression -> Blues  (#F7FBFF .. #6BAED6 .. #08306B)
+    #   diverging_blue_red    -> RdBu_r (#2166AC .. #F7F7F7 .. #B2182B)
+    # Both are colourblind-safe and neither is a rainbow ramp.
+    _SEQUENTIAL_CMAP = "Blues"
+    _DIVERGING_CMAP = "RdBu_r"
+    # significance_highlight.{significant,nonsignificant} from the same theme
+    # file; the significant hue is the one qc.py already uses for "this is the
+    # cutoff decision", so the two panels speak with one vocabulary.
+    _COLOUR_SIG = "#D55E00"
+    _COLOUR_NS = "#9E9E9E"
+    _COLOUR_GUIDE = "#666666"
+    # Genes shown per cluster by the two top-5 panels (their filenames say so).
+    _TOP_N_PER_CLUSTER = 5
+    # Vertical pitch that keeps a 5 pt gene label (~1.8 mm) clear of its
+    # neighbour, and the tallest figure a journal page can carry. Beyond the cap
+    # the panel would be rescaled to fit anyway, shrinking the type with it.
+    _GENE_ROW_PITCH_MM = 2.05
+    _MAX_FIGURE_HEIGHT_MM = 247.0
+    # The two-line title is placed above the canvas (see below), so the drawn
+    # canvas has to give that band back or the saved image exceeds the cap.
+    _TITLE_BAND_MM = 10.0
+
+    _TEST_LABELS = {
+        "wilcoxon": "Wilcoxon rank-sum",
+        "t-test": "Welch t-test",
+        "t-test_overestim_var": "t-test, overestimated variance",
+        "logreg": "logistic regression",
+        "sparse_welch_fallback": "Welch t-test (sparse fallback)",
+        "sparse_welch_fallback_OPT_IN": "Welch t-test (sparse fallback)",
+        "welch_t_test_fallback_OPT_IN": "Welch t-test (fallback)",
+    }
+
+    @classmethod
+    def _test_label(cls, ctx: PipelineContext) -> str:
+        """Human-readable name of the test that actually produced these numbers.
+
+        Read from metadata rather than from ``cfg.de_method`` so a panel drawn
+        after a fallback names the statistic that ran, not the one requested.
+        """
+        metadata = getattr(ctx, "metadata", {}) or {}
+        token = str(
+            metadata.get("de_test_actually_used")
+            or getattr(ctx.cfg, "de_method", "")
+            or "unknown test"
+        )
+        return cls._TEST_LABELS.get(token, token.replace("_", " "))
+
     @staticmethod
-    def _volcano_plot(markers: pd.DataFrame, ctx: PipelineContext) -> None:
-        """Generate a combined volcano plot for all clusters."""
+    def _correction_label(ctx: PipelineContext) -> str:
+        metadata = getattr(ctx, "metadata", {}) or {}
+        token = str(metadata.get("de_correction_actually_used") or "benjamini-hochberg")
+        return "Bonferroni" if token == "bonferroni" else "Benjamini-Hochberg"
+
+    @classmethod
+    def _marker_row_count(cls, adata, n_genes: int) -> int:
+        """Gene rows the top-N panels will draw (groups x N).
+
+        The row count, not a fixed guess, is what decides whether the gene
+        labels have room to sit next to each other, so it drives panel height.
+        """
+        try:
+            names = adata.uns.get("rank_genes_groups", {}).get("names")
+        except Exception:
+            names = None
+        groups = getattr(getattr(names, "dtype", None), "names", None)
+        if not groups and isinstance(names, dict):
+            groups = tuple(names)
+        if not groups:
+            groups = tuple(pd.Categorical(adata.obs["leiden"].astype(str)).categories)
+        return max(1, len(groups) * n_genes)
+
+    @staticmethod
+    def _matrix_has_negative_values(X) -> bool:
+        """Whether the plotted matrix is signed (z-scored) or non-negative.
+
+        Only used to choose colour limits: a symmetric diverging scale is
+        correct for signed input and a lie for log1p-normalised input, where the
+        negative half of the bar names values the matrix cannot contain. Nothing
+        is stored or reported from this read.
+        """
+        try:
+            if sparse.issparse(X):
+                data = X.data
+            elif isinstance(X, np.ndarray):
+                data = X
+            else:
+                # Backed / lazy matrix: sample the leading rows rather than
+                # materialising the whole matrix just to pick a colour limit.
+                data = np.asarray(X[: min(2000, int(X.shape[0]))])
+            return bool(data.size) and bool(np.nanmin(data) < 0)
+        except Exception:
+            return False
+
+    @classmethod
+    def _plot_marker_dotplot(cls, adata, ctx: PipelineContext) -> None:
+        """Top-5 marker dot plot at page geometry, with both channels named.
+
+        rcParams cannot reach this panel: ``sc.pl.rank_genes_groups_dotplot``
+        derives its own canvas from the category count, so 22 clusters x 5 genes
+        came out 867 mm wide — 4.7x the double-column width. Whatever the
+        typesetter does to fit that on a page takes the theme's 7 pt type down
+        to roughly 1.5 pt with it. The colour bar also read "Mean expression in
+        group" while ``standard_scale="var"`` was in force, so it named a
+        quantity other than the one it showed.
+
+        Genes move to the vertical axis because 110 gene labels cannot be
+        resolved across a 183 mm width (1.7 mm each) while 22 cluster labels
+        comfortably can.
+        """
+        from .._figure_theme import journal_figure_size
+
+        try:
+            n_rows = cls._marker_row_count(adata, cls._TOP_N_PER_CLUSTER)
+            width_in, _ = journal_figure_size("double")
+            height_mm = min(
+                cls._MAX_FIGURE_HEIGHT_MM - cls._TITLE_BAND_MM,
+                30.0 + cls._GENE_ROW_PITCH_MM * n_rows,
+            )
+            dot = sc.pl.rank_genes_groups_dotplot(
+                adata,
+                n_genes=cls._TOP_N_PER_CLUSTER,
+                show=False,
+                standard_scale="var",
+                return_fig=True,
+                figsize=(width_in, height_mm / 25.4),
+            )
+            dot.swap_axes()
+            dot.style(
+                cmap=cls._SEQUENTIAL_CMAP,
+                dot_edge_lw=0.15,
+                smallest_dot=1.0,
+                largest_dot=30.0,
+            )
+            # Size is the reason this is a dot plot rather than a matrix plot,
+            # so its legend is not optional; and the colour bar has to say that
+            # standard_scale rescaled each gene, not report a bare mean.
+            dot.legend(
+                colorbar_title="Mean expression in cluster,\nmin-max scaled per gene",
+                size_title="Cells in cluster with\nnon-zero detection (%)",
+                width=1.25,
+            )
+            dot.make_figure()
+            fig = dot.fig
+            # scanpy lays the panel out inside matplotlib's default figure
+            # margins, which on a page-tall canvas throws ~60 mm at blank
+            # border. Reclaiming it is what gives each gene row the ~1.8 mm it
+            # needs for a 5 pt label to clear its neighbour.
+            fig.subplots_adjust(top=0.955, bottom=0.035)
+            main_ax = (dot.get_axes() or {}).get("mainplot_ax")
+            if main_ax is not None:
+                main_ax.set_xlabel("Leiden cluster", fontsize=6)
+                # Says what the row blocks and the brackets on the right mean;
+                # without it the bracket numbers are unexplained.
+                main_ax.set_ylabel(
+                    "Marker genes, grouped by the cluster they rank for", fontsize=6
+                )
+                main_ax.tick_params(axis="y", labelsize=5)
+            # DotPlot nests a grid inside its own grid, and the nested one
+            # overruns the parent, so the dendrogram ends up above the canvas
+            # top by an amount that depends on the figure's aspect. A title at
+            # any fixed height therefore lands on the tree (or under the opaque
+            # dendrogram axes, which is how it disappears). Place it above
+            # whatever the tallest axes turned out to be; bbox_inches="tight"
+            # grows the saved image to include it.
+            top = max((a.get_position().y1 for a in fig.axes), default=1.0)
+            fig.suptitle(
+                f"Top {cls._TOP_N_PER_CLUSTER} marker genes per Leiden cluster "
+                f"({cls._test_label(ctx)})\n"
+                f"n = {adata.n_obs:,} cells, {n_rows // cls._TOP_N_PER_CLUSTER} clusters, "
+                f"{adata.n_vars:,} genes tested per cluster",
+                fontsize=7, y=max(1.0, top) + 0.008, va="bottom",
+            )
+            fig.savefig(ctx.figure_dir / "de_dotplot_top5.png", bbox_inches="tight")
+            plt.close(fig)
+        except Exception as exc:
+            # Unchanged policy: a failed diagnostic never fails the module. Say
+            # which one failed, so a missing panel is not silently invisible.
+            logger.warning("DE dot plot skipped: %s", exc)
+            plt.close("all")
+
+    @classmethod
+    def _plot_marker_heatmap(cls, adata, ctx: PipelineContext) -> None:
+        """Top-5 marker heatmap on a colour scale the data can actually reach.
+
+        The scale was ``vmin=-3, vmax=3`` on viridis. Those limits are written
+        for z-scored input, but at DE time ``adata.X`` is log1p-normalised and
+        strictly non-negative (0 .. ~7.9 on the LUSC cohort), so the lower half
+        of the bar advertised negative expression that cannot occur while every
+        real value above 3 saturated — and viridis puts a mid-tone at 0, which
+        reads as "average" rather than "absent". The limits are now taken from
+        the sign of the matrix: symmetric about zero on a diverging ramp only
+        when the values really are signed, otherwise 0..3 on a sequential ramp
+        whose lightest end is zero. The 3 is the module's existing clip
+        magnitude, kept so only the impossible half of the range is dropped.
+        """
+        from .._figure_theme import journal_figure_size
+
+        try:
+            signed = cls._matrix_has_negative_values(adata.X)
+            n_rows = cls._marker_row_count(adata, cls._TOP_N_PER_CLUSTER)
+            width_in, _ = journal_figure_size("double")
+            height_mm = min(
+                cls._MAX_FIGURE_HEIGHT_MM - cls._TITLE_BAND_MM,
+                34.0 + cls._GENE_ROW_PITCH_MM * n_rows,
+            )
+            axes = sc.pl.rank_genes_groups_heatmap(
+                adata,
+                n_genes=cls._TOP_N_PER_CLUSTER,
+                show=False,
+                show_gene_labels=True,
+                use_raw=False,
+                swap_axes=True,
+                vmin=-3 if signed else 0,
+                vmax=3,
+                cmap=cls._DIVERGING_CMAP if signed else cls._SEQUENTIAL_CMAP,
+                figsize=(width_in, height_mm / 25.4),
+            )
+            fig = plt.gcf()
+            axes = axes if isinstance(axes, dict) else {}
+            # scanpy lays the panel out inside matplotlib's default figure
+            # margins, which on a page-tall canvas leaves ~60 mm of blank
+            # border while the 110 gene labels overlap for want of 0.3 mm each.
+            fig.subplots_adjust(top=0.955, bottom=0.035)
+            heatmap_ax = axes.get("heatmap_ax")
+            if heatmap_ax is not None:
+                heatmap_ax.tick_params(axis="y", labelsize=5)
+            groupby_ax = axes.get("groupby_ax")
+            if groupby_ax is not None:
+                # scanpy labels this axis with the obs key; "leiden" is not a
+                # description of what the columns are. The cluster ticks are
+                # spaced by cluster size, so the small clusters' labels collide
+                # unless they are turned upright.
+                groupby_ax.set_xlabel("Leiden cluster", fontsize=6)
+                # Columns are cells, so a tick sits at each cluster's centre of
+                # mass: the smallest clusters end up closer together than a
+                # glyph is wide. Upright text on two alternating rows separates
+                # them without dropping a cluster from the axis.
+                from matplotlib.transforms import ScaledTranslation
+
+                stagger = ScaledTranslation(0.0, -0.11, fig.dpi_scale_trans)
+                for idx, label in enumerate(groupby_ax.get_xticklabels()):
+                    label.set_rotation(90)
+                    label.set_fontsize(5)
+                    if idx % 2:
+                        label.set_transform(label.get_transform() + stagger)
+            # The colour bar is the one axis scanpy does not return; it is also
+            # the only place the units of the matrix can be stated.
+            returned = {id(a) for a in axes.values()}
+            for cbar_ax in [a for a in fig.axes if id(a) not in returned]:
+                # Outside the tick labels, not above the bar: the bar is 5 mm
+                # wide and a title centred on it runs over the neighbouring
+                # cluster colour strip.
+                cbar_ax.yaxis.set_label_position("right")
+                cbar_ax.set_ylabel(
+                    "Expression (z-scored)" if signed
+                    else "Expression (log1p-normalised)",
+                    fontsize=5, labelpad=2,
+                )
+            fig.suptitle(
+                f"Top {cls._TOP_N_PER_CLUSTER} marker genes per Leiden cluster, "
+                f"single cells ({cls._test_label(ctx)})\n"
+                f"n = {adata.n_obs:,} cells, {n_rows // cls._TOP_N_PER_CLUSTER} clusters, "
+                f"{n_rows} gene rows (a gene recurs when it marks several clusters); "
+                f"colour clipped at {'+/-3' if signed else '3'}",
+                fontsize=7, y=1.0, va="bottom",
+            )
+            fig.savefig(ctx.figure_dir / "de_heatmap_top5.png", bbox_inches="tight")
+            plt.close(fig)
+        except Exception as exc:
+            logger.warning("DE marker heatmap skipped: %s", exc)
+            plt.close("all")
+
+    @classmethod
+    def _volcano_plot(
+        cls,
+        markers: pd.DataFrame,
+        ctx: PipelineContext,
+        sig_mask=None,
+    ) -> None:
+        """Volcano of every cluster-vs-rest test drawn in this run.
+
+        What was wrong: a 10x7 in canvas that no journal column fits, whose
+        colour channel re-encoded the x axis (log2 fold change mapped to a
+        red/blue bar sitting next to an axis already labelled log2 fold change)
+        while the one categorical distinction a volcano exists to show — passed
+        vs did not pass — was never drawn. The guide lines were literal
+        ``0.05`` / ``+/-0.25`` instead of the thresholds the run applied, so any
+        run configured otherwise drew somebody else's cutoffs.
+
+        ``sig_mask`` is the mask already computed in ``_run_impl``; no test,
+        threshold or correction is recomputed here. When it is absent (a direct
+        caller) every point is drawn neutrally and the pass count is left out
+        rather than guessed.
+        """
         if markers.empty:
             return
-        fig, ax = plt.subplots(figsize=(10, 7))
-        log_pval = -np.log10(markers["pvals_adj"].clip(lower=1e-20))
-        lfc = markers["logfoldchanges"]
+        from .._figure_theme import journal_figure_size
 
-        scatter = ax.scatter(
-            lfc, log_pval, c=lfc, cmap="RdBu_r", s=4, alpha=0.6,
-            vmin=-3, vmax=3, edgecolors="none",
+        p_cut = float(getattr(ctx.cfg, "de_pval_threshold", 0.05))
+        lfc_cut = float(getattr(ctx.cfg, "de_logfc_threshold", 0.25))
+        # The adjusted p is floored before the log so that exact zeros stay
+        # finite. That floor is a drawing limit and becomes a visible ceiling of
+        # stacked points, so the panel has to admit to it rather than let the
+        # flat top read as data.
+        p_floor = 1e-20
+        lfc = np.asarray(markers["logfoldchanges"], dtype=float)
+        log_pval = -np.log10(
+            np.asarray(markers["pvals_adj"], dtype=float).clip(min=p_floor)
         )
-        ax.axhline(-np.log10(0.05), color="grey", linestyle="--", linewidth=0.8)
-        ax.axvline(-0.25, color="grey", linestyle="--", linewidth=0.8)
-        ax.axvline(0.25, color="grey", linestyle="--", linewidth=0.8)
-        ax.set_xlabel("Log2 Fold Change")
-        ax.set_ylabel("-log10(adjusted p-value)")
-        ax.set_title("Volcano Plot (all clusters)")
-        plt.colorbar(scatter, ax=ax, label="Log2FC")
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "de_volcano.png", bbox_inches="tight")
-        plt.close()
+
+        # Only pairs that can be positioned are drawn; a fallback DE frame with
+        # no fold changes would otherwise contribute a legend entry and no dots.
+        drawable = np.isfinite(lfc) & np.isfinite(log_pval)
+
+        # Double column: this panel carries a three-line provenance caption that
+        # is wider than any 89 mm axes, and at single-column width the caption set
+        # the tight bbox and collapsed the axes to near-zero.
+        fig, ax = plt.subplots(
+            figsize=journal_figure_size("double", height_mm=88.0),
+            constrained_layout=True,
+        )
+        # Colour carries the significance call and nothing else. Splitting it by
+        # the sign of the fold change would repeat the x axis, which is the
+        # defect this panel had; the pass/fail split is the one fact no axis
+        # here shows, since it also depends on the detection-rate floor.
+        if sig_mask is None:
+            passed = np.zeros(len(markers), dtype=bool)
+            series = [(drawable, cls._COLOUR_NS, None)]
+        else:
+            passed = np.asarray(sig_mask, dtype=bool)
+            # Neutral cloud first so the passing tests sit on top of it.
+            series = [
+                (~passed & drawable, cls._COLOUR_NS, "not significant"),
+                (passed & drawable, cls._COLOUR_SIG, "significant"),
+            ]
+        labelled = False
+        for mask, colour, label in series:
+            if not mask.any():
+                continue  # a category with no points must not appear in the legend
+            ax.scatter(
+                lfc[mask], log_pval[mask], s=1.5, c=colour, alpha=0.65,
+                edgecolors="none", rasterized=True, label=label,
+            )
+            labelled = labelled or label is not None
+
+        # Guides are the thresholds this run applied, read from its config.
+        ax.axhline(-np.log10(p_cut), color=cls._COLOUR_GUIDE,
+                   linestyle="--", linewidth=0.5)
+        # scanpy's ranking returns UP-regulated genes per cluster, so the frame
+        # routinely contains no negative fold changes at all. Drawing the
+        # symmetric -lfc_cut guide over a region that structurally cannot hold a
+        # point invites the reading "not one cluster has a down-regulated
+        # marker", which is an artefact of the ranking, not a result.
+        one_sided = bool(drawable.any() and np.nanmin(lfc[drawable]) >= 0.0)
+        bounds = (lfc_cut,) if one_sided else (-lfc_cut, lfc_cut)
+        for bound in bounds:
+            ax.axvline(bound, color=cls._COLOUR_GUIDE, linestyle="--", linewidth=0.5)
+        if one_sided:
+            ax.set_xlim(left=0.0)
+
+        # `markers` is scanpy's RANKED table — the top de_n_genes rows per
+        # cluster — not the test set. Calling its length "tests" overstated the
+        # hit rate enormously (a 5,877/6,600 "significant" fraction reads as 89%
+        # when the rate over all genes tested is ~1.5%), and a wrong n is the
+        # single fastest way to lose a referee. Report what the rows actually
+        # are, and derive the grouping from the frame instead of assuming it.
+        group_col = next(
+            (c for c in ("group", "cluster", "cell_type", "names_group") if c in markers.columns),
+            None,
+        )
+        n_groups = int(markers[group_col].nunique()) if group_col else 0
+        ranked_desc = f"{len(markers):,} ranked marker genes"
+        if n_groups:
+            ranked_desc += f" ({n_groups} clusters x top {len(markers) // n_groups})"
+
+        ax.set_xlabel("log2 fold change (cluster vs all other cells)")
+        ax.set_ylabel(f"-log10 adjusted P ({cls._correction_label(ctx)})")
+        ax.set_title(
+            f"Cluster marker genes ({cls._test_label(ctx)})\n"
+            + ranked_desc
+            + ("" if sig_mask is None else f"; {int(passed.sum()):,} pass the run's criteria"),
+            fontsize=7,
+        )
+        # Legend and caption sit below the axes: the volcano's own empty corner
+        # moves with the data, and anchoring them to the top collides with the
+        # title. bbox_inches="tight" keeps both inside the saved canvas.
+        if labelled:
+            ax.legend(
+                loc="upper center", bbox_to_anchor=(0.5, -0.20), ncol=2,
+                fontsize=5.5, handletextpad=0.2, columnspacing=1.0,
+                borderpad=0.0, markerscale=4,
+            )
+
+        # The third significance criterion is a detection-rate floor, which has
+        # no axis on a volcano; naming it keeps the pass count reconcilable with
+        # the two cutoffs that are drawn.
+        metadata = getattr(ctx, "metadata", {}) or {}
+        min_pct = metadata.get("de_min_pct_applied")
+        note = f"dashed guides: adjusted P < {p_cut:g} and |log2FC| > {lfc_cut:g}"
+        if min_pct:
+            # For most greys this floor, not either drawn guide, is the operative
+            # criterion, so the visual grammar "grey = outside the dashed box"
+            # would otherwise be wrong for nearly every grey point.
+            note += (
+                f"; also required, and not drawable here: detected in "
+                f">= {float(min_pct):.0%} of the cluster"
+            )
+        if one_sided:
+            note += (
+                "\nranking returns up-regulated genes per cluster, so the table is "
+                "one-sided; the absent left wing is a property of the ranking, not "
+                "evidence that no gene is down-regulated"
+            )
+        n_floored = int((log_pval >= -np.log10(p_floor)).sum())
+        if n_floored:
+            # A dense line of points along the top edge is a drawing limit, not a
+            # finding, and has to be named as one. It is a plotting clip, NOT
+            # double-precision underflow: most clipped values are representable
+            # and span many orders of magnitude below the floor.
+            note += (
+                f"\n{n_floored:,} of {len(markers):,} rows have adjusted P below the "
+                f"{p_floor:g} drawing floor and are stacked on that ceiling"
+            )
+        import textwrap
+
+        wrapped = "\n".join(
+            "\n".join(textwrap.wrap(line, width=110)) for line in note.split("\n")
+        )
+        ax.text(
+            0.5, -0.30, wrapped, transform=ax.transAxes, ha="center", va="top",
+            fontsize=5, color=cls._COLOUR_GUIDE, linespacing=1.4,
+        )
+
+        fig.savefig(ctx.figure_dir / "de_volcano.png")
+        plt.close(fig)
 
     @staticmethod
     def _write_substate_de(adata, markers: pd.DataFrame, ctx: PipelineContext) -> None:

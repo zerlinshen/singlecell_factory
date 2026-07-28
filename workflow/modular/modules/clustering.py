@@ -729,26 +729,140 @@ class ClusteringModule:
 
     @staticmethod
     def _plot_pca_variance(adata, ctx: PipelineContext, n_pcs: int) -> None:
-        """Plot PCA variance explained (elbow plot + cumulative)."""
-        var_ratio = adata.uns["pca"]["variance_ratio"]
+        """Plot PCA variance explained (scree + cumulative) at journal geometry.
+
+        rcParams cannot fix what this panel was actually missing. The figure
+        exists to justify one number -- how many PCs the run hands to the
+        neighbour graph -- yet it never drew that cut, so a reader could not tell
+        which part of the curve was used or how much variance it captured. The
+        cumulative panel was worse: it was anchored to a fixed 90% line, but in
+        HVG space a 40-PC scRNA cumulative curve tops out near 40% (0.38 here),
+        so that line squeezed every data point into the bottom third of an
+        otherwise empty axis while implying a threshold the analysis never
+        approaches. Size to the double column, mark the PCs actually used, print
+        the cumulative variance at that cut, and draw the 90% reference only when
+        the data can reach it.
+        """
+        from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator
+
+        from .._figure_theme import journal_figure_size, qualitative_colors
+
+        var_ratio = np.asarray(adata.uns["pca"]["variance_ratio"], dtype=float)
         cumulative = np.cumsum(var_ratio)
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-        axes[0].plot(range(1, len(var_ratio) + 1), var_ratio, "o-", markersize=3)
-        axes[0].set_xlabel("Principal Component")
-        axes[0].set_ylabel("Variance Ratio")
-        axes[0].set_title("PCA Elbow Plot")
+        n_computed = int(var_ratio.size)
+        components = np.arange(1, n_computed + 1)
+        # The cut a reader cares about is the number of PCs consumed downstream,
+        # which cannot exceed what PCA actually produced.
+        n_used = int(min(max(int(n_pcs), 1), n_computed)) if n_computed else 0
+        # Percent, not a 0-1 ratio: same quantity, in the unit the sentence
+        # "the first 40 PCs capture 38% of the variance" is written in. The
+        # metadata recorded below is computed from the untouched ratios.
+        var_pct = var_ratio * 100.0
+        cum_pct = cumulative * 100.0
 
-        axes[1].plot(range(1, len(cumulative) + 1), cumulative, "o-", markersize=3)
-        axes[1].axhline(0.9, color="grey", linestyle="--", linewidth=0.8, label="90%")
-        axes[1].set_xlabel("Principal Component")
-        axes[1].set_ylabel("Cumulative Variance")
-        axes[1].set_title("Cumulative Variance Explained")
-        axes[1].legend()
+        # Two distinct hues from the theme -- one for the data, one for the cut
+        # marker -- rather than matplotlib's default C0/C1.
+        curve_colour, cut_colour = (
+            qualitative_colors("group_qualitative", 2) or ("#0072B2", "#D55E00")
+        )
 
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pca_variance_explained.png", bbox_inches="tight")
-        plt.close()
+        fig, axes = plt.subplots(
+            1, 2,
+            figsize=journal_figure_size("double", height_mm=62.0),
+            constrained_layout=True,
+        )
+
+        axes[0].plot(components, var_pct, "o-", markersize=2.2, color=curve_colour)
+        axes[0].set_xlabel("Principal component")
+        axes[0].set_ylabel("Variance explained (%)")
+        axes[0].set_title(f"Variance per PC (n = {adata.n_obs:,} cells)")
+
+        # PC1 typically carries ~50x the variance of the last computed PC, so on
+        # a linear axis the whole tail collapses onto the zero line and PC 15
+        # cannot be told apart from PC 40 -- which is precisely the region the
+        # n_pcs choice lives in. Log the spectrum when it is that skewed (and
+        # only when every value is positive, since log drops non-positive points
+        # silently); a shallow or degenerate spectrum stays linear.
+        positive = bool(var_pct.size) and float(var_pct.min()) > 0.0
+        if positive and float(var_pct.max()) / float(var_pct.min()) >= 10.0:
+            axes[0].set_yscale("log")
+            # Plain "0.2 / 1 / 5" ticks; the default log formatter would set a
+            # percent axis in 10^0 scientific notation.
+            plain = FuncFormatter(lambda value, _pos: f"{value:g}")
+            axes[0].yaxis.set_major_formatter(plain)
+            axes[0].yaxis.set_minor_locator(LogLocator(base=10.0, subs=(0.2, 0.5)))
+            axes[0].yaxis.set_minor_formatter(plain)
+
+        axes[1].plot(components, cum_pct, "o-", markersize=2.2, color=curve_colour)
+        axes[1].set_xlabel("Principal component")
+        axes[1].set_ylabel("Cumulative variance explained (%)")
+        axes[1].set_title("Cumulative variance explained")
+
+        # A PC index is an integer; without this a short spectrum gets ticks at
+        # "1.5, 2.0, 2.5", which name components that do not exist.
+        for ax in axes:
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True, min_n_ticks=1))
+
+        # White backing so an annotation stays legible on the rare geometry where
+        # it has to sit across the cut line. Placement below already aims at
+        # empty space, so this is a fallback, not the layout.
+        label_bbox = {"boxstyle": "square,pad=0.15", "facecolor": "white",
+                      "edgecolor": "none"}
+
+        if n_computed:
+            for ax in axes:
+                # Pad the x-range so the cut stays visible as a line inside the
+                # axes even when every computed PC is used (n_used == n_computed
+                # would otherwise land exactly on the spine).
+                ax.set_xlim(0.5, n_computed + 0.5)
+                ax.axvline(n_used, color=cut_colour, linestyle="--", linewidth=0.8)
+            # Label the cut on the emptier side of its own line: a scree curve
+            # decays left-to-right, so a left-hand cut has room to its right and
+            # a right-hand cut has room to its left.
+            label_left = n_used > n_computed / 2
+            # "1 PCs" is a tell that nobody looked at the panel.
+            used_word = "PC" if n_used == 1 else "PCs"
+            total_word = "PC" if n_computed == 1 else "PCs"
+            axes[0].annotate(
+                f"{n_used} {used_word} used\ndownstream",
+                xy=(n_used, 1.0), xycoords=("data", "axes fraction"),
+                xytext=(-3 if label_left else 3, -2), textcoords="offset points",
+                ha="right" if label_left else "left", va="top", color=cut_colour,
+                bbox=label_bbox,
+            )
+            axes[1].plot([n_used], [cum_pct[n_used - 1]], "o", markersize=3.5,
+                         color=cut_colour, zorder=3)
+
+            # The 90% reference is informative only if the curve can reach it;
+            # otherwise say so in words instead of drawing an unreachable line.
+            reaches_90 = bool(cumulative[-1] >= 0.9)
+            if reaches_90:
+                axes[1].axhline(90.0, color="0.45", linestyle=":", linewidth=0.8)
+                axes[1].annotate(
+                    "90% of variance", xy=(0.5, 90.0), xytext=(2, 2),
+                    textcoords="offset points", ha="left", va="bottom", color="0.35",
+                )
+            note = (
+                f"{n_used} of {n_computed} {total_word} used downstream\n"
+                f"{cum_pct[n_used - 1]:.1f}% of total variance at the cut"
+            )
+            if not reaches_90:
+                note += f"\n90% not reached within {n_computed} {total_word}"
+            axes[1].annotate(
+                note, xy=(0.96, 0.04), xycoords="axes fraction",
+                ha="right", va="bottom", bbox=label_bbox,
+            )
+
+        # Panel letters: a multi-panel figure is cited by letter in the running
+        # text, so it needs them. Bold lowercase at the theme's title size.
+        for ax, letter in zip(axes, "ab"):
+            ax.text(-0.13, 1.02, letter, transform=ax.transAxes,
+                    fontsize=plt.rcParams["axes.titlesize"], fontweight="bold",
+                    ha="left", va="bottom")
+
+        fig.savefig(ctx.figure_dir / "pca_variance_explained.png")
+        plt.close(fig)
 
         # Record how many PCs needed for 90% variance
         pcs_for_90 = int(np.searchsorted(cumulative, 0.9) + 1)

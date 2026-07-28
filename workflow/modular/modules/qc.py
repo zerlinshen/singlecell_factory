@@ -315,19 +315,166 @@ class QCModule:
         fig.savefig(ctx.figure_dir / f"qc_violin_{suffix}.png")
         plt.close(fig)
 
-        # Scatter plots: genes vs counts, colored by mito%
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        sc.pl.scatter(
-            adata, x="total_counts", y="n_genes_by_counts", color="pct_counts_mt",
-            ax=axes[0], show=False, title="Genes vs UMI (color=mito%)",
+        # Scatter panels: genes vs UMI counts, and mitochondrial fraction vs UMI.
+        #
+        # These were two scanpy scatters on a 12x5 inch canvas (no journal column
+        # fits it) drawing one opaque point per cell on linear axes. At ~90k cells
+        # that is a saturated blob: the overplotted core hides where the cells
+        # actually lie, which is the only thing a QC scatter is for, and a handful
+        # of 5e4-UMI cells compress the bulk of the data into the left tenth of the
+        # axis. Panel b additionally drew a metric that is identically zero on
+        # atlases whose curators removed MT genes as if it were a distribution.
+        #
+        # Draw the DENSITY instead (hexbin on log count axes) so the distribution
+        # the panel claims to show is visible, and keep the axes box: unlike a UMAP
+        # these axes carry real units.
+        from matplotlib.colors import LogNorm
+        from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+
+        def _flag_uninformative(ax, message: str) -> None:
+            """State that a panel carries no information rather than faking one."""
+            ax.text(0.5, 0.5, message, ha="center", va="center",
+                    transform=ax.transAxes, fontsize=6, color="#666666")
+            ax.set_axis_off()
+
+        def _finite_positive(*bounds) -> list[float]:
+            return [b for b in bounds if b is not None and np.isfinite(b) and b > 0]
+
+        # Decide up front whether the mitochondrial panel can say anything, because
+        # that decides the layout: on an atlas whose curators removed MT genes
+        # pct_counts_mt is constant 0, and giving a panel that carries one sentence
+        # half of a 183 mm column is the same defect (dead canvas) as the 12x5 inch
+        # figure this replaces. The slot is kept — the reader must still be told the
+        # threshold is inert — but it is narrowed to what the sentence needs.
+        mito_message = None
+        if not {"pct_counts_mt", "total_counts"} <= set(adata.obs.columns):
+            mito_message = "not computed"
+        else:
+            mito = np.asarray(adata.obs["pct_counts_mt"], dtype=float)
+            finite_mito = mito[np.isfinite(mito)]
+            # Same rule as the violins: a metric with no spread is reported as
+            # inactive, never drawn as a density on an autoscaled axis.
+            if finite_mito.size == 0 or finite_mito.max() == finite_mito.min():
+                constant = float(finite_mito[0]) if finite_mito.size else float("nan")
+                mito_message = f"no variation\n(constant {constant:g};\nthreshold inactive)"
+
+        # Height follows the layout: two data panels sit side by side at roughly
+        # square proportions, whereas one wide data panel needs a taller canvas or
+        # the density is squashed into a letterbox that hides the low-count tail.
+        fig, axes = plt.subplots(
+            1, 2,
+            figsize=journal_figure_size("double", 102.0 if mito_message else 78.0),
+            constrained_layout=True,
+            gridspec_kw={"width_ratios": [1.0, 0.24 if mito_message else 1.0]},
         )
-        sc.pl.scatter(
-            adata, x="total_counts", y="pct_counts_mt",
-            ax=axes[1], show=False, title="Mito% vs UMI counts",
+        for idx, ax in enumerate(axes):
+            ax.text(-0.02, 1.10, chr(ord("a") + idx), transform=ax.transAxes,
+                    ha="right", va="top", fontweight="bold", fontsize=8)
+
+        def _density_panel(ax, x, y, *, y_log: bool, title: str, xlabel: str,
+                           ylabel: str, vlines=(), hlines=()) -> None:
+            """Hexbin density of one QC pair, with the applied cutoffs drawn."""
+            keep = np.isfinite(x) & np.isfinite(y) & (x > 0)
+            if y_log:
+                keep &= y > 0
+            n_drawn = int(keep.sum())
+            if n_drawn == 0:
+                ax.set_title(title)
+                _flag_uninformative(ax, "no cells with positive counts")
+                return
+            # Bin count follows the cell count: 46 bins across a ~90k-cell cloud
+            # resolve the ridge, but the same grid over a few hundred cells is one
+            # cell per hexagon — confetti, not a density.
+            gridsize = int(np.clip(round(np.sqrt(n_drawn) / 3.0), 10, 46))
+            hexes = ax.hexbin(
+                x[keep], y[keep], gridsize=gridsize, mincnt=1, linewidths=0.0,
+                xscale="log", yscale="log" if y_log else "linear",
+                # Perceptually uniform and colourblind-safe (the same ramp as the
+                # theme's continuous token), on a log colour scale because bin
+                # occupancy spans several orders of magnitude — a linear colour
+                # scale renders everything but the mode as a single shade.
+                cmap="viridis", norm=LogNorm(),
+            )
+            bar = fig.colorbar(hexes, ax=ax, fraction=0.046, pad=0.02)
+            bar.set_label("cells per hexagonal bin")
+            bar.outline.set_visible(False)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            # Powers of ten alone put a single labelled tick on a 200-7000 gene
+            # axis, so the reader cannot recover a value from the panel. Label the
+            # 2x and 5x decade steps too, as plain numbers.
+            for axis, axis_is_log in ((ax.xaxis, True), (ax.yaxis, y_log)):
+                if not axis_is_log:
+                    continue
+                axis.set_major_locator(LogLocator(base=10.0, subs=(1.0, 2.0, 5.0)))
+                axis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:g}"))
+                axis.set_minor_formatter(NullFormatter())
+            # n belongs on the panel, and it is the number of cells this panel can
+            # actually draw: a log axis cannot show a zero, so cells dropped by it
+            # are named rather than silently plotted away.
+            hidden = int(x.size - n_drawn)
+            ax.set_title(f"{title} (n = {n_drawn:,} cells)")
+            if hidden:
+                ax.text(0.98, 0.03,
+                        f"{hidden:,} cell{'' if hidden == 1 else 's'} with zero "
+                        "counts not shown",
+                        transform=ax.transAxes, ha="right", va="bottom",
+                        fontsize=5.5, color="#666666",
+                        # The corner can hold data; keep the note readable there
+                        # rather than moving it somewhere it means less.
+                        bbox={"facecolor": "white", "edgecolor": "none",
+                              "alpha": 0.75, "pad": 1.0})
+            # A cutoff outside the observed range must not rescale the panel, or
+            # the cells themselves get squashed into a corner by an annotation.
+            xlim, ylim = ax.get_xlim(), ax.get_ylim()
+            for value in vlines:
+                ax.axvline(value, color="#D55E00", linewidth=0.5, linestyle="--")
+            for value in hlines:
+                ax.axhline(value, color="#D55E00", linewidth=0.5, linestyle="--")
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+
+        count_bounds = _finite_positive(float(qc_cfg.min_counts), float(qc_cfg.max_counts))
+
+        if {"total_counts", "n_genes_by_counts"} <= set(adata.obs.columns):
+            _density_panel(
+                axes[0],
+                np.asarray(adata.obs["total_counts"], dtype=float),
+                np.asarray(adata.obs["n_genes_by_counts"], dtype=float),
+                y_log=True,
+                title="Genes vs UMI counts per cell",
+                xlabel="UMI counts per cell (log scale)",
+                ylabel="Genes detected per cell (log scale)",
+                vlines=count_bounds,
+                hlines=_finite_positive(float(qc_cfg.min_genes), float(qc_cfg.max_genes)),
+            )
+        else:
+            axes[0].set_title("Genes vs UMI counts per cell")
+            _flag_uninformative(axes[0], "not computed")
+
+        if mito_message is not None:
+            axes[1].set_title("Mitochondrial %")
+            _flag_uninformative(axes[1], mito_message)
+        else:
+            _density_panel(
+                axes[1],
+                np.asarray(adata.obs["total_counts"], dtype=float),
+                mito,
+                y_log=False,
+                title="Mitochondrial % vs UMI counts",
+                xlabel="UMI counts per cell (log scale)",
+                ylabel="Mitochondrial counts (%)",
+                vlines=count_bounds,
+                hlines=_finite_positive(float(qc_cfg.max_mito_pct)),
+            )
+
+        fig.suptitle(
+            f"QC joint distributions {suffix.replace('_', ' ')} — "
+            "dashed lines = applied thresholds",
+            fontsize=7,
         )
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / f"qc_scatter_{suffix}.png", bbox_inches="tight")
-        plt.close()
+        fig.savefig(ctx.figure_dir / f"qc_scatter_{suffix}.png")
+        plt.close(fig)
 
 
     @staticmethod

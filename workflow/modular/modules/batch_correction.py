@@ -178,11 +178,7 @@ class BatchCorrectionModule:
 
         # Pre-correction UMAP (for comparison)
         if "X_umap" in adata.obsm:
-            sc.pl.umap(adata, color=[batch_key], show=False)
-            plt.savefig(
-                ctx.figure_dir / "umap_batch_before.png", bbox_inches="tight",
-            )
-            plt.close()
+            self._plot_batch_umap_before(adata, ctx, batch_key)
 
         if cfg.method == "harmony":
             backend = self._run_harmony
@@ -375,14 +371,237 @@ class BatchCorrectionModule:
         self._write_batch_mixing_audit(ctx, mixing_audit)
 
         # Post-correction UMAP
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        sc.pl.umap(adata, color=[batch_key], ax=axes[0], show=False)
-        axes[0].set_title(f"After {cfg.method} — batch")
-        sc.pl.umap(adata, color=["leiden"], ax=axes[1], show=False, legend_loc="on data")
-        axes[1].set_title(f"After {cfg.method} — clusters")
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "umap_batch_after.png", bbox_inches="tight")
-        plt.close()
+        self._plot_batch_umap_after(adata, ctx, batch_key, cfg.method, use_rep)
+
+    # --- Integration evidence figures ---------------------------------------
+    #
+    # umap_batch_before.png and umap_batch_after.png are the run's evidence that
+    # integration did something, and that argument only holds if the two panels
+    # differ in exactly one respect: the representation the embedding was built
+    # on. Each ``sc.pl.umap`` call supplies its OWN figure size, palette, point
+    # size (scanpy scales it with n_obs) and title, so two independent calls
+    # differ cosmetically in ways a reader reads as an integration effect — and
+    # the old code compounded that by drawing "before" on a scanpy-default
+    # canvas and "after" on a 14x5 inch one that no journal column fits. The
+    # helpers below route both panels through a single drawing path with one
+    # pinned point size, one batch->colour assignment and one panel geometry.
+
+    # Point area (pt^2) for every batch-coloured UMAP panel.
+    _BATCH_UMAP_POINT_SIZE = 3.0
+    # Panel height (mm). "before" is one single-column panel and "after" is two
+    # panels across the double column (~89 mm each), so a shared height makes
+    # every panel the same physical size on the page.
+    _BATCH_UMAP_PANEL_HEIGHT_MM = 92.0
+
+    @staticmethod
+    def _batch_legend_limit() -> int:
+        """Theme ceiling on legend entries before per-item labelling is dropped."""
+        from .._figure_theme import _load_theme
+
+        theme = _load_theme() or {}
+        try:
+            return int(theme["defaults"]["max_legend_items_without_grouping"])
+        except (KeyError, TypeError, ValueError):
+            return 12
+
+    @staticmethod
+    def _note_font_pt() -> float:
+        """Size for keys and caption notes, taken from the applied theme.
+
+        ``apply_pipeline_figure_theme`` has already written the theme's small
+        type token into ``legend.fontsize``, so reading it back keeps this
+        secondary text on the same typographic scale as the rest of the run
+        instead of pinning a second magic number that can drift from it.
+        """
+        try:
+            return float(matplotlib.rcParams["legend.fontsize"])
+        except (KeyError, TypeError, ValueError):
+            return 6.0  # matplotlib's symbolic default ('medium') is unthemed
+
+    @staticmethod
+    def _batch_levels(adata, batch_key: str) -> tuple[list[str], list[str]]:
+        """``(all_levels, observed_levels)`` in the order scanpy assigns colours.
+
+        ``all_levels`` sizes the palette, because scanpy colours a categorical
+        by ``cat.categories``; ``observed_levels`` is what the legend and the
+        stated batch count may use. A category left behind by upstream
+        subsetting (QC, doublet removal) survives in ``cat.categories`` with no
+        cells, and listing it would put a dead entry in the key. Derived the
+        same way for both panels — the obs column is untouched by correction —
+        so batch *i* is guaranteed the same colour before and after.
+        """
+        series = adata.obs[batch_key]
+        categories = getattr(getattr(series, "cat", None), "categories", None)
+        present = {str(value) for value in series.unique()}
+        all_levels = (
+            [str(c) for c in categories] if categories is not None else sorted(present)
+        )
+        return all_levels, [level for level in all_levels if level in present]
+
+    @classmethod
+    def _add_batch_legend(
+        cls, ax, batch_key: str, all_levels, observed, colors, panel_width_in: float
+    ) -> None:
+        """Label the batches, or state how many there are when that is unreadable.
+
+        Past the theme's ``max_legend_items_without_grouping`` a per-batch key is
+        a wall of 6 pt text taller than the panel it explains — the real LUSC
+        cohort here carries 71 samples — so the panel reports the count and the
+        colour contract instead of enumerating entries nobody can match to a
+        point.
+        """
+        limit = cls._batch_legend_limit()
+        note_pt = cls._note_font_pt()
+        if len(observed) > limit or len(colors) < len(all_levels):
+            ax.text(
+                0.5, -0.01,
+                f"{len(observed)} {batch_key} batches, one distinct colour each\n"
+                f"per-batch key omitted (> {limit} entries)",
+                transform=ax.transAxes, ha="center", va="top",
+                linespacing=1.4, fontsize=note_pt, color="#555555",
+            )
+            return
+
+        from matplotlib.lines import Line2D
+
+        position = {level: idx for idx, level in enumerate(all_levels)}
+        handles = [
+            Line2D(
+                [], [], marker="o", linestyle="none", markersize=2.6,
+                markerfacecolor=colors[position[level]], markeredgecolor="none",
+                label=level,
+            )
+            for level in observed
+        ]
+        # Fit the key to the column instead of assuming a fixed column count.
+        # Batch labels here are cohort sample IDs ("Goveia_Carmeliet_2020_
+        # patient_32_tumor_primary", 46 characters); four of those per row is
+        # 213 mm of legend hung off an 89 mm panel, which the tight bounding box
+        # then bakes into the saved canvas — the figure stops being column-sized
+        # and the caption line underneath is overrun.
+        entry_pt = (max(len(level) for level in observed) * 0.5 + 4.0) * note_pt
+        ncol = int(max(1, min(len(handles), panel_width_in * 72.0 // max(entry_pt, 1.0))))
+        ax.legend(
+            handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.01),
+            ncol=ncol, fontsize=note_pt, handletextpad=0.2,
+            columnspacing=0.9, borderaxespad=0.0,
+        )
+
+    @classmethod
+    def _draw_batch_panel(
+        cls, adata, ax, batch_key: str, phase: str, panel_width_in: float
+    ) -> None:
+        """Draw one batch-coloured UMAP panel with the shared style contract."""
+        from .._figure_theme import qualitative_colors
+
+        all_levels, observed = cls._batch_levels(adata, batch_key)
+        # Never index a palette modulo its length: with 71 batches that hands
+        # several samples the identical colour while the key still lists them
+        # separately, so a merged pair looks like a mixed pair.
+        palette = qualitative_colors("sample_qualitative", len(all_levels))
+        sc.pl.umap(
+            adata,
+            color=[batch_key],
+            palette=palette or None,
+            show=False,
+            legend_loc=None,        # keyed below by _add_batch_legend, or counted
+            frameon=False,          # UMAP axes carry no units; a box implies a scale
+            size=cls._BATCH_UMAP_POINT_SIZE,
+            ax=ax,
+        )
+        # Say what the panel shows and over how much data: the obs key alone
+        # ("sample") is not a title, and the batch/cell counts are what makes
+        # the before/after pair readable as one comparison.
+        ax.set_title(
+            f"{phase}\n{batch_key}: {len(observed)} batches, "
+            f"n = {adata.n_obs:,} cells"
+        )
+        # UMAP is isotropic: letting the panel stretch one axis to fill the
+        # canvas distorts the very cluster geometry the reader is asked to
+        # compare across the two figures. adjustable="datalim" pads the data
+        # range instead of shrinking the axes box, so the saved canvas keeps the
+        # journal column width it was sized to (a shrunk box plus the theme's
+        # tight bounding box would hand the typesetter an off-column figure).
+        ax.set_aspect("equal", adjustable="datalim")
+        # Read back what scanpy actually assigned so the key cannot disagree
+        # with the pixels (it falls back to its own palette if `palette` is
+        # unusable, e.g. when the theme file is absent).
+        rendered = [str(c) for c in adata.uns.get(f"{batch_key}_colors", palette)]
+        cls._add_batch_legend(
+            ax, batch_key, all_levels, observed, rendered, panel_width_in
+        )
+
+    @classmethod
+    def _plot_batch_umap_before(cls, adata, ctx: PipelineContext, batch_key: str) -> None:
+        """Pre-correction batch UMAP — the baseline half of the evidence pair."""
+        from .._figure_theme import journal_figure_size
+
+        # Single-column, one panel — the same nominal panel width as each half
+        # of the double-column "after" figure, so a cell is the same size on the
+        # page in both and only the embedding differs between them.
+        figsize = journal_figure_size("single", cls._BATCH_UMAP_PANEL_HEIGHT_MM)
+        fig = plt.figure(figsize=figsize, constrained_layout=True)
+        ax = fig.add_subplot(1, 1, 1)
+        cls._draw_batch_panel(adata, ax, batch_key, "Before integration", figsize[0])
+        fig.supxlabel(
+            "UMAP computed on X_pca (uncorrected).",
+            fontsize=cls._note_font_pt(), color="#555555",
+        )
+        fig.savefig(ctx.figure_dir / "umap_batch_before.png")
+        plt.close(fig)
+
+    @classmethod
+    def _plot_batch_umap_after(
+        cls, adata, ctx: PipelineContext, batch_key: str, method: str, use_rep: str
+    ) -> None:
+        """Post-correction batch + cluster UMAPs, drawn to match the before panel."""
+        from .._figure_theme import journal_figure_size, qualitative_colors
+
+        figsize = journal_figure_size("double", cls._BATCH_UMAP_PANEL_HEIGHT_MM)
+        fig, axes = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+        cls._draw_batch_panel(
+            adata, axes[0], batch_key, f"After {method} integration", figsize[0] / 2.0
+        )
+
+        n_clusters = int(adata.obs["leiden"].nunique())
+        sc.pl.umap(
+            adata,
+            color=["leiden"],
+            palette=qualitative_colors("leiden_qualitative", n_clusters) or None,
+            show=False,
+            legend_loc="on data",
+            legend_fontsize=5,
+            legend_fontoutline=1,   # keep labels legible over dense point clouds
+            frameon=False,
+            size=cls._BATCH_UMAP_POINT_SIZE,
+            ax=axes[1],
+        )
+        axes[1].set_title(
+            f"After {method} integration\nLeiden clustering: {n_clusters} clusters "
+            f"at resolution {ctx.cfg.clustering.leiden_resolution:g}, "
+            f"n = {adata.n_obs:,} cells"
+        )
+        axes[1].set_aspect("equal", adjustable="datalim")
+
+        # Panel letters in figure coordinates so both sit on one baseline
+        # regardless of how tall each panel's two-line title wraps.
+        for idx, x in enumerate((0.005, 0.505)):
+            fig.text(x, 0.985, chr(ord("a") + idx), ha="left", va="top",
+                     fontweight="bold", fontsize=8)
+
+        # The embedding is rebuilt on the corrected representation, so the two
+        # figures do NOT share a coordinate system and identical axis limits
+        # would be a lie about comparability. Point size, colour assignment and
+        # panel size ARE shared; say which comparison the pair supports so the
+        # reader does not read a shifted cloud as an effect.
+        fig.supxlabel(
+            f"UMAP recomputed on {use_rep}; coordinates are independent of "
+            "umap_batch_before.png (same point size, batch colours and panel "
+            "size) — compare how batches mix, not where they sit.",
+            fontsize=cls._note_font_pt(), color="#555555",
+        )
+        fig.savefig(ctx.figure_dir / "umap_batch_after.png")
+        plt.close(fig)
 
     @staticmethod
     def _compute_batch_mixing_metrics(
