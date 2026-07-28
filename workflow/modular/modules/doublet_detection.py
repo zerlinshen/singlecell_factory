@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from ._gpu_utils import bind_cuda_context
+from ._gpu_utils import bind_cuda_context, gpu_available
 from ._scanpy_compat import import_scanpy_or_stub
 
 sc = import_scanpy_or_stub()
@@ -887,7 +887,7 @@ class DoubletDetectionModule:
         use_grouped = strategy == "grouped"
         random_state = ctx.random_state
 
-        if _RSC_AVAILABLE:
+        if _RSC_AVAILABLE and gpu_available(ctx.cfg.gpu_mode):
             try:
                 if use_grouped:
                     return self._run_rsc_scrublet_grouped(adata, cfg, ctx)
@@ -1114,7 +1114,10 @@ class DoubletDetectionModule:
             strategy = self._resolve_doublet_strategy(ctx, adata)
             use_grouped = strategy == "grouped"
 
-            if _RSC_AVAILABLE:
+            # `--gpu-mode off` is a user-facing control; gating GPU dispatch on
+            # library availability alone made it unenforceable here, so a run
+            # requested as CPU-only still initialised CUDA and ran GPU Scrublet.
+            if _RSC_AVAILABLE and gpu_available(ctx.cfg.gpu_mode):
                 # --- GPU path ---
                 try:
                     if use_grouped:
@@ -1284,7 +1287,7 @@ class DoubletDetectionModule:
         if threshold is not None:
             ax.legend()
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "doublet_scores.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "doublet_scores.png", bbox_inches="tight")
         plt.close()
 
         if cfg.remove_doublets:

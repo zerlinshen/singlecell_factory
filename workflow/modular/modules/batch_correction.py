@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -179,7 +180,7 @@ class BatchCorrectionModule:
         if "X_umap" in adata.obsm:
             sc.pl.umap(adata, color=[batch_key], show=False)
             plt.savefig(
-                ctx.figure_dir / "umap_batch_before.png", dpi=160, bbox_inches="tight",
+                ctx.figure_dir / "umap_batch_before.png", bbox_inches="tight",
             )
             plt.close()
 
@@ -380,7 +381,7 @@ class BatchCorrectionModule:
         sc.pl.umap(adata, color=["leiden"], ax=axes[1], show=False, legend_loc="on data")
         axes[1].set_title(f"After {cfg.method} — clusters")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "umap_batch_after.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "umap_batch_after.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -656,7 +657,6 @@ class BatchCorrectionModule:
             raise ValueError("Harmony requires PCA (run clustering first).")
         cfg_batch = ctx.cfg.batch
         ctx.metadata["harmony_backend"] = "direct"
-        ctx.metadata["harmony_device"] = "cpu"
         ctx.metadata["harmony_theta"] = cfg_batch.harmony_theta
         ctx.metadata["harmony_sigma"] = cfg_batch.harmony_sigma
         ctx.metadata["harmony_max_iter"] = cfg_batch.harmony_max_iter
@@ -697,14 +697,34 @@ class BatchCorrectionModule:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 pca = np.asarray(adata.obsm["X_pca"], dtype=np.float64)
-                ho = harmonypy.run_harmony(
-                    pca,
-                    adata.obs,
-                    [batch_key],
+                harmony_kwargs = dict(
                     theta=cfg_batch.harmony_theta,
                     sigma=cfg_batch.harmony_sigma,
                     max_iter_harmony=cfg_batch.harmony_max_iter,
+                    # Harmony initialises its soft-clustering with KMeans and is
+                    # therefore stochastic (Korsunsky et al. 2019, *Nat Methods*
+                    # 16:1289-1296). Scanorama, MNN and scVI already seed from
+                    # ctx.random_state; Harmony — the default method — did not,
+                    # so ctx.metadata["batch_correction_random_state"] recorded a
+                    # seed the algorithm never received and reruns could drift.
+                    random_state=ctx.random_state,
                 )
+                # harmonypy >= 0.2 grew a PyTorch backend whose `device=None`
+                # default AUTO-SELECTS CUDA. Leaving it unset made this backend
+                # log "Running Harmony (PyTorch on cuda)" and then die with
+                # CUBLAS_STATUS_NOT_INITIALIZED on the very hardware whose broken
+                # CUDA Harmony path is the documented reason `direct` exists —
+                # while ctx.metadata still recorded harmony_device="cpu". Pin the
+                # device explicitly so the recorded provenance is the truth.
+                if "device" in inspect.signature(harmonypy.run_harmony).parameters:
+                    harmony_kwargs["device"] = "cpu"
+                    ctx.metadata["harmony_device"] = "cpu"
+                    ctx.metadata["harmony_device_pinned"] = True
+                else:
+                    # Pre-0.2 harmonypy has no torch backend and is CPU-only.
+                    ctx.metadata["harmony_device"] = "cpu"
+                    ctx.metadata["harmony_device_pinned"] = False
+                ho = harmonypy.run_harmony(pca, adata.obs, [batch_key], **harmony_kwargs)
         finally:
             _hlog.removeHandler(catcher)
             _hlog.setLevel(_prev_level)

@@ -959,8 +959,13 @@ def test_clustering_gpu_fallback_on_cuda_oom(monkeypatch, tmp_path):
 def test_clustering_gpu_m2_inplace_preserves_raw(monkeypatch, tmp_path):
     """M2 inplace contract (Plan W3 / Hotspot1): GPU path runs on the
     original adata object (no host-side copy, ``_clone_for_gpu_lite`` was
-    eliminated in US-W3-1) and adata.raw is preserved BEFORE _run_gpu so
-    that restore-cpu policy can roll back on GPU failure."""
+    eliminated in US-W3-1) and the pre-mutation COUNTS are stashed BEFORE
+    _run_gpu so that restore-cpu policy can roll back on GPU failure.
+
+    The stash is a dedicated layer, not adata.raw. Overloading adata.raw made it
+    mean raw counts after a GPU run but normalized+log1p data after any CPU lane,
+    so trajectory gene-pseudotime correlation and the tumor_microenvironment CYT
+    score silently changed with the host's GPU."""
     from workflow.modular.modules.clustering import ClusteringModule
     import workflow.modular.modules._gpu_utils as gutils
 
@@ -968,12 +973,17 @@ def test_clustering_gpu_m2_inplace_preserves_raw(monkeypatch, tmp_path):
 
     mod = ClusteringModule()
     recorded_ids: list[int] = []
-    raw_present_at_gpu_entry: list[bool] = []
+    counts_stashed_at_gpu_entry: list[bool] = []
+    stashed_matches_counts: list[bool] = []
 
     def mock_run_gpu(self, adata, cfg, ctx):
+        from workflow.modular.modules.clustering import _GPU_RESTORE_LAYER
         recorded_ids.append(id(adata))
-        # M2 invariant: raw must be preserved before _run_gpu enters.
-        raw_present_at_gpu_entry.append(adata.raw is not None)
+        # M2 invariant: pre-mutation counts stashed before _run_gpu enters.
+        counts_stashed_at_gpu_entry.append(_GPU_RESTORE_LAYER in adata.layers)
+        stashed_matches_counts.append(
+            float(np.asarray(adata.layers[_GPU_RESTORE_LAYER]).sum()) == float(np.asarray(adata.X).sum())
+        )
         adata.obs["leiden"] = "0"
 
     monkeypatch.setattr(ClusteringModule, "_run_gpu", mock_run_gpu)
@@ -1001,11 +1011,17 @@ def test_clustering_gpu_m2_inplace_preserves_raw(monkeypatch, tmp_path):
     assert len(recorded_ids) == 1
     # M2 contract: GPU receives the SAME object (no host copy), not a clone.
     assert recorded_ids[0] == original_id
-    # M2 contract: adata.raw is set before _run_gpu enters so restore-cpu works.
-    assert raw_present_at_gpu_entry == [True]
-    assert ctx.metadata.get("m2_raw_preserved") is True
+    # M2 contract: counts are stashed before _run_gpu enters so restore-cpu works.
+    assert counts_stashed_at_gpu_entry == [True]
+    assert stashed_matches_counts == [True]
+    assert ctx.metadata.get("m2_restore_counts_preserved") is True
     assert ctx.metadata["clustering_clone_strategy"] == "m2_inplace_raw_mandate"
     assert ctx.metadata["clustering_backend"] == "gpu"
+    # The transient stash must not survive into final_adata.h5ad.
+    from workflow.modular.modules.clustering import _GPU_RESTORE_LAYER
+    assert _GPU_RESTORE_LAYER not in ctx.adata.layers
+    # adata.raw semantics are recorded explicitly, never inferred from the backend.
+    assert ctx.metadata["raw_semantics"] in {"normalized_log1p_all_genes", "raw_absent"}
     monkeypatch.setattr(gutils, "_gpu_ok", None)
 
 

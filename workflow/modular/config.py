@@ -307,11 +307,14 @@ class PipelineConfig:
     doublet_strategy: str = "auto"   # auto, grouped, whole, skip
     clustering_engine: str = "auto"  # auto, sparse_exact, css, gpu
     # Wave 3 (US-W3-2). Policy for GPU clustering failure post-host-mutation.
-    # raise (default): poison adata + raise ClusteringContractViolation.
+    # raise: poison adata + raise ClusteringContractViolation.
     # restore-cpu: restore from adata.raw and route to CPU clustering (M2 only).
     # reload-checkpoint: reload adata from on-disk h5ad checkpoint (requires --checkpoint).
+    # "" (default): derived from gpu_mode by resolve_gpu_failure_policy() —
+    # `force` -> raise (operator demanded GPU), anything else -> restore-cpu
+    # (the GPU was chosen opportunistically, so it may be retracted the same way).
     # Overridable via SC_GPU_FAILURE_POLICY env var.
-    gpu_failure_policy: str = "raise"
+    gpu_failure_policy: str = ""
     # Cohort subset: obs_col=val1,val2 filter applied after loading (supports list for AND-chaining)
     cohort_subset: Optional[list[str]] = None
     annotation_strategy: str = "cluster_voting"  # cluster_voting, cell_argmax

@@ -67,10 +67,28 @@ def test_assert_not_corrupted_silent_on_healthy_or_none():
     assert_not_corrupted(_make_adata(), "any_module")  # tolerate healthy
 
 
-def test_resolve_policy_default_is_raise(monkeypatch):
+def test_resolve_policy_default_is_derived_from_gpu_mode(monkeypatch):
+    """An opportunistic GPU choice must be retractable; a forced one must not be.
+
+    `--gpu-mode auto` lets the pipeline elect the GPU on the operator's behalf,
+    so a GPU-only fault must fall back to CPU rather than destroying the run
+    (rsc.pp.pca is a documented cuSOLVER incompatibility on this workstation —
+    docs/HOTSPOT1_DIAGNOSIS.md). `--gpu-mode force` is an explicit operator
+    demand, so it still raises rather than silently delivering a CPU result.
+    """
     from workflow.modular._contract_violation import resolve_gpu_failure_policy
     monkeypatch.delenv("SC_GPU_FAILURE_POLICY", raising=False)
-    cfg = SimpleNamespace()
+
+    assert resolve_gpu_failure_policy(SimpleNamespace()) == "restore-cpu"
+    assert resolve_gpu_failure_policy(SimpleNamespace(gpu_mode="auto")) == "restore-cpu"
+    assert resolve_gpu_failure_policy(SimpleNamespace(gpu_mode="off")) == "restore-cpu"
+    assert resolve_gpu_failure_policy(SimpleNamespace(gpu_mode="force")) == "raise"
+
+
+def test_resolve_policy_explicit_cfg_overrides_derived_default(monkeypatch):
+    from workflow.modular._contract_violation import resolve_gpu_failure_policy
+    monkeypatch.delenv("SC_GPU_FAILURE_POLICY", raising=False)
+    cfg = SimpleNamespace(gpu_mode="auto", gpu_failure_policy="raise")
     assert resolve_gpu_failure_policy(cfg) == "raise"
 
 
@@ -121,10 +139,15 @@ def test_pipeline_run_module_fires_guard_on_poisoned_adata():
 
 
 def test_config_carries_gpu_failure_policy_default():
-    """PipelineConfig dataclass exposes gpu_failure_policy with default 'raise'."""
+    """PipelineConfig exposes gpu_failure_policy defaulting to "" (derive from gpu_mode).
+
+    The empty default is what lets resolve_gpu_failure_policy() distinguish
+    "operator explicitly chose a policy" from "nobody chose", which is required
+    to derive raise-vs-restore-cpu from gpu_mode.
+    """
     from workflow.modular.config import PipelineConfig
     # Verify the field exists with the expected default via dataclass fields.
     import dataclasses
     fields = {f.name: f for f in dataclasses.fields(PipelineConfig)}
     assert "gpu_failure_policy" in fields, "PipelineConfig must expose gpu_failure_policy"
-    assert fields["gpu_failure_policy"].default == "raise"
+    assert fields["gpu_failure_policy"].default == ""

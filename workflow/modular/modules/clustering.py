@@ -19,6 +19,13 @@ from ._gpu_utils import bind_cuda_context, gpu_available
 from .._neighbors_cache import get_or_compute_neighbors
 
 
+# Transient stash of pre-mutation counts for the GPU-failure fallback. Kept out
+# of adata.raw so that adata.raw means exactly one thing in every lane:
+# normalized + log1p expression, the scanpy convention that trajectory.py and
+# tumor_microenvironment.py rely on. Deleted once clustering finishes.
+_GPU_RESTORE_LAYER = "_gpu_restore_counts"
+
+
 __references__ = {
     "scanpy": {
         "title": "SCANPY: large-scale single-cell gene expression data analysis",
@@ -274,11 +281,24 @@ class ClusteringModule:
             ctx.metadata["clustering_clone_strategy"] = "m2_inplace_raw_mandate"
             ctx.metadata["gpu_failure_policy"] = gpu_failure_policy
             self._log_rss(ctx, "hotspot1:before_inplace_gpu")
-            # M2 invariant — raw MUST be preserved for the GPU path to enable
-            # restore-on-fallback. Override the checkpoint-policy gate.
-            if adata.raw is None:
-                adata.raw = adata.copy()
-                ctx.metadata["m2_raw_preserved"] = True
+            # M2 invariant — the pre-mutation counts MUST be preserved so the
+            # GPU-failure fallback can restore them.
+            #
+            # This used to overload `adata.raw` for that stash, which made
+            # `adata.raw` MEAN DIFFERENT THINGS depending on which lane ran: raw
+            # counts after a GPU run, but normalized+log1p data after any CPU lane
+            # (which assigns adata.raw straight after log1p). Downstream consumers
+            # read adata.raw as *expression* — trajectory.py correlates it against
+            # pseudotime, and tumor_microenvironment.py computes the CYT score as
+            # the geometric mean of GZMA/PRF1 (Rooney et al. 2015, *Cell*
+            # 160:48-61, defined on normalized expression). So the same input
+            # produced different biology depending on the host's GPU.
+            #
+            # The stash is now a dedicated counts layer, and adata.raw is assigned
+            # inside _run_gpu at the same point the CPU lanes assign it.
+            if _GPU_RESTORE_LAYER not in adata.layers:
+                adata.layers[_GPU_RESTORE_LAYER] = adata.X.copy()
+                ctx.metadata["m2_restore_counts_preserved"] = True
             self._log_rss(ctx, "hotspot1:after_raw_preserve")
             try:
                 self._run_gpu(adata, cfg, ctx)
@@ -296,14 +316,19 @@ class ClusteringModule:
                         f"adata poisoned. Original error: {exc}"
                     ) from exc
                 if gpu_failure_policy == "restore-cpu":
-                    if adata.raw is None:
-                        poison_adata(adata, "GPU failed + raw missing under restore-cpu")
+                    if _GPU_RESTORE_LAYER not in adata.layers:
+                        poison_adata(adata, "GPU failed + counts stash missing under restore-cpu")
                         raise ClusteringContractViolation(
-                            "GPU clustering failed under policy=restore-cpu but adata.raw "
-                            "is None — cannot restore counts. adata poisoned."
+                            f"GPU clustering failed under policy=restore-cpu but layer "
+                            f"{_GPU_RESTORE_LAYER!r} is missing — cannot restore counts. "
+                            "adata poisoned."
                         ) from exc
-                    logger.info("Restoring adata from preserved raw before CPU fallback")
-                    adata = adata.raw.to_adata()
+                    logger.info("Restoring counts from preserved stash before CPU fallback")
+                    # _run_gpu mutates X in place (normalize/log1p/scale), so the
+                    # CPU lane must start from the pre-mutation counts or it would
+                    # normalize already-normalized data.
+                    adata.X = adata.layers[_GPU_RESTORE_LAYER].copy()
+                    adata.raw = None
                     ctx.adata = adata
                     ctx.metadata["clustering_restored_from_raw"] = True
                     use_gpu = False
@@ -343,6 +368,60 @@ class ClusteringModule:
         ctx.metadata["clustering_random_state"] = ctx.random_state
         if "clustering_backend" not in ctx.metadata:
             ctx.metadata["clustering_backend"] = "gpu" if use_gpu else "cpu"
+        # Drop the transient counts stash so it never reaches final_adata.h5ad,
+        # and state what adata.raw holds so downstream consumers (and readers of
+        # the manifest) never have to infer it from the backend that ran.
+        if _GPU_RESTORE_LAYER in adata.layers:
+            del adata.layers[_GPU_RESTORE_LAYER]
+        ctx.metadata["raw_semantics"] = (
+            "normalized_log1p_all_genes" if adata.raw is not None else "raw_absent"
+        )
+        self._record_batch_confounding_risk(adata, ctx)
+
+    # obs columns that, with more than one level, indicate the run spans
+    # multiple technical units and is therefore exposed to batch effects.
+    _BATCH_CANDIDATE_COLUMNS = (
+        "batch", "sample", "sample_id", "donor_id", "donor",
+        "dataset", "study", "patient", "patient_id", "platform", "assay",
+    )
+
+    def _record_batch_confounding_risk(self, adata, ctx) -> None:
+        """Flag clusters produced from multi-batch input with no integration.
+
+        Without integration, clusters on multi-study/multi-platform input track the
+        batch rather than the biology. On the LuCA LUSC cohort (8 studies, 5
+        platforms, 87 samples) the unintegrated default scored iLISI 0.013 / kBET
+        0.115 and split 24 published cell types into 47 clusters; enabling Harmony
+        on the same input moved that to iLISI 0.051 / kBET 0.552 and exactly 24
+        clusters, with ARI against the published labels rising 0.214 -> 0.455
+        (governance/realrun_gt_concordance_lusc_2026-07-28.md).
+
+        This does not change the analysis — it records, in the manifest, that a
+        known confounder was present and unaddressed, so a batch-driven clustering
+        can never be reported as an integrated one.
+        """
+        if "batch_correction" in (getattr(ctx.cfg, "optional_modules", None) or ()):
+            return
+        candidates = {
+            col: int(adata.obs[col].nunique(dropna=True))
+            for col in self._BATCH_CANDIDATE_COLUMNS
+            if col in adata.obs.columns and adata.obs[col].nunique(dropna=True) > 1
+        }
+        if not candidates:
+            return
+        ctx.metadata["batch_confounding_risk"] = {
+            "status": "multi_batch_input_without_integration",
+            "candidate_batch_columns": candidates,
+            "integration_ran": False,
+        }
+        logger.warning(
+            "BATCH_CONFOUNDING_RISK: clustering ran with no batch correction, but the "
+            "input spans multiple technical units (%s). Clusters may separate by batch "
+            "rather than by biology; run with --optional-modules ...,batch_correction "
+            "--batch-key <col> to integrate. Recorded in the manifest as "
+            "batch_confounding_risk.",
+            ", ".join(f"{k}={v}" for k, v in sorted(candidates.items())),
+        )
 
     def _should_use_css(self, ctx, adata) -> bool:
         # F-1 (Plan ~/.omc/plans/nc-cell-clustering-final-strategy-plan.md, Principle 2):
@@ -395,14 +474,16 @@ class ClusteringModule:
                 adata.raw = adata
             is_sparse = sparse.issparse(adata.X)
             adata.X = self._materialize_matrix(adata.X)
+            # HVG before scaling — see _run_cpu for the rationale.
+            self._run_hvg(adata, cfg, ctx)
             if cfg.scale_data:
                 sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
-            self._run_hvg(adata, cfg, ctx)
             sc.tl.pca(
                 adata,
                 n_comps=cfg.n_pcs,
                 svd_solver="arpack" if is_sparse else "randomized",
                 mask_var="highly_variable",
+                random_state=cfg.random_state,
             )
             self._plot_pca_variance(adata, ctx, cfg.n_pcs)
             get_or_compute_neighbors(
@@ -484,10 +565,11 @@ class ClusteringModule:
                 "input was sparse on entry but is dense after materialization. "
                 "This indicates a contract regression in _materialize_matrix."
             )
+        # HVG before scaling — see _run_cpu for the rationale.
+        self._run_hvg(adata, cfg, ctx)
         if cfg.scale_data:
             # zero_center=False to preserve sparsity (scanpy.pp.scale contract).
             sc.pp.scale(adata, max_value=10, zero_center=False)
-        self._run_hvg(adata, cfg, ctx)
         sc.tl.pca(
             adata,
             n_comps=cfg.n_pcs,
@@ -544,14 +626,29 @@ class ClusteringModule:
             adata.raw = adata
         is_sparse = sparse.issparse(adata.X)
         adata.X = self._materialize_matrix(adata.X)
+        # HVG must be selected on normalized+log1p data, BEFORE scaling. The
+        # "seurat" flavor bins genes by mean expression and ranks them by
+        # normalized dispersion; sc.pp.scale sets every gene to mean 0 / variance
+        # 1 (and clips at max_value), destroying exactly the mean-variance
+        # relationship the selection depends on and making the ranking
+        # degenerate. Canonical order is normalize -> log1p -> HVG -> scale
+        # (Luecken & Theis 2019, *Mol Syst Biol* 15:e8746; Heumos et al. 2023,
+        # *Nat Rev Genet* 24:550-572), and _run_hvg's own contract states that
+        # adata.X is normalized+log1p at call time.
+        self._run_hvg(adata, cfg, ctx)
         if cfg.scale_data:
             sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
-        self._run_hvg(adata, cfg, ctx)
+        # Both solvers are seeded: "randomized" draws a random projection and
+        # ARPACK a random start vector, so without an explicit random_state PCA
+        # silently used scanpy's own default (0) instead of the run's
+        # --random-state, while the manifest recorded clustering_random_state as
+        # if the seed had been honoured. Only _run_sparse_exact passed it.
         sc.tl.pca(
             adata,
             n_comps=cfg.n_pcs,
             svd_solver="arpack" if is_sparse else "randomized",
             mask_var="highly_variable",
+            random_state=cfg.random_state,
         )
         self._plot_pca_variance(adata, ctx, cfg.n_pcs)
         get_or_compute_neighbors(
@@ -589,19 +686,26 @@ class ClusteringModule:
 
         sc.pp.normalize_total(adata, target_sum=cfg.target_sum)
         sc.pp.log1p(adata)
-        # M2 mandates adata.raw upstream in _run_impl, so the legacy
-        # preserve-raw gate that lived here is unreachable on the M2 path.
-        # Tags retained for downstream provenance comparison.
         self._log_rss(ctx, "hotspot1:_run_gpu:before_preserve_raw")
+        # Assign adata.raw at the SAME point the CPU lanes do, so adata.raw is
+        # normalized+log1p expression regardless of which lane ran. The
+        # pre-mutation counts the GPU fallback needs live in
+        # _GPU_RESTORE_LAYER, not here.
+        if adata.raw is None and self._should_preserve_raw(ctx):
+            adata.raw = adata
         self._log_rss(ctx, "hotspot1:_run_gpu:after_preserve_raw")
         adata.X = self._materialize_matrix(adata.X)
         self._log_rss(ctx, "hotspot1:_run_gpu:after_materialize_X")
+        # HVG before scaling — see _run_cpu for the rationale.
+        self._run_hvg(adata, cfg, ctx)
         if cfg.scale_data:
             sc.pp.scale(adata, max_value=10, zero_center=not sparse.issparse(adata.X))
-        self._run_hvg(adata, cfg, ctx)
 
         # GPU-accelerated PCA, neighbors, UMAP
-        rsc.pp.pca(adata, n_comps=cfg.n_pcs, mask_var="highly_variable")
+        rsc.pp.pca(
+            adata, n_comps=cfg.n_pcs, mask_var="highly_variable",
+            random_state=cfg.random_state,
+        )
         self._plot_pca_variance(adata, ctx, cfg.n_pcs)
         get_or_compute_neighbors(
             adata,
@@ -643,7 +747,7 @@ class ClusteringModule:
         axes[1].legend()
 
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pca_variance_explained.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pca_variance_explained.png", bbox_inches="tight")
         plt.close()
 
         # Record how many PCs needed for 90% variance
@@ -712,6 +816,37 @@ class ClusteringModule:
 
     @staticmethod
     def _plot_umap_clusters(adata, ctx: PipelineContext) -> None:
-        sc.pl.umap(adata, color=["leiden"], show=False, legend_loc="on data")
-        plt.savefig(ctx.figure_dir / "umap_leiden.png", dpi=160, bbox_inches="tight")
-        plt.close()
+        """Draw the cluster UMAP at journal geometry with a distinguishable palette.
+
+        rcParams alone cannot fix this panel: ``sc.pl.umap`` supplies its own
+        categorical palette, its own figure size and its own title, so a themed
+        run still produced scanpy's default colours at an arbitrary aspect ratio
+        titled with the obs key. At 40+ clusters that palette repeats visually
+        similar hues, and on-data labels collide, so clusters cannot be told
+        apart — the same class of defect as the plotting layer's silent colour
+        wrap. Size to the double-column width, request distinct colours, and
+        state n on the panel.
+        """
+        from .._figure_theme import journal_figure_size, qualitative_colors
+
+        n_clusters = int(adata.obs["leiden"].nunique())
+        figsize = journal_figure_size("double", height_mm=110.0)
+        fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+        sc.pl.umap(
+            adata,
+            color=["leiden"],
+            palette=qualitative_colors("leiden_qualitative", n_clusters),
+            show=False,
+            legend_loc="on data",
+            legend_fontsize=5,
+            legend_fontoutline=1,   # keep labels legible over dense point clouds
+            frameon=False,          # UMAP axes carry no units; a box implies scale
+            size=3,
+            ax=ax,
+        )
+        ax.set_title(
+            f"Leiden clusters (n = {adata.n_obs:,} cells, {n_clusters} clusters, "
+            f"resolution {ctx.cfg.clustering.leiden_resolution:g})"
+        )
+        fig.savefig(ctx.figure_dir / "umap_leiden.png")
+        plt.close(fig)

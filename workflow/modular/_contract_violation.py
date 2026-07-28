@@ -93,13 +93,31 @@ def assert_not_corrupted(adata, module_name: str) -> None:
 def resolve_gpu_failure_policy(cfg) -> str:
     """Resolve the active GPU-failure policy.
 
-    Precedence: SC_GPU_FAILURE_POLICY env var > cfg.gpu_failure_policy > "raise".
+    Precedence: SC_GPU_FAILURE_POLICY env var > cfg.gpu_failure_policy >
+    a default derived from ``cfg.gpu_mode``.
+
+    The derived default matters because ``--gpu-mode auto`` is an *opportunistic*
+    choice: the pipeline elects the GPU on the operator's behalf, so it must also
+    be able to retract that choice on the operator's behalf. Pairing an
+    opportunistic selection with an unconditional ``raise`` meant a GPU-only
+    fault destroyed the whole scientific payload — on this workstation
+    ``rsc.pp.pca`` is a documented cuSOLVER incompatibility
+    (docs/HOTSPOT1_DIAGNOSIS.md), so a default run lost clustering, annotation
+    and differential expression to a failure the CPU path handles fine.
+
+    ``auto``  -> ``restore-cpu``  (retract the automatic choice; M2 preserves
+                                   ``adata.raw`` precisely so this is safe)
+    ``force`` -> ``raise``        (the operator demanded GPU; do not silently
+                                   deliver something else)
+
     Valid values: raise, restore-cpu, reload-checkpoint.
     """
     import os
     raw = os.environ.get("SC_GPU_FAILURE_POLICY", "").strip().lower()
     if not raw:
-        raw = (getattr(cfg, "gpu_failure_policy", "") or "raise").strip().lower()
+        raw = (getattr(cfg, "gpu_failure_policy", "") or "").strip().lower()
+    if not raw:
+        raw = "raise" if (getattr(cfg, "gpu_mode", "auto") or "auto").lower() == "force" else "restore-cpu"
     if raw not in {"raise", "restore-cpu", "reload-checkpoint"}:
         raise ValueError(
             f"Invalid SC_GPU_FAILURE_POLICY={raw!r}. "

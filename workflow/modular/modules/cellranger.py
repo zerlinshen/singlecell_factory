@@ -7,6 +7,7 @@ import anndata as ad
 import pandas as pd
 
 from ._scanpy_compat import has_api, import_scanpy_or_stub, scanpy_import_error
+from .._gene_symbols import normalize_var_to_symbols
 
 sc = import_scanpy_or_stub()
 
@@ -169,6 +170,12 @@ class CellRangerModule:
                     ctx.metadata["prepared_input_loading_mode"] = "eager_zarr"
                 ctx.metadata["prepared_input_source"] = str(prepared_zarr)
             adata.var_names_make_unique()
+            # Establish the same gene-identifier contract the Cell Ranger path
+            # gets from read_10x_mtx(var_names="gene_symbols"). Public atlases
+            # distributed under the CZ CELLxGENE schema are Ensembl-indexed, and
+            # every symbol-keyed stage downstream (mito/ribo/hb QC flags, marker
+            # annotation, signature scoring) silently matches nothing otherwise.
+            ctx.metadata["gene_namespace"] = normalize_var_to_symbols(adata)
             self._annotate_flex_probe_groups(adata, sample_root, ctx)
             adata = self._apply_cohort_subset(adata, ctx)
             if cfg.sample_id and cfg.sample_id != "lusc":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import matplotlib
 
@@ -13,6 +14,8 @@ from ._scanpy_compat import has_api, import_scanpy_or_stub
 sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
+
+logger = logging.getLogger(__name__)
 
 
 __references__ = {
@@ -51,6 +54,7 @@ class QCModule:
         adata.var["mt"] = gene_upper.str.startswith("MT-")
         adata.var["ribo"] = gene_upper.str.startswith(("RPS", "RPL"))
         adata.var["hb"] = gene_upper.str.startswith(("HBA", "HBB"))
+        self._assert_gene_classes_detectable(adata, ctx)
         use_scanpy_qc = has_api(sc, "pp.calculate_qc_metrics") and ctx.cfg.scale_mode != "massive"
         if use_scanpy_qc:
             try:
@@ -142,6 +146,53 @@ class QCModule:
         keys = ["min", "p01", "p05", "p25", "median", "p75", "p95", "p99", "max"]
         return {key: round(float(value), 6) for key, value in zip(keys, qs)}
 
+    def _assert_gene_classes_detectable(self, adata, ctx: PipelineContext) -> None:
+        """Refuse to report a QC threshold as applied when it cannot possibly fire.
+
+        ``mt``/``ribo``/``hb`` are matched by gene-symbol prefix. If the gene axis
+        is not in symbol space the flags are all-False, ``pct_counts_mt`` is 0.0
+        for every cell, and ``pct_counts_mt <= max_mito_pct`` filters nothing
+        while the manifest still lists the threshold. Mitochondrial fraction is a
+        primary quality covariate (Luecken & Theis 2019, *Mol Syst Biol*
+        15:e8746; Heumos et al. 2023, *Nat Rev Genet* 24:550-572), so a silently
+        inert filter admits stressed and dying cells into every downstream
+        result. Fail loudly instead.
+
+        A dataset can legitimately contain no mitochondrial genes (pre-filtered
+        atlas, targeted panel). That case is distinguished from a namespace
+        failure by the ingest-recorded gene-namespace status and is a loud
+        warning plus a machine-readable flag, not an error.
+        """
+        counts = {cls_: int(adata.var[cls_].sum()) for cls_ in ("mt", "ribo", "hb")}
+        ctx.metadata["qc_gene_class_counts"] = counts
+
+        namespace = ctx.metadata.get("gene_namespace") or {}
+        namespace_status = namespace.get("status", "unknown")
+        mito_filter_active = float(ctx.cfg.qc.max_mito_pct) < 100.0
+
+        if counts["mt"] > 0:
+            return
+
+        ctx.metadata["qc_mito_filter_status"] = "inactive_no_mitochondrial_genes_detected"
+        if namespace_status == "ensembl_unresolved" and mito_filter_active:
+            raise ValueError(
+                "QC contract violation: no mitochondrial genes are detectable, because "
+                f"the gene axis is Ensembl-indexed and no symbol column was found "
+                f"(gene_namespace={namespace!r}). pct_counts_mt would be 0.0 for every "
+                f"cell, so --max-mito-pct={ctx.cfg.qc.max_mito_pct} would filter nothing "
+                "while still being recorded as applied. Provide a symbol column in "
+                "adata.var (e.g. 'feature_name' per the CZ CELLxGENE schema), or set "
+                "--max-mito-pct 100 to declare explicitly that no mitochondrial filter "
+                "is intended."
+            )
+        logger.warning(
+            "QC: no mitochondrial genes detected in %d genes (gene_namespace=%s). "
+            "pct_counts_mt is 0.0 for all cells and --max-mito-pct=%.1f will not "
+            "remove any cell. Recorded as qc_mito_filter_status=%s.",
+            adata.n_vars, namespace_status, ctx.cfg.qc.max_mito_pct,
+            ctx.metadata["qc_mito_filter_status"],
+        )
+
     @classmethod
     def _build_threshold_audit(cls, adata, qc, criteria: dict[str, object], mask) -> dict:
         failure_counts = {
@@ -186,18 +237,83 @@ class QCModule:
         """Generate violin + scatter QC plots."""
         if not has_api(sc, "pl.violin") or not has_api(sc, "pl.scatter"):
             return
-        # Violin plots
-        fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-        for ax, key, title in zip(
-            axes,
-            ["n_genes_by_counts", "total_counts", "pct_counts_mt", "pct_counts_ribo"],
-            ["Genes per cell", "UMI counts per cell", "Mito %", "Ribo %"],
-        ):
-            sc.pl.violin(adata, key, ax=ax, show=False, stripplot=False)
+        # Violin plots.
+        #
+        # The point of this panel is to justify the QC cutoffs, so it draws them.
+        # Previously it was a 16x4 inch canvas (no journal column fits it) of
+        # scanpy violins labelled "value", with counts on a linear axis where a
+        # single 7e6-UMI outlier flattened the whole distribution to a line, and
+        # with metrics that are identically zero (e.g. mitochondrial % on an atlas
+        # whose curators removed MT genes) drawn as a fake flat "distribution" on
+        # a +/-0.04 axis. A reader could not tell an inactive metric from a real
+        # one, nor see which cells a threshold removes.
+        from .._figure_theme import journal_figure_size
+
+        qc_cfg = ctx.cfg.qc
+        specs = [
+            ("n_genes_by_counts", "Genes per cell", True,
+             (float(qc_cfg.min_genes), float(qc_cfg.max_genes))),
+            ("total_counts", "UMI counts per cell", True,
+             (float(qc_cfg.min_counts), float(qc_cfg.max_counts))),
+            ("pct_counts_mt", "Mitochondrial %", False, (None, float(qc_cfg.max_mito_pct))),
+            ("pct_counts_ribo", "Ribosomal %", False, (None, float(qc_cfg.max_ribo_pct))),
+        ]
+        fig, axes = plt.subplots(
+            1, len(specs), figsize=journal_figure_size("double", 58.0), constrained_layout=True
+        )
+        for idx, (ax, (key, title, log_scale, bounds)) in enumerate(zip(axes, specs)):
             ax.set_title(title)
-        plt.tight_layout()
-        plt.savefig(ctx.figure_dir / f"qc_violin_{suffix}.png", dpi=160, bbox_inches="tight")
-        plt.close()
+            ax.set_xticks([])
+            ax.text(-0.02, 1.10, chr(ord("a") + idx), transform=ax.transAxes,
+                    ha="right", va="top", fontweight="bold", fontsize=8)
+            if key not in adata.obs.columns:
+                ax.text(0.5, 0.5, "not computed", ha="center", va="center",
+                        transform=ax.transAxes, fontsize=6, color="#666666")
+                ax.set_axis_off()
+                continue
+            values = np.asarray(adata.obs[key], dtype=float)
+            values = values[np.isfinite(values)]
+            # A metric with no spread carries no QC information; say so rather
+            # than drawing a flat line on an autoscaled axis that implies one.
+            if values.size == 0 or np.nanmax(values) == np.nanmin(values):
+                constant = float(values[0]) if values.size else float("nan")
+                ax.text(0.5, 0.5, f"no variation\n(constant {constant:g};\nthreshold inactive)",
+                        ha="center", va="center", transform=ax.transAxes,
+                        fontsize=6, color="#666666")
+                ax.set_axis_off()
+                continue
+
+            positive = values[values > 0]
+            use_log = bool(log_scale and positive.size)
+            plotted = np.log10(positive) if use_log else values
+            ax.violinplot([plotted], showextrema=False, widths=0.7)
+            ax.set_ylabel(f"log10({title.split(' per ')[0].lower()})" if use_log else "%")
+
+            # Draw the cutoffs this run actually applies, and report how many
+            # cells each one removes — that is the decision the panel supports.
+            removed = 0
+            for bound in bounds:
+                if bound is None or not np.isfinite(bound):
+                    continue
+                y = np.log10(bound) if (use_log and bound > 0) else bound
+                if use_log and bound <= 0:
+                    continue
+                ax.axhline(y, color="#D55E00", linewidth=0.6, linestyle="--")
+            lo, hi = bounds
+            if lo is not None:
+                removed += int((values < lo).sum())
+            if hi is not None:
+                removed += int((values > hi).sum())
+            ax.text(0.02, 0.02, f"{removed:,} outside", transform=ax.transAxes,
+                    ha="left", va="bottom", fontsize=5.5, color="#D55E00")
+
+        fig.suptitle(
+            f"QC metrics {suffix.replace('_', ' ')} — n = {adata.n_obs:,} cells; "
+            "dashed lines = applied thresholds",
+            fontsize=7,
+        )
+        fig.savefig(ctx.figure_dir / f"qc_violin_{suffix}.png")
+        plt.close(fig)
 
         # Scatter plots: genes vs counts, colored by mito%
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
@@ -210,7 +326,7 @@ class QCModule:
             ax=axes[1], show=False, title="Mito% vs UMI counts",
         )
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / f"qc_scatter_{suffix}.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / f"qc_scatter_{suffix}.png", bbox_inches="tight")
         plt.close()
 
 

@@ -1402,6 +1402,39 @@ def _bundle_sha256_concat(output_dir: Path) -> str:
     return digest.hexdigest()
 
 
+def _backfill_project_manifest_bundle_sha256(run_dir: Path, bundle_output_dir: Path) -> str:
+    """Write the real bundle digest into the project-root cross-factory manifest.
+
+    The pipeline writes ``manifest.json`` before any bundle exists, so
+    ``pipeline.py`` can only emit ``ctx.metadata.get("bundle_sha256", "")`` —
+    and nothing ever sets that key. The field was therefore structurally empty
+    in every run, including runs whose ``overall_status`` was ``complete``:
+    the cross-factory manifest advertised a bundle checksum it never carried,
+    so a consumer could not detect a truncated or substituted bundle.
+
+    The authoritative digest is computed here at export time (see
+    ``_bundle_sha256_concat``) and recorded in ``bundle/provenance.json``. This
+    copies it into the manifest so producer and consumer agree on one value.
+    Returns the digest, or "" when there is nothing to back-fill.
+    """
+    manifest_json = run_dir / "manifest.json"
+    provenance_json = bundle_output_dir / "provenance.json"
+    if not manifest_json.is_file() or not provenance_json.is_file():
+        return ""
+    try:
+        digest = str(json.loads(provenance_json.read_text(encoding="utf-8")).get("bundle_sha256", ""))
+        if not digest:
+            return ""
+        manifest = json.loads(manifest_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        warnings.warn(f"could not back-fill bundle_sha256 into {manifest_json}: {exc}", stacklevel=2)
+        return ""
+    manifest["bundle_sha256"] = digest
+    manifest["bundle_sha256_source"] = str(provenance_json)
+    manifest_json.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return digest
+
+
 def _write_bundle_provenance(output_dir: Path) -> None:
     """Write bundle/provenance.json with r_factory_sha_at_export and audit fields."""
     provenance = {
@@ -1865,6 +1898,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.exit(2)
 
     # Resolve effective output directory.
+    _run_dir = None
     if args.project_root is not None:
         import sys as _sys
         _factory_root = Path(__file__).resolve().parent.parent
@@ -1923,7 +1957,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         hic_max_contacts=int(args.hic_max_contacts),
     )
     manifest = export_bundle(config)
-    print(json.dumps({"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}))
+    result = {"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}
+    if _run_dir is not None:
+        digest = _backfill_project_manifest_bundle_sha256(_run_dir, config.output_dir)
+        if digest:
+            result["bundle_sha256"] = digest
+    print(json.dumps(result))
     return 0
 
 

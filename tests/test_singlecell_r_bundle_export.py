@@ -373,3 +373,64 @@ def test_export_cli_output_not_required_with_project_root() -> None:
     ])
     assert args.output is None
     assert str(args.project_root) == "/tmp/project"
+
+
+# ---------------------------------------------------------------------------
+# Cross-factory manifest: bundle_sha256 back-fill
+# ---------------------------------------------------------------------------
+# The pipeline writes <run>/manifest.json BEFORE any bundle exists, and emits
+# ctx.metadata.get("bundle_sha256", "") — a key nothing ever sets. The field was
+# therefore structurally empty in every run, including runs whose overall_status
+# was "complete": the cross-factory manifest advertised a bundle checksum it
+# never carried, so a consumer could not detect a truncated or substituted
+# bundle. The authoritative digest is computed at export time into
+# bundle/provenance.json and is now copied into the manifest.
+
+from scripts.export_singlecell_r_bundle import _backfill_project_manifest_bundle_sha256
+
+DIGEST = "5b2277592860747a6092ca79b2a835103d975ef265eeed9cb11f6fa86e474d52"
+
+
+def _make_run(tmp_path: Path, *, manifest: dict | None, provenance: dict | None):
+    run_dir = tmp_path / "runs" / "2026-01-01T0000Z-abcdef0"
+    bundle = run_dir / "python" / "bundle"
+    bundle.mkdir(parents=True)
+    if manifest is not None:
+        (run_dir / "manifest.json").write_text(json.dumps(manifest))
+    if provenance is not None:
+        (bundle / "provenance.json").write_text(json.dumps(provenance))
+    return run_dir, bundle
+
+
+def test_backfill_writes_the_real_digest_into_the_project_manifest(tmp_path):
+    run_dir, bundle = _make_run(
+        tmp_path,
+        manifest={"project_id": "p", "run_id": "r", "bundle_sha256": ""},
+        provenance={"bundle_sha256": DIGEST},
+    )
+
+    returned = _backfill_project_manifest_bundle_sha256(run_dir, bundle)
+
+    assert returned == DIGEST
+    written = json.loads((run_dir / "manifest.json").read_text())
+    assert written["bundle_sha256"] == DIGEST
+    assert written["bundle_sha256_source"].endswith("provenance.json")
+    # Pre-existing manifest content must survive the update.
+    assert written["project_id"] == "p" and written["run_id"] == "r"
+
+
+def test_backfill_is_a_noop_without_a_project_manifest(tmp_path):
+    run_dir, bundle = _make_run(tmp_path, manifest=None, provenance={"bundle_sha256": DIGEST})
+    assert _backfill_project_manifest_bundle_sha256(run_dir, bundle) == ""
+
+
+def test_backfill_is_a_noop_without_provenance_or_digest(tmp_path):
+    run_dir, bundle = _make_run(tmp_path, manifest={"bundle_sha256": ""}, provenance=None)
+    assert _backfill_project_manifest_bundle_sha256(run_dir, bundle) == ""
+
+    run_dir2, bundle2 = _make_run(
+        tmp_path / "second", manifest={"bundle_sha256": ""}, provenance={"bundle_sha256": ""}
+    )
+    assert _backfill_project_manifest_bundle_sha256(run_dir2, bundle2) == ""
+    # An empty digest must never overwrite the field with a misleading value.
+    assert json.loads((run_dir2 / "manifest.json").read_text())["bundle_sha256"] == ""
