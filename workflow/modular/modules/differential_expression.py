@@ -550,7 +550,12 @@ class DifferentialExpressionModule:
     _MAX_FIGURE_HEIGHT_MM = 247.0
     # The two-line title is placed above the canvas (see below), so the drawn
     # canvas has to give that band back or the saved image exceeds the cap.
-    _TITLE_BAND_MM = 10.0
+    # Measured at 300 dpi, a 10 mm reserve still landed both panels at ~249 mm —
+    # over the cap — because bbox_inches="tight" also captures the suptitle's
+    # own padding. The typesetter then rescales by ~0.99, which drags the 5 pt
+    # gene labels to ~4.95 pt, i.e. back under the legibility floor this sizing
+    # logic exists to protect. 15 mm leaves both panels inside 247 mm.
+    _TITLE_BAND_MM = 15.0
 
     _TEST_LABELS = {
         "wilcoxon": "Wilcoxon rank-sum",

@@ -361,6 +361,13 @@ class ClusteringModule:
             self._run_cpu(adata, cfg, ctx)
 
         self._write_resolution_sweep_audit(adata, ctx, cfg)
+        # Set the cluster palette ONCE, here, before anything draws. Every
+        # downstream scanpy panel that shows Leiden — the DE heatmap's cluster
+        # strip and gene-block strip, the dotplot, the annotation UMAPs — reads
+        # adata.uns["leiden_colors"], so setting it at the point the labels are
+        # created is what stops those strips falling back to scanpy's default
+        # categorical palette while the rest of the panel is themed.
+        self._set_leiden_palette(adata)
         self._plot_umap_clusters(adata, ctx)
         ctx.adata = adata
         ctx.metadata["n_clusters"] = int(adata.obs["leiden"].nunique())
@@ -377,6 +384,21 @@ class ClusteringModule:
             "normalized_log1p_all_genes" if adata.raw is not None else "raw_absent"
         )
         self._record_batch_confounding_risk(adata, ctx)
+
+    @staticmethod
+    def _set_leiden_palette(adata) -> None:
+        """Pin adata.uns["leiden_colors"] to distinct theme colours.
+
+        Purely presentational: scanpy stores per-category colours in uns and
+        regenerates them on demand, so nothing scientific reads this key.
+        """
+        from .._figure_theme import qualitative_colors
+
+        if "leiden" not in adata.obs.columns:
+            return
+        colours = qualitative_colors("leiden_qualitative", int(adata.obs["leiden"].nunique()))
+        if colours:
+            adata.uns["leiden_colors"] = list(colours)
 
     # obs columns that, with more than one level, indicate the run spans
     # multiple technical units and is therefore exposed to batch effects.
