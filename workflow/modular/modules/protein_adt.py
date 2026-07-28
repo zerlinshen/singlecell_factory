@@ -319,7 +319,6 @@ class ProteinADTModule:
         fig.tight_layout()
         fig.savefig(
             ctx.figure_dir / "protein_detection_rate_violin.png",
-            dpi=160,
             bbox_inches="tight",
         )
         plt.close(fig)

@@ -206,7 +206,7 @@ class PathwayAnalysisModule:
         plt.colorbar(im, ax=ax, label="Activity score")
         plt.title("PROGENy pathway activity per cluster")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pathway_activity_heatmap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pathway_activity_heatmap.png", bbox_inches="tight")
         plt.close()
 
         # Flatten to result format
@@ -288,5 +288,5 @@ class PathwayAnalysisModule:
         ax.set_title("Top enriched pathways")
         ax.invert_yaxis()
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pathway_enrichment_bar.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pathway_enrichment_bar.png", bbox_inches="tight")
         plt.close()

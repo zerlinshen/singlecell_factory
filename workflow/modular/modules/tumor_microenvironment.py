@@ -193,13 +193,13 @@ class TumorMicroenvironmentModule:
         # CYT score UMAP
         if "cyt_score" in adata.obs:
             sc.pl.umap(adata, color="cyt_score", show=False, cmap="YlOrRd")
-            plt.savefig(ctx.figure_dir / "tme_cyt_umap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "tme_cyt_umap.png", bbox_inches="tight")
             plt.close()
 
         # TIS score UMAP
         if "tme_TIS" in adata.obs:
             sc.pl.umap(adata, color="tme_TIS", show=False, cmap="YlOrRd")
-            plt.savefig(ctx.figure_dir / "tme_tis_umap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "tme_tis_umap.png", bbox_inches="tight")
             plt.close()
 
         # TME signature heatmap per cluster
@@ -217,7 +217,7 @@ class TumorMicroenvironmentModule:
             ax.set_ylabel("Cluster")
             ax.set_title("TME signature scores per cluster")
             plt.tight_layout()
-            plt.savefig(ctx.figure_dir / "tme_signature_heatmap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "tme_signature_heatmap.png", bbox_inches="tight")
             plt.close()
 
         # Checkpoint dotplot
@@ -260,7 +260,7 @@ class TumorMicroenvironmentModule:
         ax.set_xlabel("Checkpoint")
         ax.set_ylabel("Cell type")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "checkpoint_dotplot.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "checkpoint_dotplot.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -279,5 +279,5 @@ class TumorMicroenvironmentModule:
         ax.set_title("Immune vs Stromal ESTIMATE scores per cluster")
         ax.legend()
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "tme_immune_stromal_bar.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "tme_immune_stromal_bar.png", bbox_inches="tight")
         plt.close()

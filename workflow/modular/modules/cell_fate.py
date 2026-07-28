@@ -169,7 +169,7 @@ class CellFateModule:
         if "X_umap" in adata.obsm:
             try:
                 estimator.plot_fate_probabilities(same_plot=False, basis="umap", save=False)
-                plt.savefig(ctx.figure_dir / "fate_umap_cellrank.png", dpi=160, bbox_inches="tight")
+                plt.savefig(ctx.figure_dir / "fate_umap_cellrank.png", bbox_inches="tight")
                 plt.close()
             except Exception:
                 pass
@@ -248,7 +248,7 @@ class CellFateModule:
             plt.colorbar(sc, ax=ax)
             plt.tight_layout()
             safe_name = name.replace("/", "_")
-            plt.savefig(ctx.figure_dir / f"fate_umap_{safe_name}.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / f"fate_umap_{safe_name}.png", bbox_inches="tight")
             plt.close()
 
     @staticmethod
@@ -275,5 +275,5 @@ class CellFateModule:
         ax.set_title("Mean Fate Probability per Cluster")
         plt.colorbar(im, ax=ax, label="Probability")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "fate_heatmap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "fate_heatmap.png", bbox_inches="tight")
         plt.close()

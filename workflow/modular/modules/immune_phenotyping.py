@@ -154,7 +154,7 @@ class ImmunePhenotypingModule:
 
         # UMAP by immune subtype
         sc.pl.umap(adata, color="immune_subtype", show=False)
-        plt.savefig(ctx.figure_dir / "umap_immune_subtype.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "umap_immune_subtype.png", bbox_inches="tight")
         plt.close()
 
         # Exhaustion and cytotoxicity UMAPs
@@ -164,7 +164,7 @@ class ImmunePhenotypingModule:
         ]:
             if score_name in adata.obs:
                 sc.pl.umap(adata, color=score_name, show=False, cmap="YlOrRd")
-                plt.savefig(ctx.figure_dir / fname, dpi=160, bbox_inches="tight")
+                plt.savefig(ctx.figure_dir / fname, bbox_inches="tight")
                 plt.close()
 
         # Immune subtype composition per cluster
@@ -181,7 +181,7 @@ class ImmunePhenotypingModule:
             plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=7)
             plt.tight_layout()
             plt.savefig(
-                ctx.figure_dir / "immune_subtype_composition.png", dpi=160, bbox_inches="tight",
+                ctx.figure_dir / "immune_subtype_composition.png", bbox_inches="tight",
             )
             plt.close()
 
@@ -202,6 +202,6 @@ class ImmunePhenotypingModule:
                 ax.set_title("Immune functional signatures per subtype")
                 plt.tight_layout()
                 plt.savefig(
-                    ctx.figure_dir / "immune_signature_heatmap.png", dpi=160, bbox_inches="tight",
+                    ctx.figure_dir / "immune_signature_heatmap.png", bbox_inches="tight",
                 )
                 plt.close()

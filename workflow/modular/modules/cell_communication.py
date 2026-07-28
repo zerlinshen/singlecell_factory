@@ -113,8 +113,7 @@ class CellCommunicationModule:
                         figure_size=(12, 8),
                     )
                     plt.savefig(
-                        ctx.figure_dir / "cell_communication_dotplot.png",
-                        dpi=160, bbox_inches="tight",
+                        ctx.figure_dir / "cell_communication_dotplot.png", bbox_inches="tight",
                     )
                     plt.close()
                 except Exception:
@@ -268,7 +267,7 @@ class CellCommunicationModule:
         plt.colorbar(im, ax=ax, label="L-R score")
         ax.set_title("Top ligand-receptor interactions")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "cell_communication_heatmap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "cell_communication_heatmap.png", bbox_inches="tight")
         plt.close()
 
 

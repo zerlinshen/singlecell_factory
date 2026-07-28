@@ -191,7 +191,7 @@ class ATACLSIModule:
             out_dir: Path = ctx.figure_dir
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / "lsi_variance_explained.png"
-            fig.savefig(str(out_path), dpi=120)
+            fig.savefig(str(out_path))
             plt.close(fig)
             logger.info("%s: variance plot saved to %s", self.name, out_path)
         except Exception as exc:

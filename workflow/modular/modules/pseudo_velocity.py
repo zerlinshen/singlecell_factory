@@ -169,7 +169,7 @@ class PseudoVelocityModule:
         axes[1].set_title("Exploratory proxy input — DPT pseudotime\nNOT canonical RNA velocity")
         axes[1].set_xlabel("UMAP1"); axes[1].set_ylabel("UMAP2")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_speed_umap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_speed_umap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -190,7 +190,7 @@ class PseudoVelocityModule:
         ax.set_title("Exploratory proxy — pseudo-velocity arrows\nNOT canonical RNA velocity")
         ax.set_xlabel("UMAP1"); ax.set_ylabel("UMAP2")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -230,7 +230,7 @@ class PseudoVelocityModule:
         ax.set_title("Exploratory proxy — pseudo-velocity stream\nNOT canonical RNA velocity")
         ax.set_xlabel("UMAP1"); ax.set_ylabel("UMAP2")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_stream.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_stream.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -263,8 +263,7 @@ class PseudoVelocityModule:
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows_temporal.png",
-                    dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows_temporal.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -309,8 +308,7 @@ class PseudoVelocityModule:
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows_celltype.png",
-                    dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_arrows_celltype.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -369,8 +367,7 @@ class PseudoVelocityModule:
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_stream_celltype.png",
-                    dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_stream_celltype.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -388,7 +385,7 @@ class PseudoVelocityModule:
             "NOT canonical RNA velocity"
         )
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudo_velocity_speed_boxplot.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudo_velocity_speed_boxplot.png", bbox_inches="tight")
         plt.close()
 
 

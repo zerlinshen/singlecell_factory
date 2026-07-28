@@ -142,7 +142,7 @@ class GeneSignatureScoringModule:
             ax.set_ylabel("Cluster")
             ax.set_title("Gene signature scores per cluster")
             plt.tight_layout()
-            plt.savefig(ctx.figure_dir / "signature_heatmap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "signature_heatmap.png", bbox_inches="tight")
             plt.close()
 
         # UMAP of top 4 most variable signatures
@@ -156,7 +156,7 @@ class GeneSignatureScoringModule:
                 sc.pl.umap(adata, color=col, ax=ax, show=False, cmap="RdBu_r")
                 ax.set_title(col.replace("sig_", ""))
             plt.tight_layout()
-            plt.savefig(ctx.figure_dir / "signature_umap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "signature_umap.png", bbox_inches="tight")
             plt.close()
 
         # Signature correlation matrix
@@ -172,5 +172,5 @@ class GeneSignatureScoringModule:
             plt.colorbar(im, ax=ax, label="Pearson r")
             ax.set_title("Gene signature correlation")
             plt.tight_layout()
-            plt.savefig(ctx.figure_dir / "signature_correlation.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "signature_correlation.png", bbox_inches="tight")
             plt.close()

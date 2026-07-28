@@ -198,7 +198,7 @@ class MetacellModule:
         ax.set_ylabel("UMAP2")
         ax.set_title(f"Metacell assignments (n={n_mc})")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "metacell_umap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "metacell_umap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -212,5 +212,5 @@ class MetacellModule:
         ax.set_title("Metacell size distribution")
         ax.legend()
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "metacell_size_hist.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "metacell_size_hist.png", bbox_inches="tight")
         plt.close()

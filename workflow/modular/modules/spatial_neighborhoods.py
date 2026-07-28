@@ -225,5 +225,5 @@ class SpatialNeighborhoodsModule:
         ax.set_title(title)
         fig.colorbar(im, ax=ax)
         fig.tight_layout()
-        fig.savefig(ctx.figure_dir / filename, dpi=160, bbox_inches="tight")
+        fig.savefig(ctx.figure_dir / filename, bbox_inches="tight")
         plt.close(fig)

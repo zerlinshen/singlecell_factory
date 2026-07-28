@@ -210,7 +210,7 @@ class TrajectoryModule:
             axes[2].set_title(f"Leiden Clusters{claim_label}")
 
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudotime_dpt_umap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudotime_dpt_umap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -229,7 +229,7 @@ class TrajectoryModule:
             )
             axes[1].set_title(f"DPT Pseudotime{claim_label}")
             plt.tight_layout()
-            plt.savefig(ctx.figure_dir / "paga_trajectory.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "paga_trajectory.png", bbox_inches="tight")
             plt.close()
         except Exception:
             plt.close("all")
@@ -336,7 +336,7 @@ class TrajectoryModule:
         )
         plt.colorbar(im, ax=ax, label="Smoothed expression", shrink=0.6)
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudotime_gene_heatmap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudotime_gene_heatmap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -358,7 +358,7 @@ class TrajectoryModule:
             f"Pseudotime Distribution per Cluster{TrajectoryModule._claim_label(adata)}"
         )
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudotime_violin_per_cluster.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudotime_violin_per_cluster.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod

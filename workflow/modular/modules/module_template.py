@@ -84,7 +84,7 @@ class MyNewModule:
         # 5. Save Figures (PNG)
         # Save plots to the dedicated module figure directory
         # sc.pl.umap(adata, color="fantastic_score", show=False)
-        # plt.savefig(ctx.figure_dir / f"{self.name}_umap.png", dpi=160, bbox_inches="tight")
+        # plt.savefig(ctx.figure_dir / f"{self.name}_umap.png", bbox_inches="tight")
         # plt.close()
 
         logger.info(f"Finished {self.name}.")

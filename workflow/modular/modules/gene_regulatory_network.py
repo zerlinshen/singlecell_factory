@@ -182,7 +182,7 @@ class GeneRegulatoryNetworkModule:
         plt.colorbar(im, ax=ax, label="Activity score")
         plt.title("TF activity per cluster")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "tf_activity_heatmap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "tf_activity_heatmap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -207,5 +207,5 @@ class GeneRegulatoryNetworkModule:
             sc.pl.umap(adata, color=col, ax=ax, show=False, cmap="RdBu_r")
             ax.set_title(col.replace("tf_", "").replace("ulm_", ""))
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "tf_activity_umap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "tf_activity_umap.png", bbox_inches="tight")
         plt.close()

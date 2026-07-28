@@ -947,7 +947,7 @@ class PseudobulkDEModule:
             title=f"Pseudobulk DE -- Volcano Plot [{claim_label}]",
         )
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudobulk_volcano.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudobulk_volcano.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -979,7 +979,7 @@ class PseudobulkDEModule:
         )
         plt.colorbar(im, ax=ax, label="log2(count + 1)")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "pseudobulk_heatmap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "pseudobulk_heatmap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod

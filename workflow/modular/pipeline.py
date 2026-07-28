@@ -925,6 +925,12 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
 
     pipeline_t0 = perf_counter()
     ctx = _prepare_output(cfg)
+    # Style every diagnostic figure with the suite's publication theme before any
+    # module draws. Until this call the run's figures were raw matplotlib/scanpy
+    # defaults saved at dpi=160 — below the 300 dpi review floor — while the
+    # presentation layer's journal theme was never applied to them at all.
+    from ._figure_theme import apply_pipeline_figure_theme
+    ctx.metadata["figure_theme"] = apply_pipeline_figure_theme()
     ctx.metadata["resource_strategy"] = {
         "scale_mode": cfg.scale_mode,
         "lazy_read": cfg.lazy_read,

@@ -196,21 +196,21 @@ class AnnotationModule:
 
         # --- Visualizations ---
         sc.pl.umap(adata, color=["cell_type"], show=False, legend_loc="on data")
-        plt.savefig(ctx.figure_dir / "umap_cell_type.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "umap_cell_type.png", bbox_inches="tight")
         plt.close()
 
         # Confidence UMAP
         sc.pl.umap(adata, color=["annotation_confidence"], show=False, cmap="viridis")
-        plt.savefig(ctx.figure_dir / "umap_annotation_confidence.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "umap_annotation_confidence.png", bbox_inches="tight")
         plt.close()
 
         if "reference_cell_type" in adata.obs:
             sc.pl.umap(adata, color=["reference_cell_type"], show=False, legend_loc="on data")
-            plt.savefig(ctx.figure_dir / "umap_reference_cell_type.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "umap_reference_cell_type.png", bbox_inches="tight")
             plt.close()
         if "reference_confidence" in adata.obs:
             sc.pl.umap(adata, color=["reference_confidence"], show=False, cmap="magma")
-            plt.savefig(ctx.figure_dir / "umap_reference_confidence.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "umap_reference_confidence.png", bbox_inches="tight")
             plt.close()
 
         # Stacked bar: cell type composition per cluster
@@ -349,7 +349,7 @@ class AnnotationModule:
         plt.title("Cell type composition per cluster")
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "cell_type_composition.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "cell_type_composition.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -436,7 +436,6 @@ class AnnotationModule:
             sc.pl.umap(adata, color=present, show=False, cmap="viridis")
             plt.savefig(
                 ctx.figure_dir / "umap_epithelial_markers.png",
-                dpi=160,
                 bbox_inches="tight",
             )
             plt.close()

@@ -614,7 +614,7 @@ class RNAVelocityModule:
                 adata_v, basis="umap", color=color_col, show=False,
             )
             fig = plt.gcf()
-            ctx.save_figure(fig, ctx.figure_dir / "velocity_stream_umap.png", dpi=160)
+            ctx.save_figure(fig, ctx.figure_dir / "velocity_stream_umap.png")
         except Exception as exc:
             logger.warning("velocity_embedding_stream failed: %s", exc)
             plt.close("all")
@@ -624,7 +624,7 @@ class RNAVelocityModule:
                     arrow_length=3, arrow_size=2, show=False,
                 )
                 fig = plt.gcf()
-                ctx.save_figure(fig, ctx.figure_dir / "velocity_stream_umap.png", dpi=160)
+                ctx.save_figure(fig, ctx.figure_dir / "velocity_stream_umap.png")
             except Exception as exc2:
                 logger.warning("velocity_embedding fallback also failed: %s", exc2)
                 plt.close("all")
@@ -637,7 +637,7 @@ class RNAVelocityModule:
                 adata_v, basis="umap", color=color_col, show=False,
             )
             fig = plt.gcf()
-            ctx.save_figure(fig, ctx.figure_dir / "velocity_grid_umap.png", dpi=160)
+            ctx.save_figure(fig, ctx.figure_dir / "velocity_grid_umap.png")
         except Exception as exc:
             logger.warning("velocity_embedding_grid failed: %s", exc)
             plt.close("all")
@@ -661,7 +661,7 @@ class RNAVelocityModule:
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
         plt.tight_layout()
-        ctx.save_figure(fig, ctx.figure_dir / "velocity_latent_time_umap.png", dpi=160)
+        ctx.save_figure(fig, ctx.figure_dir / "velocity_latent_time_umap.png")
 
     @staticmethod
     def _plot_phase_portraits(adata_v, ctx: PipelineContext, scv) -> None:
@@ -681,7 +681,7 @@ class RNAVelocityModule:
 
             scv.pl.scatter(adata_v, basis=top_genes, ncols=3, show=False)
             fig = plt.gcf()
-            ctx.save_figure(fig, ctx.figure_dir / "velocity_phase_portraits.png", dpi=160)
+            ctx.save_figure(fig, ctx.figure_dir / "velocity_phase_portraits.png")
         except Exception as exc:
             logger.warning("Phase portrait generation failed: %s", exc)
             plt.close("all")
@@ -705,7 +705,7 @@ class RNAVelocityModule:
         ax.set_title("RNA Velocity Length Distribution")
         ax.legend()
         plt.tight_layout()
-        ctx.save_figure(fig, ctx.figure_dir / "velocity_length_distribution.png", dpi=160)
+        ctx.save_figure(fig, ctx.figure_dir / "velocity_length_distribution.png")
 
 
 # ---------------------------------------------------------------------------

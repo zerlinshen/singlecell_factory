@@ -253,7 +253,7 @@ class EvolutionModule:
             sc.pl.umap(adata, color="cnv_score", ax=axes[ncols - 1], show=False, cmap="Reds")
             axes[ncols - 1].set_title("CNV Score")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "evolution_clone_umap.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "evolution_clone_umap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -267,7 +267,7 @@ class EvolutionModule:
         plt.title("Clone Composition per Cluster")
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "evolution_clone_composition.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "evolution_clone_composition.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -309,7 +309,7 @@ class EvolutionModule:
         axes[1].legend(fontsize=8)
 
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "evolution_timeline.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "evolution_timeline.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -351,7 +351,7 @@ class EvolutionModule:
         ax.set_title("Clone Phylogenetic Dendrogram (CNV-based)")
         ax.set_ylabel("Ward Distance")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "evolution_phylo_dendrogram.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "evolution_phylo_dendrogram.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -371,5 +371,5 @@ class EvolutionModule:
         ax.set_ylabel("CNV Score")
         ax.set_title("CNV Score Distribution per Clone")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "evolution_cnv_by_clone.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "evolution_cnv_by_clone.png", bbox_inches="tight")
         plt.close()

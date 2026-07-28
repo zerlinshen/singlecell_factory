@@ -189,7 +189,7 @@ class CompositionModule:
         plt.title("Cell type composition")
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=7)
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "composition_barplot.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "composition_barplot.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
@@ -210,5 +210,5 @@ class CompositionModule:
         ax.set_ylabel("Proportion")
         ax.set_title("Cell type proportion distribution across groups")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "composition_boxplot.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "composition_boxplot.png", bbox_inches="tight")
         plt.close()

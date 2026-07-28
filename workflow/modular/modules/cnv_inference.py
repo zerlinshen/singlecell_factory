@@ -118,7 +118,7 @@ class CNVInferenceModule:
         # CNV heatmap
         try:
             cnv.pl.chromosome_heatmap(adata, groupby="leiden" if "leiden" in adata.obs else None)
-            plt.savefig(ctx.figure_dir / "cnv_heatmap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "cnv_heatmap.png", bbox_inches="tight")
             plt.close()
         except Exception:
             plt.close("all")
@@ -215,7 +215,7 @@ class CNVInferenceModule:
         # Visualizations
         if "X_umap" in adata.obsm:
             sc.pl.umap(adata, color="cnv_score", show=False, cmap="Reds")
-            plt.savefig(ctx.figure_dir / "cnv_score_umap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "cnv_score_umap.png", bbox_inches="tight")
             plt.close()
 
         # Heatmap: top cells by CNV score
@@ -351,7 +351,7 @@ class CNVInferenceModule:
         ax.set_ylabel("Cells")
         ax.set_title("Inferred CNV heatmap")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "cnv_heatmap.png", dpi=120, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "cnv_heatmap.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod

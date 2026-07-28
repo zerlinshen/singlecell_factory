@@ -109,5 +109,5 @@ class CellCycleModule:
             sc.pl.umap(adata, color="G2M_score", ax=axes[2], show=False, cmap="YlOrRd")
             axes[2].set_title("G2M phase score")
             plt.tight_layout()
-            plt.savefig(ctx.figure_dir / "cell_cycle_umap.png", dpi=160, bbox_inches="tight")
+            plt.savefig(ctx.figure_dir / "cell_cycle_umap.png", bbox_inches="tight")
             plt.close()

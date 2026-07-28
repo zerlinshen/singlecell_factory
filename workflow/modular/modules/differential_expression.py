@@ -241,7 +241,7 @@ class DifferentialExpressionModule:
                 adata, n_genes=5, show=False, standard_scale="var",
             )
             plt.savefig(
-                ctx.figure_dir / "de_dotplot_top5.png", dpi=160, bbox_inches="tight",
+                ctx.figure_dir / "de_dotplot_top5.png", bbox_inches="tight",
             )
             plt.close()
         except Exception:
@@ -254,7 +254,7 @@ class DifferentialExpressionModule:
                 use_raw=False, swap_axes=True, vmin=-3, vmax=3,
             )
             plt.savefig(
-                ctx.figure_dir / "de_heatmap_top5.png", dpi=160, bbox_inches="tight",
+                ctx.figure_dir / "de_heatmap_top5.png", bbox_inches="tight",
             )
             plt.close()
         except Exception:
@@ -563,7 +563,7 @@ class DifferentialExpressionModule:
         ax.set_title("Volcano Plot (all clusters)")
         plt.colorbar(scatter, ax=ax, label="Log2FC")
         plt.tight_layout()
-        plt.savefig(ctx.figure_dir / "de_volcano.png", dpi=160, bbox_inches="tight")
+        plt.savefig(ctx.figure_dir / "de_volcano.png", bbox_inches="tight")
         plt.close()
 
     @staticmethod
