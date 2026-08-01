@@ -66,6 +66,11 @@ dependencies:
       # confirmatory DE claim at all. It was installed in sc_gpu and declared in NO
       # committed spec. Declared 2026-08-02; enforced by the claim-integrity gate.
       - pydeseq2==0.5.4
+      # pertpy provides scCODA, the ONLY compositionally-valid differential-abundance
+      # engine in composition.py. Cell-type proportions sum to 1, so per-type marginal
+      # tests are invalid on them (Buttner 2021, Nat Commun 12:6876); without pertpy the
+      # module now degrades to an explicitly NON-CLAIMABLE fallback. Declared 2026-08-02.
+      - pertpy==1.0.6
       - cellrank>=2.0
       - gseapy
       - decoupler>=1.4.0

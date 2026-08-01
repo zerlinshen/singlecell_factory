@@ -57,14 +57,50 @@ class CompositionModule:
         ctx.metadata["composition_n_groups"] = int(count_df.shape[0])
         ctx.metadata["composition_n_cell_types"] = int(count_df.shape[1])
 
-        # Try pertpy scCODA first, fall back to scipy tests
+        # Try pertpy scCODA first, fall back to scipy tests.
+        #
+        # CLAIMABILITY (added 2026-08-02). Cell-type proportions are COMPOSITIONAL: they
+        # are constrained to sum to 1, so one cell type increasing mechanically decreases
+        # the others. Testing each type independently with Mann-Whitney/chi-square
+        # therefore produces spurious "significant" shifts in types that did not change --
+        # which is exactly why scCODA exists (Buttner et al. 2021, Nat Commun 12:6876).
+        # BH-FDR does not fix this: it corrects the multiplicity, not the invalid
+        # independence assumption.
+        #
+        # Previously the fallback was taken at logger.info severity and recorded NOTHING,
+        # so a run in the CPU env (where pertpy is absent) silently produced
+        # compositionally-invalid statistics indistinguishable from the scCODA path.
+        # pseudobulk_de.py already had the right pattern for this -- 86 claimability
+        # markings vs 0 here -- so this module now follows it.
         test_results = self._try_pertpy(adata, group_key)
-        if test_results is None:
+        if test_results is not None:
+            engine = "sccoda_pertpy"
+            inference_class = "compositional_bayesian"
+            inference_status = "supported_confirmatory"
+            claimable = True
+        else:
             # Thread the canonical AC-10 seed (ctx.random_state) into the
             # permutation fallback so enrichment z-scores honor --random-state
             # (issue #20).
             random_state = int(getattr(ctx, "random_state", 42))
             test_results = self._fallback_test(count_df, prop_df, random_state)
+            engine = "scipy_per_type_fallback"
+            inference_class = "per_type_marginal_fallback"
+            inference_status = "exploratory_nonclaimable_noncompositional_fallback"
+            claimable = False
+            logger.warning(
+                "Composition: scCODA unavailable -- fell back to per-cell-type marginal "
+                "tests. Proportions are compositional, so these p-values are NOT valid "
+                "for a differential-abundance claim. Result marked non-claimable "
+                "(inference_status=%s). Install pertpy/scCODA (declared in "
+                "environment_gpu.yml) to obtain a claimable result.",
+                inference_status,
+            )
+
+        ctx.metadata["composition_engine"] = engine
+        ctx.metadata["composition_inference_class"] = inference_class
+        ctx.metadata["composition_inference_status"] = inference_status
+        ctx.metadata["composition_claimable"] = claimable
 
         test_results.to_csv(ctx.table_dir / "composition_test_results.csv", index=False)
 
