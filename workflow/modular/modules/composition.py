@@ -138,9 +138,35 @@ class CompositionModule:
             sccoda.prepare(sccoda_data, formula=f"C({group_key})", reference_cell_type="automatic")
             sccoda.run_nuts(sccoda_data, num_warmup=500, num_samples=1000)
             result = sccoda.credible_effects(sccoda_data)
+
+            # `credible_effects` returns a Series indexed by (Covariate, Cell Type), so
+            # reset_index() yields THREE columns, not two. The previous code assigned
+            # exactly two names and died with
+            #   ValueError: Length mismatch: Expected axis has 3 elements, ...
+            # That line had never actually executed: pertpy's import was broken by a
+            # jax/numpyro incompatibility, so every run fell back long before reaching
+            # here. Fixed 2026-08-02 after the import was repaired and a real-data run
+            # (92,430 LUSC cells) surfaced it. Resolve columns by ROLE rather than by
+            # position so a future pertpy layout change degrades to the honest
+            # non-claimable fallback instead of mislabelling columns.
             df = result.reset_index()
-            df.columns = ["cell_type", "significant"]
-            return df
+            value_col = df.columns[-1]
+            cell_type_col = next(
+                (c for c in df.columns[:-1] if "cell" in str(c).lower()), None
+            )
+            if cell_type_col is None:
+                raise ValueError(
+                    "scCODA credible_effects has no identifiable cell-type column; "
+                    f"got {list(df.columns)}"
+                )
+            covariate_cols = [c for c in df.columns[:-1] if c != cell_type_col]
+            out = df[[cell_type_col, value_col]].copy()
+            out.columns = ["cell_type", "significant"]
+            if covariate_cols:
+                # Keep the covariate so a multi-covariate design is not silently
+                # collapsed into one row per cell type.
+                out.insert(1, "covariate", df[covariate_cols[0]].astype(str))
+            return out
         except Exception as exc:
             # Distinguish ABSENT from BROKEN. Real-data validation on 2026-08-02 showed
             # pertpy INSTALLED in sc_gpu yet failing on import, so a message saying

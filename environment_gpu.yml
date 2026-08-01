@@ -71,6 +71,12 @@ dependencies:
       # tests are invalid on them (Buttner 2021, Nat Commun 12:6876); without pertpy the
       # module now degrades to an explicitly NON-CLAIMABLE fallback. Declared 2026-08-02.
       - pertpy==1.0.6
+      # numpyro>=0.21.0 is REQUIRED for pertpy to import at all. numpyro 0.20.1 references
+      # jax's `xla_pmap_p` primitive, which jax 0.10.0 removed, so `import pertpy` died with
+      # ImportError and scCODA silently fell back on EVERY run this suite has ever done.
+      # Fixed 2026-08-02 and pinned here so the repair survives a rebuild -- leaving it
+      # undeclared would recreate the exact defect class this round exists to eliminate.
+      - numpyro>=0.21.0
       - cellrank>=2.0
       - gseapy
       - decoupler>=1.4.0
