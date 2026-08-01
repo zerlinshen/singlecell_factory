@@ -60,3 +60,10 @@ data/external/gencode_grch38_tss*.tsv
 data/external/gwas_catalog/
 data/external/trevino_2021/
 data/external/trevino_2021_supp/
+
+# Machine-specific hook install artifact. install_git_hooks.sh symlinks this to
+# <suite_root>/scripts/pre_push_suite_gate.sh using an ABSOLUTE path, so committing
+# it produces a dangling symlink on every other clone -- git then silently skips the
+# hook and the suite gate is inert while appearing installed. Run
+# scripts/install_git_hooks.sh per clone instead.
+.githooks/pre-push
