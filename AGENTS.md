@@ -170,7 +170,7 @@ Current claim posture:
 
 The current suite-level validation posture is intentionally honest:
 
-- The one-command suite gate is a 26-step structure/contract/science-assertion
+- The one-command suite gate is a 27-step structure/contract/science-assertion
   harness, including render-only, raw-data, documentation, real-data parity,
   and real-data science-assertion checks. Figure parity remains conditional
   where declared; the gate is not universal biological validation.
