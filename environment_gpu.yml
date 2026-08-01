@@ -58,6 +58,14 @@ dependencies:
       - scikit-misc
       # Pipeline optional backends
       - scrublet
+      # pydeseq2 is CLAIM-CRITICAL: it is the only backend for which
+      # pseudobulk_de.py sets inference_status="supported_confirmatory" and
+      # claimable=True. Without it, mode=confirmatory degrades to
+      # "exploratory_nonclaimable_backend_fallback" -- loudly, which is the right
+      # behaviour, but it means a rebuilt env silently loses the ability to make a
+      # confirmatory DE claim at all. It was installed in sc_gpu and declared in NO
+      # committed spec. Declared 2026-08-02; enforced by the claim-integrity gate.
+      - pydeseq2==0.5.4
       - cellrank>=2.0
       - gseapy
       - decoupler>=1.4.0
