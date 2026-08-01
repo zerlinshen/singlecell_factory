@@ -89,7 +89,8 @@ class CompositionModule:
             inference_status = "exploratory_nonclaimable_noncompositional_fallback"
             claimable = False
             logger.warning(
-                "Composition: scCODA unavailable -- fell back to per-cell-type marginal "
+                "Composition: scCODA unusable (absent OR broken -- see the preceding "
+                "warning for which) -- fell back to per-cell-type marginal "
                 "tests. Proportions are compositional, so these p-values are NOT valid "
                 "for a differential-abundance claim. Result marked non-claimable "
                 "(inference_status=%s). Install pertpy/scCODA (declared in "
@@ -141,7 +142,16 @@ class CompositionModule:
             df.columns = ["cell_type", "significant"]
             return df
         except Exception as exc:
-            logger.info("pertpy scCODA unavailable or failed (%s), using fallback tests.", exc)
+            # Distinguish ABSENT from BROKEN. Real-data validation on 2026-08-02 showed
+            # pertpy INSTALLED in sc_gpu yet failing on import, so a message saying
+            # "unavailable" sent the reader looking for a missing package that was there.
+            import importlib.util as _ilu
+            _present = _ilu.find_spec("pertpy") is not None
+            logger.warning(
+                "pertpy scCODA %s (%s: %s) -- falling back to per-cell-type marginal tests.",
+                "is INSTALLED but FAILED" if _present else "is NOT INSTALLED",
+                type(exc).__name__, exc,
+            )
             return None
 
     @staticmethod
