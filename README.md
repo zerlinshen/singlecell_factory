@@ -2601,3 +2601,48 @@ The most recent canonical work is the **wave5 Trevino PCW21** biology-aware vali
 - **Latest audit / handoff doc:** `docs/CLAUDE_HANDOFF_MULTIOMICS_REPAIR_2026-05-15.md` (handoff packet for the wave5 multiomics-repair scope that fed into the v4.2 execution).
 - **CI gate for Wave-5 v4.2:** `scripts/ci/wave5_v4_2_gate.sh` (per-AC verdicts; exit 0/1/2 = CLOSED/PARTIAL/FAIL).
 - **NC2024 NSCLC v2 outputs** carry over from 2026-04-26 as canonical for the NSCLC reproduction track; see `AGENTS.md` and `AI_AGENT_PROTOCOL.md` "Current State (2026-05-16)" for the joint NC2024 + wave5 state summary.
+
+<!-- ARCHITECTURE-GOVERNANCE:START -->
+## Architecture Governance
+
+Last refreshed: `2026-08-02T14:57:37Z`
+
+![Workspace structure](docs/architecture/structure.png)
+
+### Operating Map
+
+| Surface | Type | Governance role |
+| --- | --- | --- |
+| `bridges` | `dir` | execution / code |
+| `codex_skills` | `dir` | workspace area (inferred) |
+| `contracts` | `dir` | workspace area (inferred) |
+| `data` | `dir` | data / generated artifacts |
+| `docs` | `dir` | documentation; contains generated architecture governance |
+| `environments` | `dir` | workspace area (inferred) |
+| `notebooks` | `dir` | workspace area (inferred) |
+| `ops` | `dir` | workspace area (inferred) |
+| `recipes` | `dir` | workspace area (inferred) |
+| `ref` | `dir` | workspace area (inferred) |
+| `reports` | `dir` | human-facing evidence |
+| `rna_velocity_pseudotime_analysis` | `dir` | workspace area (inferred) |
+| `runtime_monitor` | `dir` | workspace area (inferred) |
+| `scripts` | `dir` | execution / code |
+| `tests` | `dir` | execution / code |
+| `tools` | `dir` | workspace area (inferred) |
+| `workflow` | `dir` | execution / code |
+| `AGENTS.md` | `file` | governance / entrypoint |
+| `AI_AGENT_PROTOCOL.md` | `file` | file artifact (inferred) |
+| `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
+| `CLAUDE.md` | `file` | file artifact (inferred) |
+| `CODEX.md` | `file` | file artifact (inferred) |
+| `environment.yml` | `file` | file artifact (inferred) |
+| `environment_gpu.yml` | `file` | file artifact (inferred) |
+
+### Required Update Habit
+
+- Refresh this block and `docs/architecture/structure.png` whenever folders, workflow boundaries, run lanes, artifact locations, or remote/local contracts change.
+- Keep human-facing deliverables easy to find before agent-facing logs.
+- Keep run parameters, commands, source paths, outcomes, and residual risks in agent-facing run memory.
+- If remote behavior changes, update the remote README or before-every-run memory in the same workstream.
+
+<!-- ARCHITECTURE-GOVERNANCE:END -->
