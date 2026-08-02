@@ -29,9 +29,7 @@ def _make_ctx(tmp_path, sample_id: str = "lusc") -> PipelineContext:
 
 
 def _make_prepared_zarr(tmp_path, samples: list[str]) -> tuple[AnnData, object]:
-    """Write a synthetic prepared_input.zarr with a 'sample' obs column."""
-    import anndata as ad
-
+    """Create an in-memory payload plus the prepared-zarr route sentinel."""
     n = len(samples)
     adata = AnnData(np.ones((n, 2), dtype=float))
     adata.obs_names = [f"C{i}" for i in range(n)]
@@ -39,30 +37,33 @@ def _make_prepared_zarr(tmp_path, samples: list[str]) -> tuple[AnnData, object]:
     adata.obs["sample"] = pd.Categorical(samples)
 
     zarr_path = tmp_path / "dataset" / "prepared_input.zarr"
-    zarr_path.parent.mkdir(parents=True, exist_ok=True)
-    adata.write_zarr(zarr_path)
+    zarr_path.mkdir(parents=True, exist_ok=True)
     return adata, zarr_path
 
 
-def _run_module_with_prepared_zarr(tmp_path, sample_id: str) -> PipelineContext:
+def _run_module_with_prepared_zarr(tmp_path, monkeypatch, sample_id: str) -> PipelineContext:
     samples = ["P15_T1", "P15_T1", "P15_T2", "P15_T3"]
-    _make_prepared_zarr(tmp_path, samples)
+    adata, _ = _make_prepared_zarr(tmp_path, samples)
+    monkeypatch.setattr(
+        "workflow.modular.modules.cellranger.ad.read_zarr",
+        lambda _path: adata.copy(),
+    )
     ctx = _make_ctx(tmp_path, sample_id=sample_id)
     mod = CellRangerModule()
     mod.run(ctx)
     return ctx
 
 
-def test_default_lusc_no_filter(tmp_path):
+def test_default_lusc_no_filter(tmp_path, monkeypatch):
     """Default sample_id='lusc' must not filter any cells."""
-    ctx = _run_module_with_prepared_zarr(tmp_path, sample_id="lusc")
+    ctx = _run_module_with_prepared_zarr(tmp_path, monkeypatch, sample_id="lusc")
     assert ctx.adata.n_obs == 4, "All rows should be kept with default sentinel"
     assert "sample_id_filter_applied" not in ctx.metadata
 
 
-def test_single_sample_id_filter(tmp_path):
+def test_single_sample_id_filter(tmp_path, monkeypatch):
     """--sample-id P15_T1 keeps only the two P15_T1 rows."""
-    ctx = _run_module_with_prepared_zarr(tmp_path, sample_id="P15_T1")
+    ctx = _run_module_with_prepared_zarr(tmp_path, monkeypatch, sample_id="P15_T1")
     assert ctx.adata.n_obs == 2
     assert ctx.metadata["sample_id_filter_applied"] == ["P15_T1"]
     assert ctx.metadata["sample_id_filter_n_before"] == 4
@@ -70,27 +71,32 @@ def test_single_sample_id_filter(tmp_path):
     assert set(ctx.adata.obs["sample"].astype(str).unique()) == {"P15_T1"}
 
 
-def test_comma_separated_sample_ids(tmp_path):
+def test_comma_separated_sample_ids(tmp_path, monkeypatch):
     """--sample-id P15_T1,P15_T2 keeps rows from both samples."""
-    ctx = _run_module_with_prepared_zarr(tmp_path, sample_id="P15_T1,P15_T2")
+    ctx = _run_module_with_prepared_zarr(
+        tmp_path,
+        monkeypatch,
+        sample_id="P15_T1,P15_T2",
+    )
     assert ctx.adata.n_obs == 3
     assert ctx.metadata["sample_id_filter_applied"] == ["P15_T1", "P15_T2"]
     assert ctx.metadata["sample_id_filter_n_before"] == 4
     assert ctx.metadata["sample_id_filter_n_after"] == 3
 
 
-def test_missing_sample_column_raises(tmp_path):
+def test_missing_sample_column_raises(tmp_path, monkeypatch):
     """When sample_id is set but obs lacks 'sample' column, raise ValueError."""
-    import anndata as ad
-
     adata = AnnData(np.ones((3, 2), dtype=float))
     adata.obs_names = ["C0", "C1", "C2"]
     adata.var_names = ["GeneA", "GeneB"]
     # No 'sample' column
 
     zarr_path = tmp_path / "dataset" / "prepared_input.zarr"
-    zarr_path.parent.mkdir(parents=True, exist_ok=True)
-    adata.write_zarr(zarr_path)
+    zarr_path.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        "workflow.modular.modules.cellranger.ad.read_zarr",
+        lambda _path: adata.copy(),
+    )
 
     ctx = _make_ctx(tmp_path, sample_id="P15_T1")
     mod = CellRangerModule()
