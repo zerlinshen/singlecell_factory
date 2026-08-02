@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import json
 
 import matplotlib
@@ -9,6 +11,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from ..context import PipelineContext
+
+
+logger = logging.getLogger(__name__)
 
 
 __references__ = {
@@ -69,15 +74,42 @@ class CellCommunicationModule:
         if "cell_type" not in adata.obs.columns:
             raise ValueError("Cell communication requires cell type annotations.")
 
-        # Try LIANA first
+        # LIANA (multi-method consensus over several L-R scoring functions) and the
+        # built-in manual L-R scorer are NOT equivalent: the manual path scores a single
+        # heuristic against a bundled ligand-receptor list, with no consensus across
+        # methods and no permutation-based specificity. Substituting one for the other
+        # silently makes the two indistinguishable downstream.
+        #
+        # This previously read `except ImportError: pass` -- no log line at all, and the
+        # module recorded no engine or claim status anywhere. liana is declared in
+        # environment.yml but installed only in sc_gpu, so every default CPU-env run took
+        # the manual path invisibly. Found 2026-08-02 by the engine-fallback marking gate,
+        # which caught what an earlier hand-written sweep missed.
         try:
             self._run_liana(adata, ctx)
-            return
+            engine = "liana_consensus"
+            inference_class = "multi_method_consensus"
+            inference_status = "supported_confirmatory"
+            claimable = True
         except ImportError:
-            pass
+            self._run_manual_lr(adata, ctx)
+            engine = "manual_lr_fallback"
+            inference_class = "single_heuristic_lr_fallback"
+            inference_status = "exploratory_nonclaimable_lr_fallback"
+            claimable = False
+            logger.warning(
+                "LIANA is NOT INSTALLED -- fell back to manual ligand-receptor scoring: a "
+                "single heuristic over a bundled L-R list, with no multi-method consensus "
+                "and no permutation-based specificity. Result marked non-claimable "
+                "(inference_status=%s). Install liana (declared in environment.yml) to "
+                "obtain a claimable result.",
+                inference_status,
+            )
 
-        # Fallback: manual L-R scoring
-        self._run_manual_lr(adata, ctx)
+        ctx.metadata["cell_communication_engine"] = engine
+        ctx.metadata["cell_communication_inference_class"] = inference_class
+        ctx.metadata["cell_communication_inference_status"] = inference_status
+        ctx.metadata["cell_communication_claimable"] = claimable
 
     def _run_liana(self, adata, ctx: PipelineContext) -> None:
         """Run LIANA multi-method consensus."""

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import json
 
 import matplotlib
@@ -10,6 +12,9 @@ import numpy as np
 import pandas as pd
 
 from ..context import PipelineContext
+
+
+logger = logging.getLogger(__name__)
 
 
 __references__ = {
@@ -50,10 +55,41 @@ class GeneRegulatoryNetworkModule:
         if adata is None:
             raise ValueError("GRN inference requires AnnData.")
 
+        # decoupler + DoRothEA (curated TF-target regulons, confidence levels A/B/C) and
+        # the built-in fallback are NOT equivalent: the fallback has no curated regulon
+        # resource and no univariate-linear-model activity estimation, so its "TF activity"
+        # is a different quantity with different assumptions. Substituting it silently
+        # makes the two indistinguishable downstream.
+        #
+        # Previously this was a bare `except ImportError: self._run_fallback(...)` with no
+        # log line and no engine/claim marking anywhere in the module. decoupler is declared
+        # in environment.yml but installed only in sc_gpu, so every default CPU-env run took
+        # the fallback invisibly. Found 2026-08-02 by the engine-fallback marking gate.
         try:
             self._run_decoupler(adata, ctx)
+            engine = "decoupler_dorothea"
+            inference_class = "curated_regulon_activity"
+            inference_status = "supported_confirmatory"
+            claimable = True
         except ImportError:
             self._run_fallback(adata, ctx)
+            engine = "builtin_grn_fallback"
+            inference_class = "uncurated_grn_fallback"
+            inference_status = "exploratory_nonclaimable_grn_fallback"
+            claimable = False
+            logger.warning(
+                "decoupler is NOT INSTALLED -- fell back to the built-in GRN path, which "
+                "has no curated DoRothEA regulons and no univariate-linear-model activity "
+                "estimation. Its output is a different quantity, not a weaker estimate of "
+                "the same one. Result marked non-claimable (inference_status=%s). Install "
+                "decoupler (declared in environment.yml) to obtain a claimable result.",
+                inference_status,
+            )
+
+        ctx.metadata["grn_engine"] = engine
+        ctx.metadata["grn_inference_class"] = inference_class
+        ctx.metadata["grn_inference_status"] = inference_status
+        ctx.metadata["grn_claimable"] = claimable
 
     def _run_decoupler(self, adata, ctx: PipelineContext) -> None:
         """TF activity inference using decoupler + DoRothEA regulons."""
