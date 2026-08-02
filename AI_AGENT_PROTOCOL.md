@@ -209,7 +209,14 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
-## Current State (2026-05-27)
+## Current State (2026-08-02)
+
+The August pipeline-remediation round preserves the bounded scientific verdicts
+below and adds the canonical `../QUICKSTART.md`, report-all 33-gate route,
+measured legacy-output deprecation, immutable render evidence, and prospective
+ground-truth promotion protocol. The implementation and acceptance sequence is
+recorded in
+`../docs/superpowers/plans/2026-08-02-pipeline-remediation.md`.
 
 The current integration-biology/multiomics validation round is recorded at
 `/home/zerlinshen/projects/pipeline-validation-20260527/` and

@@ -123,7 +123,14 @@ Never rely on the legacy `results/` fallback. It is governed by
 an access event outside the checkout. Do not remove it until migration, owner
 approval, and the full 14-day silent window are all proven.
 
-## Current State (2026-05-27)
+## Current State (2026-08-02)
+
+The August pipeline-remediation round preserves the scientific claim posture
+below while adding the canonical suite quickstart, 33-gate report-all route,
+measured legacy-output deprecation, render-only evidence contracts, and
+ground-truth promotion governance. Use `../QUICKSTART.md` and the committed
+suite plan at `../docs/superpowers/plans/2026-08-02-pipeline-remediation.md` for
+the executable entrypoints and acceptance record.
 
 Integration-selection gate + batch correction hardened (comprehensive review + ralplan campaign) —
 canonical detail in `docs/SCIENTIFIC_AUDIT_2026-05-15.md`:
