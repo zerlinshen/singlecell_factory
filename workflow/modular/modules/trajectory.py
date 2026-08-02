@@ -316,9 +316,29 @@ class TrajectoryModule:
         # unconditionally and compared on coverage, never gated behind the direct attempt
         # "looking good enough" -- that sufficiency test was the previous defect.
         if "ensembl_id" in adata.var.columns:
-            alt = attempt(adata.var["ensembl_id"].astype(str))
-            if alt[1] > best[1]:
-                best, route = alt, "recovered_via_ensembl_id"
+            # Only join through a key the ingest boundary vouched for. A shipped
+            # `ensembl_id` that nothing verified is just a string column with the right
+            # name -- and a wrong one is BIJECTIVE, so it satisfies the set-identity
+            # check by construction and gets reported as a successful recovery. Measured
+            # on the real file with a permuted shipped column: 2,000 HVGs accepted,
+            # 290 correct, marked recovered_via_ensembl_id.
+            from .._gene_symbols import TRUSTED_ENSEMBL_ID_SOURCES
+
+            namespace = (getattr(ctx, "metadata", None) or {}).get("gene_namespace") or {}
+            source = namespace.get("ensembl_id_source", "unknown")
+            if source in TRUSTED_ENSEMBL_ID_SOURCES:
+                alt = attempt(adata.var["ensembl_id"].astype(str))
+                if alt[1] > best[1]:
+                    best, route = alt, "recovered_via_ensembl_id"
+            else:
+                ctx.metadata["trajectory_hvg_ensembl_key_rejected"] = source
+                logger.warning(
+                    "TRAJECTORY: var['ensembl_id'] is present but its provenance is %r, "
+                    "not one of %s. Refusing to re-key HVG flags through an unverified "
+                    "join column -- a wrong one would be bijective and would pass every "
+                    "completeness check while selecting the wrong genes.",
+                    source, sorted(TRUSTED_ENSEMBL_ID_SOURCES),
+                )
 
         mask, n_present, n_keys = best
         if mask is not None and n_present == n_keys:

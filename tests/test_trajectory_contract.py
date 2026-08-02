@@ -5,6 +5,7 @@ import pytest
 import anndata as ad
 
 from workflow.modular._contract_violation import ModuleContractError
+from workflow.modular._gene_symbols import TRUSTED_ENSEMBL_ID_SOURCES as _TRUSTED
 from workflow.modular.modules.trajectory import TrajectoryModule
 
 
@@ -17,9 +18,14 @@ def _make_adata(**obsm_kwargs):
 
 
 class _MinimalCtx:
-    def __init__(self, adata, *, root_cluster=None, root_justification=None):
+    def __init__(self, adata, *, root_cluster=None, root_justification=None,
+                 ensembl_id_source="converted_in_factory"):
         self.adata = adata
-        self.metadata = {}
+        # The aligner joins through var["ensembl_id"] only when the ingest boundary
+        # vouched for that column, so a ctx used for alignment tests must carry the
+        # provenance. Default to a trusted source; tests that exercise the refusal pass
+        # an untrusted one explicitly.
+        self.metadata = {"gene_namespace": {"ensembl_id_source": ensembl_id_source}}
 
         class _Cfg:
             trajectory_root_cluster = root_cluster
@@ -306,3 +312,42 @@ def test_duplicate_ensembl_id_does_not_drop_a_flagged_hvg():
                           var=pd.DataFrame(index=pd.Index(["E1", "E2", "E3"], dtype=object)))
     mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, _MinimalCtx(adata))
     assert mask is not None and mask.tolist() == [True, True, True]
+
+
+
+def test_unverified_ensembl_id_is_refused_as_a_join_key():
+    """Refutes "the backfill is the only origin of a wrong key".
+
+    An upstream preparer that symbol-ifies var, reorders the gene axis, then writes
+    `var["ensembl_id"] = raw.var_names` ships a bijectively-WRONG column. Bijective means
+    it satisfies the set-identity completeness check by construction, so the aligner
+    reported a successful recovery while selecting the wrong genes: measured on the real
+    17,764-gene file, 2,000 HVGs accepted and 290 correct, marked
+    `recovered_via_ensembl_id`. That path wrote no provenance at all, so it was less
+    visible than the backfill bug it mirrors. Seurat->h5ad conversions and hand-prepared
+    CELLxGENE files routinely ship such a column, which makes it the LIKELIER origin.
+    """
+    adata, expr_sub = _diverged_pair()
+    ctx = _MinimalCtx(adata, ensembl_id_source="preexisting_unverified")
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
+
+    assert mask is None, "an unverified join key must not be used"
+    assert ctx.metadata["trajectory_hvg_ensembl_key_rejected"] == "preexisting_unverified"
+    assert ctx.metadata["trajectory_hvg_axis_alignment"] == "unavailable_axis_mismatch"
+
+
+@pytest.mark.parametrize("source", sorted(_TRUSTED))
+def test_every_trusted_source_is_accepted_as_a_join_key(source):
+    adata, expr_sub = _diverged_pair()
+    ctx = _MinimalCtx(adata, ensembl_id_source=source)
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
+    assert mask is not None and int(mask.sum()) == 6
+
+
+def test_absent_provenance_is_treated_as_untrusted():
+    """Fail-closed: no gene_namespace record means nothing vouched for the column."""
+    adata, expr_sub = _diverged_pair()
+    ctx = _MinimalCtx(adata)
+    ctx.metadata.pop("gene_namespace")
+    assert TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx) is None
+    assert ctx.metadata["trajectory_hvg_ensembl_key_rejected"] == "unknown"

@@ -339,3 +339,90 @@ def test_a_constant_shared_column_is_not_a_valid_order_witness():
     prov = normalize_var_to_symbols(adata)
     assert prov["ensembl_id_backfill"] == "skipped_raw_order_unverifiable"
     assert "ensembl_id" not in adata.var.columns
+
+
+# ------------------------------------- ensembl_id provenance (2026-08-02, round 3)
+# A review REFUTED "the backfill is the only origin of a wrong join key". A pre-existing
+# `ensembl_id` column was trusted with zero verification by both the conversion path and
+# the backfill's early return. An upstream preparer doing the unsafe thing one step
+# earlier -- symbol-ify var, reorder the gene axis, then write
+# `var["ensembl_id"] = raw.var_names` -- reproduced the corruption exactly (489/17,764
+# correct; 290 of 2,000 HVGs correct; reported as `recovered_via_ensembl_id`) and left NO
+# provenance key at all, making it less visible than the bug it mirrors. Seurat->h5ad
+# conversions and hand-prepared CELLxGENE files routinely ship such a column.
+
+
+def test_shipped_ensembl_id_is_marked_unverified_without_an_order_witness():
+    adata = _diverged_with_raw(SYMBOLS, ENSEMBL_IDS)
+    adata.var["ensembl_id"] = list(reversed(ENSEMBL_IDS))   # bijective and WRONG
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "preexisting_unverified"
+
+
+def test_shipped_ensembl_id_is_verified_when_it_matches_an_ordered_raw():
+    adata = _diverged_with_raw(
+        SYMBOLS, ENSEMBL_IDS, shared_col=(["a", "b", "c", "d"], ["a", "b", "c", "d"]))
+    adata.var["ensembl_id"] = list(ENSEMBL_IDS)
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "verified_against_raw"
+    assert prov["ensembl_id_verified_via"] == "probe"
+
+
+def test_shipped_ensembl_id_contradicting_an_ordered_raw_is_marked_wrong():
+    """Order is proven, so a mismatching column is not ambiguous -- it is incorrect."""
+    adata = _diverged_with_raw(
+        SYMBOLS, ENSEMBL_IDS, shared_col=(["a", "b", "c", "d"], ["a", "b", "c", "d"]))
+    adata.var["ensembl_id"] = list(reversed(ENSEMBL_IDS))
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "preexisting_contradicts_raw"
+
+
+def test_factory_written_ensembl_id_vouches_for_itself():
+    adata = _adata(ENSEMBL_IDS, {"feature_name": SYMBOLS})
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "converted_in_factory"
+
+
+def test_absent_ensembl_id_is_reported_as_absent():
+    adata = _adata(SYMBOLS)
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "absent"
+
+
+def test_a_witness_at_exactly_the_distinctness_bar_is_refused():
+    """100% twin pairs give exactly 50% distinct values.
+
+    A permutation WITHIN a tie group preserves every shared column positionally, so a
+    composite that only reaches the bar proves nothing. A strict `<` let this worst case
+    through by a single comparison; the boundary belongs on the refusing side.
+    """
+    n = 8
+    syms = [f"SYM{i}" for i in range(n)]
+    ens = [f"ENSG{i:011d}" for i in range(n)]
+    twins = [f"pair{i // 2}" for i in range(n)]          # exactly n/2 distinct values
+    adata = _diverged_with_raw(syms, ens, shared_col=(twins, twins))
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_backfill"] == "skipped_raw_order_unverifiable"
+    assert "ensembl_id" not in adata.var.columns
+
+
+def test_shipped_ensembl_id_is_unverified_when_there_is_nothing_to_check_it_against():
+    """No `.raw` at all: the column may be perfect, but nothing here can vouch for it.
+
+    Distinct from the no-witness branch. There, `.raw` exists and the gene ORDER is
+    unproven; here there is no second axis to compare against in the first place. Both
+    must land on `preexisting_unverified`, and both need their own cover — a mutation
+    that flipped only this branch to a trusted value survived the suite.
+    """
+    adata = _adata(SYMBOLS, {"ensembl_id": ENSEMBL_IDS})
+    prov = normalize_var_to_symbols(adata)
+    assert prov["raw_axis_status"] == "absent"
+    assert prov["ensembl_id_source"] == "preexisting_unverified"
+
+
+def test_shipped_ensembl_id_is_unverified_when_raw_lengths_differ():
+    adata = _adata(SYMBOLS, {"ensembl_id": ENSEMBL_IDS})
+    adata.raw = _adata(ENSEMBL_IDS)
+    adata._inplace_subset_var(np.array([True, True, False, False]))
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "preexisting_unverified"

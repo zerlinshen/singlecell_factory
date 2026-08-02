@@ -147,6 +147,68 @@ def describe_raw_axis(adata) -> dict[str, Any]:
     return provenance
 
 
+# `var["ensembl_id"]` is the join key every cross-namespace repair depends on, and it is
+# PERSISTED into final_adata.h5ad. Only these origins are load-bearing evidence that it is
+# correct; anything else is a string column of unknown provenance that happens to have the
+# right name.
+TRUSTED_ENSEMBL_ID_SOURCES = frozenset({
+    "converted_in_factory",            # this module wrote it during Ensembl->symbol conversion
+    "backfilled_from_raw_positional",  # this module wrote it from an order-verified `.raw`
+    "verified_against_raw",            # shipped by the preparer, and it matches an order-verified `.raw`
+})
+
+
+def classify_ensembl_id(adata, provenance: dict[str, Any]) -> None:
+    """Record WHERE ``var["ensembl_id"]`` came from, and whether it can be trusted.
+
+    A review refuted the assumption that the backfill is the only origin of a wrong join
+    key. A pre-existing column was trusted with no verification at all, by both the
+    conversion path and the backfill's early return — and an upstream preparer doing the
+    same unsafe thing one step earlier (symbol-ify, reorder, then write
+    ``var["ensembl_id"] = raw.var_names``) reproduced the corruption EXACTLY: 489 of
+    17,764 correct on the real file, 290 of 2,000 HVGs correct, aligner reporting
+    ``recovered_via_ensembl_id``. Worse than the bug it mirrors, because that one at
+    least left ``ensembl_id_backfill`` behind; this path left no trace whatsoever.
+
+    Seurat->h5ad conversions and hand-prepared CELLxGENE files routinely ship an
+    ``ensembl_id`` / ``gene_ids`` column, so the unverified path is the LIKELIER one.
+    """
+    import pandas as pd
+
+    if "ensembl_id" not in adata.var.columns:
+        provenance["ensembl_id_source"] = "absent"
+        return
+    if provenance.get("ensembl_id_source"):
+        return  # this module wrote it on this call and already said so
+
+    if (provenance.get("raw_axis_status") != "ensembl_while_var_symbols"
+            or provenance.get("raw_n_genes") != int(adata.n_vars)):
+        # Nothing to check it against.
+        provenance["ensembl_id_source"] = "preexisting_unverified"
+        return
+
+    witness = _positional_order_witness(adata)
+    if witness is None:
+        provenance["ensembl_id_source"] = "preexisting_unverified"
+        return
+
+    shipped = pd.Series(adata.var["ensembl_id"]).astype(str).to_numpy()
+    from_raw = pd.Index(adata.raw.var_names).astype(str).to_numpy()
+    if shipped.shape == from_raw.shape and (shipped == from_raw).all():
+        provenance["ensembl_id_source"] = "verified_against_raw"
+        provenance["ensembl_id_verified_via"] = witness
+        return
+
+    provenance["ensembl_id_source"] = "preexisting_contradicts_raw"
+    logger.warning(
+        "GENE_NAMESPACE: var['ensembl_id'] was shipped with this file, but the gene ORDER "
+        "of var and raw.var is confirmed identical (via %r) and the column does NOT match "
+        "adata.raw.var_names. The column is therefore wrong. It is left in place but "
+        "marked untrusted, so cross-namespace repairs will refuse it rather than join "
+        "through it.", witness,
+    )
+
+
 def _backfill_ensembl_id_from_raw(adata, provenance: dict[str, Any]) -> None:
     """Recover ``var["ensembl_id"]`` when ``var`` was symbol-ified outside this factory.
 
@@ -199,6 +261,7 @@ def _backfill_ensembl_id_from_raw(adata, provenance: dict[str, Any]) -> None:
 
     adata.var["ensembl_id"] = pd.Index(adata.raw.var_names).astype(str)
     provenance["ensembl_id_backfill"] = "from_raw_positional"
+    provenance["ensembl_id_source"] = "backfilled_from_raw_positional"
     provenance["ensembl_id_backfill_witness"] = witness
     logger.info(
         "GENE_NAMESPACE: backfilled var['ensembl_id'] from adata.raw.var_names "
@@ -254,7 +317,12 @@ def _positional_order_witness(adata) -> str | None:
          zip(*(pd.Series(adata.var[c]).astype(str).tolist() for c in agreeing))]
     )
     n_distinct = composite.nunique()
-    if n_distinct < _ORDER_WITNESS_MIN_DISTINCT_FRACTION * len(composite):
+    if not len(composite):
+        return None
+    # `<=`, not `<`: a file of 100% twin pairs gives exactly 50% distinct, and a strict
+    # comparison let that worst case through by one comparison. A tie group is precisely
+    # where a permutation is invisible, so the boundary belongs on the refusing side.
+    if n_distinct <= _ORDER_WITNESS_MIN_DISTINCT_FRACTION * len(composite):
         logger.warning(
             "GENE_NAMESPACE: columns %s agree positionally between var and raw.var, but "
             "together they take only %d distinct values across %d genes -- too coarse to "
@@ -292,6 +360,7 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
         provenance["source_column"] = None
         provenance.update(describe_raw_axis(adata))
         _backfill_ensembl_id_from_raw(adata, provenance)
+        classify_ensembl_id(adata, provenance)
         return provenance
 
     col = find_symbol_column(adata.var)
@@ -310,11 +379,13 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
             [str(c) for c in adata.var.columns],
         )
         provenance.update(describe_raw_axis(adata))
+        classify_ensembl_id(adata, provenance)
         return provenance
 
     # Preserve the original identifiers before overwriting the index.
     if "ensembl_id" not in adata.var.columns:
         adata.var["ensembl_id"] = pd.Index(adata.var_names).astype(str)
+        provenance["ensembl_id_source"] = "converted_in_factory"
 
     symbols = pd.Series(adata.var[col]).astype(str)
     # Fall back to the Ensembl ID for genes with no symbol, so the axis stays
@@ -329,6 +400,7 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
     provenance["source_column"] = col
     provenance["n_without_symbol"] = int(blank.sum())
     provenance.update(describe_raw_axis(adata))
+    classify_ensembl_id(adata, provenance)
     logger.info(
         "GENE_NAMESPACE: converted %d Ensembl-indexed genes to symbols from "
         "var[%r] (%d had no symbol and kept their Ensembl ID); original IDs "
