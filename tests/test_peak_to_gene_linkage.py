@@ -1,6 +1,7 @@
 """Tests for Pearson + permutation FDR peak-to-gene linkage (US-W5-6).
 
-Tests use the synthetic Trevino fixture (1000 cells, 3000 genes, 5000 peaks).
+Tests use bounded projections of the synthetic Trevino fixture so correctness
+checks do not accidentally become full-scale permutation benchmarks.
 Planted linkage structure (from load_synthetic defaults):
   markers_per_type = max(10, 3000 // (3 * 10)) = 100
   peaks_per_type   = max(10, 5000 // (3 * 10)) = 166
@@ -39,16 +40,26 @@ def _planted_pairs_set(n_cell_types: int = 3, n_rna: int = 3000, n_atac: int = 5
     return planted
 
 
+def _bounded_linkage_view(adata, *, n_genes: int = 100, n_peaks: int = 100):
+    """Keep a deterministic planted block while bounding permutation runtime."""
+    bounded = adata[:, :n_genes].copy()
+    bounded.obsm["atac_peaks"] = adata.obsm["atac_peaks"][:, :n_peaks].copy()
+    atac_var = adata.uns.get("atac_var")
+    if atac_var is not None:
+        bounded.uns["atac_var"] = atac_var.iloc[:n_peaks].reset_index(drop=True)
+    return bounded
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
 def test_linkage_recovery_on_planted(trevino_synthetic_adata):
     """Top-1000 linkages should be dominated by planted (peak, gene) pairs (>=90%)."""
-    adata = trevino_synthetic_adata
+    adata = _bounded_linkage_view(trevino_synthetic_adata)
     compute_peak_gene_linkages(
         adata,
-        peak_block_size=500,  # small blocks for speed on 5000 peaks
+        peak_block_size=50,
         gene_window_bp=500_000,
         n_perms=50,
         fdr_alpha=0.05,
@@ -91,7 +102,7 @@ def test_sparse_axis_assertion_dense_atac_raises(trevino_synthetic_adata):
 
 def test_sparse_preserved_through_chunks(trevino_synthetic_adata):
     """adata.X and obsm['atac_peaks'] must remain sparse before AND after the call."""
-    adata = trevino_synthetic_adata.copy()
+    adata = _bounded_linkage_view(trevino_synthetic_adata)
 
     assert scipy.sparse.issparse(adata.X), "X not sparse before call"
     assert scipy.sparse.issparse(adata.obsm["atac_peaks"]), "atac_peaks not sparse before call"

@@ -583,6 +583,8 @@ A change that passes only nano/small_real is not cleared for full_real runs. Bui
 Prepared-input validation inspects local Zarr v2/v3 CSR metadata synchronously
 before opening AnnData. Missing or malformed `X/{data,indices,indptr}` storage
 therefore fails diagnostically without entering Zarr's asynchronous I/O bridge.
+Permutation-linkage unit tests use a bounded, planted synthetic projection;
+full-cohort runtime and memory claims belong to the staircase benchmark tiers.
 
 **Densify policy** — the pipeline enforces a grep-ban on unmarked `toarray()` / `todense()` calls in CI (`tests/test_densify_audit.py`). Any deliberate densification must carry a `# densify-allowed: <reason>` annotation on the same line, or route through `workflow/modular/_densify_policy.py:plan_densify()` which returns a `{GO, CHUNK, ABORT}` decision based on free memory and configured caps. This prevents silent memory explosions at 884k-cell scale. The Phase C modality modules (`protein_adt`, `spatial_neighborhoods`, `multimodal_integration`) carry `# densify-allowed: <reason>` annotations at every dense intermediate (protein panels are O(100) features, WNN UMAP is O(n_cells x 2), spatial neighborhood means are O(n_genes)).
 
