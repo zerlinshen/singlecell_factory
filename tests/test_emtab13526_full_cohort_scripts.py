@@ -162,6 +162,39 @@ def _write_csr_x_contract(merged: Path, matrix: sparse.csr_matrix) -> None:
         )
 
 
+def test_inspect_csr_x_storage_supports_zarr_v3_metadata(tmp_path):
+    module = load_prepare_module()
+    merged = tmp_path / "merged.zarr"
+    x_group = merged / "X"
+    x_group.mkdir(parents=True)
+    (x_group / "zarr.json").write_text(
+        json.dumps(
+            {
+                "zarr_format": 3,
+                "node_type": "group",
+                "attributes": {
+                    "encoding-type": "csr_matrix",
+                    "encoding-version": "0.1.0",
+                    "shape": [4, 3],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    for key in ("data", "indices", "indptr"):
+        array_path = x_group / key
+        array_path.mkdir()
+        (array_path / "zarr.json").write_text(
+            json.dumps({"zarr_format": 3, "node_type": "array"}),
+            encoding="utf-8",
+        )
+
+    attrs = module.inspect_csr_x_storage(merged)
+
+    assert attrs["encoding-type"] == "csr_matrix"
+    assert attrs["shape"] == [4, 3]
+
+
 def make_valid_merged_zarr(
     tmp_path: Path,
     module,

@@ -10,7 +10,6 @@ import anndata as ad
 from anndata.experimental import concat_on_disk
 import numpy as np
 import pandas as pd
-import zarr
 from scipy import io
 
 ROOT = Path("/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/data/raw/nc2024_nsclc_emtab13526")
@@ -369,6 +368,72 @@ def open_prepared_input(prepared_zarr: Path):
     return ad.read_zarr(prepared_zarr)
 
 
+def _read_json_object(path: Path, *, label: str) -> dict:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Prepared input has invalid {label}: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"Prepared input has non-object {label}: {path}")
+    return payload
+
+
+def inspect_csr_x_storage(prepared_zarr: Path) -> dict:
+    """Inspect local Zarr v2/v3 CSR metadata without starting async Zarr I/O."""
+    x_path = prepared_zarr / "X"
+    if not x_path.is_dir():
+        raise ValueError(f"Prepared input missing X group: {prepared_zarr}")
+
+    consolidated = {}
+    consolidated_path = prepared_zarr / ".zmetadata"
+    if consolidated_path.is_file():
+        consolidated_payload = _read_json_object(
+            consolidated_path,
+            label="consolidated Zarr metadata",
+        )
+        candidate = consolidated_payload.get("metadata", {})
+        if isinstance(candidate, dict):
+            consolidated = candidate
+
+    v2_attrs_path = x_path / ".zattrs"
+    v3_metadata_path = x_path / "zarr.json"
+    if v2_attrs_path.is_file():
+        x_attrs = _read_json_object(v2_attrs_path, label="X attributes")
+    elif isinstance(consolidated.get("X/.zattrs"), dict):
+        x_attrs = consolidated["X/.zattrs"]
+    elif v3_metadata_path.is_file():
+        v3_metadata = _read_json_object(v3_metadata_path, label="X metadata")
+        candidate = v3_metadata.get("attributes", {})
+        if not isinstance(candidate, dict):
+            raise ValueError(
+                f"Prepared input has non-object X attributes: {v3_metadata_path}"
+            )
+        x_attrs = candidate
+    else:
+        raise ValueError(f"Prepared input missing X attributes: {prepared_zarr}")
+
+    if x_attrs.get("encoding-type") != "csr_matrix":
+        raise ValueError(
+            f"Prepared input is not CSR-backed: encoding-type={x_attrs.get('encoding-type')}"
+        )
+
+    for key in ("data", "indices", "indptr"):
+        array_path = x_path / key
+        has_local_metadata = (array_path / ".zarray").is_file() or (
+            array_path / "zarr.json"
+        ).is_file()
+        has_consolidated_metadata = isinstance(
+            consolidated.get(f"X/{key}/.zarray"),
+            dict,
+        )
+        if not array_path.is_dir() or not (
+            has_local_metadata or has_consolidated_metadata
+        ):
+            raise ValueError(f"Prepared input missing X/{key}: {prepared_zarr}")
+
+    return x_attrs
+
+
 def validate_prepared_input(
     prepared_zarr: Path,
     expected_n_samples: int = EXPECTED_N_SAMPLES,
@@ -378,18 +443,7 @@ def validate_prepared_input(
     if not prepared_zarr.exists():
         raise FileNotFoundError(f"Prepared input missing: {prepared_zarr}")
 
-    root = zarr.open_group(prepared_zarr, mode="r")
-    if "X" not in root:
-        raise ValueError(f"Prepared input missing X group: {prepared_zarr}")
-    x_group = root["X"]
-    x_attrs = dict(x_group.attrs)
-    if x_attrs.get("encoding-type") != "csr_matrix":
-        raise ValueError(
-            f"Prepared input is not CSR-backed: encoding-type={x_attrs.get('encoding-type')}"
-        )
-    for key in ("data", "indices", "indptr"):
-        if key not in x_group:
-            raise ValueError(f"Prepared input missing X/{key}: {prepared_zarr}")
+    x_attrs = inspect_csr_x_storage(prepared_zarr)
 
     adata = open_prepared_input(prepared_zarr)
     obs_columns = {str(col) for col in adata.obs.columns}
