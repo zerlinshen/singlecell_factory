@@ -105,25 +105,68 @@ class PathwayAnalysisModule:
 
         de_df = pd.read_csv(de_csv)
 
-        # Try gseapy first, then decoupler, then fallback
+        # Try gseapy first, then decoupler, then the built-in overlap fallback.
+        #
+        # CLAIMABILITY (added 2026-08-02). These three tiers are NOT interchangeable
+        # methods with the same guarantees:
+        #   1. gseapy    -- rank-based GSEA against MSigDB with a permutation null
+        #                   (Subramanian 2005). The field standard.
+        #   2. decoupler -- PROGENy pathway-activity scoring; a different question
+        #                   (signalling activity), not GSEA.
+        #   3. fallback  -- simple overlap counting against bundled gene sets. No
+        #                   permutation null, no ranking, and a different (much smaller)
+        #                   gene-set universe.
+        #
+        # Previously the tier was chosen at logger.info/warning severity and ctx.metadata
+        # recorded only `pathway_top_terms`, so nothing downstream could tell which method
+        # produced the result. gseapy and decoupler are declared in both env specs but
+        # installed only in sc_gpu, so a default CPU-env run silently degraded all the way
+        # to tier 3 and looked identical to a real GSEA run. This is the same defect class
+        # as composition.py's scCODA fallback; the fix follows pseudobulk_de.py's pattern.
         results = None
+        engine = None
         try:
             results = self._run_gseapy(de_df, adata, ctx)
+            engine = "gseapy_gsea"
         except ImportError:
-            logger.info("gseapy not available, trying decoupler backend")
+            logger.warning("gseapy NOT INSTALLED -- trying decoupler backend.")
         except Exception as exc:
-            logger.warning("gseapy enrichment failed: %s", exc)
+            logger.warning("gseapy enrichment failed (%s: %s) -- trying decoupler backend.",
+                           type(exc).__name__, exc)
 
         if results is None:
             try:
                 results = self._run_decoupler(adata, ctx)
+                engine = "decoupler_progeny"
             except ImportError:
-                logger.info("decoupler not available, using built-in fallback")
+                logger.warning("decoupler NOT INSTALLED -- using the built-in overlap fallback.")
             except Exception as exc:
-                logger.warning("decoupler pathway analysis failed: %s", exc)
+                logger.warning("decoupler pathway analysis failed (%s: %s) -- using the "
+                               "built-in overlap fallback.", type(exc).__name__, exc)
 
         if results is None:
             results = self._run_fallback(de_df, adata, ctx)
+            engine = "builtin_overlap_fallback"
+            logger.warning(
+                "Pathway analysis fell back to simple overlap enrichment: no permutation "
+                "null, no ranking, and a smaller bundled gene-set universe than MSigDB. "
+                "Result marked non-claimable. Install gseapy (already declared in both "
+                "environment specs) to obtain a claimable GSEA result."
+            )
+
+        # gseapy is rank-based GSEA with a permutation null -> confirmatory.
+        # decoupler answers a DIFFERENT question (pathway activity, not enrichment), so it
+        # is recorded as supported-but-distinct rather than as a GSEA substitute.
+        inference = {
+            "gseapy_gsea": ("rank_based_gsea", "supported_confirmatory", True),
+            "decoupler_progeny": ("pathway_activity_scoring", "supported_different_question", True),
+            "builtin_overlap_fallback": (
+                "overlap_enrichment_fallback", "exploratory_nonclaimable_overlap_fallback", False),
+        }[engine]
+        ctx.metadata["pathway_engine"] = engine
+        ctx.metadata["pathway_inference_class"] = inference[0]
+        ctx.metadata["pathway_inference_status"] = inference[1]
+        ctx.metadata["pathway_claimable"] = inference[2]
 
         if results is not None and not results.empty:
             results.to_csv(ctx.table_dir / "pathway_enrichment.csv", index=False)
