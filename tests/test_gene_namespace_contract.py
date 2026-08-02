@@ -406,6 +406,50 @@ def test_a_witness_at_exactly_the_distinctness_bar_is_refused():
     assert "ensembl_id" not in adata.var.columns
 
 
+def _tied_symbol_permutation(*, shipped_join_key: bool):
+    """Four-gene reproduction of an invisible within-tie permutation.
+
+    ``feature_name`` agrees positionally after the live axis swaps the two DUP
+    genes, but that agreement cannot reveal which stable ID belongs to either
+    duplicate. AnnData keeps ``raw.var`` in its original order.
+    """
+    ens = [f"ENSG{i:011d}" for i in range(1, 5)]
+    base = ad.AnnData(np.arange(16, dtype=float).reshape(4, 4))
+    base.var_names = ens
+    base.var["feature_name"] = ["DUP", "DUP", "GENEA", "GENEB"]
+    base.raw = base.copy()
+
+    obj = base[:, [1, 0, 2, 3]].copy()
+    obj.var_names = ["DUP", "DUP-1", "GENEA", "GENEB"]
+    if shipped_join_key:
+        # The unsafe upstream repair: attach the unchanged raw IDs by position
+        # after the live matrix has moved.
+        obj.var["ensembl_id"] = list(obj.raw.var_names)
+    return obj
+
+
+def test_tied_symbol_group_cannot_verify_a_shipped_positional_join_key():
+    """Accepting feature_name here certifies two provably wrong stable IDs."""
+    from workflow.modular._gene_symbols import _positional_order_witness
+
+    adata = _tied_symbol_permutation(shipped_join_key=True)
+    assert _positional_order_witness(adata) is None
+
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_source"] == "preexisting_unverified"
+    assert "ensembl_id_verified_via" not in prov
+
+
+def test_tied_symbol_group_refuses_positional_ensembl_backfill():
+    """Removing a shipped key must not turn the same ambiguity into backfill."""
+    adata = _tied_symbol_permutation(shipped_join_key=False)
+
+    prov = normalize_var_to_symbols(adata)
+
+    assert prov["ensembl_id_backfill"] == "skipped_raw_order_unverifiable"
+    assert "ensembl_id" not in adata.var.columns
+
+
 def test_shipped_ensembl_id_is_unverified_when_there_is_nothing_to_check_it_against():
     """No `.raw` at all: the column may be perfect, but nothing here can vouch for it.
 

@@ -270,11 +270,10 @@ def _backfill_ensembl_id_from_raw(adata, provenance: dict[str, Any]) -> None:
     )
 
 
-# A witness must be able to distinguish orderings. A boolean flag agrees positionally
-# under any permutation that only swaps genes sharing its value -- sorting within groups
-# does exactly that -- so it proves almost nothing. Require the shared columns, taken
-# together, to identify most genes uniquely.
-_ORDER_WITNESS_MIN_DISTINCT_FRACTION = 0.5
+# A witness must distinguish EVERY ordering. Any tied composite key leaves a permutation
+# within that tie group invisible, even if 99.99% of the remaining genes are unique.
+# Positional stable-ID assignment is all-or-nothing, so majority distinctness is not a
+# proof threshold.
 
 
 def _positional_order_witness(adata) -> str | None:
@@ -316,19 +315,19 @@ def _positional_order_witness(adata) -> str | None:
         ["\x1f".join(vals) for vals in
          zip(*(pd.Series(adata.var[c]).astype(str).tolist() for c in agreeing))]
     )
-    n_distinct = composite.nunique()
     if not len(composite):
         return None
-    # `<=`, not `<`: a file of 100% twin pairs gives exactly 50% distinct, and a strict
-    # comparison let that worst case through by one comparison. A tie group is precisely
-    # where a permutation is invisible, so the boundary belongs on the refusing side.
-    if n_distinct <= _ORDER_WITNESS_MIN_DISTINCT_FRACTION * len(composite):
+    tied = composite.duplicated(keep=False)
+    if bool(tied.any()):
+        n_tied_positions = int(tied.sum())
+        n_tied_keys = int(composite[tied].nunique())
         logger.warning(
             "GENE_NAMESPACE: columns %s agree positionally between var and raw.var, but "
-            "together they take only %d distinct values across %d genes -- too coarse to "
-            "prove the two frames are in the same gene ORDER (any permutation within a "
-            "value group preserves them). Treating the order as unverified.",
-            agreeing, n_distinct, len(composite),
+            "their composite key has %d tied values covering %d of %d genes. Any "
+            "permutation within a tied group preserves the witness, so it cannot prove "
+            "the two frames are in the same gene ORDER. Treating the order as "
+            "unverified.",
+            agreeing, n_tied_keys, n_tied_positions, len(composite),
         )
         return None
     return "+".join(agreeing)
