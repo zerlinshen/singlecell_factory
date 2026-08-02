@@ -285,47 +285,62 @@ class TrajectoryModule:
         """
         if "highly_variable" not in adata.var.columns:
             return None
-        flags = adata.var["highly_variable"].astype(bool)
-        n_flagged = int(flags.to_numpy().sum())
-        if n_flagged == 0:
+        flags = adata.var["highly_variable"].astype(bool).to_numpy()
+        if not flags.any():
             return None
+        expr_names = np.asarray(list(expr_sub.var_names), dtype=object)
 
-        direct = flags.reindex(expr_sub.var_names, fill_value=False).to_numpy()
-        best, route = direct, "direct"
+        def attempt(keys):
+            """Join the flagged genes onto the expression axis by `keys`.
 
-        # Re-key through the Ensembl IDs the ingest boundary preserved, which is the
-        # namespace `.raw` is still in. Computed unconditionally and compared on
-        # completeness, never gated behind the direct attempt "looking good enough".
+            Set-based on purpose. `Series.reindex` DUPLICATES a value across duplicated
+            target labels, so one flagged gene facing a `.raw` axis that repeats its ID
+            contributed several Trues and inflated the count to look complete while other
+            flagged genes were never selected at all. Counting distinct KEYS on both
+            sides removes that, and it also keeps the two counts in the same space --
+            counting flagged rows in `var` (with duplicates) against selected labels in
+            `raw` (deduplicated) made them incomparable, and produced permanent false
+            refusals whenever two flagged genes shared an Ensembl ID.
+            """
+            keys = np.asarray(keys, dtype=object)
+            flagged_keys = set(keys[flags].tolist())
+            if not flagged_keys:
+                return None, 0, 0
+            mask = np.isin(expr_names, np.asarray(sorted(flagged_keys), dtype=object))
+            present = flagged_keys & set(expr_names.tolist())
+            return mask, len(present), len(flagged_keys)
+
+        best = attempt(adata.var_names.astype(str))
+        route = "direct"
+        # Re-key through the Ensembl IDs, the namespace `.raw` is still in. Computed
+        # unconditionally and compared on coverage, never gated behind the direct attempt
+        # "looking good enough" -- that sufficiency test was the previous defect.
         if "ensembl_id" in adata.var.columns:
-            by_ensembl = pd.Series(flags.to_numpy(),
-                                   index=pd.Index(adata.var["ensembl_id"].astype(str)))
-            # A duplicated Ensembl ID must not silently drop a flagged gene: reduce with
-            # any(), not first(). keep="first" picked False over True and lost real HVGs.
-            by_ensembl = by_ensembl.groupby(level=0).any()
-            remap = by_ensembl.reindex(expr_sub.var_names, fill_value=False).to_numpy()
-            if remap.sum() > direct.sum():
-                best, route = remap, "recovered_via_ensembl_id"
+            alt = attempt(adata.var["ensembl_id"].astype(str))
+            if alt[1] > best[1]:
+                best, route = alt, "recovered_via_ensembl_id"
 
-        if int(best.sum()) == n_flagged:
+        mask, n_present, n_keys = best
+        if mask is not None and n_present == n_keys:
             if route != "direct":
                 ctx.metadata["trajectory_hvg_axis_alignment"] = route
                 logger.info(
                     "TRAJECTORY: HVG flags re-keyed through var['ensembl_id'] to match "
-                    "the expression axis (%d/%d recovered).", int(best.sum()), n_flagged,
+                    "the expression axis (%d/%d distinct keys).", n_present, n_keys,
                 )
-            return best
+            return mask
 
         ctx.metadata["trajectory_hvg_axis_alignment"] = "unavailable_axis_mismatch"
-        ctx.metadata["trajectory_hvg_aligned_fraction"] = round(
-            float(best.sum()) / n_flagged, 4)
+        ctx.metadata["trajectory_hvg_aligned_fraction"] = (
+            round(n_present / n_keys, 4) if n_keys else 0.0)
         logger.warning(
-            "TRAJECTORY: only %d of %d highly-variable genes align onto the expression "
-            "axis (best route: %s), so the HVG restriction is NOT applied and all %d "
-            "genes are used as candidates, variance-ranked. On a counts matrix that "
-            "favours the highest-expressed genes, not the most variable — a weaker "
+            "TRAJECTORY: only %d of %d distinct highly-variable gene keys are present on "
+            "the expression axis (best route: %s), so the HVG restriction is NOT applied "
+            "and all %d genes are used as candidates, variance-ranked. On a counts matrix "
+            "that favours the highest-expressed genes, not the most variable -- a weaker "
             "criterion, recorded rather than silently substituted. adata.var and the "
             "correlated matrix address genes in different namespaces.",
-            int(best.sum()), n_flagged, route, int(expr_sub.n_vars),
+            n_present, n_keys, route, int(expr_sub.n_vars),
         )
         return None
 

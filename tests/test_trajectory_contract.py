@@ -231,7 +231,7 @@ def test_absent_or_empty_hvg_flag_yields_no_mask():
     assert TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx) is None
 
 
-def _contaminated_pair(unnamed_frac, n=400, n_hvg=40, seed=0):
+def _contaminated_pair(unnamed_frac, n=400, n_hvg=40, seed=0, keep_ensembl_id=True):
     """CELLxGENE-shaped file where a fraction of features have no symbol.
 
     `normalize_var_to_symbols` deliberately keeps the Ensembl ID for a feature whose
@@ -242,7 +242,9 @@ def _contaminated_pair(unnamed_frac, n=400, n_hvg=40, seed=0):
     ens = [f"ENSG{i:011d}" for i in range(n)]
     unnamed = set(rng.choice(n, int(n * unnamed_frac), replace=False).tolist())
     syms = [ens[i] if i in unnamed else f"SYM{i}" for i in range(n)]
-    var = pd.DataFrame({"ensembl_id": ens}, index=pd.Index(syms, dtype=object))
+    var = pd.DataFrame(index=pd.Index(syms, dtype=object))
+    if keep_ensembl_id:
+        var["ensembl_id"] = ens
     hv = np.zeros(n, bool)
     hv[rng.choice(n, n_hvg, replace=False)] = True
     var["highly_variable"] = hv
@@ -252,8 +254,9 @@ def _contaminated_pair(unnamed_frac, n=400, n_hvg=40, seed=0):
     return adata, expr_sub, set(np.array(ens)[hv].tolist())
 
 
+@pytest.mark.parametrize("keep_ensembl_id", [True, False])
 @pytest.mark.parametrize("unnamed_frac", [0.2, 0.48, 0.52, 0.6, 0.75, 0.95])
-def test_alignment_never_returns_a_partially_correct_mask(unnamed_frac):
+def test_alignment_never_returns_a_partially_correct_mask(unnamed_frac, keep_ensembl_id):
     """Pins the rule from ABOVE: a mask is returned only when it is COMPLETE.
 
     The first version of this fix used a sufficiency threshold -- accept the direct
@@ -264,9 +267,18 @@ def test_alignment_never_returns_a_partially_correct_mask(unnamed_frac):
     as contamination increased.
 
     Crucially, the four tests above could not see it -- raising the constant to 1.0 left
-    all of them green. This one fails for any sufficiency threshold below 1.0.
+    all of them green.
+
+    The `keep_ensembl_id=False` arm is what actually exercises the rule. With the column
+    present the Ensembl re-key always succeeds, so the direct-join result is never the one
+    tested and any threshold passes; a review showed the first version of this test
+    asserted it pinned the threshold while reaching the refusal branch zero times.
+    Without the column the only available join is the contaminated direct one, which is
+    large but incomplete -- exactly the input a sufficiency threshold accepts and a
+    completeness rule refuses.
     """
-    adata, expr_sub, expected = _contaminated_pair(unnamed_frac)
+    adata, expr_sub, expected = _contaminated_pair(
+        unnamed_frac, keep_ensembl_id=keep_ensembl_id)
     ctx = _MinimalCtx(adata)
     mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
 

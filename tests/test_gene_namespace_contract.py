@@ -240,8 +240,8 @@ def test_externally_symbolified_file_gets_its_repair_key_backfilled():
     Ensembl IDs in `adata.raw.var_names`, and every downstream re-keying failed anyway.
     Measured on the real LUSC file: the trajectory HVG restriction was lost permanently.
     """
-    adata = _adata(SYMBOLS)
-    raw = _adata(ENSEMBL_IDS)
+    adata = _adata(SYMBOLS, {"probe": ["a", "b", "c", "d"]})
+    raw = _adata(ENSEMBL_IDS, {"probe": ["a", "b", "c", "d"]})
     adata.raw = raw
 
     prov = normalize_var_to_symbols(adata)
@@ -272,3 +272,70 @@ def test_backfill_does_not_overwrite_an_existing_ensembl_id():
     prov = normalize_var_to_symbols(adata)
     assert "ensembl_id_backfill" not in prov
     assert list(adata.var["ensembl_id"]) == ["KEEP1", "KEEP2", "KEEP3", "KEEP4"]
+
+
+# ------------------------------------------- backfill order verification (2026-08-02)
+# Second-round review finding. Equal lengths do NOT establish that `var` and `.raw` are
+# in the same gene order: AnnData leaves `.raw` untouched when the gene axis is sliced or
+# reordered, so `adata[:, sorted_order]` permutes `var` and not `.raw`. An earlier
+# version of the backfill trusted the length alone. Measured on the real 17,764-gene LUSC
+# file prepared with `var_names = var["feature_name"]` then sorted by symbol: the
+# backfilled ensembl_id was correct for 489 genes (2.75%), the trajectory aligner
+# certified it `recovered_via_ensembl_id`, and 1,710 of 2,000 "highly variable genes"
+# were the wrong genes. `ensembl_id` is PERSISTED into final_adata.h5ad, so that
+# 97%-wrong mapping would have reached every downstream consumer unmarked.
+
+
+def _diverged_with_raw(var_order, raw_order, shared_col=None):
+    """`var` and `.raw` in Ensembl/symbol split, with independently controlled orders."""
+    var = pd.DataFrame(index=pd.Index(var_order, dtype=object))
+    raw_var = pd.DataFrame(index=pd.Index(raw_order, dtype=object))
+    if shared_col is not None:
+        var["probe"], raw_var["probe"] = shared_col[0], shared_col[1]
+    n = len(var_order)
+    adata = ad.AnnData(np.zeros((3, n)), var=var)
+    raw = ad.AnnData(np.zeros((3, n)), var=raw_var)
+    adata.raw = raw
+    return adata
+
+
+def test_backfill_refuses_when_raw_gene_order_cannot_be_verified():
+    """No shared column -> the positional assumption is unproven -> refuse."""
+    adata = _diverged_with_raw(SYMBOLS, ENSEMBL_IDS)
+    prov = normalize_var_to_symbols(adata)
+    assert prov["raw_axis_status"] == "ensembl_while_var_symbols"
+    assert prov["ensembl_id_backfill"] == "skipped_raw_order_unverifiable"
+    assert "ensembl_id" not in adata.var.columns
+
+
+def test_backfill_refuses_when_a_shared_column_disagrees_positionally():
+    """The permutation case: lengths match, order does not, and a witness proves it."""
+    adata = _diverged_with_raw(
+        SYMBOLS, ENSEMBL_IDS,
+        shared_col=(["a", "b", "c", "d"], ["d", "c", "b", "a"]),
+    )
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_backfill"] == "skipped_raw_order_unverifiable"
+    assert "ensembl_id" not in adata.var.columns
+
+
+def test_backfill_proceeds_when_a_discriminating_column_agrees():
+    adata = _diverged_with_raw(
+        SYMBOLS, ENSEMBL_IDS,
+        shared_col=(["a", "b", "c", "d"], ["a", "b", "c", "d"]),
+    )
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_backfill"] == "from_raw_positional"
+    assert prov["ensembl_id_backfill_witness"] == "probe"
+    assert list(adata.var["ensembl_id"]) == ENSEMBL_IDS
+
+
+def test_a_constant_shared_column_is_not_a_valid_order_witness():
+    """A column that agrees under ANY permutation proves nothing about order."""
+    adata = _diverged_with_raw(
+        SYMBOLS, ENSEMBL_IDS,
+        shared_col=(["same"] * 4, ["same"] * 4),
+    )
+    prov = normalize_var_to_symbols(adata)
+    assert prov["ensembl_id_backfill"] == "skipped_raw_order_unverifiable"
+    assert "ensembl_id" not in adata.var.columns

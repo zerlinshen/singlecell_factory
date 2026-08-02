@@ -160,11 +160,20 @@ def _backfill_ensembl_id_from_raw(adata, provenance: dict[str, Any]) -> None:
     the column. Measured on the real LUSC file prepared that way: the trajectory aligner
     refused and the HVG restriction was lost permanently, with the fix in place.
 
-    The mapping is POSITIONAL, so it is only taken when ``.raw`` has exactly as many
-    genes as ``var`` — the shape produced by the standard ``adata.raw = adata.copy()`` at
-    ingest, before any subsetting. That assumption is recorded in the provenance rather
-    than hidden, because a reordered ``.raw`` would make it wrong and nothing here can
-    detect that.
+    The mapping is POSITIONAL, and equal lengths are NOT sufficient to justify it.
+    **AnnData does not reorder ``.raw`` when the gene axis is sliced or reordered**, so
+    ``adata[:, sorted_order]`` leaves ``var`` permuted and ``.raw`` untouched, with the
+    lengths still equal. An earlier version of this function trusted the length alone.
+    Measured on the real LUSC file prepared with two ubiquitous one-liners
+    (``var_names = var["feature_name"]``, then sort the gene axis by symbol): the
+    backfilled column was correct for **489 of 17,764 genes — 2.75%** — and, because
+    ``ensembl_id`` is PERSISTED into ``final_adata.h5ad``, that 97%-wrong mapping would
+    have reached every downstream consumer with nothing marking it.
+
+    So the order is verified, not assumed: a column carried by BOTH ``var`` and
+    ``raw.var`` must agree positionally. Without such a column, or when it disagrees,
+    the backfill is refused and the reason recorded. Refusing costs the HVG restriction;
+    guessing corrupts the gene identity of the whole run.
     """
     import pandas as pd
 
@@ -176,16 +185,85 @@ def _backfill_ensembl_id_from_raw(adata, provenance: dict[str, Any]) -> None:
         provenance["ensembl_id_backfill"] = "skipped_raw_length_mismatch"
         return
 
+    witness = _positional_order_witness(adata)
+    if witness is None:
+        provenance["ensembl_id_backfill"] = "skipped_raw_order_unverifiable"
+        logger.warning(
+            "GENE_NAMESPACE: .raw is Ensembl-indexed and var['ensembl_id'] is absent, but "
+            "no column shared by var and raw.var confirms they are in the same gene "
+            "ORDER. Equal lengths do not establish that -- AnnData leaves .raw untouched "
+            "when the gene axis is reordered. Refusing to backfill rather than persist a "
+            "possibly-wrong ensembl_id into the run artifact."
+        )
+        return
+
     adata.var["ensembl_id"] = pd.Index(adata.raw.var_names).astype(str)
     provenance["ensembl_id_backfill"] = "from_raw_positional"
-    logger.warning(
-        "GENE_NAMESPACE: var_names were already symbols but .raw is Ensembl-indexed and "
-        "var['ensembl_id'] was absent, so downstream re-keying had no join key. Backfilled "
-        "ensembl_id from adata.raw.var_names POSITIONALLY (%d genes, lengths match). This "
-        "assumes .raw preserves var's gene order, which holds for the standard "
-        "`adata.raw = adata.copy()` ingest; recorded as ensembl_id_backfill in provenance.",
-        int(adata.n_vars),
+    provenance["ensembl_id_backfill_witness"] = witness
+    logger.info(
+        "GENE_NAMESPACE: backfilled var['ensembl_id'] from adata.raw.var_names "
+        "positionally (%d genes); gene ORDER verified via the shared column %r.",
+        int(adata.n_vars), witness,
     )
+
+
+# A witness must be able to distinguish orderings. A boolean flag agrees positionally
+# under any permutation that only swaps genes sharing its value -- sorting within groups
+# does exactly that -- so it proves almost nothing. Require the shared columns, taken
+# together, to identify most genes uniquely.
+_ORDER_WITNESS_MIN_DISTINCT_FRACTION = 0.5
+
+
+def _positional_order_witness(adata) -> str | None:
+    """Proof that ``var`` and ``raw.var`` are in the same gene order, or ``None``.
+
+    Compares every column carried by BOTH frames, as one composite key, positionally.
+    On the real file ``raw.var`` carries ``feature_name`` — the detector that catches the
+    permuted-order corruption instantly (positional agreement 489/17,764 when permuted,
+    17,764/17,764 when intact).
+
+    Returns the composite's description so the provenance records WHAT was checked, not
+    merely that something was.
+    """
+    import pandas as pd
+
+    raw = getattr(adata, "raw", None)
+    if raw is None:
+        return None
+    try:
+        raw_var = raw.var
+    except (AttributeError, ValueError):  # pragma: no cover - defensive
+        return None
+
+    shared = [c for c in raw_var.columns
+              if c in adata.var.columns and len(adata.var) == len(raw_var)]
+    if not shared:
+        return None
+
+    agreeing = []
+    for col in shared:
+        left = pd.Series(adata.var[col]).astype(str).to_numpy()
+        right = pd.Series(raw_var[col]).astype(str).to_numpy()
+        if left.shape == right.shape and (left == right).all():
+            agreeing.append(str(col))
+    if not agreeing:
+        return None
+
+    composite = pd.Series(
+        ["\x1f".join(vals) for vals in
+         zip(*(pd.Series(adata.var[c]).astype(str).tolist() for c in agreeing))]
+    )
+    n_distinct = composite.nunique()
+    if n_distinct < _ORDER_WITNESS_MIN_DISTINCT_FRACTION * len(composite):
+        logger.warning(
+            "GENE_NAMESPACE: columns %s agree positionally between var and raw.var, but "
+            "together they take only %d distinct values across %d genes -- too coarse to "
+            "prove the two frames are in the same gene ORDER (any permutation within a "
+            "value group preserves them). Treating the order as unverified.",
+            agreeing, n_distinct, len(composite),
+        )
+        return None
+    return "+".join(agreeing)
 
 
 def normalize_var_to_symbols(adata) -> dict[str, Any]:
