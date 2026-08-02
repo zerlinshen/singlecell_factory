@@ -141,9 +141,18 @@ class TumorMicroenvironmentModule:
     @staticmethod
     def _compute_cyt_score(adata, var_names: set) -> None:
         """Compute CYT score as geometric mean of GZMA and PRF1."""
-        if "GZMA" not in var_names or "PRF1" not in var_names:
-            return
+        # Membership MUST be tested on the matrix that will be indexed. `var_names` is
+        # derived from adata, but the values are read from adata.raw when present, and the
+        # two axes diverge: the ingest-boundary Ensembl->symbol conversion
+        # (workflow/modular/_gene_symbols.normalize_var_to_symbols) rewrites adata.var and
+        # leaves adata.raw.var in Ensembl space. The old check therefore passed on
+        # adata.var_names and then raised ValueError from .index() on the raw axis.
+        # Same real-data bug found in cell_communication.py on 2026-08-02 (KeyError 'CCL2');
+        # synthetic fixtures never caught it because they carry no `.raw`.
         expr = adata.raw.to_adata() if adata.raw else adata
+        expr_names = set(expr.var_names)
+        if "GZMA" not in expr_names or "PRF1" not in expr_names:
+            return
         gzma_idx = list(expr.var_names).index("GZMA")
         prf1_idx = list(expr.var_names).index("PRF1")
         gzma = expr.X[:, gzma_idx]
@@ -161,8 +170,11 @@ class TumorMicroenvironmentModule:
     @staticmethod
     def _profile_checkpoints(adata, var_names: set) -> pd.DataFrame | None:
         """Compute mean checkpoint expression per cell type."""
+        # Same invariant as _compute_cyt_score: filter against the axis being indexed.
         expr = adata.raw.to_adata() if adata.raw else adata
-        available = {label: gene for label, gene in CHECKPOINT_GENES.items() if gene in var_names}
+        expr_names = set(expr.var_names)
+        available = {label: gene for label, gene in CHECKPOINT_GENES.items()
+                     if gene in expr_names}
         if not available:
             return None
 

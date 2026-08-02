@@ -177,16 +177,39 @@ class CellCommunicationModule:
             ("CCL5", "CCR5"),        # RANTES / CCR5
         ]
 
-        var_names = set(adata.var_names)
+        # Resolve the expression matrix FIRST, then test membership against the very
+        # object that will be indexed.
+        #
+        # Real-data bug found 2026-08-02 on canonically-ingested LUSC data
+        # (KeyError: 'CCL2'): membership was tested against `adata.var_names` while the
+        # index map was built from `adata.raw`. Those two axes diverge, because the
+        # ingest-boundary Ensembl->symbol conversion
+        # (workflow/modular/_gene_symbols.normalize_var_to_symbols) rewrites `adata.var`
+        # and leaves `adata.raw.var` in Ensembl space. So 'CCL2' was present in
+        # adata.var_names and absent from adata.raw.var_names, and the lookup crashed.
+        # Synthetic fixtures never caught it because they carry no `.raw`.
+        cell_types = adata.obs["cell_type"].unique()
+        expr = adata.raw.to_adata() if adata.raw else adata
+
+        var_names = set(expr.var_names)
         valid_pairs = [(l, r) for l, r in lr_pairs if l in var_names and r in var_names]
 
         if not valid_pairs:
+            # Distinguish "this tissue genuinely lacks these pairs" from "the gene axis is
+            # in the wrong namespace", which previously produced the same opaque message.
+            from .._gene_symbols import looks_like_ensembl
+
+            if looks_like_ensembl(list(expr.var_names)[:200]):
+                raise ValueError(
+                    "No valid ligand-receptor pairs found: the expression gene axis is "
+                    "Ensembl-indexed, but the built-in L-R list is in symbol space. "
+                    f"(matrix used: {'adata.raw' if adata.raw else 'adata'}). Ensure the "
+                    "ingest-boundary symbol normalisation covered this matrix."
+                )
             raise ValueError("No valid ligand-receptor pairs found in dataset.")
 
         # Collect all genes needed for valid L-R pairs
         needed_genes = sorted({g for pair in valid_pairs for g in pair})
-        cell_types = adata.obs["cell_type"].unique()
-        expr = adata.raw.to_adata() if adata.raw else adata
 
         gene_to_idx = {g: i for i, g in enumerate(expr.var_names)}
         gene_indices = [gene_to_idx[g] for g in needed_genes]
