@@ -426,12 +426,67 @@ def _summarize_run_status(
     }
 
 
+def _restate_raw_axis_at_manifest_time(ctx: PipelineContext) -> None:
+    """Re-measure the `.raw` gene axis against the artifact actually being written.
+
+    `gene_namespace` is captured once, at the ingest boundary. But `.raw` is REASSIGNED
+    later in the run, so by manifest time the recorded status can describe a state no
+    module ever saw. Two reachable paths, neither exotic:
+
+    * Cell Ranger ingest yields no `.raw`, so ingest records ``absent``; `clustering.py`
+      then sets ``adata.raw = adata``. The manifest says ``absent`` for an artifact that
+      has one. Benign in direction, still factually wrong.
+    * **The harmful one, and it is the DEFAULT path.** `_contract_violation` resolves the
+      GPU failure policy to ``restore-cpu`` for any ``gpu_mode != "force"``. On GPU
+      failure `clustering.py` sets ``adata.raw = None`` and the CPU lanes re-assign
+      ``adata.raw = adata`` in SYMBOL space. The manifest still asserts
+      ``ensembl_while_var_symbols`` / ``raw_axis_diverged: True`` for a run whose artifact
+      is ``matches_var``.
+
+    That second case is why this matters beyond tidiness: a divergence flag that claims a
+    split which no longer exists cannot be used as gate input or as reviewer evidence,
+    which is exactly what it was introduced to be.
+
+    Both timepoints are recorded rather than one overwriting the other — the ingest
+    reading explains what the modules saw, the manifest reading describes the artifact on
+    disk, and a disagreement between them is itself information.
+    """
+    namespace = ctx.metadata.get("gene_namespace")
+    if not isinstance(namespace, dict) or ctx.adata is None:
+        return
+    try:
+        from ._gene_symbols import describe_raw_axis
+
+        current = describe_raw_axis(ctx.adata)
+    except Exception as exc:  # pragma: no cover - never block a manifest write
+        namespace["raw_axis_at_manifest_error"] = repr(exc)
+        return
+
+    at_ingest = namespace.get("raw_axis_status")
+    namespace["raw_axis_status_at_ingest"] = at_ingest
+    namespace["raw_axis_status_at_manifest"] = current.get("raw_axis_status")
+    namespace["raw_axis_diverged_at_manifest"] = current.get("raw_axis_diverged")
+    if current.get("raw_n_genes") is not None:
+        namespace["raw_n_genes_at_manifest"] = current["raw_n_genes"]
+
+    if at_ingest is not None and at_ingest != current.get("raw_axis_status"):
+        namespace["raw_axis_reassigned_during_run"] = True
+        logger.warning(
+            "GENE_NAMESPACE: adata.raw was REASSIGNED during the run. At ingest the axis "
+            "was %r; the artifact being written is %r. Both timepoints are recorded; use "
+            "raw_axis_status_at_manifest to describe final_adata.h5ad and "
+            "raw_axis_status_at_ingest to describe what the modules saw.",
+            at_ingest, current.get("raw_axis_status"),
+        )
+
+
 def _save_manifest(
     ctx: PipelineContext,
     requested_modules: list[str] | None = None,
     planned_modules: list[str] | None = None,
 ) -> Path:
     ctx.flush_figures()
+    _restate_raw_axis_at_manifest_time(ctx)
     if ctx.adata is not None:
         ctx.adata.write(ctx.run_dir / "final_adata.h5ad")
     summary = _summarize_run_status(

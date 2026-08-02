@@ -426,3 +426,85 @@ def test_shipped_ensembl_id_is_unverified_when_raw_lengths_differ():
     adata._inplace_subset_var(np.array([True, True, False, False]))
     prov = normalize_var_to_symbols(adata)
     assert prov["ensembl_id_source"] == "preexisting_unverified"
+
+
+# ------------------------------- .raw reassignment during the run (2026-08-02, round 4)
+# `gene_namespace` is captured once at ingest, but `.raw` is REASSIGNED later, so the
+# recorded status could describe a state no module ever saw and no artifact ever had.
+# Two reachable paths, and the second is the DEFAULT:
+#   (a) Cell Ranger yields no `.raw` -> ingest records `absent`; clustering.py then sets
+#       `adata.raw = adata`. Benign in direction, still factually wrong.
+#   (b) GPU failure policy resolves to `restore-cpu` for any gpu_mode != "force";
+#       clustering.py nulls `.raw` and the CPU lanes re-assign it in SYMBOL space, while
+#       the manifest still asserts ensembl_while_var_symbols / raw_axis_diverged: True.
+# (b) is why this matters: a divergence flag asserting a split that no longer exists
+# cannot serve as gate input or reviewer evidence, which is what it exists to be.
+
+from workflow.modular.pipeline import _restate_raw_axis_at_manifest_time
+
+
+def _ctx_with(adata, namespace):
+    return SimpleNamespace(adata=adata, metadata={"gene_namespace": namespace})
+
+
+def test_manifest_restates_raw_axis_after_cellranger_assigns_it():
+    adata = _adata(SYMBOLS)
+    prov = normalize_var_to_symbols(adata)
+    assert prov["raw_axis_status"] == "absent"
+
+    adata.raw = adata                      # clustering.py, checkpoint_policy=full
+    ctx = _ctx_with(adata, prov)
+    _restate_raw_axis_at_manifest_time(ctx)
+
+    ns = ctx.metadata["gene_namespace"]
+    assert ns["raw_axis_status_at_ingest"] == "absent"
+    assert ns["raw_axis_status_at_manifest"] == "matches_var"
+    assert ns["raw_axis_reassigned_during_run"] is True
+    assert ns["raw_n_genes_at_manifest"] == len(SYMBOLS)
+
+
+def test_manifest_stops_asserting_a_divergence_the_gpu_fallback_removed():
+    """The harmful direction, on the default GPU policy."""
+    adata = _adata(ENSEMBL_IDS, {"feature_name": SYMBOLS})
+    adata.raw = adata.copy()
+    prov = normalize_var_to_symbols(adata)
+    assert prov["raw_axis_status"] == "ensembl_while_var_symbols"
+    assert prov["raw_axis_diverged"] is True
+
+    adata.raw = None                       # clustering.py:446 on GPU failure
+    adata.raw = adata                      # _run_cpu re-assigns, now in symbol space
+    ctx = _ctx_with(adata, prov)
+    _restate_raw_axis_at_manifest_time(ctx)
+
+    ns = ctx.metadata["gene_namespace"]
+    assert ns["raw_axis_status_at_manifest"] == "matches_var"
+    assert ns["raw_axis_diverged_at_manifest"] is False
+    assert ns["raw_axis_reassigned_during_run"] is True
+    # The ingest reading is preserved, not overwritten: it explains what the modules saw.
+    assert ns["raw_axis_status_at_ingest"] == "ensembl_while_var_symbols"
+
+
+def test_no_reassignment_is_not_reported_as_one():
+    adata = _adata(ENSEMBL_IDS, {"feature_name": SYMBOLS})
+    adata.raw = adata.copy()
+    prov = normalize_var_to_symbols(adata)
+    ctx = _ctx_with(adata, prov)
+    _restate_raw_axis_at_manifest_time(ctx)
+
+    ns = ctx.metadata["gene_namespace"]
+    assert ns["raw_axis_status_at_manifest"] == ns["raw_axis_status_at_ingest"]
+    assert "raw_axis_reassigned_during_run" not in ns
+
+
+def test_restatement_never_blocks_a_manifest_write():
+    """A manifest that fails to write loses the whole run's provenance."""
+    class _Exploding:
+        var_names = pd.Index(SYMBOLS, dtype=object)
+
+        @property
+        def raw(self):
+            raise RuntimeError("backing store closed")
+
+    ctx = _ctx_with(_Exploding(), {"raw_axis_status": "absent"})
+    _restate_raw_axis_at_manifest_time(ctx)
+    assert "raw_axis_at_manifest_error" in ctx.metadata["gene_namespace"]
