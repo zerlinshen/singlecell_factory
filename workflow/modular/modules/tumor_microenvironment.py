@@ -10,6 +10,7 @@ from ._scanpy_compat import import_scanpy_or_stub
 
 sc = import_scanpy_or_stub()
 
+from .._gene_symbols import ExpressionAxis, resolve_expression_axis
 from ..context import PipelineContext
 from . import score_gene_sets
 
@@ -102,20 +103,20 @@ class TumorMicroenvironmentModule:
         if adata is None or "cell_type" not in adata.obs.columns:
             raise ValueError("TME scoring requires cell type annotations.")
 
-        var_names = set(adata.var_names if adata.raw is None else adata.raw.var_names)
+        axis = resolve_expression_axis(adata)
 
         # --- Score TME signatures ---
         scored_sigs = score_gene_sets(adata, TME_SIGNATURES, "tme")
 
         # CYT score: geometric mean of GZMA and PRF1 on raw expression
         # (per Rooney et al. definition, distinct from additive gene set score)
-        self._compute_cyt_score(adata, var_names)
+        self._compute_cyt_score(adata, axis)
 
         if not scored_sigs:
             raise ValueError("Insufficient TME signature genes found in dataset.")
 
         # --- Checkpoint expression profiling ---
-        checkpoint_data = self._profile_checkpoints(adata, var_names)
+        checkpoint_data = self._profile_checkpoints(adata, axis)
 
         # --- Save tables ---
         tme_cols = [c for c in adata.obs.columns if c.startswith("tme_")]
@@ -139,7 +140,7 @@ class TumorMicroenvironmentModule:
         self._plot_visualizations(adata, ctx, scored_sigs, checkpoint_data)
 
     @staticmethod
-    def _compute_cyt_score(adata, var_names: set) -> None:
+    def _compute_cyt_score(adata, axis: ExpressionAxis) -> None:
         """Compute CYT score as geometric mean of GZMA and PRF1."""
         # Membership MUST be tested on the matrix that will be indexed. `var_names` is
         # derived from adata, but the values are read from adata.raw when present, and the
@@ -149,12 +150,12 @@ class TumorMicroenvironmentModule:
         # adata.var_names and then raised ValueError from .index() on the raw axis.
         # Same real-data bug found in cell_communication.py on 2026-08-02 (KeyError 'CCL2');
         # synthetic fixtures never caught it because they carry no `.raw`.
-        expr = adata.raw.to_adata() if adata.raw else adata
-        expr_names = set(expr.var_names)
+        expr = axis.expression
+        expr_names = axis.gene_set
         if "GZMA" not in expr_names or "PRF1" not in expr_names:
             return
-        gzma_idx = list(expr.var_names).index("GZMA")
-        prf1_idx = list(expr.var_names).index("PRF1")
+        gzma_idx = axis.gene_names.index("GZMA")
+        prf1_idx = axis.gene_names.index("PRF1")
         gzma = expr.X[:, gzma_idx]
         prf1 = expr.X[:, prf1_idx]
         if hasattr(gzma, "toarray"):
@@ -168,17 +169,17 @@ class TumorMicroenvironmentModule:
         adata.obs["cyt_score"] = np.sqrt(np.maximum(gzma, 0) * np.maximum(prf1, 0))
 
     @staticmethod
-    def _profile_checkpoints(adata, var_names: set) -> pd.DataFrame | None:
+    def _profile_checkpoints(adata, axis: ExpressionAxis) -> pd.DataFrame | None:
         """Compute mean checkpoint expression per cell type."""
         # Same invariant as _compute_cyt_score: filter against the axis being indexed.
-        expr = adata.raw.to_adata() if adata.raw else adata
-        expr_names = set(expr.var_names)
+        expr = axis.expression
+        expr_names = axis.gene_set
         available = {label: gene for label, gene in CHECKPOINT_GENES.items()
                      if gene in expr_names}
         if not available:
             return None
 
-        gene_to_idx = {g: i for i, g in enumerate(expr.var_names)}
+        gene_to_idx = {g: i for i, g in enumerate(axis.gene_names)}
         records = []
         for cell_type in adata.obs["cell_type"].unique():
             mask = (adata.obs["cell_type"] == cell_type).values

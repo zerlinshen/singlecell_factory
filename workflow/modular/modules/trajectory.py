@@ -13,6 +13,7 @@ from ._scanpy_compat import import_scanpy_or_stub
 sc = import_scanpy_or_stub()
 from scipy import sparse
 
+from .._gene_symbols import resolve_expression_axis
 from ..context import PipelineContext
 
 logger = logging.getLogger(__name__)
@@ -376,7 +377,8 @@ class TrajectoryModule:
 
         # Find genes most correlated with pseudotime.
         # Limit candidate genes to keep memory/runtime bounded on large datasets.
-        expr = adata.raw.to_adata() if adata.raw else adata
+        axis = resolve_expression_axis(adata)
+        expr = axis.expression
         expr_sub = expr[valid]
         pt_vals = pt.loc[valid].values.astype(np.float32)
         n_cells = float(len(pt_vals))

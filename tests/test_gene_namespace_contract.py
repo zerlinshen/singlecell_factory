@@ -30,6 +30,7 @@ from workflow.modular._gene_symbols import (
     find_symbol_column,
     looks_like_ensembl,
     normalize_var_to_symbols,
+    resolve_expression_axis,
 )
 from workflow.modular.modules.qc import QCModule
 
@@ -62,6 +63,36 @@ def test_detects_ensembl_and_symbol_axes():
     assert not looks_like_ensembl(SYMBOLS)
     # Versioned Ensembl IDs are still Ensembl IDs.
     assert looks_like_ensembl([f"{g}.7" for g in ENSEMBL_IDS])
+
+
+def test_checked_expression_axis_binds_names_to_the_raw_matrix_it_returns():
+    adata = _adata(ENSEMBL_IDS, {"feature_name": SYMBOLS})
+    adata.raw = adata.copy()
+    normalize_var_to_symbols(adata)
+
+    axis = resolve_expression_axis(adata)
+
+    assert axis.source == "adata.raw"
+    assert axis.expression.n_vars == len(ENSEMBL_IDS)
+    assert axis.gene_names == tuple(ENSEMBL_IDS)
+    assert axis.gene_set == frozenset(ENSEMBL_IDS)
+    assert tuple(adata.var_names) == tuple(SYMBOLS), "the live axis is deliberately different"
+    with pytest.raises(TypeError):
+        axis.gene_names[0] = "MUTATED"
+
+
+def test_checked_expression_axis_uses_live_matrix_when_raw_is_absent():
+    adata = _adata(SYMBOLS)
+    axis = resolve_expression_axis(adata)
+    assert axis.source == "adata"
+    assert axis.expression is adata
+    assert axis.gene_names == tuple(SYMBOLS)
+
+
+def test_checked_expression_axis_rejects_duplicate_gene_keys():
+    adata = _adata(["DUP", "DUP", "GENE"])
+    with pytest.raises(ValueError, match="duplicate gene names"):
+        resolve_expression_axis(adata)
 
 
 def test_symbol_column_discovery_rejects_ensembl_and_placeholder_columns():

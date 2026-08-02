@@ -217,6 +217,20 @@ The pipeline refuses to start when the factory git tree is dirty unless
 `--allow-dirty` is passed. With `--allow-dirty`, `diff_sha256` is recorded
 in `manifest.json` for forensics.
 
+### Gene-axis safety
+
+Prepared atlas files may legitimately keep `adata.raw.var_names` in Ensembl space after
+the live `adata.var_names` axis is normalized to symbols. Modules that read a possibly
+raw matrix must call `workflow.modular._gene_symbols.resolve_expression_axis()`, which
+returns the selected expression object together with its own immutable, unique gene
+index and verifies matrix/observation alignment. Never select `.raw` and independently
+read gene names from `adata.var`.
+
+Positional recovery of `var["ensembl_id"]` is fail-closed: every composite witness key
+must be unique. Even one tied symbol group permits an invisible within-group permutation
+and therefore cannot certify positional stable-ID assignment. The suite-level static
+guard is an additional bounded review aid; it does not replace the runtime accessor.
+
 ### Contracts vendoring
 
 The Python-R bundle schema lives canonically at `contracts/bundle_schema.yaml`

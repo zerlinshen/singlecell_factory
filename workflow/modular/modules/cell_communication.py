@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from .._gene_symbols import resolve_expression_axis
 from ..context import PipelineContext
 
 
@@ -189,9 +190,10 @@ class CellCommunicationModule:
         # adata.var_names and absent from adata.raw.var_names, and the lookup crashed.
         # Synthetic fixtures never caught it because they carry no `.raw`.
         cell_types = adata.obs["cell_type"].unique()
-        expr = adata.raw.to_adata() if adata.raw else adata
+        axis = resolve_expression_axis(adata)
+        expr = axis.expression
 
-        var_names = set(expr.var_names)
+        var_names = axis.gene_set
         valid_pairs = [(l, r) for l, r in lr_pairs if l in var_names and r in var_names]
 
         if not valid_pairs:
@@ -199,11 +201,11 @@ class CellCommunicationModule:
             # in the wrong namespace", which previously produced the same opaque message.
             from .._gene_symbols import looks_like_ensembl
 
-            if looks_like_ensembl(list(expr.var_names)[:200]):
+            if looks_like_ensembl(axis.gene_names[:200]):
                 raise ValueError(
                     "No valid ligand-receptor pairs found: the expression gene axis is "
                     "Ensembl-indexed, but the built-in L-R list is in symbol space. "
-                    f"(matrix used: {'adata.raw' if adata.raw else 'adata'}). Ensure the "
+                    f"(matrix used: {axis.source}). Ensure the "
                     "ingest-boundary symbol normalisation covered this matrix."
                 )
             raise ValueError("No valid ligand-receptor pairs found in dataset.")
@@ -211,7 +213,7 @@ class CellCommunicationModule:
         # Collect all genes needed for valid L-R pairs
         needed_genes = sorted({g for pair in valid_pairs for g in pair})
 
-        gene_to_idx = {g: i for i, g in enumerate(expr.var_names)}
+        gene_to_idx = {g: i for i, g in enumerate(axis.gene_names)}
         gene_indices = [gene_to_idx[g] for g in needed_genes]
         gene_col_map = {g: i for i, g in enumerate(needed_genes)}
 
@@ -324,5 +326,4 @@ class CellCommunicationModule:
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "cell_communication_heatmap.png", bbox_inches="tight")
         plt.close()
-
 

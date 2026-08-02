@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,64 @@ _SYMBOL_COLUMN_CANDIDATES: tuple[str, ...] = (
 
 # Below this fraction of Ensembl-shaped entries we treat the axis as symbols.
 _ENSEMBL_FRACTION_THRESHOLD = 0.5
+
+
+@dataclass(frozen=True)
+class ExpressionAxis:
+    """An expression object coupled to the immutable gene keys used to index it."""
+
+    expression: Any
+    gene_names: tuple[str, ...]
+    source: str
+
+    @property
+    def gene_set(self) -> frozenset[str]:
+        return frozenset(self.gene_names)
+
+
+def resolve_expression_axis(adata) -> ExpressionAxis:
+    """Return the selected expression matrix and the exact gene index it owns.
+
+    Downstream modules historically selected ``adata.raw`` and then independently read
+    ``adata.var_names``. Those axes legitimately diverge after ingest normalises the live
+    axis to symbols. This is the single runtime boundary for that choice: callers receive
+    the matrix and an immutable tuple captured from *that matrix*, never a free-floating
+    name set that could have come from another AnnData object.
+    """
+    raw = getattr(adata, "raw", None)
+    expression = raw.to_adata() if raw is not None else adata
+    source = "adata.raw" if raw is not None else "adata"
+
+    gene_names = tuple(str(name) for name in expression.var_names)
+    n_vars = int(expression.n_vars)
+    matrix_shape = getattr(expression.X, "shape", None)
+    if len(gene_names) != n_vars or matrix_shape is None or len(matrix_shape) != 2 \
+            or int(matrix_shape[1]) != n_vars:
+        raise RuntimeError(
+            f"Expression-axis contract violated for {source}: "
+            f"n_vars={n_vars}, names={len(gene_names)}, X.shape={matrix_shape}."
+        )
+
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for name in gene_names:
+        if name in seen:
+            duplicates.add(name)
+        else:
+            seen.add(name)
+    if duplicates:
+        raise ValueError(
+            f"Expression-axis contract violated for {source}: duplicate gene names "
+            f"cannot form an unambiguous lookup index (examples: {sorted(duplicates)[:5]})."
+        )
+
+    if int(expression.n_obs) != int(adata.n_obs) or not expression.obs_names.equals(adata.obs_names):
+        raise RuntimeError(
+            f"Expression-axis contract violated for {source}: observation rows are not "
+            "aligned to adata, so cell masks cannot be applied safely."
+        )
+
+    return ExpressionAxis(expression=expression, gene_names=gene_names, source=source)
 
 
 def ensembl_fraction(values) -> float:
