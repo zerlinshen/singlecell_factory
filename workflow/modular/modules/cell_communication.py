@@ -190,7 +190,10 @@ class CellCommunicationModule:
         # adata.var_names and absent from adata.raw.var_names, and the lookup crashed.
         # Synthetic fixtures never caught it because they carry no `.raw`.
         cell_types = adata.obs["cell_type"].unique()
-        axis = resolve_expression_axis(adata)
+        # The built-in L-R resource is symbol-keyed and the LIANA path above uses
+        # ``use_raw=False``. Select the same live symbol axis for the fallback;
+        # ``adata.raw`` may intentionally remain Ensembl-indexed after ingest.
+        axis = resolve_expression_axis(adata, use_raw=False)
         expr = axis.expression
 
         var_names = axis.gene_set
@@ -326,4 +329,3 @@ class CellCommunicationModule:
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "cell_communication_heatmap.png", bbox_inches="tight")
         plt.close()
-

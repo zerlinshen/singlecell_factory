@@ -1,6 +1,8 @@
 """Optional and mandatory modules for modular workflow."""
 from __future__ import annotations
 
+from .._gene_symbols import resolve_expression_axis
+
 
 def score_gene_sets(
     adata,
@@ -17,7 +19,11 @@ def score_gene_sets(
     """
     import scanpy as sc
 
-    var_names = set(adata.var_names if adata.raw is None else adata.raw.var_names)
+    # Membership and Scanpy must address the same matrix. ``use_raw=False`` is
+    # the default because factory gene sets are symbol-keyed and ingest
+    # normalises the live axis while preserving an Ensembl-indexed raw snapshot.
+    axis = resolve_expression_axis(adata, use_raw=use_raw)
+    var_names = axis.gene_set
     scored: list[str] = []
     for name, genes in gene_sets.items():
         valid = [g for g in genes if g in var_names]

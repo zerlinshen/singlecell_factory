@@ -240,7 +240,8 @@ the live `adata.var_names` axis is normalized to symbols. Modules that read a po
 raw matrix must call `workflow.modular._gene_symbols.resolve_expression_axis()`, which
 returns the selected expression object together with its own immutable, unique gene
 index and verifies matrix/observation alignment. Never select `.raw` and independently
-read gene names from `adata.var`.
+read gene names from `adata.var`. Calls to the accessor and to Scanpy `score_genes`
+must name `use_raw=True|False`; an implicit default is rejected by the suite gate.
 
 Positional recovery of `var["ensembl_id"]` is fail-closed: every composite witness key
 must be unique. Even one tied symbol group permits an invisible within-group permutation
@@ -864,7 +865,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
   unstaged tracked and staged diff hashes from the untracked path inventory and
   bounded content hash; the legacy `diff_sha256` field remains available.
 - **Module runtime telemetry** — per-module wall-time automatically stored in `run_manifest.json`
-- **Raw-count integrity for pseudobulk** — `cellranger` stores raw UMI matrix in `adata.layers["counts"]`; `pseudobulk_de` consumes this layer only
+- **Raw-count integrity for pseudobulk** — a real Cell Ranger matrix is copied to `adata.layers["counts"]` with explicit factory/source/schema provenance. A prepared H5AD must already carry the same provenance-qualified layer; its possibly normalized `X` is never copied and relabelled as counts. `pseudobulk_de` validates finite nonnegative integer values without rounding and fails closed for confirmatory inference.
 - **Reference-aware annotation (optional)** — KNN label transfer from reference `h5ad` can override low-certainty marker labels
 - Multi-backend support: each module auto-detects the best available tool
 - Validated against cBioPortal mutation data
@@ -1026,7 +1027,9 @@ sample-root directory, reads an arbitrarily named `.h5ad` by forwarding its
 exact path as `--input-h5ad`, picks optional modules from the canonical module
 catalog, and can also dispatch the v2.1 R bundle export. It does **not** change pipeline
 behavior — pass `--optional-modules` to override the auto plan, or
-`--dry-run` to preview the underlying CLI invocation.
+`--dry-run` to preview the underlying CLI invocation. Explicit, recipe, and automatic
+plans are validated against the canonical module catalog before either preview or
+execution; an unknown module exits nonzero without printing a runnable plan.
 
 <!-- scfactory-governed-h5ad-quickstart -->
 ```bash
@@ -1094,9 +1097,13 @@ Eligibility note:
   contrast contract and an explicit biological `--pseudobulk-sample-col` are
   provided. Each biological sample must map to one condition, each contrast
   needs at least two biological replicates per condition, and raw counts must
-  exist. Invalid explicit contracts fail the run after recording a non-claimable
+  exist in a provenance-qualified `layers["counts"]`. Invalid explicit contracts,
+  normalized/fractional values, or an unverified layer fail the run after recording a non-claimable
   inference payload. Otherwise treat pseudobulk as exploratory and enable it
   intentionally.
+- Confirmatory composition analysis passes the condition and declared covariates into
+  the scCODA sample-level object and propagates the pipeline seed to NUTS. Backend
+  failure remains a visibly exploratory/non-claimable fallback.
 
 1. **Full local analysis (recommended, no external network dependency)**
 

@@ -72,7 +72,7 @@ class ExpressionAxis:
         return frozenset(self.gene_names)
 
 
-def resolve_expression_axis(adata) -> ExpressionAxis:
+def resolve_expression_axis(adata, *, use_raw: bool = True) -> ExpressionAxis:
     """Return the selected expression matrix and the exact gene index it owns.
 
     Downstream modules historically selected ``adata.raw`` and then independently read
@@ -82,8 +82,8 @@ def resolve_expression_axis(adata) -> ExpressionAxis:
     name set that could have come from another AnnData object.
     """
     raw = getattr(adata, "raw", None)
-    expression = raw.to_adata() if raw is not None else adata
-    source = "adata.raw" if raw is not None else "adata"
+    expression = raw.to_adata() if use_raw and raw is not None else adata
+    source = "adata.raw" if use_raw and raw is not None else "adata"
 
     gene_names = tuple(str(name) for name in expression.var_names)
     n_vars = int(expression.n_vars)

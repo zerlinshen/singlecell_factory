@@ -377,7 +377,7 @@ class TrajectoryModule:
 
         # Find genes most correlated with pseudotime.
         # Limit candidate genes to keep memory/runtime bounded on large datasets.
-        axis = resolve_expression_axis(adata)
+        axis = resolve_expression_axis(adata, use_raw=True)
         expr = axis.expression
         expr_sub = expr[valid]
         pt_vals = pt.loc[valid].values.astype(np.float32)

@@ -88,8 +88,6 @@ class ImmunePhenotypingModule:
         if adata is None or "cell_type" not in adata.obs.columns:
             raise ValueError("Immune phenotyping requires cell type annotations.")
 
-        var_names = set(adata.var_names if adata.raw is None else adata.raw.var_names)
-
         # --- Score immune subtypes ---
         scored_subtypes = score_gene_sets(adata, IMMUNE_SUBTYPES, "immune")
         available_subtypes = {s: IMMUNE_SUBTYPES[s] for s in scored_subtypes}

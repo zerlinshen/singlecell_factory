@@ -1388,7 +1388,9 @@ def test_atac_extension_round_trip(rscript_path, tmp_path):
     [
         ("protein", "PROTEIN_MODULE_R_PATH"),
         ("spatial", "SPATIAL_MODULE_R_PATH"),
+        ("multimodal_obsm", "INTEGRATION_MODULE_R_PATH"),
         ("atac", "ATAC_MODULE_R_PATH"),
+        ("hic", "HIC_MODULE_R_PATH"),
     ],
 )
 def test_requested_active_extension_loader_failure_is_hard_error(
@@ -1414,12 +1416,21 @@ def test_requested_active_extension_loader_failure_is_hard_error(
         _make_tiny_spatial_h5ad(h5ad, n_cells=8)
         export_kwargs["include_spatial"] = True
         export_kwargs["spatial_obsm_key"] = "spatial"
-    else:
+    elif extension == "multimodal_obsm":
+        _make_tiny_multimodal_h5ad(h5ad, n_cells=8)
+        export_kwargs["include_multimodal_obsm"] = True
+        export_kwargs["multimodal_obsm_keys"] = ("X_wnn",)
+    elif extension == "atac":
         _make_tiny_atac_h5ad(h5ad)
         export_kwargs["schema_version"] = "v2.2"
         export_kwargs["include_atac"] = True
         export_kwargs["atac_lsi_obsm_key"] = "X_lsi"
         export_kwargs["atac_peaks_uns_key"] = "atac_peaks"
+    else:
+        _make_tiny_hic_h5ad(h5ad)
+        export_kwargs["schema_version"] = "v2.2"
+        export_kwargs["include_hic"] = True
+        export_kwargs["hic_max_contacts"] = 100
 
     export_bundle(ExportConfig(**export_kwargs))
     broken_loader = tmp_path / f"broken_{extension}_module.R"

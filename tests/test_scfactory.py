@@ -235,6 +235,22 @@ def test_subprocess_rna_plan_uses_canonical_catalog_defaults(tmp_path):
     assert actual == list(DEFAULT_OPTIONAL_MODULES)
 
 
+def test_dry_run_rejects_unknown_user_module_before_printing_a_plan(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+    proc = _run_scfactory_subprocess(
+        "run",
+        str(h5ad),
+        "--optional-modules",
+        "clustering,definitely_not_a_module",
+        "--dry-run",
+    )
+
+    assert proc.returncode == 2
+    assert "unknown module name" in proc.stderr
+    assert "definitely_not_a_module" in proc.stderr
+    assert "scfactory: would execute:" not in proc.stdout
+
+
 def test_canonical_cli_accepts_input_h5ad_argument(tmp_path, monkeypatch):
     from workflow.modular import cli
 
@@ -322,6 +338,75 @@ def test_cellranger_loads_the_exact_direct_h5ad(tmp_path):
     assert ctx.adata.shape == (12, 8)
     assert ctx.metadata["prepared_input_source"] == str(arbitrary)
     assert ctx.metadata["prepared_input_h5ad"] == str(arbitrary)
+
+
+def test_direct_normalized_h5ad_never_synthesizes_a_counts_layer(tmp_path):
+    """A requested pseudobulk module must not turn arbitrary X into raw counts."""
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.modules.cellranger import CellRangerModule
+
+    h5ad = _make_minimal_adata(tmp_path)
+    cfg = PipelineConfig(
+        project="adapter-test",
+        output_dir=tmp_path / "output",
+        cellranger=CellRangerConfig(
+            sample_root=h5ad.parent,
+            outs_dir=h5ad.parent / "unused-outs",
+            input_h5ad=h5ad,
+        ),
+        optional_modules=["pseudobulk_de"],
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+    )
+
+    CellRangerModule().run(ctx)
+
+    assert "counts" not in ctx.adata.layers
+    assert ctx.metadata["counts_layer_preserved"] is False
+    assert ctx.metadata["counts_provenance_status"] == "missing_explicit_counts_layer"
+
+
+def test_direct_h5ad_rejects_fractional_declared_counts_at_ingest(tmp_path):
+    """A layer called counts is not sufficient evidence when its values are normalized."""
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.modules.cellranger import CellRangerModule
+
+    anndata = pytest.importorskip("anndata")
+    h5ad = tmp_path / "fractional-counts.h5ad"
+    adata = anndata.AnnData(X=np.ones((12, 8), dtype=np.float32))
+    adata.layers["counts"] = np.full((12, 8), 0.25, dtype=np.float32)
+    adata.uns["counts_provenance"] = {
+        "schema_version": "1.0",
+        "matrix": "layers/counts",
+        "semantic": "raw_umi_counts",
+        "source": "author_supplied_raw_umi_layer",
+    }
+    adata.write_h5ad(h5ad)
+    cfg = PipelineConfig(
+        project="adapter-test",
+        output_dir=tmp_path / "output",
+        cellranger=CellRangerConfig(
+            sample_root=h5ad.parent,
+            outs_dir=h5ad.parent / "unused-outs",
+            input_h5ad=h5ad,
+        ),
+        optional_modules=["pseudobulk_de"],
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+    )
+
+    with pytest.raises(ValueError, match="nonnegative integer raw UMI counts"):
+        CellRangerModule().run(ctx)
 
 
 # ---------------------------------------------------------------------------

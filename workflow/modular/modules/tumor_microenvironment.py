@@ -103,12 +103,14 @@ class TumorMicroenvironmentModule:
         if adata is None or "cell_type" not in adata.obs.columns:
             raise ValueError("TME scoring requires cell type annotations.")
 
-        axis = resolve_expression_axis(adata)
+        # TME signatures are symbol-keyed and score_genes uses the live matrix.
+        # Keep CYT/checkpoint lookups on that exact axis as well.
+        axis = resolve_expression_axis(adata, use_raw=False)
 
         # --- Score TME signatures ---
         scored_sigs = score_gene_sets(adata, TME_SIGNATURES, "tme")
 
-        # CYT score: geometric mean of GZMA and PRF1 on raw expression
+        # CYT score: geometric mean of GZMA and PRF1 on live symbol expression
         # (per Rooney et al. definition, distinct from additive gene set score)
         self._compute_cyt_score(adata, axis)
 

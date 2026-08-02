@@ -101,7 +101,9 @@ def test_composition_random_state_threaded_through_run(tmp_path, monkeypatch):
     )
     # Force the scipy fallback path (skip optional pertpy/scCODA).
     monkeypatch.setattr(
-        CompositionModule, "_try_pertpy", staticmethod(lambda adata, design: None)
+        CompositionModule,
+        "_try_pertpy",
+        staticmethod(lambda adata, design, random_state: None),
     )
     # Silence figure side-effects; we only care about the seed threading.
     monkeypatch.setattr(

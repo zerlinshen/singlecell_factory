@@ -351,6 +351,12 @@ def test_pseudobulk_confirmatory_mode_records_contract(tmp_path, monkeypatch):
     counts = np.tile(np.array([[10, 1], [8, 2], [9, 1]], dtype=np.int32), (4, 1))
     adata = AnnData(np.log1p(counts.astype(np.float32)))
     adata.layers["counts"] = sparse.csr_matrix(counts)
+    adata.uns["counts_provenance"] = {
+        "schema_version": "1.0",
+        "matrix": "layers/counts",
+        "semantic": "raw_umi_counts",
+        "source": "test_raw_umi_fixture",
+    }
     adata.var_names = ["g1", "g2"]
     adata.obs["sample"] = ["S1"] * 3 + ["S2"] * 3 + ["S3"] * 3 + ["S4"] * 3
     adata.obs["cell_type"] = ["Tumor"] * 12

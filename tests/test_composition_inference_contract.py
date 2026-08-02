@@ -7,7 +7,9 @@ produced sample-level coefficients instead of the requested condition contrast.
 from __future__ import annotations
 
 import sys
+import subprocess
 from types import SimpleNamespace
+from pathlib import Path
 
 import anndata as ad
 import numpy as np
@@ -88,15 +90,21 @@ class _FakeSccoda:
     def __init__(self) -> None:
         self.load_kwargs: dict = {}
         self.formula = ""
+        self.available_covariates: set[str] = set()
+        self.rng_key: int | None = None
 
     def load(self, adata, **kwargs):
         self.load_kwargs = kwargs
+        self.available_covariates = set(kwargs.get("covariate_obs") or ())
         return {"adata": adata}
 
     def prepare(self, data, *, formula, reference_cell_type):
+        if "condition" not in self.available_covariates:
+            raise ValueError("condition missing from generated sample observations")
         self.formula = formula
 
-    def run_nuts(self, data, *, num_warmup, num_samples):
+    def run_nuts(self, data, *, num_warmup, num_samples, rng_key=0):
+        self.rng_key = rng_key
         return None
 
     def credible_effects(self, data):
@@ -116,6 +124,7 @@ def test_three_vs_three_models_condition_not_sample(tmp_path, monkeypatch):
         }
     )
     ctx = _ctx(tmp_path, adata)
+    ctx.cfg.random_state = 314
     fake = _FakeSccoda()
     monkeypatch.setitem(
         sys.modules,
@@ -127,13 +136,55 @@ def test_three_vs_three_models_condition_not_sample(tmp_path, monkeypatch):
     CompositionModule().run(ctx)
 
     assert fake.load_kwargs["sample_identifier"] == "sample"
+    assert fake.load_kwargs["covariate_obs"] == ["condition"]
     assert fake.formula == "C(condition)"
+    assert fake.rng_key == 314
     result = pd.read_csv(ctx.table_dir / "composition_test_results.csv")
     assert result["covariate"].str.contains("condition", regex=False).all()
     assert not result["covariate"].str.contains("C1|C2|C3|K1|K2|K3").any()
     assert ctx.metadata["composition_sample_col"] == "sample"
     assert ctx.metadata["composition_condition_col"] == "condition"
     assert ctx.metadata["composition_claimable"] is True
+
+
+def test_real_pertpy_load_prepare_receives_sample_covariates() -> None:
+    """Exercise the installed pertpy 1.x API without running expensive MCMC."""
+    python = Path("/home/zerlinshen/conda/envs/sc_gpu/bin/python")
+    if not python.is_file():
+        pytest.skip("sc_gpu Python is unavailable")
+    probe = """
+import anndata as ad
+import numpy as np
+import pandas as pd
+import pertpy as pt
+
+samples = ["C1", "C2", "C3", "K1", "K2", "K3"]
+conditions = ["CTRL"] * 3 + ["KO"] * 3
+obs = pd.DataFrame({
+    "sample": np.repeat(samples, 4),
+    "condition": np.repeat(conditions, 4),
+    "cell_type": ["A", "A", "B", "B"] * 6,
+})
+adata = ad.AnnData(X=np.ones((len(obs), 1)), obs=obs)
+sccoda = pt.tl.Sccoda()
+data = sccoda.load(
+    adata,
+    type="cell_level",
+    generate_sample_level=True,
+    cell_type_identifier="cell_type",
+    sample_identifier="sample",
+    covariate_obs=["condition"],
+)
+sccoda.prepare(data, formula="C(condition)", reference_cell_type="automatic")
+assert "condition" in data["coda"].obs.columns
+"""
+    completed = subprocess.run(
+        [str(python), "-c", probe],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
 
 
 def test_no_explicit_condition_is_descriptive_and_never_calls_sccoda(

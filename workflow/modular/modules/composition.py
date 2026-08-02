@@ -118,7 +118,11 @@ class CompositionModule:
             inference_status = "descriptive_only_no_condition_contract"
             claimable = False
         else:
-            test_results = self._try_pertpy(analysis_adata, design)
+            test_results = self._try_pertpy(
+                analysis_adata,
+                design,
+                random_state=int(getattr(ctx, "random_state", 42)),
+            )
 
         if design.condition_col is not None and test_results is not None:
             engine = "sccoda_pertpy"
@@ -341,7 +345,12 @@ class CompositionModule:
         return adata[mask].copy()
 
     @staticmethod
-    def _try_pertpy(adata, design: CompositionDesign) -> pd.DataFrame | None:
+    def _try_pertpy(
+        adata,
+        design: CompositionDesign,
+        *,
+        random_state: int,
+    ) -> pd.DataFrame | None:
         """Attempt scCODA compositional analysis via pertpy."""
         try:
             import pertpy as pt
@@ -350,13 +359,19 @@ class CompositionModule:
             sccoda_data = sccoda.load(
                 adata, type="cell_level", generate_sample_level=True,
                 cell_type_identifier="cell_type", sample_identifier=design.sample_col,
+                covariate_obs=[design.condition_col, *design.covariates],
             )
             sccoda.prepare(
                 sccoda_data,
                 formula=design.formula,
                 reference_cell_type="automatic",
             )
-            sccoda.run_nuts(sccoda_data, num_warmup=500, num_samples=1000)
+            sccoda.run_nuts(
+                sccoda_data,
+                num_warmup=500,
+                num_samples=1000,
+                rng_key=int(random_state),
+            )
             result = sccoda.credible_effects(sccoda_data)
 
             # `credible_effects` returns a Series indexed by (Covariate, Cell Type), so
@@ -404,7 +419,11 @@ class CompositionModule:
             # pertpy INSTALLED in sc_gpu yet failing on import, so a message saying
             # "unavailable" sent the reader looking for a missing package that was there.
             import importlib.util as _ilu
-            _present = _ilu.find_spec("pertpy") is not None
+            try:
+                _present = _ilu.find_spec("pertpy") is not None
+            except (ImportError, ValueError):
+                import sys as _sys
+                _present = "pertpy" in _sys.modules
             logger.warning(
                 "pertpy scCODA %s (%s: %s) -- falling back to per-cell-type marginal tests.",
                 "is INSTALLED but FAILED" if _present else "is NOT INSTALLED",

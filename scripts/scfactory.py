@@ -425,6 +425,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         planned = plan_optional_modules(modality)
         plan_source = f"auto for modality={modality}"
 
+    unknown_modules = sorted(set(planned) - _known_module_names())
+    if unknown_modules:
+        print(
+            f"scfactory: unknown module name(s) {unknown_modules!r} in {plan_source}.\n"
+            "  choose names from workflow.modular.module_catalog.MODULE_SPECS; "
+            "no dry-run or real run was started.",
+            file=sys.stderr,
+        )
+        return 2
+
     project = args.project or (
         f"scfactory_{recipe['name']}" if recipe else f"scfactory_{modality}"
     )

@@ -24,6 +24,12 @@ def _ctx(tmp_path, *, sample_col="sample", sample_condition_pairs=None):
     counts = np.tile(np.array([[10, 2]], dtype=np.int32), (len(samples), 1))
     adata = ad.AnnData(np.log1p(counts.astype(np.float32)))
     adata.layers["counts"] = sparse.csr_matrix(counts)
+    adata.uns["counts_provenance"] = {
+        "schema_version": "1.0",
+        "matrix": "layers/counts",
+        "semantic": "raw_umi_counts",
+        "source": "test_raw_umi_fixture",
+    }
     adata.var_names = ["g1", "g2"]
     adata.obs["sample"] = samples
     adata.obs["cell_type"] = "Tumor"
@@ -217,6 +223,37 @@ def test_explicit_contrast_missing_counts_records_then_raises(tmp_path):
     assert ctx.metadata["pseudobulk_de_status"] == "failed_missing_counts_layer"
     assert ctx.metadata["pseudobulk_de_inference_status"] == (
         "not_testable_missing_raw_counts"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+def test_confirmatory_contract_rejects_unprovenanced_integer_counts(tmp_path):
+    ctx = _ctx(tmp_path)
+    del ctx.adata.uns["counts_provenance"]
+
+    with pytest.raises(ValueError, match="provenance-qualified"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_unverified_raw_counts"
+    )
+    assert ctx.metadata["pseudobulk_de_claimable"] is False
+
+
+@pytest.mark.parametrize("bad_value", [0.25, -1.0, np.nan, np.inf])
+def test_confirmatory_contract_rejects_invalid_counts_even_with_provenance(
+    tmp_path, bad_value
+):
+    ctx = _ctx(tmp_path)
+    values = np.full(ctx.adata.shape, 2.0, dtype=np.float64)
+    values[0, 0] = bad_value
+    ctx.adata.layers["counts"] = sparse.csr_matrix(values)
+
+    with pytest.raises(ValueError, match="nonnegative integer raw UMI counts"):
+        PseudobulkDEModule().run(ctx)
+
+    assert ctx.metadata["pseudobulk_de_inference_status"] == (
+        "not_testable_invalid_raw_counts"
     )
     assert ctx.metadata["pseudobulk_de_claimable"] is False
 

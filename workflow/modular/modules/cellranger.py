@@ -7,6 +7,10 @@ import anndata as ad
 import pandas as pd
 
 from ._scanpy_compat import has_api, import_scanpy_or_stub, scanpy_import_error
+from ._counts_contract import (
+    stamp_factory_counts_provenance,
+    validate_counts_layer_contract,
+)
 from .._gene_symbols import normalize_var_to_symbols
 
 sc = import_scanpy_or_stub()
@@ -206,12 +210,26 @@ class CellRangerModule:
                 ctx.metadata["sample_id_filter_applied"] = sample_ids
                 ctx.metadata["sample_id_filter_n_before"] = int(n_before)
                 ctx.metadata["sample_id_filter_n_after"] = int(adata.n_obs)
-            if self._needs_counts_layer(ctx) and "counts" not in adata.layers:
-                # Keep the logical raw-count layer available for pseudobulk but
-                # defer any heavy lazy-backend materialization until the
-                # pseudobulk module actually needs it.
-                adata.layers["counts"] = adata.X.copy()
-            ctx.metadata["counts_layer_preserved"] = bool(self._needs_counts_layer(ctx))
+            if self._needs_counts_layer(ctx):
+                if "counts" in adata.layers:
+                    contract = validate_counts_layer_contract(adata)
+                    ctx.metadata["counts_layer_contract"] = contract
+                    ctx.metadata["counts_layer_preserved"] = True
+                    ctx.metadata["counts_provenance_status"] = (
+                        "validated_explicit_counts_layer"
+                    )
+                else:
+                    # An arbitrary/prepared AnnData X may be log-normalized. Never
+                    # manufacture a raw-count claim by copying it into a layer whose
+                    # name downstream code trusts. Confirmatory pseudobulk will fail
+                    # closed with the missing-count contract; exploratory runs skip.
+                    ctx.metadata["counts_layer_preserved"] = False
+                    ctx.metadata["counts_provenance_status"] = (
+                        "missing_explicit_counts_layer"
+                    )
+            else:
+                ctx.metadata["counts_layer_preserved"] = "counts" in adata.layers
+                ctx.metadata["counts_provenance_status"] = "not_requested"
             ctx.adata = adata
             ctx.metadata["prepared_input_h5ad"] = (
                 str(prepared_h5ad)
@@ -249,7 +267,18 @@ class CellRangerModule:
         # massive clustering-first runs.
         if self._needs_counts_layer(ctx):
             adata.layers["counts"] = adata.X.copy()
-        ctx.metadata["counts_layer_preserved"] = bool(self._needs_counts_layer(ctx))
+            stamp_factory_counts_provenance(
+                adata, source="cellranger_raw_feature_bc_matrix"
+            )
+            ctx.metadata["counts_layer_contract"] = validate_counts_layer_contract(
+                adata
+            )
+            ctx.metadata["counts_provenance_status"] = "validated_factory_reader"
+        else:
+            ctx.metadata["counts_provenance_status"] = "not_requested"
+        ctx.metadata["counts_layer_preserved"] = bool(
+            self._needs_counts_layer(ctx) and "counts" in adata.layers
+        )
         ctx.adata = adata
         ctx.metadata["cellranger_outs"] = str(outs)
         ctx.metadata["raw_cells"] = int(adata.n_obs)

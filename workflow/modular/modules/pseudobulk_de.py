@@ -13,6 +13,11 @@ import pandas as pd
 from scipy import sparse
 
 from ..context import PipelineContext
+from ._counts_contract import (
+    CountsContractError,
+    validate_counts_layer_contract,
+    validate_nonnegative_integer_counts,
+)
 
 
 __references__ = {
@@ -144,7 +149,6 @@ class PseudobulkDEModule:
             )
             raise ValueError(contract_message or "Invalid confirmatory pseudobulk contract.")
         exploratory = bool(getattr(cfg, "exploratory_group_vs_rest", False))
-
         configured_sample_col = getattr(cfg, "sample_col", None)
         if explicit_contrasts and (
             not configured_sample_col or configured_sample_col not in adata.obs.columns
@@ -245,6 +249,63 @@ class PseudobulkDEModule:
             ctx.status(self.name, "skipped", msg)
             return
 
+        if not explicit_contrasts and not exploratory:
+            msg = contract_message or (
+                "No explicit pseudobulk contrast contract provided. Pass "
+                "--pseudobulk-contrast-col/--pseudobulk-contrast-a/--pseudobulk-contrast-b "
+                "for confirmatory pseudobulk or enable "
+                "--pseudobulk-exploratory-group-vs-rest."
+            )
+            ctx.metadata["pseudobulk_de_status"] = "skipped_missing_contrast_contract"
+            ctx.metadata["pseudobulk_de_mode"] = "skipped"
+            self._record_inference(
+                ctx,
+                inference_class="not_tested",
+                inference_status="not_testable_missing_contrast_contract",
+                claimable=False,
+            )
+            ctx.status(self.name, "skipped", msg)
+            return
+
+        try:
+            counts_contract = validate_counts_layer_contract(adata)
+        except CountsContractError as exc:
+            message = str(exc)
+            unverified = "provenance-qualified" in message
+            inference_status = (
+                "not_testable_unverified_raw_counts"
+                if unverified
+                else "not_testable_invalid_raw_counts"
+            )
+            ctx.metadata["pseudobulk_de_status"] = (
+                "failed_unverified_raw_counts"
+                if confirmatory_requested and unverified
+                else "failed_invalid_raw_counts"
+                if confirmatory_requested
+                else "skipped_unverified_raw_counts"
+                if unverified
+                else "skipped_invalid_raw_counts"
+            )
+            ctx.metadata["pseudobulk_de_mode"] = (
+                "failed" if confirmatory_requested else "skipped"
+            )
+            self._record_inference(
+                ctx,
+                inference_class=(
+                    "replicate_aware_pseudobulk"
+                    if explicit_contrasts
+                    else "exploratory_pseudobulk"
+                ),
+                inference_status=inference_status,
+                claimable=False,
+                biological_sample_col=sample_col,
+            )
+            if confirmatory_requested:
+                raise ValueError(message) from exc
+            ctx.status(self.name, "skipped", message)
+            return
+        ctx.metadata["pseudobulk_counts_contract"] = counts_contract
+
         try:
             if explicit_contrasts:
                 replicate_contract = self._validate_biological_replicates(
@@ -296,22 +357,6 @@ class PseudobulkDEModule:
                     "group_col": group_col,
                     "contrast_policy": "group_vs_rest",
                 }
-            else:
-                msg = contract_message or (
-                    "No explicit pseudobulk contrast contract provided. Pass "
-                    "--pseudobulk-contrast-col/--pseudobulk-contrast-a/--pseudobulk-contrast-b "
-                    "for confirmatory pseudobulk or enable --pseudobulk-exploratory-group-vs-rest."
-                )
-                ctx.metadata["pseudobulk_de_status"] = "skipped_missing_contrast_contract"
-                ctx.metadata["pseudobulk_de_mode"] = "skipped"
-                self._record_inference(
-                    ctx,
-                    inference_class="not_tested",
-                    inference_status="not_testable_missing_contrast_contract",
-                    claimable=False,
-                )
-                ctx.status(self.name, "skipped", msg)
-                return
         except PseudobulkInferenceContractError as exc:
             logger.warning("%s; skipping pseudobulk DE.", exc)
             ctx.metadata["pseudobulk_de_status"] = f"failed_{exc.inference_status}"
@@ -868,7 +913,12 @@ class PseudobulkDEModule:
         from pydeseq2.dds import DeseqDataSet
         from pydeseq2.ds import DeseqStats
 
-        ci = counts.round().astype(int)
+        validate_nonnegative_integer_counts(
+            counts.to_numpy(), expected_shape=tuple(counts.shape)
+        )
+        # Validation above is the contract. Do not round: rounding would erase the
+        # evidence that normalized expression had entered a raw-count model.
+        ci = counts.astype(np.int64)
         md = meta[[cond_col]].copy()
         md.index = ci.index = pd.RangeIndex(len(md))
         md[cond_col] = md[cond_col].astype(str)
