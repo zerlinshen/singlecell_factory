@@ -6,6 +6,13 @@ AI agents should start with `AI_AGENT_PROTOCOL.md` before using this file. This
 file remains the deep operational guide for running and recovering the modular
 pipeline; it is not deprecated.
 
+Use [../QUICKSTART.md](../QUICKSTART.md) for the suite's tested startup path.
+When recovery work may expose several cross-factory failures, run:
+
+```bash
+GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
+```
+
 This protocol is a beginner-friendly, end-to-end guide for running the current modular scRNA-seq pipeline.
 
 It is aligned with the current codebase (`workflow/modular/*`) and CLI (`python -m workflow.modular.cli`).
@@ -176,7 +183,8 @@ downstream consequences and recorded them in the run ledger.
 | `SC_ALLOW_CELLRANK_FALLBACK=1` | `cell_fate` module: connectivity-diffusion fallback when CellRank raises a non-ImportError exception (ImportError fallback always allowed and stamped) | unset → strict mode raises | `ctx.metadata["cell_fate_fallback_opt_in_acknowledged"] = True`; `adata.uns["cell_fate"]["engine"] = "fallback_connectivity_diffusion"` |
 | `SC_ALLOW_BATCH_BACKEND_SKIP=1` | `batch_correction` module: silent skip when an explicitly-selected scvi/mnn/fastmnn backend fails (Harmony unchanged — always fail-loud) | unset → strict mode raises | `ctx.metadata["batch_correction_skip_opt_in_acknowledged"] = True`; `batch_correction_method_actually_used = "none_opt_in_skip"` |
 | `SC_AMBIENT_TRIGGERS_DISABLE=1` | `ambient_correction` module: force-skip DecontX irrespective of QC triggers (paper-faithful reproduction mode) | unset → triggered-on policy | `adata.uns["ambient_correction"]["decision"] = "force_skip_env_disabled"` |
-| `SC_REQUIRE_PROJECT_ROOT=1` | Pipeline entry: fail-fast on missing `--project-root` instead of falling back to legacy `output/` | unset → DeprecationWarning + legacy fallback | controller error exit |
+| `SC_REQUIRE_PROJECT_ROOT=1` | Pipeline entry: fail-fast on missing `--project-root` instead of entering the measured legacy route | unset → warning + external JSONL access event + `results/` fallback | controller error exit |
+| `SC_LEGACY_OUTPUT_ACCESS_LOG` | Override the compatibility-access JSONL path | XDG state path outside the checkout | controller telemetry; an in-factory path or write failure blocks legacy launch |
 
 A run that sets any of `SC_ALLOW_*_FALLBACK` should record:
 - the env var actually set

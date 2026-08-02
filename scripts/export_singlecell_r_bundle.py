@@ -1883,11 +1883,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     # GOV-2 cutover semantics:
-    # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` emits
-    # `DeprecationWarning` and falls back to legacy `output/`. When
+    # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` records
+    # a contracted access event, emits `DeprecationWarning`, and uses explicit
+    # legacy `--output`. When
     # `SC_REQUIRE_PROJECT_ROOT=1`: a missing `--project-root` is a hard error
     # (exit code 2). Warning and hard-error are mutually exclusive (no
-    # double-fire). Round-2 ADR will flip the default to required.
+    # double-fire). Retirement is governed by the committed deprecation contract.
     if args.project_root is None:
         if os.environ.get("SC_REQUIRE_PROJECT_ROOT") == "1":
             print(
@@ -1909,23 +1910,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         _run_dir = resolve_run_dir(args.project_root, run_id=args.run_id)
         effective_output = bundle_dir(_run_dir)
     else:
-        warnings.warn(
-            "--project-root will be required in a future release; "
-            "legacy --output layout will be removed",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        print(
-            "DeprecationWarning: --project-root will be required in a future release; "
-            "legacy --output layout will be removed",
-            file=sys.stderr,
-        )
         if args.output is None:
             print(
                 "ERROR: --output is required when --project-root is not provided.",
                 file=sys.stderr,
             )
             sys.exit(2)
+        _factory_root = Path(__file__).resolve().parent.parent
+        if str(_factory_root) not in sys.path:
+            sys.path.insert(0, str(_factory_root))
+        from workflow.modular.legacy_output import (
+            legacy_output_warning_message,
+            record_legacy_output_access,
+        )
+        try:
+            telemetry_path = record_legacy_output_access(
+                output_dir=Path(args.output),
+                project="bundle_export",
+            )
+        except (OSError, ValueError) as exc:
+            print(
+                "ERROR: legacy output telemetry could not be recorded; the "
+                "deprecation contract blocks this compatibility export: "
+                f"{exc}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from exc
+        warning_message = legacy_output_warning_message(telemetry_path)
+        warnings.warn(
+            warning_message,
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        print(f"DeprecationWarning: {warning_message}", file=sys.stderr)
         effective_output = args.output
 
     config = ExportConfig(

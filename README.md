@@ -13,6 +13,14 @@ AI agents must start with [AI_AGENT_PROTOCOL.md](AI_AGENT_PROTOCOL.md). That
 file is the onboarding index; `AGENTS.md` / `CLAUDE.md` remain runtime-specific
 authorities, and `PROTOCOL.md` remains the deep operational guide.
 
+Suite startup is centralized in [../QUICKSTART.md](../QUICKSTART.md). When a
+repair may affect several gates, collect the complete failure set from this
+child checkout with:
+
+```bash
+GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
+```
+
 ## Current Validation Status (2026-05-28)
 
 Current factory readiness is split into structural validation and bounded
@@ -207,9 +215,14 @@ python -m workflow.modular.cli \
 Run-id is auto-generated as `<UTC-timestamp>-<short-py-sha>` if omitted, e.g.
 `2026-05-14T1530Z-a3f4c2b`. Regex: `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z-[0-9a-f]{7}$`.
 
-Legacy invocations without `--project-root` still work but emit a
-`DeprecationWarning` to stderr. Deprecation window: **30 days** active shim +
-**14-day silent retirement** (shim removed only after zero accesses in that window).
+Legacy invocations without `--project-root` remain a governed compatibility
+path. Each real launch emits a `DeprecationWarning` and appends a privacy-bounded
+JSONL access event to `$SC_LEGACY_OUTPUT_ACCESS_LOG` or, by default,
+`${XDG_STATE_HOME:-~/.local/state}/singlecell_factory/legacy_output_access.jsonl`.
+`contracts/legacy_factory_output_deprecation.yaml` forbids removal until the
+documented monitoring window has elapsed with zero access, project-root migration
+is complete, and owner approval is recorded. Telemetry write failure blocks the
+legacy launch; it cannot create an unobserved access.
 
 ### Dirty-tree gate
 
@@ -451,9 +464,15 @@ Round-1a governance switches (plan: `/home/zerlinshen/.omc/plans/factories-optim
 
 | Variable | Unset (default) | `=1` |
 |---|---|---|
-| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning` on stderr; falls back to legacy `output/` | Hard error, `sys.exit(2)`. Pass `--project-root` or unset the var. |
+| `SC_REQUIRE_PROJECT_ROOT` | Contracted `DeprecationWarning`, external JSONL access event, then legacy `results/` fallback | Hard error, `sys.exit(2)`. Pass `--project-root` or unset the var. |
 
-Warning and hard-error are mutually exclusive (no double-fire). Round-2 ADR will flip the default to required.
+Warning and hard-error are mutually exclusive (no double-fire). The compatibility
+route is governed by `contracts/legacy_factory_output_deprecation.yaml`. Events
+default to `$XDG_STATE_HOME/singlecell_factory/legacy_output_access.jsonl` (or
+`~/.local/state/...`) and may be redirected with
+`SC_LEGACY_OUTPUT_ACCESS_LOG`. Telemetry failure blocks the legacy launch.
+Removal remains forbidden until migration and owner approval are recorded and
+the complete 14-day access window is silent; silence alone is insufficient.
 
 #### Wave 3 — GPU-failure policy
 
@@ -1584,8 +1603,9 @@ it must not reopen AnnData or recompute velocity/statistics.
 
 Current governed runs must use `--project-root` and write scientific artifacts to
 `/home/zerlinshen/projects/<project-id>/runs/<run-id>/`. The older `--output-dir`
-layout below is retained only for legacy compatibility and local scratch/smoke
-work; do not cite it as the canonical project-root layout.
+layout below is retained only for measured legacy compatibility and local
+scratch/smoke work; do not cite it as the canonical project-root layout. Every
+real access is recorded under the deprecation contract described above.
 
 Each legacy run creates an independent timestamped folder under `--output-dir`
 (CLI default: `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/results`):

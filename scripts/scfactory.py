@@ -54,6 +54,7 @@ _added_repo_path = _repo_path not in sys.path
 if _added_repo_path:
     sys.path.insert(0, _repo_path)
 try:
+    from workflow.modular.legacy_output import LEGACY_DEFAULT_OUTPUT_DIR
     from workflow.modular.module_catalog import MODULE_SPECS
     from workflow.modular.module_catalog import optional_modules_for_modality
 finally:
@@ -440,7 +441,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 2
     output_dir = str(Path(args.out).expanduser().resolve()) if args.out else str(
-        REPO_ROOT / "results"
+        LEGACY_DEFAULT_OUTPUT_DIR
     )
 
     cli_cmd = [
@@ -1345,7 +1346,10 @@ def build_parser() -> argparse.ArgumentParser:
     output_group.add_argument(
         "--out",
         default=None,
-        help="Deprecated factory-local output directory (default: <repo>/results)",
+        help=(
+            "Deprecated compatibility output directory (default: <repo>/results); "
+            "real launches are access-logged by the canonical CLI"
+        ),
     )
     p_run.add_argument(
         "--run-id",

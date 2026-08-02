@@ -1,0 +1,41 @@
+schema_version: legacy_factory_output_deprecation/1.0
+status: deprecated_compatibility
+replacement: --project-root
+
+legacy_surface:
+  entrypoints:
+    - python -m workflow.modular.cli
+    - scripts/scfactory.py run
+    - scripts/export_singlecell_r_bundle.py
+    - scripts/pack_run_for_mac.sh
+  default_output_dir: results
+  cli_flag: --output-dir
+  adapter_flag: --out
+  require_project_root_env: SC_REQUIRE_PROJECT_ROOT
+  require_project_root_value: "1"
+
+telemetry:
+  event: legacy_factory_output_access
+  format: jsonl
+  path_env: SC_LEGACY_OUTPUT_ACCESS_LOG
+  default_state_path: singlecell_factory/legacy_output_access.jsonl
+  write_failure: block_legacy_launch
+  records_inputs: false
+
+retirement:
+  access_window_days: 14
+  monitoring_started_at: "2026-08-02T00:00:00Z"
+  project_root_migration_complete: false
+  owner_approval_recorded: false
+  required_conditions:
+    - zero access events during the full window
+    - all active launchers and automation use --project-root
+    - migration inventory has been reviewed
+    - owner approval is recorded in an append-only governance decision
+
+protection:
+  remove_before_eligible: forbidden
+  preserves_historical_outputs: true
+  notes: >-
+    This contract governs the compatibility path; it does not authorize deletion
+    or rewriting of legacy run evidence.

@@ -18,6 +18,9 @@
 #   Legacy positional <run_dir> argument is still accepted for backward compat.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
 # ---------------------------------------------------------------------------
 # Parse args
 # ---------------------------------------------------------------------------
@@ -63,11 +66,11 @@ else
 fi
 
 # GOV-2 cutover semantics:
-# When SC_REQUIRE_PROJECT_ROOT is UNSET: a missing --project-root emits a
-# deprecation warning and falls back to legacy output/. When
+# When SC_REQUIRE_PROJECT_ROOT is UNSET: a missing --project-root records a
+# contracted access event, emits a warning, and uses the positional run path. When
 # SC_REQUIRE_PROJECT_ROOT=1: a missing --project-root is a hard error
 # (exit code 2). Warning and hard-error are mutually exclusive (no
-# double-fire). Round-2 ADR will flip the default to required.
+# double-fire). Retirement is governed by the committed deprecation contract.
 if [[ -z "$PROJECT_ROOT" ]]; then
   if [[ "${SC_REQUIRE_PROJECT_ROOT:-}" == "1" ]]; then
     echo "ERROR: --project-root is required (SC_REQUIRE_PROJECT_ROOT=1 is set). Pass --project-root or unset the env var." >&2
@@ -80,8 +83,13 @@ if [[ ! -d "$RUN_DIR" ]]; then
   exit 1
 fi
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+if [[ -z "$PROJECT_ROOT" ]]; then
+  PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+    python -m workflow.modular.legacy_output \
+      --output-dir "$RUN_DIR" \
+      --project pack_run_for_mac \
+      >/dev/null
+fi
 
 ASSETS_DIR="${RUN_DIR}/mac_assets"
 if [[ -n "${BUNDLE_DIR_OVERRIDE:-}" ]]; then

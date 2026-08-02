@@ -280,6 +280,9 @@ def test_canonical_cli_plumbs_exact_h5ad_into_pipeline_config(tmp_path, monkeypa
         ],
     )
     monkeypatch.delenv("SC_REQUIRE_PROJECT_ROOT", raising=False)
+    monkeypatch.setenv(
+        "SC_LEGACY_OUTPUT_ACCESS_LOG", str(tmp_path / "legacy-access.jsonl")
+    )
 
     cli.main()
 

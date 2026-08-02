@@ -7,6 +7,13 @@ task routing. Then follow `AGENTS.md` as the root project contract. This file
 is a Codex-specific review/optimization companion and must not bypass the
 canonical onboarding index.
 
+The shared executable entrypoint is [../QUICKSTART.md](../QUICKSTART.md). To
+report all suite failures during a multi-gate repair, run:
+
+```bash
+GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
+```
+
 ## Current Review Focus (2026-05-27)
 
 For pipeline-quality review, start from

@@ -25,8 +25,12 @@ from .config import (
 )
 from .module_catalog import DEFAULT_OPTIONAL_MODULES as DEFAULT_OPTIONAL_MODULE_NAMES
 from .module_catalog import module_help_list
+from .legacy_output import (
+    LEGACY_DEFAULT_OUTPUT_DIR,
+    legacy_output_warning_message,
+    record_legacy_output_access,
+)
 from .pipeline import MODULE_DEPENDENCIES, run_pipeline
-from ..factory_paths import SINGLECELL_FACTORY_ROOT
 
 
 DEFAULT_OPTIONAL_MODULES = ",".join(DEFAULT_OPTIONAL_MODULE_NAMES)
@@ -125,7 +129,7 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Path to Cell Ranger filtered_feature_bc_matrix. Defaults to <sample-root>/outs/filtered_feature_bc_matrix",
     )
-    parser.add_argument("--output-dir", default=str(SINGLECELL_FACTORY_ROOT / "results"))
+    parser.add_argument("--output-dir", default=str(LEGACY_DEFAULT_OUTPUT_DIR))
     parser.add_argument(
         "--optional-modules",
         default=DEFAULT_OPTIONAL_MODULES,
@@ -1067,10 +1071,12 @@ def main() -> None:
 
     # GOV-2 cutover semantics:
     # When `SC_REQUIRE_PROJECT_ROOT` is UNSET: a missing `--project-root` emits
-    # `DeprecationWarning` and falls back to legacy `output/`. When
+    # a contracted warning, records external JSONL access telemetry, and falls
+    # back to legacy `results/`. When
     # `SC_REQUIRE_PROJECT_ROOT=1`: a missing `--project-root` is a hard error
     # (exit code 2). Warning and hard-error are mutually exclusive (no
-    # double-fire). Round-2 ADR will flip the default to required.
+    # double-fire). Retirement is controlled by the explicit deprecation
+    # contract and its measured access window.
     if args.project_root is None:
         if os.environ.get("SC_REQUIRE_PROJECT_ROOT") == "1":
             print(
@@ -1119,17 +1125,26 @@ def main() -> None:
         effective_output_dir = python_dir(_run_dir)
     else:
         import warnings
+        try:
+            telemetry_path = record_legacy_output_access(
+                output_dir=Path(args.output_dir),
+                project=args.project,
+            )
+        except (OSError, ValueError) as exc:
+            print(
+                "ERROR: legacy output telemetry could not be recorded; the "
+                "deprecation contract blocks this compatibility launch: "
+                f"{exc}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from exc
+        warning_message = legacy_output_warning_message(telemetry_path)
         warnings.warn(
-            "--project-root will be required in a future release; "
-            "legacy output/ layout will be removed",
+            warning_message,
             DeprecationWarning,
             stacklevel=2,
         )
-        print(
-            "DeprecationWarning: --project-root will be required in a future release; "
-            "legacy output/ layout will be removed",
-            file=sys.stderr,
-        )
+        print(f"DeprecationWarning: {warning_message}", file=sys.stderr)
         effective_output_dir = Path(args.output_dir)
 
     cfg = PipelineConfig(

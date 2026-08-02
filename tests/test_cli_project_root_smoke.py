@@ -103,7 +103,11 @@ def test_sc_require_project_root_unset_legacy_warns(tmp_path):
     import warnings
 
     # Ensure env var is not set
-    with mock.patch.dict("os.environ", {}, clear=False):
+    with mock.patch.dict(
+        "os.environ",
+        {"SC_LEGACY_OUTPUT_ACCESS_LOG": str(tmp_path / "legacy-access.jsonl")},
+        clear=False,
+    ):
         # Remove the key if present
         import os
         os.environ.pop("SC_REQUIRE_PROJECT_ROOT", None)
@@ -128,7 +132,11 @@ def test_sc_require_project_root_unset_legacy_warns(tmp_path):
     # Now test without --project-root: the main() function emits the warning
     # We test by calling main() and checking it issues DeprecationWarning before
     # hitting pipeline work (which will fail, so we catch SystemExit too)
-    with mock.patch.dict("os.environ", {}, clear=False):
+    with mock.patch.dict(
+        "os.environ",
+        {"SC_LEGACY_OUTPUT_ACCESS_LOG": str(tmp_path / "legacy-access.jsonl")},
+        clear=False,
+    ):
         import os
         os.environ.pop("SC_REQUIRE_PROJECT_ROOT", None)
 
@@ -155,6 +163,12 @@ def test_sc_require_project_root_unset_legacy_warns(tmp_path):
             assert len(deprecation_warnings) >= 1, (
                 f"Expected DeprecationWarning about --project-root, got: {[str(w.message) for w in caught]}"
             )
+    event = json.loads(
+        (tmp_path / "legacy-access.jsonl").read_text(encoding="utf-8")
+    )
+    assert event["event"] == "legacy_factory_output_access"
+    assert event["project"] == "test"
+    assert event["output_dir"] == str((tmp_path / "legacy-output").resolve())
 
 
 def test_sc_require_project_root_set_hard_errors():

@@ -93,8 +93,14 @@ Once data is moved (after SAFETY_DISABLE is removed):
 
 1. For each migrated run, `manifest.json` is written by `manifest_writer.py`
    recording `original_path`, `migrated_at`, factory SHAs, and `bundle_sha256`.
-2. Legacy `output/<thing>` paths are replaced by wrapper scripts that log access
-   events to `<project-root>/runs/<run-id>/logs/legacy_access.log`.
-3. Shims are retired after a 14-day silent window (zero logged accesses).
+2. Existing no-`--project-root` launches are already governed by
+   `../contracts/legacy_factory_output_deprecation.yaml` and record JSONL access
+   events under the external XDG state directory (override:
+   `SC_LEGACY_OUTPUT_ACCESS_LOG`). A telemetry write failure blocks that launch.
+3. Any later path shim must add its own project-run access record without
+   replacing the controller JSONL record.
+4. Compatibility surfaces may be retired only after the contract records
+   migration completion and owner approval and the complete 14-day window has
+   zero accesses. A silent or absent log by itself is not removal authority.
 
 See plan §4b for the full step-by-step sequence.

@@ -6,6 +6,13 @@ Start with `AI_AGENT_PROTOCOL.md` for onboarding, read order, and task routing.
 Then follow this file as the Claude Code runtime contract. Use `PROTOCOL.md`
 for deep operational steps.
 
+The shared executable entrypoint is [../QUICKSTART.md](../QUICKSTART.md). To
+report all suite failures during a multi-gate repair, run:
+
+```bash
+GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
+```
+
 ## Project Precedence (Overrides Global OMC Defaults)
 - This project's rules take precedence over global `~/.claude/CLAUDE.md` orchestration defaults.
 - If global OMC behavior conflicts with project safety/reproducibility constraints, follow this file.
@@ -63,9 +70,12 @@ Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
 | Variable | Unset (default) | `=1` |
 |---|---|---|
-| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning` on stderr; falls back to legacy `output/` | Hard error `sys.exit(2)`. Pass `--project-root` or unset the var. |
+| `SC_REQUIRE_PROJECT_ROOT` | Contracted warning + external JSONL access event; legacy `results/` fallback | Hard error `sys.exit(2)`. Pass `--project-root` or unset the var. |
 
-Warning and hard-error are mutually exclusive. Round-2 ADR will flip the default to required. Gate is mirrored in `scripts/export_singlecell_r_bundle.py` and `scripts/pack_run_for_mac.sh`.
+Warning and hard-error are mutually exclusive. The compatibility route is
+protected by `contracts/legacy_factory_output_deprecation.yaml`; removal needs
+recorded migration completion, owner approval, and a silent 14-day access
+window. `SC_LEGACY_OUTPUT_ACCESS_LOG` may select an external JSONL path.
 
 ### R-factory SHA fields (Round-1a)
 

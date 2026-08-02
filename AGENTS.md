@@ -22,6 +22,13 @@ Start with `AI_AGENT_PROTOCOL.md` for onboarding, read order, and task routing.
 Then follow this file as the Codex/root project contract. Use `PROTOCOL.md` for
 deep operational steps.
 
+The canonical suite startup is [../QUICKSTART.md](../QUICKSTART.md). For a
+complete cross-factory failure report from this checkout, use:
+
+```bash
+GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
+```
+
 ## Mission
 - Protect biological correctness, statistical validity, and reproducibility.
 - Prefer small, reversible edits with verifiable evidence.
@@ -55,9 +62,12 @@ write to `<project-root>/runs/<run-id>/r/`. Manifests land at
 Run-id format: `<UTC-timestamp>-<short-py-sha>`, regex
 `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z-[0-9a-f]{7}$`. Auto-generated if absent.
 
-Legacy invocations without `--project-root` still work but emit a
-`DeprecationWarning` to stderr. Deprecation window: **30 days** active shim +
-**14-day silent retirement** (shim removed only after zero accesses in that window).
+Legacy invocations without `--project-root` remain behind
+`contracts/legacy_factory_output_deprecation.yaml`. A real compatibility launch
+must emit a warning and append external JSONL access telemetry. Do not remove the
+path until its 14-day monitoring window is silent, project-root migration is
+complete, and owner approval is recorded; the current contract keeps both latter
+conditions false.
 
 Dirty-tree gate: the pipeline refuses to start when the factory git tree is dirty
 unless `--allow-dirty` is passed. With `--allow-dirty`, `diff_sha256` is recorded
@@ -83,9 +93,11 @@ Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
 | Variable | Unset (default) | `=1` |
 |---|---|---|
-| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning` on stderr; falls back to legacy `output/` | Hard error `sys.exit(2)`. Pass `--project-root` or unset. |
+| `SC_REQUIRE_PROJECT_ROOT` | Contracted warning + external JSONL access event; legacy `results/` fallback | Hard error `sys.exit(2)`. Pass `--project-root` or unset. |
 
-Warning and hard-error are mutually exclusive. Round-2 ADR flips the default to required. Gate is mirrored in `scripts/export_singlecell_r_bundle.py` and `scripts/pack_run_for_mac.sh`.
+Warning and hard-error are mutually exclusive. Any later default flip must
+satisfy the committed deprecation contract; the gate remains mirrored in
+`scripts/export_singlecell_r_bundle.py` and `scripts/pack_run_for_mac.sh`.
 
 ### R-factory SHA fields (Round-1a)
 
@@ -106,8 +118,10 @@ for scientific artifacts is a bug.
 
 **SC_REQUIRE_PROJECT_ROOT=1 fail-fast**: When invoking the pipeline, prefer
 setting `SC_REQUIRE_PROJECT_ROOT=1` to fail-fast on a missing `--project-root`.
-Never rely on the legacy `output/` fallback — it emits a `DeprecationWarning`
-and will be removed in Round-2.
+Never rely on the legacy `results/` fallback. It is governed by
+`contracts/legacy_factory_output_deprecation.yaml`, emits a warning, and records
+an access event outside the checkout. Do not remove it until migration, owner
+approval, and the full 14-day silent window are all proven.
 
 ## Current State (2026-05-27)
 

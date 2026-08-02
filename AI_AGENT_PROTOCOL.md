@@ -10,6 +10,14 @@
 Canonical onboarding index for AI agents entering
 `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory`.
 
+Use the suite's single executable startup path at
+[../QUICKSTART.md](../QUICKSTART.md). When diagnosing more than one gate, run
+from this checkout:
+
+```bash
+GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
+```
+
 ## Bioinformatics Research Pipeline suite identity
 
 Physical suite layout: this repository is stored at `/home/zerlinshen/Bioinformatics Research Pipeline/singlecell_factory/`. The retired legacy path `/home/zerlinshen/singlecell_factory` is not part of the current contract; migrate automation to this canonical suite path.
@@ -74,10 +82,10 @@ vendored byte-identically into `r_multiomics_factory/contracts/`. Update via
 resolve outputs from `--project-root`.
 
 **SC_REQUIRE_PROJECT_ROOT=1 fail-fast**: Prefer setting this env var when
-invoking the pipeline. Unset → `DeprecationWarning` + legacy fallback. `=1` →
-hard error `sys.exit(2)`. Round-2 ADR will flip the default to required. Gate
-mirrored in `scripts/export_singlecell_r_bundle.py` and
-`scripts/pack_run_for_mac.sh`. Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`.
+invoking the pipeline. Unset → contracted `DeprecationWarning`, an external
+JSONL access event, then legacy fallback. `=1` → hard error `sys.exit(2)`.
+`contracts/legacy_factory_output_deprecation.yaml` forbids removal until the
+project-root migration, owner approval, and 14-day silent window all pass.
 
 ### Environment Switches (Round-1a)
 
@@ -85,7 +93,8 @@ Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
 | Variable | Unset | `=1` |
 |---|---|---|
-| `SC_REQUIRE_PROJECT_ROOT` | `DeprecationWarning`; legacy `output/` fallback | Hard error exit 2 |
+| `SC_REQUIRE_PROJECT_ROOT` | Warning + access telemetry; legacy `results/` fallback | Hard error exit 2 |
+| `SC_LEGACY_OUTPUT_ACCESS_LOG` | XDG state JSONL path | Explicit external JSONL path; paths inside the factory are rejected |
 
 ### R-factory SHA fields (Round-1a)
 
