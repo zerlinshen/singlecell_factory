@@ -2605,7 +2605,7 @@ The most recent canonical work is the **wave5 Trevino PCW21** biology-aware vali
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-02T14:57:37Z`
+Last refreshed: `2026-08-02T15:04:20Z`
 
 ![Workspace structure](docs/architecture/structure.png)
 
@@ -2613,14 +2613,20 @@ Last refreshed: `2026-08-02T14:57:37Z`
 
 | Surface | Type | Governance role |
 | --- | --- | --- |
+| `AGENTS.md` | `file` | governance / entrypoint |
+| `AI_AGENT_PROTOCOL.md` | `file` | governance / entrypoint |
+| `CLAUDE.md` | `file` | governance / entrypoint |
+| `CODEX.md` | `file` | governance / entrypoint |
+| `PROTOCOL.md` | `file` | governance / entrypoint |
+| `README.md` | `file` | governance / entrypoint |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
-| `contracts` | `dir` | workspace area (inferred) |
+| `contracts` | `dir` | contracts / schemas |
 | `data` | `dir` | data / generated artifacts |
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
-| `ops` | `dir` | workspace area (inferred) |
+| `ops` | `dir` | agent-facing memory |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
@@ -2628,15 +2634,9 @@ Last refreshed: `2026-08-02T14:57:37Z`
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
 | `tests` | `dir` | execution / code |
-| `tools` | `dir` | workspace area (inferred) |
+| `tools` | `dir` | execution / code |
 | `workflow` | `dir` | execution / code |
-| `AGENTS.md` | `file` | governance / entrypoint |
-| `AI_AGENT_PROTOCOL.md` | `file` | file artifact (inferred) |
 | `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
-| `CLAUDE.md` | `file` | file artifact (inferred) |
-| `CODEX.md` | `file` | file artifact (inferred) |
-| `environment.yml` | `file` | file artifact (inferred) |
-| `environment_gpu.yml` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 
