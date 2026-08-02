@@ -30,12 +30,13 @@ ad = pytest.importorskip("anndata")
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+R_FACTORY_ROOT = ROOT.parent / "r_multiomics_factory"
 
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle
 
-IO_BUNDLE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle/io_bundle.R"
-ATAC_MODULE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R/atac_module.R"
-HIC_MODULE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R/hic_module.R"
+IO_BUNDLE_R = str(R_FACTORY_ROOT / "R_bundle" / "io_bundle.R")
+ATAC_MODULE_R = str(R_FACTORY_ROOT / "R" / "atac_module.R")
+HIC_MODULE_R = str(R_FACTORY_ROOT / "R" / "hic_module.R")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1379,6 +1380,73 @@ def test_atac_extension_round_trip(rscript_path, tmp_path):
     assert kv["ROWS_MATCH"] == "TRUE"
     assert kv["PEAK_ID"].startswith("chr1:")
     assert int(kv["PLOT_COLORS"]) >= 2
+
+
+@pytest.mark.r_contract
+@pytest.mark.parametrize(
+    ("extension", "loader_env"),
+    [
+        ("protein", "PROTEIN_MODULE_R_PATH"),
+        ("spatial", "SPATIAL_MODULE_R_PATH"),
+        ("atac", "ATAC_MODULE_R_PATH"),
+    ],
+)
+def test_requested_active_extension_loader_failure_is_hard_error(
+    rscript_path, tmp_path, extension, loader_env
+):
+    """An advertised active extension may not degrade to metadata-only success."""
+    h5ad = tmp_path / f"broken_{extension}_loader.h5ad"
+    bundle_dir = tmp_path / f"bundle_broken_{extension}_loader"
+    export_kwargs: dict[str, object] = {
+        "input_h5ad": h5ad,
+        "output_dir": bundle_dir,
+        "obs_columns": ("cell_type", "leiden"),
+        "markers": ("CD3E", "LYZ"),
+        "obsm_keys": ("X_umap", "X_pca"),
+        "schema_version": "v2.1",
+        "format": "parquet",
+    }
+    if extension == "protein":
+        _make_tiny_protein_h5ad(h5ad)
+        export_kwargs["include_protein"] = True
+        export_kwargs["protein_obsm_key"] = "protein_clr"
+    elif extension == "spatial":
+        _make_tiny_spatial_h5ad(h5ad, n_cells=8)
+        export_kwargs["include_spatial"] = True
+        export_kwargs["spatial_obsm_key"] = "spatial"
+    else:
+        _make_tiny_atac_h5ad(h5ad)
+        export_kwargs["schema_version"] = "v2.2"
+        export_kwargs["include_atac"] = True
+        export_kwargs["atac_lsi_obsm_key"] = "X_lsi"
+        export_kwargs["atac_peaks_uns_key"] = "atac_peaks"
+
+    export_bundle(ExportConfig(**export_kwargs))
+    broken_loader = tmp_path / f"broken_{extension}_module.R"
+    broken_loader.write_text(
+        f"stop('intentional {extension} loader failure')\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ)
+    env[loader_env] = str(broken_loader)
+    bundle_dir_r = str(bundle_dir).replace("'", "\\'")
+    proc = subprocess.run(
+        [
+            rscript_path,
+            "-e",
+            f"source('{IO_BUNDLE_R}'); read_bundle_v2('{bundle_dir_r}')",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env=env,
+    )
+
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0, (
+        f"requested {extension} loader failure was silently accepted:\n{combined}"
+    )
+    assert f"requested {extension} extension loader failed" in combined
 
 
 @pytest.mark.r_contract

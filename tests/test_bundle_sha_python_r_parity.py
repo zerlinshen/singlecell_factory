@@ -26,7 +26,6 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle, _bundle_sha256_concat
 
-RSCRIPT_BIN = "/home/zerlinshen/conda/envs/r_multiomics_arrow/bin/Rscript"
 BUNDLE_CACHE_R = ROOT.parent / "r_multiomics_factory" / "R_bundle" / "bundle_cache.R"
 
 
@@ -76,14 +75,10 @@ def synthetic_bundle(tmp_path_factory):
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_bundle_sha_python_r_parity(synthetic_bundle):
+@pytest.mark.r_contract
+def test_bundle_sha_python_r_parity(synthetic_bundle, rscript_path):
     """Python and R must produce identical sha256 for the same bundle."""
-    import os
-    import shutil
-
-    rscript = RSCRIPT_BIN
-    if not Path(rscript).is_file():
-        pytest.skip(f"Rscript not found at {rscript}")
+    rscript = rscript_path
 
     bundle_cache_r = BUNDLE_CACHE_R
     if not bundle_cache_r.is_file():

@@ -41,10 +41,12 @@ ad = pytest.importorskip("anndata")
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+SUITE_ROOT = ROOT.parent
+R_FACTORY_ROOT = SUITE_ROOT / "r_multiomics_factory"
 
 from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle  # noqa: E402
 
-IO_BUNDLE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory/R_bundle/io_bundle.R"
+IO_BUNDLE_R = str(R_FACTORY_ROOT / "R_bundle" / "io_bundle.R")
 
 
 # ---------------------------------------------------------------------------
@@ -52,12 +54,18 @@ IO_BUNDLE_R = "/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_fa
 # is self-contained and the existing test module is not modified)
 # ---------------------------------------------------------------------------
 
-def _run_r(rscript: str, script: str, timeout: int = 180) -> subprocess.CompletedProcess:
+def _run_r(
+    rscript: str,
+    script: str,
+    timeout: int = 180,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess:
     return subprocess.run(
         [rscript, "-e", script],
         capture_output=True,
         text=True,
         timeout=timeout,
+        cwd=cwd,
     )
 
 
@@ -86,6 +94,17 @@ def _maybe_skip_seurat(proc: subprocess.CompletedProcess) -> None:
     """If the R script printed SEURAT_MISSING=1 (Seurat unloadable), skip."""
     if "SEURAT_MISSING=1" in proc.stdout:
         pytest.skip("Seurat unavailable in R env; skipping parity test")
+
+
+@pytest.mark.r_contract
+def test_io_bundle_sources_from_repo_and_suite_working_directories(rscript_path):
+    io_r = IO_BUNDLE_R.replace("'", "\\'")
+    script = f"source('{io_r}'); stopifnot(exists('read_bundle_v2')); cat('OK\\n')"
+
+    for working_dir in (R_FACTORY_ROOT, SUITE_ROOT):
+        proc = _run_r(rscript_path, script, cwd=working_dir)
+        _assert_r_ok(proc, f"io_bundle_source_from_{working_dir.name}")
+        assert "OK" in proc.stdout
 
 
 def _make_clustered_adata(
