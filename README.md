@@ -97,6 +97,9 @@ Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC
 
 Layer-3 small-real validation outputs: `results/small_real_validate_20260426/`.
 File governance authority: `docs/LINUX_FILE_GOVERNANCE.md`.
+The canonical SHA-pinned WNN aggregation executable is
+`scripts/v5_1/apply_wnn_sweep_aggregation.py`; `.omc/` remains scratch state
+and is not a runtime or test dependency.
 
 ### Wave 4 reproducibility evidence (2026-05-16)
 

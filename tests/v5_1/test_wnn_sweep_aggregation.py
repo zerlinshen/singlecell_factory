@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-APPLY_AGGREGATION = REPO_ROOT / ".omc" / "research" / "wave5" / "wnn_sweep_draft" / "apply_aggregation.py"
+APPLY_AGGREGATION = REPO_ROOT / "scripts" / "v5_1" / "apply_wnn_sweep_aggregation.py"
 
 
 def _load_module():
