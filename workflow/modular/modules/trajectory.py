@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -12,6 +14,14 @@ sc = import_scanpy_or_stub()
 from scipy import sparse
 
 from ..context import PipelineContext
+
+logger = logging.getLogger(__name__)
+
+# Fraction of the flagged HVGs that must survive alignment onto the expression axis
+# before the mask is trusted. A healthy `.raw` is a superset of `adata.var`, so a
+# correct alignment recovers ~all of them; anything far below that means the two
+# axes address genes in different namespaces and the mask is meaningless.
+_HVG_AXIS_ALIGNMENT_MIN_FRACTION = 0.5
 
 
 __references__ = {
@@ -235,6 +245,65 @@ class TrajectoryModule:
             plt.close("all")
 
     @staticmethod
+    def _hvg_mask_on_expression_axis(adata, expr_sub, ctx: PipelineContext):
+        """Align ``adata.var["highly_variable"]`` onto the axis actually correlated.
+
+        Real-data defect found 2026-08-02 on the 92,430-cell LUSC dataset. The gene
+        trends are computed over ``adata.raw``, but the HVG flag was reindexed straight
+        from ``adata.var`` — and those two axes are in different namespaces once the
+        ingest boundary converts ``var_names`` Ensembl->symbol while leaving ``.raw``
+        alone (see governance/raw_axis_namespace_divergence_2026-08-02.md).
+
+        The reindex did not fail loudly, and it did not return empty either: the two
+        axes overlap on the handful of features whose ``feature_name`` was itself an
+        Ensembl ID (36 of 17,764 on the real file). So ``candidate_idx`` came back
+        NON-empty with ~5 unnamed pseudogenes, the ``size == 0`` fallback never
+        triggered, and "genes most correlated with pseudotime" was reported from that
+        arbitrary handful instead of from the HVGs. A crash would have been kinder.
+
+        Returns ``None`` when no trustworthy mask can be built, which makes the caller
+        fall back to the full axis — the designed bounded path, since candidates are
+        then variance-ranked down to ``max_candidates``.
+        """
+        if "highly_variable" not in adata.var.columns:
+            return None
+        flags = adata.var["highly_variable"].astype(bool)
+        n_flagged = int(flags.to_numpy().sum())
+        if n_flagged == 0:
+            return None
+        floor = _HVG_AXIS_ALIGNMENT_MIN_FRACTION * n_flagged
+
+        mask = flags.reindex(expr_sub.var_names, fill_value=False).to_numpy()
+        if mask.sum() >= floor:
+            return mask
+
+        # Namespace divergence. Re-key through the Ensembl IDs the ingest boundary
+        # preserved, which is the axis `.raw` is still in.
+        if "ensembl_id" in adata.var.columns:
+            by_ensembl = pd.Series(
+                flags.to_numpy(), index=pd.Index(adata.var["ensembl_id"].astype(str))
+            )
+            by_ensembl = by_ensembl[~by_ensembl.index.duplicated(keep="first")]
+            remask = by_ensembl.reindex(expr_sub.var_names, fill_value=False).to_numpy()
+            if remask.sum() >= floor:
+                ctx.metadata["trajectory_hvg_axis_alignment"] = "recovered_via_ensembl_id"
+                logger.info(
+                    "TRAJECTORY: HVG flags re-keyed through var['ensembl_id'] to match the "
+                    "expression axis (%d/%d recovered).", int(remask.sum()), n_flagged,
+                )
+                return remask
+
+        ctx.metadata["trajectory_hvg_axis_alignment"] = "unavailable_axis_mismatch"
+        logger.warning(
+            "TRAJECTORY: only %d of %d highly-variable genes could be aligned onto the "
+            "expression axis, so the HVG restriction is NOT applied and all %d genes are "
+            "used as candidates (variance-ranked). This means adata.var and the correlated "
+            "matrix address genes in different namespaces.",
+            int(mask.sum()), n_flagged, int(expr_sub.n_vars),
+        )
+        return None
+
+    @staticmethod
     def _plot_gene_trends(adata, ctx: PipelineContext) -> None:
         """Heatmap of top variable genes ordered by pseudotime."""
         if "dpt_pseudotime" not in adata.obs:
@@ -253,9 +322,7 @@ class TrajectoryModule:
         if n_cells <= 1:
             return
 
-        hv_mask = None
-        if "highly_variable" in adata.var.columns:
-            hv_mask = adata.var["highly_variable"].reindex(expr_sub.var_names, fill_value=False).to_numpy()
+        hv_mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
         candidate_idx = np.flatnonzero(hv_mask) if hv_mask is not None else np.arange(expr_sub.n_vars)
         if candidate_idx.size == 0:
             candidate_idx = np.arange(expr_sub.n_vars)

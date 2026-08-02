@@ -93,6 +93,60 @@ def find_symbol_column(var) -> str | None:
     return None
 
 
+def describe_raw_axis(adata) -> dict[str, Any]:
+    """Describe ``adata.raw``'s gene axis relative to ``adata.var_names``.
+
+    ``normalize_var_to_symbols`` rewrites ``adata.var_names`` but deliberately
+    leaves ``adata.raw`` alone: ``.raw`` is an immutable snapshot of the
+    pre-processing state, and rewriting it would change ingest semantics for
+    every module and every already-prepared artifact. The consequence is that
+    on canonically-ingested CELLxGENE data the two axes address genes in
+    *different namespaces*, so a module that tests membership against ``adata``
+    and then reads values out of ``adata.raw`` passes its own guard and raises
+    on the lookup.
+
+    That divergence is legitimate but must not be invisible. This records it so
+    the manifest, the modules, and the reviewer can all see it.
+
+    ``raw_axis_status``
+        ``absent``        — no ``.raw``; ``expr`` falls through to ``adata``.
+        ``matches_var``   — same namespace as ``var_names``; safe to cross-index.
+        ``ensembl_while_var_symbols`` — the divergence described above.
+        ``diverged_other`` — axes differ for some other reason (e.g. ``.raw``
+        retains genes dropped by HVG selection).
+    """
+    provenance: dict[str, Any] = {}
+    raw = getattr(adata, "raw", None)
+    if raw is None:
+        provenance["raw_axis_status"] = "absent"
+        provenance["raw_axis_diverged"] = False
+        return provenance
+
+    raw_names = list(raw.var_names)
+    provenance["raw_n_genes"] = len(raw_names)
+
+    if list(adata.var_names) == raw_names:
+        provenance["raw_axis_status"] = "matches_var"
+        provenance["raw_axis_diverged"] = False
+        return provenance
+
+    raw_ensembl = round(ensembl_fraction(raw_names), 4)
+    provenance["raw_ensembl_fraction"] = raw_ensembl
+    provenance["raw_axis_diverged"] = True
+    if raw_ensembl >= _ENSEMBL_FRACTION_THRESHOLD and not looks_like_ensembl(adata.var_names):
+        provenance["raw_axis_status"] = "ensembl_while_var_symbols"
+        logger.warning(
+            "GENE_NAMESPACE: adata.raw is Ensembl-indexed (%.1f%%) while adata.var_names "
+            "are symbols. Symbol-keyed lookups against .raw WILL fail. Modules must test "
+            "membership against the axis they index (see governance/"
+            "raw_axis_namespace_divergence_2026-08-02.md).",
+            100 * raw_ensembl,
+        )
+    else:
+        provenance["raw_axis_status"] = "diverged_other"
+    return provenance
+
+
 def normalize_var_to_symbols(adata) -> dict[str, Any]:
     """Make ``adata.var_names`` gene symbols when the input is Ensembl-indexed.
 
@@ -103,6 +157,9 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
         ``symbols_already`` — index was already symbol-like, nothing changed.
         ``converted``       — index was Ensembl, symbols applied from ``source_column``.
         ``ensembl_unresolved`` — index is Ensembl but no symbol column exists.
+
+    The returned dict always also carries the ``raw_axis_*`` keys from
+    ``describe_raw_axis`` — see that function for why ``.raw`` is not rewritten.
     """
     import pandas as pd
 
@@ -114,6 +171,7 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
     if not looks_like_ensembl(adata.var_names):
         provenance["status"] = "symbols_already"
         provenance["source_column"] = None
+        provenance.update(describe_raw_axis(adata))
         return provenance
 
     col = find_symbol_column(adata.var)
@@ -131,6 +189,7 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
             list(_SYMBOL_COLUMN_CANDIDATES),
             [str(c) for c in adata.var.columns],
         )
+        provenance.update(describe_raw_axis(adata))
         return provenance
 
     # Preserve the original identifiers before overwriting the index.
@@ -149,6 +208,7 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
     provenance["status"] = "converted"
     provenance["source_column"] = col
     provenance["n_without_symbol"] = int(blank.sum())
+    provenance.update(describe_raw_axis(adata))
     logger.info(
         "GENE_NAMESPACE: converted %d Ensembl-indexed genes to symbols from "
         "var[%r] (%d had no symbol and kept their Ensembl ID); original IDs "

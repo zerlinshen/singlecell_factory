@@ -161,3 +161,71 @@ def test_missing_or_invalid_biological_root_is_non_claimable(
     assert set(pseudotime_table["trajectory_claim_status"]) == {
         "non_claimable_missing_biologically_justified_root"
     }
+
+
+# ------------------------------------------------- HVG axis alignment (2026-08-02)
+# Real-data defect: gene trends are correlated over `adata.raw`, but the HVG flag was
+# reindexed straight off `adata.var`. After the ingest boundary converts var_names
+# Ensembl->symbol and leaves `.raw` alone, those axes are different namespaces. The
+# reindex returned a NON-empty mask of the few features whose symbol was itself an
+# Ensembl ID (36/17,764 on the real LUSC file), so the `size == 0` fallback never fired
+# and the reported "top pseudotime-correlated genes" came from that handful.
+# See governance/raw_axis_namespace_divergence_2026-08-02.md.
+
+_ENS = [f"ENSG{i:011d}" for i in range(8)]
+# "ENSG00000000007" is a var_name that is ITSELF an Ensembl ID -- the real file has 36
+# such unnamed features -- and it is inside the HVG-flagged range on purpose, because
+# that is what makes the naive reindex return a non-empty-but-meaningless mask.
+_SYM = ["GZMA", "ENSG00000000007", "CD8A", "MKI67", "EPCAM", "PTPRC", "COL1A1", "PRF1"]
+
+
+def _diverged_pair(*, keep_ensembl_id=True, n_hvg=6):
+    """adata in symbol space, expression matrix still in Ensembl space."""
+    var = pd.DataFrame(index=pd.Index(_SYM, dtype=object))
+    var["highly_variable"] = [True] * n_hvg + [False] * (len(_SYM) - n_hvg)
+    if keep_ensembl_id:
+        var["ensembl_id"] = _ENS
+    adata = ad.AnnData(np.zeros((4, len(_SYM))), var=var)
+    expr_sub = ad.AnnData(
+        np.zeros((4, len(_ENS))), var=pd.DataFrame(index=pd.Index(_ENS, dtype=object))
+    )
+    return adata, expr_sub
+
+
+def test_hvg_mask_is_rekeyed_through_ensembl_id_when_axes_diverge():
+    adata, expr_sub = _diverged_pair()
+    ctx = _MinimalCtx(adata)
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
+    assert mask is not None
+    assert int(mask.sum()) == 6, "all flagged HVGs must survive alignment"
+    assert ctx.metadata["trajectory_hvg_axis_alignment"] == "recovered_via_ensembl_id"
+
+
+def test_partial_axis_overlap_is_refused_rather_than_silently_used():
+    """The exact failure shape: non-empty but meaningless overlap must NOT be trusted."""
+    adata, expr_sub = _diverged_pair(keep_ensembl_id=False)
+    # 'ENSG00000000007' is both a var_name and an expr var_name, so the naive reindex
+    # returns a non-empty mask -- which is precisely what defeated the size==0 guard.
+    naive = adata.var["highly_variable"].reindex(expr_sub.var_names, fill_value=False)
+    assert 0 < int(naive.to_numpy().sum()) < 6, "fixture must reproduce partial overlap"
+
+    ctx = _MinimalCtx(adata)
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
+    assert mask is None, "an unalignable mask must fall back to the full axis"
+    assert ctx.metadata["trajectory_hvg_axis_alignment"] == "unavailable_axis_mismatch"
+
+
+def test_matching_axes_need_no_realignment_and_record_nothing():
+    adata, _ = _diverged_pair()
+    ctx = _MinimalCtx(adata)
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, adata, ctx)
+    assert int(mask.sum()) == 6
+    assert "trajectory_hvg_axis_alignment" not in ctx.metadata
+
+
+def test_absent_or_empty_hvg_flag_yields_no_mask():
+    adata, expr_sub = _diverged_pair(n_hvg=0)
+    ctx = _MinimalCtx(adata)
+    assert TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx) is None
+    del adata.var["highly_variable"]
+    assert TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx) is None

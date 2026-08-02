@@ -26,6 +26,7 @@ import pandas as pd
 import pytest
 
 from workflow.modular._gene_symbols import (
+    describe_raw_axis,
     find_symbol_column,
     looks_like_ensembl,
     normalize_var_to_symbols,
@@ -110,6 +111,72 @@ def test_unresolved_ensembl_is_reported_not_guessed():
     assert prov["status"] == "ensembl_unresolved"
     assert prov["source_column"] is None
     assert list(adata.var_names) == ENSEMBL_IDS
+
+
+# ------------------------------------------------------- .raw axis divergence
+# Real-data finding, 2026-08-02 (92,430-cell LUSC squamous dataset): converting
+# `var_names` to symbols leaves `.raw` in Ensembl space. Modules that tested
+# membership against `adata` and then read values from `adata.raw` passed their
+# own guard and raised on the lookup. Synthetic fixtures elsewhere carry no
+# `.raw`, so `expr` falls through to `adata` and the two axes are identical by
+# construction — which is exactly why unit tests could not see this. These
+# fixtures therefore build `.raw` explicitly.
+# See governance/raw_axis_namespace_divergence_2026-08-02.md.
+
+
+def _with_ensembl_raw(adata):
+    """Attach a `.raw` in the pre-conversion (Ensembl) namespace, as real ingest does."""
+    adata.raw = adata.copy()
+    return adata
+
+
+def test_raw_axis_divergence_is_recorded_not_silent():
+    adata = _with_ensembl_raw(_adata(ENSEMBL_IDS, {"feature_name": SYMBOLS}))
+    prov = normalize_var_to_symbols(adata)
+
+    assert prov["status"] == "converted"
+    assert list(adata.var_names) == SYMBOLS
+    # The divergence the real run hit, now visible in the manifest.
+    assert prov["raw_axis_diverged"] is True
+    assert prov["raw_axis_status"] == "ensembl_while_var_symbols"
+    assert prov["raw_n_genes"] == len(ENSEMBL_IDS)
+    assert prov["raw_ensembl_fraction"] == 1.0
+
+
+def test_absent_raw_is_reported_as_absent_not_as_agreement():
+    adata = _adata(ENSEMBL_IDS, {"feature_name": SYMBOLS})
+    prov = normalize_var_to_symbols(adata)
+    assert prov["raw_axis_status"] == "absent"
+    assert prov["raw_axis_diverged"] is False
+
+
+def test_matching_raw_axis_is_safe_to_cross_index():
+    adata = _adata(SYMBOLS)
+    adata.raw = adata.copy()
+    prov = normalize_var_to_symbols(adata)
+    assert prov["status"] == "symbols_already"
+    assert prov["raw_axis_status"] == "matches_var"
+    assert prov["raw_axis_diverged"] is False
+
+
+def test_raw_retaining_extra_genes_is_diverged_but_not_a_namespace_split():
+    """HVG selection leaves `.raw` wider than `var`. Same namespace, still not cross-indexable."""
+    adata = _adata(SYMBOLS)
+    adata.raw = adata.copy()
+    adata._inplace_subset_var(np.array([True, True, False, False]))
+    prov = describe_raw_axis(adata)
+    assert prov["raw_axis_status"] == "diverged_other"
+    assert prov["raw_axis_diverged"] is True
+    assert prov["raw_n_genes"] == 4
+
+
+def test_unresolved_ensembl_still_reports_the_raw_axis():
+    """The unresolved branch is the one most likely to be cross-indexed by mistake."""
+    adata = _with_ensembl_raw(_adata(ENSEMBL_IDS))
+    prov = normalize_var_to_symbols(adata)
+    assert prov["status"] == "ensembl_unresolved"
+    # Both axes are Ensembl here, so there is no namespace split to report.
+    assert prov["raw_axis_status"] == "matches_var"
 
 
 # --------------------------------------------------------------- QC enforcement
