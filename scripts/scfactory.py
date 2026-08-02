@@ -11,11 +11,11 @@ Subcommands:
   report  walk a run dir and render a single self-contained HTML report
 
 Hard contracts:
-  * Stdlib only (argparse, json, pathlib, subprocess, shutil, base64, csv,
-    html, datetime). anndata is imported lazily for ``run`` modality
+  * The dependency-light canonical module catalog is the only source for
+    auto-selected modules. anndata is imported lazily for ``run`` modality
     detection on .h5ad inputs.
   * No state mutation in ``doctor`` or ``report``.
-  * Existing CLIs are not modified.
+  * Every planned argument is forwarded visibly to the canonical CLI.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ import datetime as _dt
 import html
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -36,25 +37,28 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXPORT_SCRIPT = REPO_ROOT / "scripts" / "export_singlecell_r_bundle.py"
 RECIPES_DIR = REPO_ROOT / "recipes"
-SCFACTORY_VERSION = "0.3.0"
+DEFAULT_PROJECTS_ROOT = Path.home() / "projects"
+SCFACTORY_VERSION = "0.4.0"
 
 # Report constants (HARD limits per spec).
 REPORT_PNG_EMBED_MAX_BYTES = 10 * 1024 * 1024  # 10 MB per PNG
 REPORT_TOTAL_EMBED_MAX_BYTES = 50 * 1024 * 1024  # 50 MB total embedded
 REPORT_WALK_MAX_DEPTH = 3
 
-# Mirror workflow.modular.module_catalog.DEFAULT_OPTIONAL_MODULES so we don't
-# import the package (keeps scfactory dispatch-only and dependency-light).
-DEFAULT_OPTIONAL_RNA = (
-    "clustering",
-    "differential_expression",
-    "annotation",
-    "trajectory",
-    "pseudo_velocity",
-)
-PROTEIN_EXTRA = ("protein_adt",)
-SPATIAL_EXTRA = ("spatial_ingest", "spatial_neighborhoods")
-MULTIMODAL_EXTRA = ("multimodal_integration",)
+# Import the dependency-light canonical catalog from the repository even when
+# this file is invoked as an absolute script path (where sys.path[0] is
+# ``scripts/``). Import failures are fatal: a stale local fallback would make
+# this adapter advertise a plan different from the canonical CLI.
+_repo_path = str(REPO_ROOT)
+_added_repo_path = _repo_path not in sys.path
+if _added_repo_path:
+    sys.path.insert(0, _repo_path)
+try:
+    from workflow.modular.module_catalog import MODULE_SPECS
+    from workflow.modular.module_catalog import optional_modules_for_modality
+finally:
+    if _added_repo_path:
+        sys.path.remove(_repo_path)
 
 
 # ---------------------------------------------------------------------------
@@ -160,16 +164,7 @@ def detect_modality(input_path: Path) -> tuple[str, list[str]]:
 
 def plan_optional_modules(modality: str) -> list[str]:
     """Map modality -> optional module list."""
-    base = list(DEFAULT_OPTIONAL_RNA)
-    if modality == "rna_only":
-        return base
-    if modality == "cite_seq":
-        return base + list(PROTEIN_EXTRA)
-    if modality == "spatial":
-        return base + list(SPATIAL_EXTRA)
-    if modality == "multimodal":
-        return base + list(PROTEIN_EXTRA) + list(SPATIAL_EXTRA) + list(MULTIMODAL_EXTRA)
-    return base
+    return list(optional_modules_for_modality(modality))
 
 
 # ---------------------------------------------------------------------------
@@ -253,36 +248,9 @@ def _load_recipe(name: str) -> dict[str, Any]:
 
 
 def _known_module_names() -> set[str]:
-    """Read module_catalog.MODULE_SPECS to validate recipe module names.
+    """Return canonical catalog names used to validate recipe modules."""
 
-    Falls back to a hard-coded set of mandatory + DEFAULT_OPTIONAL_RNA +
-    extras if the import fails, so scfactory stays runnable from sources
-    without the workflow package on PYTHONPATH.
-    """
-    try:
-        sys.path.insert(0, str(REPO_ROOT))
-        from workflow.modular import module_catalog  # type: ignore
-
-        return set(module_catalog.MODULE_SPECS.keys())
-    except Exception:
-        # Fallback: minimal known set used elsewhere in this file.
-        return {
-            "cellranger", "qc", "doublet_detection",
-            *DEFAULT_OPTIONAL_RNA,
-            *PROTEIN_EXTRA, *SPATIAL_EXTRA, *MULTIMODAL_EXTRA,
-            "paper_repro", "cell_cycle", "batch_correction",
-            "cnv_inference", "pathway_analysis", "cell_communication",
-            "gene_regulatory_network", "validate_cbioportal",
-            "immune_phenotyping", "tumor_microenvironment",
-            "gene_signature_scoring", "evolution", "pseudobulk_de",
-            "cell_fate", "composition", "metacell", "rna_velocity",
-        }
-    finally:
-        # Don't pollute sys.path beyond this function call.
-        try:
-            sys.path.remove(str(REPO_ROOT))
-        except ValueError:
-            pass
+    return set(MODULE_SPECS)
 
 
 def _validate_recipe(data: dict[str, Any], path: Path, expected_name: str) -> None:
@@ -459,24 +427,44 @@ def cmd_run(args: argparse.Namespace) -> int:
     project = args.project or (
         f"scfactory_{recipe['name']}" if recipe else f"scfactory_{modality}"
     )
-    output_dir = args.out or str(REPO_ROOT / "results")
-
-    # Decide sample-root for the underlying CLI:
-    # - directory input: pass directly.
-    # - h5ad input: the canonical CLI requires --sample-root. We pass the
-    #   parent directory of the .h5ad so cellranger module can resolve outs/
-    #   when applicable; users with bare .h5ad should typically also pass
-    #   --optional-modules excluding cellranger reload, but the existing CLI
-    #   already handles "pre-prepared" inputs.
-    sample_root = str(input_path) if input_path.is_dir() else str(input_path.parent)
+    project_root = (
+        Path(args.project_root).expanduser().resolve()
+        if args.project_root
+        else None
+    )
+    if args.run_id and project_root is None:
+        print(
+            "scfactory: --run-id requires --project-root because legacy output "
+            "directories do not use governed run identifiers.",
+            file=sys.stderr,
+        )
+        return 2
+    output_dir = str(Path(args.out).expanduser().resolve()) if args.out else str(
+        REPO_ROOT / "results"
+    )
 
     cli_cmd = [
         sys.executable, "-m", "workflow.modular.cli",
         "--project", project,
-        "--sample-root", sample_root,
-        "--output-dir", output_dir,
-        "--optional-modules", ",".join(planned),
     ]
+    if input_path.is_file():
+        cli_cmd += ["--input-h5ad", str(input_path)]
+    else:
+        cli_cmd += ["--sample-root", str(input_path)]
+
+    if project_root is not None:
+        cli_cmd += ["--project-root", str(project_root)]
+        if args.run_id:
+            cli_cmd += ["--run-id", args.run_id]
+    else:
+        cli_cmd += ["--output-dir", output_dir]
+
+    cli_cmd += ["--optional-modules", ",".join(planned)]
+
+    if args.scientific_profile:
+        cli_cmd += ["--scientific-profile", args.scientific_profile]
+    if args.acknowledge_scientific_non_equivalence:
+        cli_cmd.append("--acknowledge-scientific-non-equivalence")
 
     # Recipe scale_preset -> --scale-mode passthrough (only if not overridden
     # by a user --optional-modules escape, which is purely about modules).
@@ -490,6 +478,20 @@ def cmd_run(args: argparse.Namespace) -> int:
     if recipe is not None and isinstance(recipe.get("bundle"), dict):
         bundle_cfg = dict(recipe["bundle"])
     bundle_enabled = bool(bundle_cfg.get("enabled", False)) or bool(args.bundle)
+    if bundle_enabled and project_root is not None and not args.run_id:
+        print(
+            "scfactory: governed bundle export requires an explicit --run-id so "
+            "the pipeline and bundle are written to the same run.",
+            file=sys.stderr,
+        )
+        return 2
+    if project_root is not None and args.bundle_out:
+        print(
+            "scfactory: --bundle-out is a legacy-layout option and cannot be "
+            "combined with --project-root; governed bundles live under the run.",
+            file=sys.stderr,
+        )
+        return 2
 
     # Resolve env overrides from recipe (subprocess env, NOT parent env).
     recipe_env: dict[str, str] = {}
@@ -509,7 +511,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         + "  to override: --optional-modules a,b,c    "
         "to preview only: --dry-run"
     )
-    print(f"scfactory: would execute: {' '.join(cli_cmd)}")
+    print(f"scfactory: would execute: {shlex.join(cli_cmd)}")
 
     if args.dry_run:
         return 0
@@ -525,25 +527,47 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     # Bundle export.
     if bundle_enabled:
-        bundle_out = (
-            Path(args.bundle_out).resolve()
-            if args.bundle_out
-            else Path(output_dir) / project / "r_bundle"
-        )
-        # Locate final_adata.h5ad produced by the run.
-        candidate_h5ad = Path(output_dir) / project / "final_adata.h5ad"
-        if not candidate_h5ad.exists():
+        if project_root is not None:
+            governed_python_dir = (
+                project_root / "runs" / args.run_id / "python"
+            )
+            candidates = list(governed_python_dir.glob("*/final_adata.h5ad"))
+            bundle_out = governed_python_dir / "bundle"
+        else:
+            legacy_root = Path(output_dir)
+            candidates = [
+                path
+                for path in (
+                    legacy_root / project / "final_adata.h5ad",
+                    *legacy_root.glob(f"{project}_*/final_adata.h5ad"),
+                )
+                if path.is_file()
+            ]
+            bundle_out = (
+                Path(args.bundle_out).resolve()
+                if args.bundle_out
+                else legacy_root / project / "r_bundle"
+            )
+
+        if not candidates:
             print(
-                f"scfactory: bundle requested but final_adata.h5ad not found at "
-                f"{candidate_h5ad}; skipping bundle export.",
+                "scfactory: bundle requested but no final_adata.h5ad was produced "
+                "in the selected run; bundle export cannot proceed.",
                 file=sys.stderr,
             )
-            return 0
+            return 1
+        candidate_h5ad = max(candidates, key=lambda path: path.stat().st_mtime)
         bundle_cmd: list[str] = [
             sys.executable, str(EXPORT_SCRIPT),
             "--input", str(candidate_h5ad),
-            "--output", str(bundle_out),
         ]
+        if project_root is not None:
+            bundle_cmd += [
+                "--project-root", str(project_root),
+                "--run-id", args.run_id,
+            ]
+        else:
+            bundle_cmd += ["--output", str(bundle_out)]
         # Bundle protein/spatial/multimodal flags: recipe wins, modality is fallback.
         include_protein = bundle_cfg.get(
             "include_protein", modality in ("cite_seq", "multimodal")
@@ -559,7 +583,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         if include_multimodal_obsm:
             bundle_cmd.append("--include-multimodal-obsm")
         print(f"scfactory: bundling -> {bundle_out}")
-        print(f"scfactory: would execute: {' '.join(bundle_cmd)}")
+        print(f"scfactory: would execute: {shlex.join(bundle_cmd)}")
         b_proc = subprocess.run(bundle_cmd, cwd=str(REPO_ROOT), env=sub_env)
         if b_proc.returncode != 0:
             return 1
@@ -732,22 +756,58 @@ def _check_r_packages(rscript_path: str | None) -> dict[str, Any]:
     }
 
 
-def _check_last_run() -> dict[str, Any]:
-    candidates: list[Path] = []
+def _check_last_run(project_roots: list[Path] | None = None) -> dict[str, Any]:
+    """Inspect governed run manifests plus the deprecated local layout.
+
+    Explicit project roots keep the search bounded to paths named by the user.
+    Without one, doctor checks each immediate project under ``~/projects``.
+    Producer-native ``run_manifest.json`` files remain a fallback, while the
+    cross-factory run-root ``manifest.json`` is the governed source of truth.
+    """
+
+    candidates: set[Path] = set()
+    if project_roots:
+        governed_roots = project_roots
+        for root in governed_roots:
+            candidates.update(root.glob("runs/*/manifest.json"))
+            candidates.update(root.glob("runs/*/python/**/run_manifest.json"))
+    elif DEFAULT_PROJECTS_ROOT.is_dir():
+        candidates.update(DEFAULT_PROJECTS_ROOT.glob("*/runs/*/manifest.json"))
+        candidates.update(
+            DEFAULT_PROJECTS_ROOT.glob("*/runs/*/python/**/run_manifest.json")
+        )
+
     for sub in ("results", "output"):
         d = REPO_ROOT / sub
         if d.is_dir():
-            candidates.extend(d.glob("*/run_manifest.json"))
+            candidates.update(d.glob("*/run_manifest.json"))
     if not candidates:
-        return {"status": "warn", "found": False,
-                "message": "no recent run_manifest.json found in results/ or output/"}
+        return {
+            "status": "warn",
+            "found": False,
+            "message": (
+                "no governed manifest.json found under project runs and no "
+                "legacy run_manifest.json found in results/ or output/"
+            ),
+        }
     newest = max(candidates, key=lambda p: p.stat().st_mtime)
     info: dict[str, Any] = {"path": str(newest)}
     try:
         data = json.loads(newest.read_text())
-        modules = data.get("modules") or data.get("module_status") or []
+        modules = (
+            data.get("completed_modules")
+            or data.get("modules_run")
+            or data.get("modules")
+            or data.get("module_status")
+            or []
+        )
         info["module_count"] = len(modules) if hasattr(modules, "__len__") else 0
-        info["status_field"] = data.get("status", "unknown")
+        info["status_field"] = data.get(
+            "overall_status", data.get("status", "unknown")
+        )
+        info["layout"] = (
+            "governed" if newest.name == "manifest.json" else "producer_or_legacy"
+        )
         return {"status": "pass", "found": True, "info": info,
                 "message": (f"last run: {newest.parent.name} "
                             f"(modules={info['module_count']}, "
@@ -759,6 +819,9 @@ def _check_last_run() -> dict[str, Any]:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     rscript = _check_rscript()
+    project_roots = [
+        Path(value).expanduser().resolve() for value in args.project_root
+    ]
     report = {
         "python": _check_python(),
         "conda_envs": _check_conda_envs(),
@@ -766,7 +829,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "bridge_symlinks": _check_bridges(),
         "python_deps": _check_python_deps(),
         "r_packages": _check_r_packages(rscript.get("path")),
-        "last_run": _check_last_run(),
+        "last_run": _check_last_run(project_roots or None),
     }
 
     counts = {"pass": 0, "warn": 0, "fail": 0}
@@ -1269,8 +1332,27 @@ def build_parser() -> argparse.ArgumentParser:
                             "(omit only with --list-recipes)")
     p_run.add_argument("--project", default=None,
                        help="Run name (default: scfactory_<modality>)")
-    p_run.add_argument("--out", default=None,
-                       help="Output directory (default: <repo>/results)")
+    output_group = p_run.add_mutually_exclusive_group()
+    output_group.add_argument(
+        "--project-root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Governed project root; forwards outputs to "
+            "<project-root>/runs/<run-id>/python/"
+        ),
+    )
+    output_group.add_argument(
+        "--out",
+        default=None,
+        help="Deprecated factory-local output directory (default: <repo>/results)",
+    )
+    p_run.add_argument(
+        "--run-id",
+        default=None,
+        metavar="STR",
+        help="Governed run identifier; requires --project-root",
+    )
     p_run.add_argument("--bundle", action="store_true",
                        help="After run, export an R bundle via "
                             "scripts/export_singlecell_r_bundle.py "
@@ -1286,6 +1368,20 @@ def build_parser() -> argparse.ArgumentParser:
                             "(modules + scale-mode + env + bundle config)")
     p_run.add_argument("--list-recipes", action="store_true",
                        help="List available recipes (one per line) and exit 0")
+    p_run.add_argument(
+        "--scientific-profile",
+        default=None,
+        metavar="NAME",
+        help="Forward a named scientific profile to the canonical CLI",
+    )
+    p_run.add_argument(
+        "--acknowledge-scientific-non-equivalence",
+        action="store_true",
+        help=(
+            "Forward explicit acknowledgement for non-canonical scientific "
+            "settings"
+        ),
+    )
     p_run.add_argument("--dry-run", action="store_true",
                        help="Print what would run, do not execute")
     p_run.set_defaults(func=cmd_run)
@@ -1296,6 +1392,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_doc.add_argument("--json", action="store_true",
                        help="Emit machine-readable JSON")
+    p_doc.add_argument(
+        "--project-root",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Governed project root to inspect for runs (repeatable; default: "
+            "all immediate projects under ~/projects)"
+        ),
+    )
     p_doc.set_defaults(func=cmd_doctor)
 
     p_rep = sub.add_parser(

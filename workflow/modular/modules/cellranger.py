@@ -153,14 +153,29 @@ class CellRangerModule:
     def run(self, ctx: PipelineContext) -> None:
         cfg = ctx.cfg.cellranger
         sample_root = cfg.sample_root
-        prepared_h5ad = sample_root / "prepared_input.h5ad"
+        direct_h5ad = cfg.input_h5ad
+        prepared_h5ad = (
+            Path(direct_h5ad)
+            if direct_h5ad is not None
+            else sample_root / "prepared_input.h5ad"
+        )
         prepared_zarr = sample_root / "prepared_input.zarr"
         outs = cfg.outs_dir
 
-        if prepared_h5ad.exists() or prepared_zarr.exists():
-            if prepared_h5ad.exists():
+        if direct_h5ad is not None:
+            if prepared_h5ad.suffix.lower() != ".h5ad":
+                raise ValueError(
+                    f"direct input must use the .h5ad suffix: {prepared_h5ad}"
+                )
+            if not prepared_h5ad.is_file():
+                raise FileNotFoundError(f"direct input h5ad not found: {prepared_h5ad}")
+
+        if direct_h5ad is not None or prepared_h5ad.exists() or prepared_zarr.exists():
+            if direct_h5ad is not None or prepared_h5ad.exists():
                 adata = ad.read_h5ad(prepared_h5ad)
                 ctx.metadata["prepared_input_source"] = str(prepared_h5ad)
+                ctx.metadata["prepared_input_loading_mode"] = "eager_h5ad"
+                ctx.metadata["direct_input_h5ad"] = direct_h5ad is not None
             else:
                 if self._should_lazy_read(prepared_zarr, ctx) and hasattr(ad.experimental, "read_lazy"):
                     adata = ad.experimental.read_lazy(prepared_zarr)
@@ -198,7 +213,11 @@ class CellRangerModule:
                 adata.layers["counts"] = adata.X.copy()
             ctx.metadata["counts_layer_preserved"] = bool(self._needs_counts_layer(ctx))
             ctx.adata = adata
-            ctx.metadata["prepared_input_h5ad"] = str(prepared_h5ad) if prepared_h5ad.exists() else str(prepared_zarr)
+            ctx.metadata["prepared_input_h5ad"] = (
+                str(prepared_h5ad)
+                if direct_h5ad is not None or prepared_h5ad.exists()
+                else str(prepared_zarr)
+            )
             ctx.metadata["raw_cells"] = int(adata.n_obs)
             ctx.metadata["raw_genes"] = int(adata.n_vars)
             return

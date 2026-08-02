@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from .module_catalog import DEFAULT_OPTIONAL_MODULES
+
 
 @dataclass
 class CellRangerConfig:
@@ -11,6 +13,7 @@ class CellRangerConfig:
 
     sample_root: Path
     outs_dir: Path
+    input_h5ad: Path | None = None
     fastq_dir: Path | None = None
     transcriptome_dir: Path | None = None
     sample_id: str = "lusc"
@@ -297,11 +300,7 @@ class PipelineConfig:
     cnv: CNVConfig = field(default_factory=CNVConfig)
     velocity: VelocityConfig = field(default_factory=VelocityConfig)
     optional_modules: list[str] = field(
-        default_factory=lambda: [
-            "clustering",
-            "differential_expression",
-            "annotation",
-        ]
+        default_factory=lambda: list(DEFAULT_OPTIONAL_MODULES)
     )
     markers: dict[str, list[str]] = field(default_factory=dict)
     cbioportal: CbioPortalConfig = field(default_factory=CbioPortalConfig)

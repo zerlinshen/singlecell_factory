@@ -42,6 +42,23 @@ DEFAULT_OPTIONAL_MODULES: tuple[str, ...] = (
     "annotation",
 )
 
+# Modality-aware defaults are catalog data, not launcher policy.  Every
+# user-facing adapter must consume this mapping (through the accessor below)
+# instead of copying module names into its own source file.
+MODALITY_OPTIONAL_MODULES: dict[str, tuple[str, ...]] = {
+    "rna_only": DEFAULT_OPTIONAL_MODULES,
+    "cite_seq": DEFAULT_OPTIONAL_MODULES + ("protein_adt",),
+    "spatial": DEFAULT_OPTIONAL_MODULES
+    + ("spatial_ingest", "spatial_neighborhoods"),
+    "multimodal": DEFAULT_OPTIONAL_MODULES
+    + (
+        "protein_adt",
+        "spatial_ingest",
+        "spatial_neighborhoods",
+        "multimodal_integration",
+    ),
+}
+
 
 MODULE_SPECS: dict[str, ModuleSpec] = {
     "cellranger": ModuleSpec(
@@ -480,6 +497,22 @@ def optional_module_names() -> tuple[str, ...]:
 
     mandatory = set(MANDATORY_MODULES)
     return tuple(name for name in MODULE_SPECS if name not in mandatory)
+
+
+def optional_modules_for_modality(modality: str) -> tuple[str, ...]:
+    """Return the canonical optional-module defaults for ``modality``.
+
+    Unknown modality names are rejected so adapters cannot silently relabel an
+    unsupported input as RNA-only while presenting the result as auto-detected.
+    """
+
+    try:
+        return MODALITY_OPTIONAL_MODULES[modality]
+    except KeyError as exc:
+        choices = ", ".join(MODALITY_OPTIONAL_MODULES)
+        raise ValueError(
+            f"unknown modality {modality!r}; expected one of: {choices}"
+        ) from exc
 
 
 def module_help_list() -> str:

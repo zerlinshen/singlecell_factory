@@ -994,23 +994,42 @@ data/raw/lung_carcinoma_3k_count/outs/filtered_feature_bc_matrix/
 `scripts/scfactory.py` is a thin UX wrapper around the canonical
 `python -m workflow.modular.cli` invocation. It auto-detects modality
 (RNA-only / CITE-seq / spatial / multimodal) from an `.h5ad` file or a
-sample-root directory, picks sensible optional modules, and can also
-dispatch the v2.1 R bundle export. It does **not** change pipeline
+sample-root directory, reads an arbitrarily named `.h5ad` by forwarding its
+exact path as `--input-h5ad`, picks optional modules from the canonical module
+catalog, and can also dispatch the v2.1 R bundle export. It does **not** change pipeline
 behavior — pass `--optional-modules` to override the auto plan, or
 `--dry-run` to preview the underlying CLI invocation.
 
+<!-- scfactory-governed-h5ad-quickstart -->
 ```bash
-# preview the planned modular invocation for an .h5ad input
-python scripts/scfactory.py run path/to/sample.h5ad --dry-run
+# executable governed preview for an arbitrarily named .h5ad input
+python scripts/scfactory.py run INPUT_H5AD \
+    --project scfactory-demo \
+    --project-root PROJECT_ROOT \
+    --run-id 2026-08-02T1200Z-abcdef0 \
+    --dry-run
+```
 
+```bash
 # run + export an R bundle with modality-aware defaults
 python scripts/scfactory.py run data/raw/lung_carcinoma_3k_count \
-    --project demo_run --bundle
+    --project demo-run \
+    --project-root /home/zerlinshen/projects/demo-run \
+    --run-id 2026-08-02T1200Z-abcdef0 \
+    --bundle
 
-# read-only environment health check (Rscript, bridges, deps, last run)
+# read-only environment health check (Rscript, bridges, deps, governed last run)
 python scripts/scfactory.py doctor          # human-readable
 python scripts/scfactory.py doctor --json   # machine-readable, exits non-zero on FAIL
+python scripts/scfactory.py doctor --project-root /home/zerlinshen/projects/demo-run
 ```
+
+For RNA-only inputs, automatic planning is exactly
+`clustering,differential_expression,annotation`, the same tuple exported by
+`workflow.modular.module_catalog`. Trajectory and pseudo-velocity are opt-in
+scientific analyses, not universal defaults. Prefer `--project-root`; `--out`
+retains the deprecated factory-local layout only for the documented migration
+window. `--run-id` is meaningful only with `--project-root`.
 
 #### Recipes (presets)
 

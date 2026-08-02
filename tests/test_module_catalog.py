@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from workflow.modular.module_catalog import (
     DEFAULT_OPTIONAL_MODULES,
     MANDATORY_MODULES,
@@ -9,6 +11,7 @@ from workflow.modular.module_catalog import (
     module_help_list,
     modules_by_layer,
     optional_module_names,
+    optional_modules_for_modality,
 )
 from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
@@ -38,6 +41,21 @@ def test_mandatory_chain_and_default_optional_modules_are_stable() -> None:
     assert "trajectory" in MODULE_SPECS
     assert "pseudo_velocity" in MODULE_SPECS
     assert set(MANDATORY_MODULES).isdisjoint(optional_module_names())
+
+
+def test_modality_defaults_extend_the_canonical_rna_tuple() -> None:
+    assert optional_modules_for_modality("rna_only") is DEFAULT_OPTIONAL_MODULES
+    assert optional_modules_for_modality("cite_seq") == (
+        *DEFAULT_OPTIONAL_MODULES,
+        "protein_adt",
+    )
+    assert optional_modules_for_modality("spatial") == (
+        *DEFAULT_OPTIONAL_MODULES,
+        "spatial_ingest",
+        "spatial_neighborhoods",
+    )
+    with pytest.raises(ValueError, match="unknown modality"):
+        optional_modules_for_modality("guessed_rna")
 
 
 def test_cli_help_uses_optional_modules_only() -> None:

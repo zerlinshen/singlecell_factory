@@ -107,7 +107,19 @@ def parse_args() -> argparse.Namespace:
     """Parse command line arguments for modular workflow."""
     parser = argparse.ArgumentParser(description="Modular single-cell workflow runner")
     parser.add_argument("--project", required=True)
-    parser.add_argument("--sample-root", required=True, help="Dataset root, e.g. data/raw/lung_carcinoma_3k_count")
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
+        "--sample-root",
+        help="Dataset root, e.g. data/raw/lung_carcinoma_3k_count",
+    )
+    input_group.add_argument(
+        "--input-h5ad",
+        help=(
+            "Exact prepared AnnData file to ingest. The filename is arbitrary; "
+            "the canonical loader reads this path directly instead of searching "
+            "for <sample-root>/prepared_input.h5ad."
+        ),
+    )
     parser.add_argument(
         "--outs-dir",
         default="",
@@ -979,6 +991,19 @@ def _apply_scientific_profile(args: argparse.Namespace) -> argparse.Namespace:
 
 def _validate_args(args: argparse.Namespace) -> None:
     """Validate CLI arguments before pipeline execution."""
+    if args.input_h5ad:
+        input_h5ad = Path(args.input_h5ad).expanduser()
+        if input_h5ad.suffix.lower() != ".h5ad":
+            raise SystemExit(
+                f"Error: --input-h5ad must name a .h5ad file, got {input_h5ad}"
+            )
+        if not input_h5ad.is_file():
+            raise SystemExit(f"Error: --input-h5ad file not found: {input_h5ad}")
+        if args.outs_dir:
+            raise SystemExit(
+                "Error: --outs-dir cannot be combined with --input-h5ad; "
+                "the exact AnnData file is the ingest source."
+            )
     if args.min_genes >= args.max_genes:
         raise SystemExit(f"Error: --min-genes ({args.min_genes}) must be < --max-genes ({args.max_genes})")
     if args.min_counts >= args.max_counts:
@@ -1055,7 +1080,16 @@ def main() -> None:
             )
             sys.exit(2)
 
-    sample_root = Path(args.sample_root)
+    input_h5ad = (
+        Path(args.input_h5ad).expanduser().resolve()
+        if args.input_h5ad
+        else None
+    )
+    sample_root = (
+        Path(args.sample_root).expanduser()
+        if args.sample_root
+        else input_h5ad.parent
+    )
     outs_dir = (
         Path(args.outs_dir)
         if args.outs_dir
@@ -1104,6 +1138,7 @@ def main() -> None:
         cellranger=CellRangerConfig(
             sample_root=sample_root,
             outs_dir=outs_dir,
+            input_h5ad=input_h5ad,
             fastq_dir=Path(args.fastq_dir) if args.fastq_dir else None,
             transcriptome_dir=Path(args.transcriptome_dir) if args.transcriptome_dir else None,
             sample_id=args.sample_id,

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -47,6 +49,25 @@ def _make_minimal_adata(tmp_path: Path, *, with_protein=False, with_spatial=Fals
     out = tmp_path / "tiny.h5ad"
     adata.write_h5ad(out)
     return out
+
+
+def _run_scfactory_subprocess(*args: str) -> subprocess.CompletedProcess[str]:
+    """Run the public adapter exactly as a user would from the repository root."""
+    return subprocess.run(
+        [sys.executable, str(SCFACTORY_PATH), *args],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _planned_cli_tokens(stdout: str) -> list[str]:
+    line = next(
+        line for line in stdout.splitlines()
+        if line.startswith("scfactory: would execute: ")
+    )
+    return shlex.split(line.partition("scfactory: would execute: ")[2])
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +115,212 @@ def test_run_detection_failure_exits_2(tmp_path, capsys, scfactory):
     assert "input not found" in err or "could not auto-detect" in err
 
 
+def test_subprocess_forwards_arbitrary_named_h5ad_to_canonical_cli(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+    arbitrary = h5ad.with_name("patient-42.expression-matrix.h5ad")
+    h5ad.rename(arbitrary)
+
+    proc = _run_scfactory_subprocess("run", str(arbitrary), "--dry-run")
+
+    assert proc.returncode == 0, proc.stderr
+    tokens = _planned_cli_tokens(proc.stdout)
+    assert "--input-h5ad" in tokens
+    assert tokens[tokens.index("--input-h5ad") + 1] == str(arbitrary.resolve())
+    assert "--sample-root" not in tokens
+
+
+def test_subprocess_forwards_governed_project_root_and_run_id(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+    project_root = tmp_path / "governed-project"
+    run_id = "2026-08-02T1200Z-abcdef0"
+
+    proc = _run_scfactory_subprocess(
+        "run",
+        str(h5ad),
+        "--project-root",
+        str(project_root),
+        "--run-id",
+        run_id,
+        "--dry-run",
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    tokens = _planned_cli_tokens(proc.stdout)
+    assert tokens[tokens.index("--project-root") + 1] == str(project_root.resolve())
+    assert tokens[tokens.index("--run-id") + 1] == run_id
+    assert "--output-dir" not in tokens
+
+
+def test_subprocess_forwards_scientific_non_equivalence_acknowledgement(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+
+    proc = _run_scfactory_subprocess(
+        "run",
+        str(h5ad),
+        "--scientific-profile",
+        "paper-15pc",
+        "--acknowledge-scientific-non-equivalence",
+        "--dry-run",
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    tokens = _planned_cli_tokens(proc.stdout)
+    assert tokens[tokens.index("--scientific-profile") + 1] == "paper-15pc"
+    assert "--acknowledge-scientific-non-equivalence" in tokens
+
+
+def test_governed_bundle_reuses_run_id_and_project_layout(
+    tmp_path, capsys, monkeypatch, scfactory
+):
+    h5ad = _make_minimal_adata(tmp_path)
+    project_root = tmp_path / "governed-project"
+    run_id = "2026-08-02T1200Z-abcdef0"
+    final_h5ad = (
+        project_root
+        / "runs"
+        / run_id
+        / "python"
+        / "adapter-test_20260802_120000"
+        / "final_adata.h5ad"
+    )
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        if cmd[1:3] == ["-m", "workflow.modular.cli"]:
+            final_h5ad.parent.mkdir(parents=True)
+            final_h5ad.write_bytes(b"pipeline-output-placeholder")
+
+        class _Result:
+            returncode = 0
+
+        return _Result()
+
+    monkeypatch.setattr(scfactory.subprocess, "run", _fake_run)
+
+    rc = scfactory.main(
+        [
+            "run",
+            str(h5ad),
+            "--project",
+            "adapter-test",
+            "--project-root",
+            str(project_root),
+            "--run-id",
+            run_id,
+            "--bundle",
+        ]
+    )
+
+    assert rc == 0, capsys.readouterr().err
+    assert len(calls) == 2
+    export_cmd = calls[1]
+    assert export_cmd[export_cmd.index("--input") + 1] == str(final_h5ad)
+    assert export_cmd[export_cmd.index("--project-root") + 1] == str(
+        project_root.resolve()
+    )
+    assert export_cmd[export_cmd.index("--run-id") + 1] == run_id
+    assert "--output" not in export_cmd
+
+
+def test_subprocess_rna_plan_uses_canonical_catalog_defaults(tmp_path):
+    from workflow.modular.module_catalog import DEFAULT_OPTIONAL_MODULES
+
+    h5ad = _make_minimal_adata(tmp_path)
+    proc = _run_scfactory_subprocess("run", str(h5ad), "--dry-run")
+
+    assert proc.returncode == 0, proc.stderr
+    tokens = _planned_cli_tokens(proc.stdout)
+    actual = tokens[tokens.index("--optional-modules") + 1].split(",")
+    assert actual == list(DEFAULT_OPTIONAL_MODULES)
+
+
+def test_canonical_cli_accepts_input_h5ad_argument(tmp_path, monkeypatch):
+    from workflow.modular import cli
+
+    h5ad = _make_minimal_adata(tmp_path)
+    arbitrary = h5ad.with_name("arbitrary-name.h5ad")
+    h5ad.rename(arbitrary)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["cli", "--project", "adapter-test", "--input-h5ad", str(arbitrary)],
+    )
+
+    args = cli.parse_args()
+
+    assert args.input_h5ad == str(arbitrary)
+    assert args.sample_root is None
+
+
+def test_canonical_cli_plumbs_exact_h5ad_into_pipeline_config(tmp_path, monkeypatch):
+    from workflow.modular import cli
+
+    h5ad = _make_minimal_adata(tmp_path)
+    arbitrary = h5ad.with_name("pipeline-config-source.h5ad")
+    h5ad.rename(arbitrary)
+    captured: dict[str, object] = {}
+
+    def _fake_run_pipeline(cfg, ledger=None):
+        captured["cfg"] = cfg
+        return {"modules_run": [], "failed_modules": []}
+
+    monkeypatch.setattr(cli, "run_pipeline", _fake_run_pipeline)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "cli",
+            "--project",
+            "adapter-test",
+            "--input-h5ad",
+            str(arbitrary),
+            "--output-dir",
+            str(tmp_path / "legacy-output"),
+        ],
+    )
+    monkeypatch.delenv("SC_REQUIRE_PROJECT_ROOT", raising=False)
+
+    cli.main()
+
+    cfg = captured["cfg"]
+    assert cfg.cellranger.input_h5ad == arbitrary.resolve()
+    assert cfg.cellranger.sample_root == arbitrary.parent
+
+
+def test_cellranger_loads_the_exact_direct_h5ad(tmp_path):
+    from workflow.modular.config import CellRangerConfig, PipelineConfig
+    from workflow.modular.context import PipelineContext
+    from workflow.modular.modules.cellranger import CellRangerModule
+
+    h5ad = _make_minimal_adata(tmp_path)
+    arbitrary = h5ad.with_name("not-prepared-input.h5ad")
+    h5ad.rename(arbitrary)
+    cfg = PipelineConfig(
+        project="adapter-test",
+        output_dir=tmp_path / "output",
+        cellranger=CellRangerConfig(
+            sample_root=arbitrary.parent,
+            outs_dir=arbitrary.parent / "unused-outs",
+            input_h5ad=arbitrary,
+        ),
+        optional_modules=[],
+    )
+    ctx = PipelineContext(
+        cfg=cfg,
+        run_dir=tmp_path / "run",
+        figure_dir=tmp_path / "run",
+        table_dir=tmp_path / "run",
+    )
+
+    CellRangerModule().run(ctx)
+
+    assert ctx.adata is not None
+    assert ctx.adata.shape == (12, 8)
+    assert ctx.metadata["prepared_input_source"] == str(arbitrary)
+    assert ctx.metadata["prepared_input_h5ad"] == str(arbitrary)
+
+
 # ---------------------------------------------------------------------------
 # doctor
 # ---------------------------------------------------------------------------
@@ -122,6 +349,31 @@ def test_doctor_json_shape(capsys, scfactory):
         assert k in summary
         assert isinstance(summary[k], int)
     assert rc in (0, 1)
+
+
+def test_doctor_searches_governed_project_manifest(tmp_path, capsys, scfactory):
+    project_root = tmp_path / "project"
+    run_id = "2026-08-02T1200Z-abcdef0"
+    manifest = project_root / "runs" / run_id / "manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "overall_status": "complete",
+                "completed_modules": ["cellranger", "qc"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rc = scfactory.main(
+        ["doctor", "--json", "--project-root", str(project_root)]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert rc in (0, 1)
+    assert payload["last_run"]["found"] is True
+    assert payload["last_run"]["info"]["path"] == str(manifest)
 
 
 # ---------------------------------------------------------------------------
