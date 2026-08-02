@@ -23,7 +23,12 @@ import pytest
 from anndata import AnnData
 from scipy.spatial.distance import cdist
 
-from workflow.modular.config import BatchConfig, CellRangerConfig, PipelineConfig
+from workflow.modular.config import (
+    BatchConfig,
+    CellRangerConfig,
+    CompositionConfig,
+    PipelineConfig,
+)
 from workflow.modular.context import PipelineContext
 from workflow.modular.modules.composition import CompositionModule
 from workflow.modular.modules.evolution import EvolutionModule
@@ -82,16 +87,21 @@ def test_composition_random_state_threaded_through_run(tmp_path, monkeypatch):
     captured: list[int] = []
     orig = CompositionModule.__dict__["_fallback_test"].__func__
 
-    def spy(count_df, prop_df, random_state=42):
+    def spy(count_df, prop_df, random_state=42, *, condition_by_sample=None):
         captured.append(random_state)
-        return orig(count_df, prop_df, random_state)
+        return orig(
+            count_df,
+            prop_df,
+            random_state,
+            condition_by_sample=condition_by_sample,
+        )
 
     monkeypatch.setattr(
         CompositionModule, "_fallback_test", staticmethod(spy)
     )
     # Force the scipy fallback path (skip optional pertpy/scCODA).
     monkeypatch.setattr(
-        CompositionModule, "_try_pertpy", staticmethod(lambda adata, key: None)
+        CompositionModule, "_try_pertpy", staticmethod(lambda adata, design: None)
     )
     # Silence figure side-effects; we only care about the seed threading.
     monkeypatch.setattr(
@@ -101,19 +111,29 @@ def test_composition_random_state_threaded_through_run(tmp_path, monkeypatch):
         CompositionModule, "_plot_boxplot", staticmethod(lambda prop_df, ctx: None)
     )
 
-    # Minimal single-group AnnData: no multi-sample column and a single leiden
-    # cluster -> _find_group_key falls back to "leiden", count_df has one row, so
-    # _fallback_test takes the n_groups<2 permutation path (the seeded branch).
+    # A valid replicate-aware design is required before any inferential fallback.
+    # The unit test above covers the stochastic single-group implementation; this
+    # integration test covers propagation of ctx.random_state through run().
     n = 40
     rng = np.random.default_rng(0)
     adata = AnnData(rng.random((n, 3)).astype(np.float32))
     adata.obs["cell_type"] = pd.Categorical(
         ["A"] * 10 + ["B"] * 10 + ["C"] * 12 + ["D"] * 8
     )
-    adata.obs["leiden"] = pd.Categorical(["0"] * n)  # single group -> permutation path
+    adata.obs["sample"] = pd.Categorical(
+        ["C1"] * 10 + ["C2"] * 10 + ["K1"] * 10 + ["K2"] * 10
+    )
+    adata.obs["condition"] = pd.Categorical(["CTRL"] * 20 + ["KO"] * 20)
 
     ctx = _ctx(tmp_path, random_state=123)
-    ctx.cfg.batch = BatchConfig(batch_key="sample")  # absent -> leiden fallback
+    ctx.cfg.batch = BatchConfig(batch_key="sample")
+    ctx.cfg.composition = CompositionConfig(
+        sample_col="sample",
+        condition_col="condition",
+        contrast_a="CTRL",
+        contrast_b="KO",
+        min_samples_per_condition=2,
+    )
     ctx.adata = adata
 
     CompositionModule().run(ctx)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import textwrap
+from dataclasses import dataclass
 
 import matplotlib
 
@@ -28,6 +30,20 @@ __references__ = {
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class CompositionDesign:
+    """Resolved sample-level design used by composition inference."""
+
+    sample_col: str
+    condition_col: str | None
+    contrast_a: str | None
+    contrast_b: str | None
+    covariates: tuple[str, ...]
+    min_samples_per_condition: int
+    formula: str | None
+    sample_metadata: pd.DataFrame
+
+
 class CompositionModule:
     """Optional module: differential cell type composition analysis across samples."""
 
@@ -41,12 +57,20 @@ class CompositionModule:
         if "cell_type" not in adata.obs.columns:
             raise ValueError("Composition analysis requires 'cell_type' in adata.obs (run annotation first).")
 
-        group_key = self._find_group_key(adata, ctx)
-        logger.info("Composition analysis: cell_type grouped by '%s'", group_key)
+        design = self._resolve_design(adata, ctx)
+        analysis_adata = self._subset_to_contrast(adata, design)
+        sample_key = design.sample_col
+        logger.info(
+            "Composition analysis: cell_type grouped by biological sample %r; "
+            "condition=%r; formula=%r",
+            sample_key,
+            design.condition_col,
+            design.formula,
+        )
 
         # Build count and proportion tables
         count_df = (
-            adata.obs.groupby([group_key, "cell_type"], observed=True)
+            analysis_adata.obs.groupby([sample_key, "cell_type"], observed=True)
             .size()
             .unstack(fill_value=0)
         )
@@ -57,7 +81,20 @@ class CompositionModule:
         ctx.metadata["composition_n_groups"] = int(count_df.shape[0])
         ctx.metadata["composition_n_cell_types"] = int(count_df.shape[1])
 
-        # Try pertpy scCODA first, fall back to scipy tests.
+        ctx.metadata["composition_sample_col"] = sample_key
+        ctx.metadata["composition_condition_col"] = design.condition_col
+        ctx.metadata["composition_formula"] = design.formula
+        ctx.metadata["composition_covariates"] = list(design.covariates)
+        ctx.metadata["composition_contrast"] = (
+            [design.contrast_a, design.contrast_b]
+            if design.contrast_a is not None
+            else None
+        )
+
+        # Try pertpy scCODA only for an explicit replicate-aware condition
+        # contract. A sample column is an identifier, not an experimental
+        # covariate; using C(sample) yields one coefficient per replicate and no
+        # biological contrast while looking superficially confirmatory.
         #
         # CLAIMABILITY (added 2026-08-02). Cell-type proportions are COMPOSITIONAL: they
         # are constrained to sum to 1, so one cell type increasing mechanically decreases
@@ -72,18 +109,39 @@ class CompositionModule:
         # compositionally-invalid statistics indistinguishable from the scCODA path.
         # pseudobulk_de.py already had the right pattern for this -- 86 claimability
         # markings vs 0 here -- so this module now follows it.
-        test_results = self._try_pertpy(adata, group_key)
-        if test_results is not None:
+        if design.condition_col is None:
+            test_results = pd.DataFrame(
+                columns=["cell_type", "covariate", "significant"]
+            )
+            engine = "descriptive_only"
+            inference_class = "sample_level_descriptive"
+            inference_status = "descriptive_only_no_condition_contract"
+            claimable = False
+        else:
+            test_results = self._try_pertpy(analysis_adata, design)
+
+        if design.condition_col is not None and test_results is not None:
             engine = "sccoda_pertpy"
             inference_class = "compositional_bayesian"
             inference_status = "supported_confirmatory"
             claimable = True
-        else:
+        elif design.condition_col is not None:
             # Thread the canonical AC-10 seed (ctx.random_state) into the
             # permutation fallback so enrichment z-scores honor --random-state
             # (issue #20).
             random_state = int(getattr(ctx, "random_state", 42))
-            test_results = self._fallback_test(count_df, prop_df, random_state)
+            condition_by_sample = (
+                design.sample_metadata.set_index(sample_key)[design.condition_col]
+                .astype(str)
+                .reindex(count_df.index.astype(str))
+            )
+            condition_by_sample.index = count_df.index
+            test_results = self._fallback_test(
+                count_df,
+                prop_df,
+                random_state,
+                condition_by_sample=condition_by_sample,
+            )
             engine = "scipy_per_type_fallback"
             inference_class = "per_type_marginal_fallback"
             inference_status = "exploratory_nonclaimable_noncompositional_fallback"
@@ -103,6 +161,10 @@ class CompositionModule:
         ctx.metadata["composition_inference_status"] = inference_status
         ctx.metadata["composition_claimable"] = claimable
 
+        test_results = test_results.copy()
+        test_results["inference_class"] = inference_class
+        test_results["inference_status"] = inference_status
+        test_results["claimable"] = claimable
         test_results.to_csv(ctx.table_dir / "composition_test_results.csv", index=False)
 
         # Visualizations
@@ -110,22 +172,176 @@ class CompositionModule:
         self._plot_boxplot(prop_df, ctx)
 
     @staticmethod
-    def _find_group_key(adata, ctx: PipelineContext) -> str:
-        """Detect the sample/condition column to group by."""
-        batch_key = ctx.cfg.batch.batch_key
-        if batch_key in adata.obs.columns and adata.obs[batch_key].nunique() > 1:
-            return batch_key
-        for candidate in ("sample", "batch", "donor", "patient", "condition"):
-            if candidate in adata.obs.columns and adata.obs[candidate].nunique() > 1:
-                return candidate
-        # Single-sample fallback: use leiden clusters as groups
-        if "leiden" in adata.obs.columns:
-            logger.warning("No multi-sample grouping found; using leiden clusters as groups.")
-            return "leiden"
-        raise ValueError("No suitable grouping column found for composition analysis.")
+    def _resolve_sample_col(adata, ctx: PipelineContext) -> str:
+        """Resolve the replicate identifier without treating a condition as one."""
+        cfg = getattr(ctx.cfg, "composition", None)
+        explicit = getattr(cfg, "sample_col", None)
+        if explicit:
+            if explicit not in adata.obs.columns:
+                raise ValueError(
+                    f"Composition sample column {explicit!r} is absent from adata.obs."
+                )
+            return str(explicit)
+
+        batch_key = getattr(getattr(ctx.cfg, "batch", None), "batch_key", None)
+        candidates = [batch_key, "sample", "donor", "patient", "batch"]
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not candidate or candidate in seen:
+                continue
+            seen.add(str(candidate))
+            if candidate in adata.obs.columns and adata.obs[candidate].notna().any():
+                return str(candidate)
+        raise ValueError(
+            "Composition analysis requires a biological sample column. Set "
+            "--composition-sample-col; Leiden clusters and condition labels are not "
+            "independent replicates."
+        )
+
+    @classmethod
+    def _find_group_key(cls, adata, ctx: PipelineContext) -> str:
+        """Backward-compatible name for the sample-column resolver."""
+        return cls._resolve_sample_col(adata, ctx)
+
+    @classmethod
+    def _resolve_design(cls, adata, ctx: PipelineContext) -> CompositionDesign:
+        cfg = getattr(ctx.cfg, "composition", None)
+        sample_col = cls._resolve_sample_col(adata, ctx)
+        condition_col = getattr(cfg, "condition_col", None)
+        contrast_a = getattr(cfg, "contrast_a", None)
+        contrast_b = getattr(cfg, "contrast_b", None)
+        covariates = tuple(getattr(cfg, "covariates", ()) or ())
+        min_replicates = int(getattr(cfg, "min_samples_per_condition", 2))
+
+        if bool(contrast_a) != bool(contrast_b):
+            raise ValueError(
+                "Composition contrast requires both contrast_a and contrast_b."
+            )
+        if not condition_col:
+            if contrast_a or contrast_b or covariates:
+                raise ValueError(
+                    "Composition contrasts/covariates require an explicit condition_col."
+                )
+            sample_metadata = (
+                adata.obs[[sample_col]].drop_duplicates().astype(str).reset_index(drop=True)
+            )
+            return CompositionDesign(
+                sample_col=sample_col,
+                condition_col=None,
+                contrast_a=None,
+                contrast_b=None,
+                covariates=(),
+                min_samples_per_condition=min_replicates,
+                formula=None,
+                sample_metadata=sample_metadata,
+            )
+
+        condition_col = str(condition_col)
+        if condition_col == sample_col:
+            raise ValueError(
+                "Composition sample_col and condition_col must be different; a sample "
+                "identifier cannot be used as its own biological condition."
+            )
+        if sample_col in covariates:
+            raise ValueError(
+                "Composition sample identifier cannot be reintroduced as a model "
+                "covariate."
+            )
+        if min_replicates < 2:
+            raise ValueError(
+                "Composition inference requires at least two biological samples per "
+                "condition."
+            )
+
+        design_cols = [condition_col, *covariates]
+        missing = [column for column in [sample_col, *design_cols]
+                   if column not in adata.obs.columns]
+        if missing:
+            raise ValueError(
+                f"Composition design columns are absent from adata.obs: {missing}"
+            )
+        if len(set(design_cols)) != len(design_cols):
+            raise ValueError("Composition condition/covariate columns must be unique.")
+
+        frame = adata.obs[[sample_col, *design_cols]].copy()
+        if frame.isna().any(axis=None):
+            raise ValueError("Composition design contains missing sample-level values.")
+        for column in frame.columns:
+            frame[column] = frame[column].astype(str)
+
+        by_sample = frame.groupby(sample_col, observed=True, sort=False)
+        conflicts = [
+            column
+            for column in design_cols
+            if bool((by_sample[column].nunique(dropna=False) > 1).any())
+        ]
+        if conflicts:
+            raise ValueError(
+                "Each biological sample must map to one condition/covariate value; "
+                f"conflicting columns: {conflicts}."
+            )
+
+        sample_metadata = frame.drop_duplicates(subset=[sample_col]).reset_index(drop=True)
+        if contrast_a is not None:
+            contrast_a, contrast_b = str(contrast_a), str(contrast_b)
+            available = set(sample_metadata[condition_col])
+            absent = [value for value in (contrast_a, contrast_b) if value not in available]
+            if absent:
+                raise ValueError(
+                    f"Composition contrast labels are absent from {condition_col!r}: {absent}"
+                )
+            sample_metadata = sample_metadata[
+                sample_metadata[condition_col].isin((contrast_a, contrast_b))
+            ].reset_index(drop=True)
+
+        condition_counts = sample_metadata[condition_col].value_counts()
+        if len(condition_counts) < 2:
+            raise ValueError(
+                "Composition inference requires at least two modeled conditions."
+            )
+        underpowered = condition_counts[condition_counts < min_replicates]
+        if not underpowered.empty:
+            detail = ", ".join(
+                f"{condition}={int(count)}"
+                for condition, count in underpowered.items()
+            )
+            raise ValueError(
+                "Composition inference has too few independent biological samples "
+                f"(minimum {min_replicates} per condition; {detail})."
+            )
+
+        formula_columns = [condition_col, *covariates]
+        invalid_formula_columns = [
+            column for column in formula_columns
+            if re.fullmatch(r"[A-Za-z_]\w*", str(column)) is None
+        ]
+        if invalid_formula_columns:
+            raise ValueError(
+                "Composition formula columns must be valid identifiers: "
+                f"{invalid_formula_columns}"
+            )
+        formula = " + ".join([f"C({condition_col})", *covariates])
+        return CompositionDesign(
+            sample_col=sample_col,
+            condition_col=condition_col,
+            contrast_a=contrast_a,
+            contrast_b=contrast_b,
+            covariates=covariates,
+            min_samples_per_condition=min_replicates,
+            formula=formula,
+            sample_metadata=sample_metadata,
+        )
 
     @staticmethod
-    def _try_pertpy(adata, group_key: str) -> pd.DataFrame | None:
+    def _subset_to_contrast(adata, design: CompositionDesign):
+        if design.condition_col is None or design.contrast_a is None:
+            return adata
+        values = adata.obs[design.condition_col].astype(str)
+        mask = values.isin((design.contrast_a, design.contrast_b)).to_numpy()
+        return adata[mask].copy()
+
+    @staticmethod
+    def _try_pertpy(adata, design: CompositionDesign) -> pd.DataFrame | None:
         """Attempt scCODA compositional analysis via pertpy."""
         try:
             import pertpy as pt
@@ -133,9 +349,13 @@ class CompositionModule:
             sccoda = pt.tl.Sccoda()
             sccoda_data = sccoda.load(
                 adata, type="cell_level", generate_sample_level=True,
-                cell_type_identifier="cell_type", sample_identifier=group_key,
+                cell_type_identifier="cell_type", sample_identifier=design.sample_col,
             )
-            sccoda.prepare(sccoda_data, formula=f"C({group_key})", reference_cell_type="automatic")
+            sccoda.prepare(
+                sccoda_data,
+                formula=design.formula,
+                reference_cell_type="automatic",
+            )
             sccoda.run_nuts(sccoda_data, num_warmup=500, num_samples=1000)
             result = sccoda.credible_effects(sccoda_data)
 
@@ -160,12 +380,24 @@ class CompositionModule:
                     f"got {list(df.columns)}"
                 )
             covariate_cols = [c for c in df.columns[:-1] if c != cell_type_col]
+            if not covariate_cols:
+                raise ValueError(
+                    "scCODA credible_effects has no identifiable model coefficient."
+                )
+            coefficient_values = df[covariate_cols[0]].astype(str)
+            if not coefficient_values.str.contains(
+                str(design.condition_col), regex=False
+            ).any():
+                raise ValueError(
+                    "scCODA returned no coefficient for the explicit condition "
+                    f"{design.condition_col!r}; got "
+                    f"{sorted(coefficient_values.unique().tolist())}."
+                )
             out = df[[cell_type_col, value_col]].copy()
             out.columns = ["cell_type", "significant"]
-            if covariate_cols:
-                # Keep the covariate so a multi-covariate design is not silently
-                # collapsed into one row per cell type.
-                out.insert(1, "covariate", df[covariate_cols[0]].astype(str))
+            # Keep the covariate so a multi-covariate design is not silently
+            # collapsed into one row per cell type.
+            out.insert(1, "covariate", coefficient_values)
             return out
         except Exception as exc:
             # Distinguish ABSENT from BROKEN. Real-data validation on 2026-08-02 showed
@@ -182,7 +414,11 @@ class CompositionModule:
 
     @staticmethod
     def _fallback_test(
-        count_df: pd.DataFrame, prop_df: pd.DataFrame, random_state: int = 42
+        count_df: pd.DataFrame,
+        prop_df: pd.DataFrame,
+        random_state: int = 42,
+        *,
+        condition_by_sample: pd.Series | None = None,
     ) -> pd.DataFrame:
         """Statistical testing of composition differences using scipy.
 
@@ -227,18 +463,38 @@ class CompositionModule:
                 })
             return pd.DataFrame(results)
 
-        # Multi-group statistical tests
+        # Multi-group statistical tests. On the production path each value is
+        # one biological sample and the groups are experimental conditions.
+        # ``condition_by_sample=None`` is retained only for backwards-compatible
+        # direct unit calls; CompositionModule.run never treats sample IDs as
+        # conditions.
+        if condition_by_sample is not None:
+            condition_by_sample = condition_by_sample.reindex(prop_df.index)
+            if condition_by_sample.isna().any():
+                missing = condition_by_sample[condition_by_sample.isna()].index.tolist()
+                raise ValueError(
+                    f"Composition condition metadata missing for samples: {missing}"
+                )
+            condition_levels = list(dict.fromkeys(condition_by_sample.astype(str)))
+        else:
+            condition_levels = [str(value) for value in prop_df.index.unique()]
+
         pvals = []
         for ct in cell_types:
-            values = prop_df[ct].values
-            if n_groups == 2:
-                _, p = stats.mannwhitneyu(
-                    values[prop_df.index == prop_df.index[0]],
-                    values[prop_df.index != prop_df.index[0]],
-                    alternative="two-sided",
-                )
+            if condition_by_sample is not None:
+                groups = [
+                    prop_df.loc[
+                        condition_by_sample.astype(str) == condition, ct
+                    ].to_numpy()
+                    for condition in condition_levels
+                ]
             else:
                 groups = [prop_df[ct][prop_df.index == g].values for g in prop_df.index.unique()]
+            if len(groups) == 2:
+                _, p = stats.mannwhitneyu(
+                    groups[0], groups[1], alternative="two-sided"
+                )
+            else:
                 _, p = stats.kruskal(*groups)
             pvals.append(p)
 

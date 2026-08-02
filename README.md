@@ -773,8 +773,9 @@ as part of the NC2024 abort cleanup.
     `pseudobulk_de` as failed; use the recovery directory above for recovered
     pseudobulk evidence
   - known fallbacks are evidence, not hidden failures: `pathway_analysis` used
-    fallback when decoupler PROGENy was unavailable, `composition` used
-    chi-squared fallback when pertpy/scCODA was unavailable, and `metacell`
+    fallback when decoupler PROGENy was unavailable, historical `composition`
+    output used a non-claimable marginal fallback when pertpy/scCODA was
+    unavailable, and `metacell`
     used MiniBatchKMeans fallback when SEACells was unavailable
 
 ## NC2024 Targeted Post-Baseline Evidence Lanes
@@ -861,7 +862,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 | `evolution` | CNV-based clonal clustering, phylogenetic dendrogram, pseudotime-ordered evolution | cnv_inference + trajectory |
 | `pseudobulk_de` | Replicate-aware pseudobulk DE. Only valid explicit biological-sample contracts completed entirely with pydeseq2 are claimable; rank-test fallback is visibly exploratory/non-claimable. | differential_expression |
 | `cell_fate` | Probabilistic cell fate mapping (CellRank / diffusion-based fallback) | trajectory |
-| `composition` | Differential cell type composition analysis (pertpy/scCODA / chi-squared fallback) | annotation |
+| `composition` | Sample-level cell-type proportions; confirmatory pertpy/scCODA only with separate biological-sample and explicit condition contracts. Missing condition = descriptive/non-claimable; marginal fallback = exploratory/non-claimable. | annotation |
 | `metacell` | Metacell aggregation (SEACells / MiniBatchKMeans fallback) — noise reduction for large datasets | clustering |
 | `paper_repro` | Paper-driven reproduction ledger: track paper/repo/commit/license and validate figure parity against pipeline outputs | clustering |
 
@@ -2222,9 +2223,23 @@ velocity claims. Use `rna_velocity` when canonical velocity evidence is needed.
 | Item | Detail |
 |---|---|
 | **Method (primary)** | Bayesian compositional DA with scCODA (via `pertpy`) |
-| **Fallback** | Mann-Whitney U (`n_groups=2`) or Kruskal-Wallis (`n_groups>2`) + BH FDR |
+| **Design contract** | `--composition-sample-col` identifies independent biological replicates; `--composition-condition-col` defines the model. Optional `--composition-contrast-a/--composition-contrast-b` filters a two-level contrast. Sample IDs never enter the formula. |
+| **No condition contract** | Writes sample-level counts/proportions only and records `descriptive_only_no_condition_contract`, `composition_claimable=false`; scCODA is not invoked. |
+| **Fallback** | Condition-grouped Mann-Whitney U (`n_conditions=2`) or Kruskal-Wallis (`n_conditions>2`) + BH FDR, always exploratory/non-claimable because it does not model the compositional simplex. |
 | **Implementation** | `workflow/modular/modules/composition.py` |
 | **References** | **Büttner et al., *Nature Communications*, 2021.** DOI: [10.1038/s41467-021-27150-6](https://doi.org/10.1038/s41467-021-27150-6); **Benjamini & Hochberg, 1995** DOI: [10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x) |
+
+Example confirmatory request (3+ biological samples per arm recommended):
+
+```bash
+python -m workflow.modular.cli \
+  --project <project-id> --sample-root <input-root> \
+  --optional-modules clustering,differential_expression,annotation,composition \
+  --composition-sample-col sample \
+  --composition-condition-col condition \
+  --composition-contrast-a CTRL --composition-contrast-b KO \
+  --composition-min-samples-per-condition 3
+```
 
 ---
 

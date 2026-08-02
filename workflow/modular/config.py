@@ -266,6 +266,23 @@ class PseudobulkConfig:
 
 
 @dataclass
+class CompositionConfig:
+    """Replicate-aware design for cell-type composition analysis.
+
+    ``sample_col`` identifies independent biological replicates.  It is never a
+    model covariate.  ``condition_col`` and optional covariates define the model;
+    leaving ``condition_col`` unset requests descriptive proportions only.
+    """
+
+    sample_col: str | None = None
+    condition_col: str | None = None
+    contrast_a: str | None = None
+    contrast_b: str | None = None
+    covariates: tuple[str, ...] = ()
+    min_samples_per_condition: int = 2
+
+
+@dataclass
 class PipelineConfig:
     """Top-level modular workflow configuration."""
 
@@ -291,6 +308,7 @@ class PipelineConfig:
     gene_signature: GeneSignatureConfig = field(default_factory=GeneSignatureConfig)
     paper_repro: PaperReproConfig = field(default_factory=PaperReproConfig)
     pseudobulk: PseudobulkConfig = field(default_factory=PseudobulkConfig)
+    composition: CompositionConfig = field(default_factory=CompositionConfig)
     de_config: DEConfig = field(default_factory=DEConfig)
     pseudobulk_de: PseudobulkDEConfig = field(default_factory=PseudobulkDEConfig)
     regress_cell_cycle: bool = False

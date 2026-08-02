@@ -312,6 +312,11 @@ for historical project-local skills.
   exploratory/non-claimable. Keep `pseudobulk_counts.csv` numeric and place
   sample/group/condition plus inference fields in aligned
   `pseudobulk_metadata.csv`.
+- Composition counts and proportions are grouped by biological sample.
+  Confirmatory scCODA additionally requires an explicit, separate condition
+  column with one condition per sample and sufficient replicates; without that
+  contract the module is descriptive/non-claimable. Never use sample IDs,
+  Leiden clusters, or a heuristic batch column as the model condition.
 - Scale/resource strategies must never change scientific parameters or module
   selection. Use an acknowledged scientific profile for non-equivalent changes.
 - `2026-04-25` sparse-exact probe directories are not canonical successful

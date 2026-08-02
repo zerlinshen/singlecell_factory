@@ -10,6 +10,7 @@ from .config import (
     CbioPortalConfig,
     CellRangerConfig,
     ClusteringConfig,
+    CompositionConfig,
     CNVConfig,
     DEConfig,
     DoubletConfig,
@@ -573,6 +574,46 @@ def parse_args() -> argparse.Namespace:
         help="Number of top DE genes to include in cBioPortal validation (default: 20)",
     )
 
+    # Replicate-aware composition analysis
+    parser.add_argument(
+        "--composition-sample-col",
+        default="",
+        help=(
+            "obs column identifying independent biological samples. When omitted, "
+            "the composition module may resolve --batch-key or a standard sample "
+            "column for descriptive proportions only."
+        ),
+    )
+    parser.add_argument(
+        "--composition-condition-col",
+        default="",
+        help=(
+            "Explicit obs condition/covariate column for scCODA inference. Empty "
+            "means descriptive sample-level proportions only."
+        ),
+    )
+    parser.add_argument(
+        "--composition-contrast-a",
+        default="",
+        help="First condition label for a two-level composition contrast.",
+    )
+    parser.add_argument(
+        "--composition-contrast-b",
+        default="",
+        help="Second condition label for a two-level composition contrast.",
+    )
+    parser.add_argument(
+        "--composition-covariates",
+        default="",
+        help="Comma-separated sample-level covariate columns added to the scCODA formula.",
+    )
+    parser.add_argument(
+        "--composition-min-samples-per-condition",
+        type=int,
+        default=2,
+        help="Minimum independent biological samples in every modeled condition (default: 2).",
+    )
+
     # Pseudobulk DE
     parser.add_argument(
         "--pseudobulk-sample-col",
@@ -810,6 +851,29 @@ def _resolve_optional_modules(args: argparse.Namespace) -> list[str]:
         )
     if contrast_requested and "pseudobulk_de" not in modules:
         modules.append("pseudobulk_de")
+
+    composition_condition = getattr(args, "composition_condition_col", "")
+    composition_a = getattr(args, "composition_contrast_a", "")
+    composition_b = getattr(args, "composition_contrast_b", "")
+    if bool(composition_a) != bool(composition_b):
+        raise SystemExit(
+            "Error: a composition contrast requires both "
+            "--composition-contrast-a and --composition-contrast-b."
+        )
+    if (composition_a or composition_b) and not composition_condition:
+        raise SystemExit(
+            "Error: a composition contrast requires --composition-condition-col; "
+            "sample identifiers are not condition labels."
+        )
+    composition_requested = any((
+        getattr(args, "composition_sample_col", ""),
+        composition_condition,
+        composition_a,
+        composition_b,
+        getattr(args, "composition_covariates", ""),
+    ))
+    if composition_requested and "composition" not in modules:
+        modules.append("composition")
     return modules
 
 
@@ -1122,6 +1186,18 @@ def main() -> None:
         paper_repro=PaperReproConfig(
             spec_json=Path(args.paper_spec_json) if args.paper_spec_json else None,
             strict=args.paper_repro_strict,
+        ),
+        composition=CompositionConfig(
+            sample_col=args.composition_sample_col or None,
+            condition_col=args.composition_condition_col or None,
+            contrast_a=args.composition_contrast_a or None,
+            contrast_b=args.composition_contrast_b or None,
+            covariates=tuple(
+                value.strip()
+                for value in args.composition_covariates.split(",")
+                if value.strip()
+            ),
+            min_samples_per_condition=args.composition_min_samples_per_condition,
         ),
         pseudobulk=PseudobulkConfig(
             sample_col=args.pseudobulk_sample_col or None,

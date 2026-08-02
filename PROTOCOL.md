@@ -383,7 +383,10 @@ Optional (23):
 - `evolution`
 - `pseudobulk_de` (explicit contrast flags auto-route this module)
 - `cell_fate`
-- `composition`
+- `composition` (sample-level descriptive output by default; claim-capable
+  scCODA requires separate `--composition-sample-col` and explicit
+  `--composition-condition-col`. Optional contrast A/B labels must be supplied
+  together; sample IDs are never model covariates.)
 - `metacell`
 - `paper_repro`
 
