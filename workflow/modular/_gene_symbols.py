@@ -147,6 +147,47 @@ def describe_raw_axis(adata) -> dict[str, Any]:
     return provenance
 
 
+def _backfill_ensembl_id_from_raw(adata, provenance: dict[str, Any]) -> None:
+    """Recover ``var["ensembl_id"]`` when ``var`` was symbol-ified outside this factory.
+
+    ``normalize_var_to_symbols`` writes ``ensembl_id`` only when IT does the conversion.
+    But the commonest way an h5ad arrives already symbol-indexed is the one-liner
+    ``adata.var_names = adata.var["feature_name"]``, which touches neither ``.raw`` nor
+    ``ensembl_id``. That file then takes the ``symbols_already`` branch, and
+    ``describe_raw_axis`` correctly reports ``ensembl_while_var_symbols`` — so the
+    pipeline KNOWS the axes are split, is holding the Ensembl IDs in
+    ``adata.raw.var_names``, and yet every downstream re-keying attempt fails for want of
+    the column. Measured on the real LUSC file prepared that way: the trajectory aligner
+    refused and the HVG restriction was lost permanently, with the fix in place.
+
+    The mapping is POSITIONAL, so it is only taken when ``.raw`` has exactly as many
+    genes as ``var`` — the shape produced by the standard ``adata.raw = adata.copy()`` at
+    ingest, before any subsetting. That assumption is recorded in the provenance rather
+    than hidden, because a reordered ``.raw`` would make it wrong and nothing here can
+    detect that.
+    """
+    import pandas as pd
+
+    if provenance.get("raw_axis_status") != "ensembl_while_var_symbols":
+        return
+    if "ensembl_id" in adata.var.columns:
+        return
+    if provenance.get("raw_n_genes") != int(adata.n_vars):
+        provenance["ensembl_id_backfill"] = "skipped_raw_length_mismatch"
+        return
+
+    adata.var["ensembl_id"] = pd.Index(adata.raw.var_names).astype(str)
+    provenance["ensembl_id_backfill"] = "from_raw_positional"
+    logger.warning(
+        "GENE_NAMESPACE: var_names were already symbols but .raw is Ensembl-indexed and "
+        "var['ensembl_id'] was absent, so downstream re-keying had no join key. Backfilled "
+        "ensembl_id from adata.raw.var_names POSITIONALLY (%d genes, lengths match). This "
+        "assumes .raw preserves var's gene order, which holds for the standard "
+        "`adata.raw = adata.copy()` ingest; recorded as ensembl_id_backfill in provenance.",
+        int(adata.n_vars),
+    )
+
+
 def normalize_var_to_symbols(adata) -> dict[str, Any]:
     """Make ``adata.var_names`` gene symbols when the input is Ensembl-indexed.
 
@@ -172,6 +213,7 @@ def normalize_var_to_symbols(adata) -> dict[str, Any]:
         provenance["status"] = "symbols_already"
         provenance["source_column"] = None
         provenance.update(describe_raw_axis(adata))
+        _backfill_ensembl_id_from_raw(adata, provenance)
         return provenance
 
     col = find_symbol_column(adata.var)

@@ -228,3 +228,47 @@ def test_qc_records_gene_class_counts_on_the_happy_path():
     QCModule()._assert_gene_classes_detectable(adata, ctx)
     assert ctx.metadata["qc_gene_class_counts"] == {"mt": 2, "ribo": 1, "hb": 1}
     assert "qc_mito_filter_status" not in ctx.metadata
+
+
+def test_externally_symbolified_file_gets_its_repair_key_backfilled():
+    """The commonest way a file arrives symbol-indexed leaves no join key behind.
+
+    `adata.var_names = adata.var["feature_name"]` symbol-ifies var and touches neither
+    `.raw` nor `ensembl_id`. That file then takes the `symbols_already` branch, so the
+    original code never wrote `ensembl_id` -- while `describe_raw_axis` correctly reported
+    `ensembl_while_var_symbols`. The pipeline knew the axes were split, was holding the
+    Ensembl IDs in `adata.raw.var_names`, and every downstream re-keying failed anyway.
+    Measured on the real LUSC file: the trajectory HVG restriction was lost permanently.
+    """
+    adata = _adata(SYMBOLS)
+    raw = _adata(ENSEMBL_IDS)
+    adata.raw = raw
+
+    prov = normalize_var_to_symbols(adata)
+    assert prov["status"] == "symbols_already"
+    assert prov["raw_axis_status"] == "ensembl_while_var_symbols"
+    assert prov["ensembl_id_backfill"] == "from_raw_positional"
+    assert list(adata.var["ensembl_id"]) == ENSEMBL_IDS
+
+
+def test_backfill_is_skipped_when_positional_correspondence_is_not_established():
+    """The mapping is positional, so a length mismatch must refuse rather than guess."""
+    adata = _adata(SYMBOLS)
+    adata.raw = _adata(ENSEMBL_IDS[:2] + ["ENSG00000000009"] * 2)
+    adata.raw = _adata(ENSEMBL_IDS)
+    # Shrink var so raw is a superset -> positional correspondence is not established.
+    adata._inplace_subset_var(np.array([True, True, False, False]))
+    prov = describe_raw_axis(adata)
+    prov["status"] = "symbols_already"
+    from workflow.modular._gene_symbols import _backfill_ensembl_id_from_raw
+    _backfill_ensembl_id_from_raw(adata, prov)
+    assert prov["ensembl_id_backfill"] == "skipped_raw_length_mismatch"
+    assert "ensembl_id" not in adata.var.columns
+
+
+def test_backfill_does_not_overwrite_an_existing_ensembl_id():
+    adata = _adata(SYMBOLS, {"ensembl_id": ["KEEP1", "KEEP2", "KEEP3", "KEEP4"]})
+    adata.raw = _adata(ENSEMBL_IDS)
+    prov = normalize_var_to_symbols(adata)
+    assert "ensembl_id_backfill" not in prov
+    assert list(adata.var["ensembl_id"]) == ["KEEP1", "KEEP2", "KEEP3", "KEEP4"]

@@ -17,11 +17,6 @@ from ..context import PipelineContext
 
 logger = logging.getLogger(__name__)
 
-# Fraction of the flagged HVGs that must survive alignment onto the expression axis
-# before the mask is trusted. A healthy `.raw` is a superset of `adata.var`, so a
-# correct alignment recovers ~all of them; anything far below that means the two
-# axes address genes in different namespaces and the mask is meaningless.
-_HVG_AXIS_ALIGNMENT_MIN_FRACTION = 0.5
 
 
 __references__ = {
@@ -262,8 +257,31 @@ class TrajectoryModule:
         arbitrary handful instead of from the HVGs. A crash would have been kinder.
 
         Returns ``None`` when no trustworthy mask can be built, which makes the caller
-        fall back to the full axis — the designed bounded path, since candidates are
-        then variance-ranked down to ``max_candidates``.
+        fall back to the full axis. That path is BOUNDED (candidates are variance-ranked
+        down to ``max_candidates``) but it is a WEAKER selection criterion, not an
+        equivalent one — on a raw counts matrix, variance ranking is dominated by the
+        mean-variance relationship, so it selects the highest-EXPRESSED genes rather than
+        the most variable. The refusal is therefore recorded, not silent.
+
+        Why completeness rather than a sufficiency threshold
+        ---------------------------------------------------
+        The first version of this fix accepted the direct reindex whenever at least half
+        the flagged HVGs survived it. That is backwards, and an independent review proved
+        it: the accidental cross-namespace overlap consists of features whose
+        ``feature_name`` was blank and therefore kept their Ensembl ID
+        (``normalize_var_to_symbols`` does this deliberately). The more such features a
+        file has, the LARGER that overlap — so above ~50% the sufficiency test accepted a
+        mask containing ONLY the unnamed features, dropped every named HVG, and recorded
+        nothing at all. Protection decreased as contamination increased, and the failure
+        was quieter than the refusal it replaced. Measured on a constructed CELLxGENE-shaped
+        file: at 52% unnamed it returned 52 of 100 HVGs, all of them the wrong ones, with
+        an empty ``ctx.metadata``.
+
+        So: compute BOTH alignments, take the more complete, and accept only a COMPLETE
+        one. Anything short of every flagged HVG is a refusal with the shortfall recorded.
+        Every reachable case in this pipeline aligns exactly — ``.raw`` is assigned as a
+        copy or superset of ``var``, never a subset — so completeness is achievable rather
+        than merely strict.
         """
         if "highly_variable" not in adata.var.columns:
             return None
@@ -271,35 +289,43 @@ class TrajectoryModule:
         n_flagged = int(flags.to_numpy().sum())
         if n_flagged == 0:
             return None
-        floor = _HVG_AXIS_ALIGNMENT_MIN_FRACTION * n_flagged
 
-        mask = flags.reindex(expr_sub.var_names, fill_value=False).to_numpy()
-        if mask.sum() >= floor:
-            return mask
+        direct = flags.reindex(expr_sub.var_names, fill_value=False).to_numpy()
+        best, route = direct, "direct"
 
-        # Namespace divergence. Re-key through the Ensembl IDs the ingest boundary
-        # preserved, which is the axis `.raw` is still in.
+        # Re-key through the Ensembl IDs the ingest boundary preserved, which is the
+        # namespace `.raw` is still in. Computed unconditionally and compared on
+        # completeness, never gated behind the direct attempt "looking good enough".
         if "ensembl_id" in adata.var.columns:
-            by_ensembl = pd.Series(
-                flags.to_numpy(), index=pd.Index(adata.var["ensembl_id"].astype(str))
-            )
-            by_ensembl = by_ensembl[~by_ensembl.index.duplicated(keep="first")]
-            remask = by_ensembl.reindex(expr_sub.var_names, fill_value=False).to_numpy()
-            if remask.sum() >= floor:
-                ctx.metadata["trajectory_hvg_axis_alignment"] = "recovered_via_ensembl_id"
+            by_ensembl = pd.Series(flags.to_numpy(),
+                                   index=pd.Index(adata.var["ensembl_id"].astype(str)))
+            # A duplicated Ensembl ID must not silently drop a flagged gene: reduce with
+            # any(), not first(). keep="first" picked False over True and lost real HVGs.
+            by_ensembl = by_ensembl.groupby(level=0).any()
+            remap = by_ensembl.reindex(expr_sub.var_names, fill_value=False).to_numpy()
+            if remap.sum() > direct.sum():
+                best, route = remap, "recovered_via_ensembl_id"
+
+        if int(best.sum()) == n_flagged:
+            if route != "direct":
+                ctx.metadata["trajectory_hvg_axis_alignment"] = route
                 logger.info(
-                    "TRAJECTORY: HVG flags re-keyed through var['ensembl_id'] to match the "
-                    "expression axis (%d/%d recovered).", int(remask.sum()), n_flagged,
+                    "TRAJECTORY: HVG flags re-keyed through var['ensembl_id'] to match "
+                    "the expression axis (%d/%d recovered).", int(best.sum()), n_flagged,
                 )
-                return remask
+            return best
 
         ctx.metadata["trajectory_hvg_axis_alignment"] = "unavailable_axis_mismatch"
+        ctx.metadata["trajectory_hvg_aligned_fraction"] = round(
+            float(best.sum()) / n_flagged, 4)
         logger.warning(
-            "TRAJECTORY: only %d of %d highly-variable genes could be aligned onto the "
-            "expression axis, so the HVG restriction is NOT applied and all %d genes are "
-            "used as candidates (variance-ranked). This means adata.var and the correlated "
-            "matrix address genes in different namespaces.",
-            int(mask.sum()), n_flagged, int(expr_sub.n_vars),
+            "TRAJECTORY: only %d of %d highly-variable genes align onto the expression "
+            "axis (best route: %s), so the HVG restriction is NOT applied and all %d "
+            "genes are used as candidates, variance-ranked. On a counts matrix that "
+            "favours the highest-expressed genes, not the most variable — a weaker "
+            "criterion, recorded rather than silently substituted. adata.var and the "
+            "correlated matrix address genes in different namespaces.",
+            int(best.sum()), n_flagged, route, int(expr_sub.n_vars),
         )
         return None
 
@@ -369,13 +395,29 @@ class TrajectoryModule:
         top_idx = candidate_idx[top_local_idx]
         top_genes = expr_sub.var_names[top_idx].tolist()
 
-        # Save gene-pseudotime correlations
+        # Save gene-pseudotime correlations.
+        #
+        # The two trajectory_claim_* columns describe the ROOT justification and say
+        # nothing about which genes were searched. Without the candidate-set columns a
+        # reader cannot tell "top 30 of the highly-variable genes" from "top 30 of the
+        # 3,000 highest-variance columns of a counts matrix" -- and on raw counts,
+        # variance ranking is dominated by the mean-variance relationship, so the second
+        # is closer to "most highly expressed". Same claim-marking principle the rest of
+        # the suite applies to engine substitution: the weaker selection is allowed,
+        # unmarked is not.
         trajectory = adata.uns.get("trajectory", {})
         corr_df = pd.DataFrame({
             "gene": expr_sub.var_names[top_idx],
             "pseudotime_correlation": corr[top_local_idx],
             "trajectory_claimable": bool(trajectory.get("claimable", False)),
             "trajectory_claim_status": trajectory.get("claim_status", "non_claimable_unknown"),
+            "candidate_selection": (
+                "highly_variable_genes" if hv_mask is not None
+                else "variance_ranked_full_axis"
+            ),
+            "n_candidates_searched": int(candidate_idx.size),
+            "hvg_axis_alignment": ctx.metadata.get(
+                "trajectory_hvg_axis_alignment", "direct"),
         })
         corr_df.to_csv(ctx.table_dir / "pseudotime_top_genes.csv", index=False)
 

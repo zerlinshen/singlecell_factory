@@ -229,3 +229,68 @@ def test_absent_or_empty_hvg_flag_yields_no_mask():
     assert TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx) is None
     del adata.var["highly_variable"]
     assert TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx) is None
+
+
+def _contaminated_pair(unnamed_frac, n=400, n_hvg=40, seed=0):
+    """CELLxGENE-shaped file where a fraction of features have no symbol.
+
+    `normalize_var_to_symbols` deliberately keeps the Ensembl ID for a feature whose
+    `feature_name` is blank, so those features appear in BOTH namespaces. The more of
+    them a file has, the larger the accidental overlap between `adata.var` and `.raw`.
+    """
+    rng = np.random.default_rng(seed)
+    ens = [f"ENSG{i:011d}" for i in range(n)]
+    unnamed = set(rng.choice(n, int(n * unnamed_frac), replace=False).tolist())
+    syms = [ens[i] if i in unnamed else f"SYM{i}" for i in range(n)]
+    var = pd.DataFrame({"ensembl_id": ens}, index=pd.Index(syms, dtype=object))
+    hv = np.zeros(n, bool)
+    hv[rng.choice(n, n_hvg, replace=False)] = True
+    var["highly_variable"] = hv
+    adata = ad.AnnData(np.zeros((4, n)), var=var)
+    expr_sub = ad.AnnData(np.zeros((4, n)),
+                          var=pd.DataFrame(index=pd.Index(ens, dtype=object)))
+    return adata, expr_sub, set(np.array(ens)[hv].tolist())
+
+
+@pytest.mark.parametrize("unnamed_frac", [0.2, 0.48, 0.52, 0.6, 0.75, 0.95])
+def test_alignment_never_returns_a_partially_correct_mask(unnamed_frac):
+    """Pins the rule from ABOVE: a mask is returned only when it is COMPLETE.
+
+    The first version of this fix used a sufficiency threshold -- accept the direct
+    reindex if at least half the flagged HVGs survived it. An independent review proved
+    that backwards: the accidental overlap grows with the number of unnamed features, so
+    above ~50% the threshold ACCEPTED a mask containing only the unnamed features, having
+    dropped every named HVG, and recorded nothing in ctx.metadata. Protection decreased
+    as contamination increased.
+
+    Crucially, the four tests above could not see it -- raising the constant to 1.0 left
+    all of them green. This one fails for any sufficiency threshold below 1.0.
+    """
+    adata, expr_sub, expected = _contaminated_pair(unnamed_frac)
+    ctx = _MinimalCtx(adata)
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, ctx)
+
+    if mask is None:
+        assert ctx.metadata["trajectory_hvg_axis_alignment"] == "unavailable_axis_mismatch"
+        assert "trajectory_hvg_aligned_fraction" in ctx.metadata
+        return
+    selected = set(np.asarray(list(expr_sub.var_names))[mask].tolist())
+    assert selected == expected, (
+        f"returned a non-empty but WRONG mask at {unnamed_frac:.0%} unnamed "
+        f"({len(selected)} genes, {len(selected & expected)} of them correct) -- "
+        f"a partial mask must be refused, not accepted"
+    )
+
+
+def test_duplicate_ensembl_id_does_not_drop_a_flagged_hvg():
+    """`keep="first"` silently picked False over True and lost real HVGs."""
+    var = pd.DataFrame(
+        {"ensembl_id": ["E1", "E1", "E2", "E3"],
+         "highly_variable": [False, True, True, True]},
+        index=pd.Index(["A", "B", "C", "D"], dtype=object),
+    )
+    adata = ad.AnnData(np.zeros((2, 4)), var=var)
+    expr_sub = ad.AnnData(np.zeros((2, 3)),
+                          var=pd.DataFrame(index=pd.Index(["E1", "E2", "E3"], dtype=object)))
+    mask = TrajectoryModule._hvg_mask_on_expression_axis(adata, expr_sub, _MinimalCtx(adata))
+    assert mask is not None and mask.tolist() == [True, True, True]
