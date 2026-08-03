@@ -480,6 +480,57 @@ def _restate_raw_axis_at_manifest_time(ctx: PipelineContext) -> None:
         )
 
 
+def _reconcile_batch_risk_at_manifest_time(
+    ctx: PipelineContext, completed_modules: list[str]
+) -> None:
+    """Check the plan-time batch claim against the object the run produced.
+
+    Plan-time detection is UNAVAILABLE for every run that starts from a raw
+    sample root, so ``--batch-strategy single-batch`` is granted ``claimable``
+    on the operator's word alone. Nothing verified that word until this pass:
+    the manifest could simultaneously assert a ``claimable`` clustering claim
+    and a ``batch_confounding_risk`` record for the same run.
+
+    Integration counts as done only when ``batch_correction`` completed AND
+    declared ``batch_correction_status == "completed"`` — its own
+    ``completed_with_stale_clustering_opt_in`` state means the corrected
+    representation exists but the leiden labels are the PRE-correction ones,
+    which is exactly the claim this field is supposed to refuse.
+
+    Never raises and never fails the run: the compute has already happened, so
+    downgrading the claim preserves scientific correctness at lower cost than
+    destroying the artifacts.
+    """
+    risk = ctx.metadata.get("batch_risk")
+    if not isinstance(risk, dict):
+        return
+    try:
+        from .batch_risk import (
+            announce_reconciliation,
+            observe_batch_structure,
+            reconcile_batch_risk,
+        )
+
+        observation = observe_batch_structure(
+            getattr(ctx.adata, "obs", None),
+            preferred_key=getattr(ctx.cfg.batch, "batch_key", ""),
+        )
+        integration_completed = (
+            "batch_correction" in completed_modules
+            and ctx.metadata.get("batch_correction_status") == "completed"
+        )
+        reconciled = reconcile_batch_risk(
+            risk,
+            observation=observation,
+            integration_completed=integration_completed,
+        )
+        ctx.metadata["batch_risk"] = reconciled
+        announce_reconciliation(reconciled)
+    except Exception as exc:  # pragma: no cover - never block a manifest write
+        logger.warning("batch-risk reconciliation failed: %s", exc)
+        risk["batch_risk_reconciliation_error"] = repr(exc)
+
+
 def _save_manifest(
     ctx: PipelineContext,
     requested_modules: list[str] | None = None,
@@ -487,13 +538,14 @@ def _save_manifest(
 ) -> Path:
     ctx.flush_figures()
     _restate_raw_axis_at_manifest_time(ctx)
-    if ctx.adata is not None:
-        ctx.adata.write(ctx.run_dir / "final_adata.h5ad")
     summary = _summarize_run_status(
         ctx,
         requested_modules or list(ctx.cfg.optional_modules),
         planned_modules,
     )
+    _reconcile_batch_risk_at_manifest_time(ctx, summary["completed_modules"])
+    if ctx.adata is not None:
+        ctx.adata.write(ctx.run_dir / "final_adata.h5ad")
     manifest = {
         "project": ctx.cfg.project,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -1039,6 +1091,22 @@ def run_pipeline(cfg: PipelineConfig, ledger=None) -> Path:
             mandatory, cfg.optional_modules, dropped_hints_sink
         )
         requested_modules = list(dict.fromkeys([*mandatory, *cfg.optional_modules]))
+
+        # Plan-time batch-risk record. The launcher normally resolves and
+        # announces this before run_pipeline is entered (so the warning lands
+        # before any compute); resolving it here as well keeps programmatic
+        # callers — tests, notebooks, library use — from getting a manifest with
+        # no batch accounting at all.
+        batch_risk = getattr(cfg, "batch_risk", None)
+        if batch_risk is None:
+            from .batch_risk import announce_batch_risk, plan_batch_risk
+
+            batch_risk = plan_batch_risk(cfg, execution_order)
+            announce_batch_risk(batch_risk)
+        # Copy: the manifest-time reconciliation replaces this entry, and
+        # cfg.batch_risk must keep the plan-time reading the launcher announced.
+        ctx.metadata["batch_risk"] = dict(batch_risk)
+
         if dropped_hints_sink:
             # Loud breadcrumb in run_manifest.json: ordering hints were dropped
             # to avoid a combined-graph stall (annotation/batch_correction

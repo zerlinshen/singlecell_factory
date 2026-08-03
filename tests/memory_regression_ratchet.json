@@ -1,0 +1,8 @@
+{
+  "verdict": "pass",
+  "recorded_utc": "2026-08-03T01:37:11+00:00",
+  "watched_sha256": "eb99424992a40884e861d3ecf917c13b6a4b51917084cbf91f7a4ea02bcc5bc6",
+  "pre_fix_peak_gb": 9.31,
+  "m2_peak_gb": 6.33,
+  "reduction_pct": 32.0
+}

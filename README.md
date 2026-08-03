@@ -89,33 +89,19 @@ truth, bundle export, cross-factory validation, and governance records. The
 suite name does not physically merge git histories; GitHub publication should
 keep each repository's history unless an explicit monorepo migration is planned.
 
-A comprehensive, production-ready single-cell RNA-seq analysis framework with **mandatory QC + 22 optional analysis modules + automatic dependency resolution + GPU acceleration + categorized output**.
+A comprehensive, production-ready single-cell RNA-seq analysis framework with **4 mandatory QC modules + 40 optional analysis modules (44 total) + automatic dependency resolution + GPU acceleration + categorized output**. Module counts are asserted against `workflow/modular/module_catalog.py` by `tests/test_readme_module_counts.py` — see [Historical: Wave 4/5 Progress Narrative](#historical-wave-45-progress-narrative-2026-04-26--2026-05-16) for the superseded Wave 4/5 reproducibility snapshots.
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells and the NC2024 NSCLC E-MTAB-13526 cohort at full 828k-cell scale.
 
-### Wave 5 v5.1 small-real validation (2026-04-26)
+### Remote CI
 
-Layer-3 small-real validation outputs: `results/small_real_validate_20260426/`.
-File governance authority: `docs/LINUX_FILE_GOVERNANCE.md`.
-The canonical SHA-pinned WNN aggregation executable is
-`scripts/v5_1/apply_wnn_sweep_aggregation.py`; `.omc/` remains scratch state
-and is not a runtime or test dependency.
-
-### Wave 4 reproducibility evidence (2026-05-16)
-
-NC2024 NSCLC full cohort run on the verified GPU stack:
-
-| Metric | Value |
-|---|---|
-| Cells × Genes | **828,537 × 30,368** |
-| Wall time | **5 min 14 sec** |
-| Peak host RSS | 91.86 GB |
-| Pipeline status | 8/9 modules ok (batch_correction GPU bug → Wave 5 P0) |
-| `cell_type` ARI vs Wave 1 baseline | **0.846** (≥ 0.85 acceptance threshold) |
-| Shared cells with baseline | 803,784 (100% baseline coverage) |
-| Final h5ad | 28 GB |
-
-Full report: `.omc/research/wave4/nc2024/reproducibility_evidence.md`.
+`.github/workflows/suite-gate.yml` gates every push/PR to this repo's active
+branch by reconstructing the four-repo suite on a GitHub-hosted runner and
+running the environment-portable subset of the suite governance harness
+(pinning this repo to the commit under test). It is additive alongside the
+pre-existing, narrower `.github/workflows/factory-governance.yml`. Setup and
+the full gate classification are in
+[`../docs/CI_SETUP.md`](../docs/CI_SETUP.md).
 
 ### Canonical GPU environment
 
@@ -545,6 +531,7 @@ Regenerate with `python scripts/generate_factories_report.py`.
 | [docs/PUBLICATION_READY.md](docs/PUBLICATION_READY.md) | Methods section template and citation patterns for manuscript drafting |
 | [docs/NEXT_ROUND_PIPELINE_REVIEW_AND_MODULE_INTEGRATION_README.md](docs/NEXT_ROUND_PIPELINE_REVIEW_AND_MODULE_INTEGRATION_README.md) | Next-session plan for GitHub method intake, upstream/downstream comparison, figure QA, and default-change gates |
 | [docs/SINGLECELL_PREPROCESSING_DECISION_GATES_2026-05-22.md](docs/SINGLECELL_PREPROCESSING_DECISION_GATES_2026-05-22.md) | QC, normalization, resolution, batch, annotation, and CNV decision gates |
+| [docs/HOTSPOT1_DIAGNOSIS.md](docs/HOTSPOT1_DIAGNOSIS.md) | Clustering peak-RSS diagnosis and the 200k memory-regression ratchet (gate 33) that protects the 32% reduction |
 
 ### Engineering Disciplines (Phase 7+)
 
@@ -821,6 +808,45 @@ as part of the NC2024 abort cleanup.
     unavailable, and `metacell`
     used MiniBatchKMeans fallback when SEACells was unavailable
 
+## Historical: Wave 4/5 Progress Narrative (2026-04-26 / 2026-05-16)
+
+> This section is retained as historical governance record, not current
+> status. It was originally published near the top of this README
+> (immediately after the suite intro); relocated here on 2026-08-03 so the
+> top of the README describes current state only. See "Canonical GPU
+> environment" above for the current, superseding GPU stack status.
+
+### Wave 5 v5.1 small-real validation (2026-04-26)
+
+Layer-3 small-real validation outputs: `results/small_real_validate_20260426/`.
+File governance authority: `docs/LINUX_FILE_GOVERNANCE.md`.
+The canonical SHA-pinned WNN aggregation executable is
+`scripts/v5_1/apply_wnn_sweep_aggregation.py`; `.omc/` remains scratch state
+and is not a runtime or test dependency.
+
+### Wave 4 reproducibility evidence (2026-05-16)
+
+NC2024 NSCLC full cohort run on the verified GPU stack, as measured on
+2026-05-16:
+
+| Metric | Value |
+|---|---|
+| Cells × Genes | **828,537 × 30,368** |
+| Wall time | **5 min 14 sec** |
+| Peak host RSS | 91.86 GB |
+| Pipeline status | 8/9 modules ok (batch_correction GPU bug → Wave 5 P0) |
+| `cell_type` ARI vs Wave 1 baseline | **0.846** (≥ 0.85 acceptance threshold) |
+| Shared cells with baseline | 803,784 (100% baseline coverage) |
+| Final h5ad | 28 GB |
+
+Full report: `.omc/research/wave4/nc2024/reproducibility_evidence.md`.
+
+> **Update:** the `batch_correction GPU bug` tracked above as `Wave 5 P0` is
+> fixed. Current `batch_correction` runs on GPU via `rsc.pp.harmony_integrate`
+> with ARI=1.000 parity vs harmonypy — see "Canonical GPU environment" above.
+> The `8/9 modules ok` row is preserved verbatim as the recorded state of the
+> 2026-05-16 run and must not be read as current pipeline status.
+
 ## NC2024 Targeted Post-Baseline Evidence Lanes
 
 Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted evidence lanes over repeating stage-1.
@@ -846,7 +872,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 ## Features
 
 - **4 mandatory modules** (cellranger, QC, ambient correction, doublet detection) ensure data quality baseline
-- **23 optional analysis modules** covering the full scRNA-seq workflow
+- **40 optional analysis modules** covering the full scRNA-seq workflow (44 total; see `workflow/modular/module_catalog.py`)
 - Automatic topological dependency resolution — just list what you want, dependencies are auto-included
 - **GPU acceleration** — auto-detected rapids-singlecell backend for clustering, batch post-processing, DE ranking, and evolution clone markers
 - **Categorized output** — each module's figures and tables in its own subfolder
@@ -858,9 +884,31 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 - **Normalized status tracking** — module results are recorded as `ok` / `skipped` / `failed` in both `run_manifest.json` and `module_status.csv`
 - **Truthful aggregate completion** — `run_manifest.json` and the project-root
   `manifest.json` record requested, executed, skipped, and failed module lists
-  plus `overall_status`. A requested-module failure exits nonzero by default;
-  `--allow-partial-run` is the explicit recovery-only override and does not hide
-  the recorded failure.
+  plus `overall_status` (`complete` / `partial` / `failed` / `crashed`;
+  `workflow.modular.manifest_writer.MANIFEST_OVERALL_STATUSES`). A
+  requested-module failure exits nonzero by default; `--allow-partial-run` is
+  the explicit recovery-only override and does not hide the recorded failure.
+- **Crashed runs still leave a manifest** — when the pipeline raises before
+  saving its own manifest, the CLI writes a project-root failure envelope with
+  `overall_status: crashed`, the exception class and message, the requested /
+  planned / executed / completed module lists, the last completed module, the
+  input and git/environment identity, and a traceback artifact at
+  `<run>/logs/crash_traceback.txt`. The original exception is always re-raised,
+  so the exit code and traceback are unchanged; a failure to write the envelope
+  is logged and never replaces the real traceback. `crash.phase` distinguishes
+  `pipeline` (the analysis itself died) from `governed_manifest_write` (the run
+  completed — every module reads ok and the producer's own `run_manifest.json`
+  is intact — and only the governed manifest write failed). A `sys.exit()`
+  raised from inside a module is a crash and gets an envelope; only the
+  documented `--allow-partial-run` exit is exempt.
+- **Batch-design accounting** — both manifests carry a `batch_risk` object
+  recording detected batch count, the batch column, whether a strategy was
+  declared, and `clustering_claim_status`
+  (`claimable` / `exploratory` / `undetermined`). The claim is re-resolved at
+  manifest time against the object the run produced and against whether
+  integration actually completed, so an unverifiable declaration cannot leave a
+  batch-driven clustering marked `claimable`. See
+  [Batch declarations](#batch-declarations-batch-strategy).
 - **Complete dirty-source provenance** — project-root manifests distinguish
   unstaged tracked and staged diff hashes from the untracked path inventory and
   bounded content hash; the legacy `diff_sha256` field remains available.
@@ -1062,6 +1110,84 @@ scientific analyses, not universal defaults. Prefer `--project-root`; `--out`
 retains the deprecated factory-local layout only for the documented migration
 window. `--run-id` is meaningful only with `--project-root`.
 
+That default tuple contains **no integration step**, which is a scientific
+choice only when it is a choice — see
+[Batch declarations](#batch-declarations-batch-strategy) below.
+
+#### Batch declarations (`--batch-strategy`)
+
+Every launcher detects batch structure from the input `.obs` **before any
+compute** (obs-only; ~14 ms on the 620 MB / 92k-cell LUSC cohort) by counting
+levels in the canonical candidate columns
+(`batch, sample, sample_id, donor_id, donor, dataset, study, patient,
+patient_id, platform, assay, orig.ident` — `workflow.modular.batch_risk`),
+matched **case-insensitively** so `Sample` / `BATCH` / `Orig.Ident` resolve to
+the same axes. The result is written to `manifest.json` as a `batch_risk`
+object and, on the producer side, to `run_manifest.json` under
+`metadata.batch_risk`.
+
+**A detection failure is never reported as a single batch.** The reader
+distinguishes three per-column outcomes — read, absent, unreadable — and only
+"at least one candidate column was read, all of them single-level, none
+unreadable" is a genuine `single_batch`. Zero readable candidates (no
+batch-like column at all, or every one of them unreadable) yields
+`detection_status: unavailable` and a claim of `undetermined`, never
+`claimable`. The envelope records `candidate_columns_present`,
+`candidate_columns_read` and `unreadable_columns` so the basis is auditable.
+A heuristic is allowed false negatives; it is not allowed to report one as an
+affirmative positive claim.
+
+Multi-batch input with no declared strategy is **warned about on stderr** and
+its `clustering`/`differential_expression`/`annotation` output is recorded as
+`clustering_claim_status: exploratory`. Silence never clears this; only an
+affirmative declaration does.
+
+**Declarations are checked against the data, not trusted.** Plan-time detection
+is `unavailable` for any run starting from a raw `--sample-root` (there is no
+prepared `.obs` to read yet), so a declaration made there is initially accepted
+on the operator's word. At manifest time the pipeline re-reads the object the
+run actually produced and re-resolves the claim
+(`pipeline._reconcile_batch_risk_at_manifest_time`):
+
+- `single-batch` declared, but the produced object carries several batch levels
+  → claim **downgraded** to `exploratory` with reason
+  `exploratory_nonclaimable_single_batch_declaration_falsified`, plus a loud
+  `BATCH_RISK_FALSIFIED` warning. The run's artifacts are kept — the compute
+  already happened, and the honest record of it is worth more than deleting it.
+- `integrate` declared, but `batch_correction` did not complete (skipped,
+  failed, or finished in its own `completed_with_stale_clustering_opt_in` state
+  where leiden is still the pre-correction labelling) → downgraded with reason
+  `exploratory_nonclaimable_integration_planned_but_not_completed`. Planned is
+  not the same as ran.
+
+`clustering_claim_status` is the single authoritative field; `claim_basis`
+records whether it came from `runtime_observation` or `plan_time_detection`,
+and `plan_time_claim` preserves the earlier reading so a disagreement between
+the two timepoints stays visible. The separate `batch_confounding_risk` entry
+written by `clustering.py` is a diagnostic breadcrumb, not the claim.
+
+| `--batch-strategy` | Meaning | Claim status on multi-batch input |
+|---|---|---|
+| `auto` (default) | No declaration made | `exploratory` + stderr warning |
+| `single-batch` | Operator asserts a single batch | **fails at plan time** if `.obs` contradicts it; **downgraded at manifest time** if the produced object does |
+| `integrate` | Integration will run; requires `batch_correction` in the plan (inferred automatically when it is present) | `claimable` only if `batch_correction` actually completed |
+| `accept-uncorrected` | Deliberate uncorrected multi-batch run | `exploratory` (declared) |
+
+Why this matters, measured on the LuCA LUSC cohort (92,430 cells, 87 samples,
+9 datasets; `governance/realrun_gt_concordance_lusc_2026-07-28.md`):
+unintegrated defaults scored ARI 0.216 / kBET 0.117 with 47 clusters against 24
+published classes, while Harmony on the same input scored ARI 0.471 / kBET
+0.554 with 23 clusters.
+
+The two designs are named profiles in the catalog
+(`workflow.modular.module_catalog.ANALYSIS_PROFILES`) and are reachable as
+recipes:
+
+```bash
+python scripts/scfactory.py run cohort.h5ad --recipe single_batch --dry-run
+python scripts/scfactory.py run cohort.h5ad --recipe multi_batch_harmony --dry-run
+```
+
 #### Recipes (presets)
 
 Recipes pre-package optional modules + capability-flag env vars + bundle
@@ -1069,6 +1195,15 @@ config for common workflows. Pass `--recipe NAME` to `scfactory run`; precedence
 `--optional-modules` > `--recipe` > auto-detect. Recipe `env` is applied
 to the subprocess only (parent env untouched). Requires `pyyaml`
 (only when `--recipe` / `--list-recipes` is used).
+
+A recipe supplies modules through either an inline `optional_modules:` list or a
+`profile:` key naming an entry in
+`workflow.modular.module_catalog.ANALYSIS_PROFILES` (never both). `profile:` is
+preferred for designs the catalog owns, because it resolves the module list and
+the batch declaration from the catalog instead of copying module names into
+YAML. Batch declarations follow the same precedence as modules:
+`--batch-strategy` > recipe (its profile, or its `batch_strategy:` field) >
+undeclared.
 
 ```bash
 python scripts/scfactory.py run --list-recipes        # list all
@@ -1081,6 +1216,8 @@ Starter recipes in `recipes/`:
 - `nc2024_paper` — NSCLC paper-faithful repro: clustering + DE + annotation + trajectory + paper_repro, `scale-mode=massive`, `SC_CLUSTERING_ENGINE=sparse_exact`, bundle off by default.
 - `cite_seq_full` — CITE-seq RNA + ADT (CLR) with bundle protein extension.
 - `visium_neighborhoods` — Visium spatial: ingest + neighborhoods (squidpy) + bundle spatial extension.
+- `single_batch` — canonical defaults with an affirmative single-batch declaration (fails if `.obs` says otherwise). Catalog profile `single_batch`.
+- `multi_batch_harmony` — canonical defaults plus Harmony integration, with `differential_expression`/`annotation` sequenced after correction. Catalog profile `multi_batch_harmony`.
 
 ### Execution Profiles (Human + AI)
 
@@ -1763,6 +1900,7 @@ checkpoints or change numerical analysis settings.
 
 | Parameter | Default | Description |
 |---|---|---|
+| `--batch-strategy` | `auto` | Declare the input's batch design: `auto` (no declaration; multi-batch input is warned about and its clustering claim downgraded to `exploratory`), `single-batch` (asserted; **fails at plan time** if `.obs` contradicts it), `integrate` (requires `batch_correction` in the plan; inferred automatically when present), `accept-uncorrected` (deliberate uncorrected multi-batch run; stays `exploratory`). See [Batch declarations](#batch-declarations-batch-strategy). |
 | `--batch-key` | sample | Batch column in adata.obs |
 | `--batch-method` | harmony | Method: harmony/bbknn/combat/scanorama/scvi/mnn/fastmnn |
 | `--harmony-backend` | auto | Harmony backend: `auto`/`cpu`/`gpu`/`direct`. `direct` calls canonical `harmonypy.run_harmony` and transposes `Z_corr` to `(n_cells, n_pcs)` — the proven-working path when the rapids/scanpy wrappers are broken. The `integration_select` gate auto-selects `direct` when it picks Harmony. |

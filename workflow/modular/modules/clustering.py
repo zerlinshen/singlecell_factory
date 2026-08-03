@@ -16,6 +16,7 @@ sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
 from ._gpu_utils import bind_cuda_context, gpu_available
+from ..batch_risk import BATCH_CANDIDATE_COLUMNS, observe_batch_structure
 from .._neighbors_cache import get_or_compute_neighbors
 
 
@@ -516,11 +517,10 @@ class ClusteringModule:
             adata.uns["leiden_colors"] = list(colours)
 
     # obs columns that, with more than one level, indicate the run spans
-    # multiple technical units and is therefore exposed to batch effects.
-    _BATCH_CANDIDATE_COLUMNS = (
-        "batch", "sample", "sample_id", "donor_id", "donor",
-        "dataset", "study", "patient", "patient_id", "platform", "assay",
-    )
+    # multiple technical units and is therefore exposed to batch effects. Shared
+    # with the plan-time detector in batch_risk.py so the pre-run warning and
+    # this post-run reading can never disagree about what counts as a batch.
+    _BATCH_CANDIDATE_COLUMNS = BATCH_CANDIDATE_COLUMNS
 
     def _record_batch_confounding_risk(self, adata, ctx) -> None:
         """Flag clusters produced from multi-batch input with no integration.
@@ -536,14 +536,19 @@ class ClusteringModule:
         This does not change the analysis — it records, in the manifest, that a
         known confounder was present and unaddressed, so a batch-driven clustering
         can never be reported as an integrated one.
+
+        DIAGNOSTIC ONLY. The authoritative claim is
+        ``metadata["batch_risk"]["clustering_claim_status"]``, reconciled against
+        the final object by ``pipeline._reconcile_batch_risk_at_manifest_time``.
+        That pass computes its own reading through the shared
+        :func:`observe_batch_structure` used below, and unlike this early return
+        it does not treat a merely PLANNED batch_correction as an integrated one.
+        Consumers must read the claim field, not this record.
         """
         if "batch_correction" in (getattr(ctx.cfg, "optional_modules", None) or ()):
             return
-        candidates = {
-            col: int(adata.obs[col].nunique(dropna=True))
-            for col in self._BATCH_CANDIDATE_COLUMNS
-            if col in adata.obs.columns and adata.obs[col].nunique(dropna=True) > 1
-        }
+        observation = observe_batch_structure(adata.obs)
+        candidates = observation["observed_candidate_batch_columns"]
         if not candidates:
             return
         ctx.metadata["batch_confounding_risk"] = {

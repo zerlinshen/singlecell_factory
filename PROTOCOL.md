@@ -333,6 +333,26 @@ python -m workflow.modular.cli \
 ```
 
 Notes:
+- **Declare the batch design before a multi-batch run.** The launcher detects
+  batch structure from the input `.obs` before any compute. Multi-batch input
+  with no declaration is warned about on stderr and its
+  clustering/differential_expression/annotation output is recorded as
+  `batch_risk.clustering_claim_status: exploratory` in both manifests. Resolve
+  it with one of:
+  `--optional-modules clustering,batch_correction,differential_expression,annotation --batch-key <col>`
+  (integration; also available as `--recipe multi_batch_harmony`),
+  `--batch-strategy single-batch` (asserted; fails if `.obs` contradicts it), or
+  `--batch-strategy accept-uncorrected` (deliberate, stays exploratory).
+  Measured cost of getting this wrong:
+  `governance/realrun_gt_concordance_lusc_2026-07-28.md`.
+- **A declaration is checked, not trusted.** Runs starting from a raw
+  `--sample-root` have no prepared `.obs` at plan time, so `single-batch` is
+  accepted provisionally. At manifest time the claim is re-resolved against the
+  produced object and against whether `batch_correction` actually completed; a
+  falsified declaration is downgraded to `exploratory` with a loud
+  `BATCH_RISK_FALSIFIED` warning and the artifacts are kept. Read
+  `batch_risk.clustering_claim_status` (with `claim_basis`) as the authoritative
+  field — `batch_confounding_risk` is a diagnostic breadcrumb only.
 - `rna_velocity` needs either `--velocity-loom` OR (`--velocity-bam` + resolvable GTF via `--velocity-gtf` or `--transcriptome-dir`).
 - `validate_cbioportal` is not included above (avoids network dependency).
 - Claim-capable trajectory is a separate explicit choice:

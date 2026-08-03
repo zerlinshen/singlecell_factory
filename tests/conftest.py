@@ -64,6 +64,25 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 # Stabilize scanpy/numba imports in this CI/runtime environment.
+#
+# KNOWN BUG this setdefault can expose (found 2026-08-03, scanpy 1.12 /
+# numba 0.61.2 / numpy 2.2.6 / python 3.13): with JIT disabled, an
+# `@njit`-decorated function falls back to plain CPython execution, and
+# scanpy's `_normalize_csr` (scanpy/preprocessing/_normalization.py:65)
+# unconditionally `return`s `counts_per_cell, counts_per_cols`, but
+# `counts_per_cols` is only ever assigned inside
+# `if exclude_highly_expressed:`. Any `sc.pp.normalize_total(...)` call on
+# a CSR matrix with the default `exclude_highly_expressed=False`, run
+# anywhere JIT is off (including a subprocess that inherits this env var),
+# raises `UnboundLocalError: cannot access local variable 'counts_per_cols'`.
+# Invisible with JIT on (numba's SSA typing does not hit the same
+# CPython-semantics error). If you spawn a subprocess from a pytest test
+# that needs real JIT (e.g. a heavy scanpy stress), explicitly set
+# `NUMBA_DISABLE_JIT=0` in that child's env rather than inheriting -- see
+# tests/test_clustering_memory_regression.py::wave3_200k_stress_result for
+# the working pattern and the (separate, JIT-vs-pytest) reason it needs a
+# subprocess in the first place. Not yet filed upstream; if scanpy bumps
+# past 1.12 and this stops reproducing, this comment can be pruned.
 MPL_DIR = ROOT / ".mplconfig"
 MPL_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(MPL_DIR))

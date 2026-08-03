@@ -15,6 +15,24 @@ from workflow.modular.software_provenance import collect_software_versions
 _MAX_UNTRACKED_HASH_BYTES = 16 * 1024 * 1024
 _MAX_UNTRACKED_FILE_HASH_BYTES = 1024 * 1024
 
+# Closed vocabulary for manifest.overall_status.
+#   complete/partial/failed — emitted by pipeline._summarize_run_status.
+#   crashed                 — emitted by the CLI failure envelope when the
+#                             pipeline raised before writing its own manifest.
+#                             Without it a crashed run left no manifest at all
+#                             and was indistinguishable from a run that never
+#                             started.
+MANIFEST_STATUS_COMPLETE = "complete"
+MANIFEST_STATUS_PARTIAL = "partial"
+MANIFEST_STATUS_FAILED = "failed"
+MANIFEST_STATUS_CRASHED = "crashed"
+MANIFEST_OVERALL_STATUSES: frozenset[str] = frozenset({
+    MANIFEST_STATUS_COMPLETE,
+    MANIFEST_STATUS_PARTIAL,
+    MANIFEST_STATUS_FAILED,
+    MANIFEST_STATUS_CRASHED,
+})
+
 
 def factory_git_state(repo_path: Path) -> dict:
     """Return a complete, machine-auditable source state for a git repo.
@@ -129,8 +147,20 @@ def write_manifest(
     overall_status: str = "",
     producer_manifest: str = "",
     factory_python_state: Optional[dict] = None,
+    batch_risk: Optional[dict] = None,
 ) -> Path:
     """Write <run-dir>/manifest.json with the canonical schema. Returns the path.
+
+    ``overall_status`` must be a member of MANIFEST_OVERALL_STATUSES (empty
+    means "derive from failed_modules"); an unrecognised status is rejected
+    rather than written, because a consumer that switches on it would silently
+    mis-read the run.
+
+    ``batch_risk`` carries the plan-time multi-batch envelope from
+    :mod:`workflow.modular.batch_risk`, including
+    ``clustering_claim_status``. It is always present as an object so a consumer
+    never has to distinguish "no batch risk" from "this manifest predates the
+    field"; ``{}`` means the launcher did not resolve one.
 
     Dual R-factory SHA contract (PREC-1):
       factory_r.sha  — the R factory short SHA at manifest-write time (legacy field, kept).
@@ -139,6 +169,12 @@ def write_manifest(
       time (may differ from r_factory_sha_at_manifest_write if a pull happened between the
       two steps). The R loader warns on mismatch between the two fields.
     """
+    if overall_status and overall_status not in MANIFEST_OVERALL_STATUSES:
+        raise ValueError(
+            f"unknown overall_status {overall_status!r}; expected one of: "
+            + ", ".join(sorted(MANIFEST_OVERALL_STATUSES))
+        )
+
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if "multiomics_r_factory" in str(factory_r_path):  # legacy name accepted during transition
@@ -175,7 +211,9 @@ def write_manifest(
         "completed_modules": list(completed_modules or modules_run),
         "skipped_modules": list(skipped_modules or []),
         "failed_modules": list(failed_modules or []),
-        "overall_status": overall_status or ("failed" if failed_modules else "complete"),
+        "overall_status": overall_status
+        or (MANIFEST_STATUS_FAILED if failed_modules else MANIFEST_STATUS_COMPLETE),
+        "batch_risk": dict(batch_risk) if batch_risk else {},
         "bundle_sha256": bundle_sha256 or "",
         "producer_manifest": producer_manifest,
         "claim_guard": "not_for_de_or_new_quantitative_claims_without_full_object_validation",

@@ -1,0 +1,20 @@
+name: single_batch
+description: "Single-batch design: canonical defaults with an affirmative single-batch declaration"
+modality_hint: rna_only
+profile: single_batch
+scale_preset: standard
+bundle:
+  enabled: false
+  include_protein: false
+  include_spatial: false
+  include_multimodal_obsm: false
+  schema_version: v2.1
+notes: |
+  Modules and the batch declaration are resolved from
+  workflow.modular.module_catalog.ANALYSIS_PROFILES['single_batch'], not from a
+  copy in this file.
+  The declaration is checked, not trusted: if obs actually carries more than one
+  level in a batch-like column (batch/sample/donor/dataset/study/platform/...),
+  the run FAILS at plan time rather than producing batch-driven clusters under a
+  single-batch label. Use multi_batch_harmony, or --batch-strategy
+  accept-uncorrected, when that happens.

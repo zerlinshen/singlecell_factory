@@ -413,7 +413,25 @@ def test_direct_h5ad_rejects_fractional_declared_counts_at_ingest(tmp_path):
 # doctor
 # ---------------------------------------------------------------------------
 
-def test_doctor_emits_pass_or_warn(capsys, scfactory):
+def _stub_claim_critical_probe(monkeypatch, scfactory) -> None:
+    """Stub out the suite-root claim-critical contract lookup for doctor
+    tests that are not specifically exercising claim-critical behavior.
+
+    The real check shells out to the `sc_gpu` and `r_multiomics` conda envs
+    (see `test_doctor_claim_critical_*` below, which intentionally exercise
+    that real subprocess path). Every OTHER `doctor` test just needs a fast,
+    deterministic no-op here so the suite doesn't pay that real probe cost
+    (observed ~12s/call) once per unrelated test.
+    """
+
+    def fake_load(*args, **kwargs):
+        return None, "stubbed for test speed (see _stub_claim_critical_probe)"
+
+    monkeypatch.setattr(scfactory, "_load_claim_critical_contract", fake_load)
+
+
+def test_doctor_emits_pass_or_warn(monkeypatch, capsys, scfactory):
+    _stub_claim_critical_probe(monkeypatch, scfactory)
     rc = scfactory.main(["doctor"])
     out = capsys.readouterr().out
     # Lines we expect regardless of pass/warn outcome.
@@ -425,21 +443,28 @@ def test_doctor_emits_pass_or_warn(capsys, scfactory):
     assert rc in (0, 1)
 
 
-def test_doctor_json_shape(capsys, scfactory):
+def test_doctor_json_shape(monkeypatch, capsys, scfactory):
+    _stub_claim_critical_probe(monkeypatch, scfactory)
     rc = scfactory.main(["doctor", "--json"])
     out = capsys.readouterr().out
     payload = json.loads(out)
     for key in ("python", "conda_envs", "rscript", "bridge_symlinks",
-                "python_deps", "r_packages", "last_run", "summary"):
+                "python_deps", "r_packages", "last_run", "summary",
+                "lock_identity_match", "claim_critical_deps", "readiness"):
         assert key in payload, f"missing top-level key: {key}"
     summary = payload["summary"]
     for k in ("pass", "warn", "fail"):
         assert k in summary
         assert isinstance(summary[k], int)
+    for key in ("core_environment_ready", "selected_profile_ready",
+                "optional_capabilities", "claim_critical_ready"):
+        assert key in payload["readiness"], f"missing readiness dimension: {key}"
+        assert "status" in payload["readiness"][key]
     assert rc in (0, 1)
 
 
-def test_doctor_searches_governed_project_manifest(tmp_path, capsys, scfactory):
+def test_doctor_searches_governed_project_manifest(tmp_path, monkeypatch, capsys, scfactory):
+    _stub_claim_critical_probe(monkeypatch, scfactory)
     project_root = tmp_path / "project"
     run_id = "2026-08-02T1200Z-abcdef0"
     manifest = project_root / "runs" / run_id / "manifest.json"
@@ -462,6 +487,206 @@ def test_doctor_searches_governed_project_manifest(tmp_path, capsys, scfactory):
     assert rc in (0, 1)
     assert payload["last_run"]["found"] is True
     assert payload["last_run"]["info"]["path"] == str(manifest)
+
+
+def test_doctor_lock_identity_mismatch_is_non_pass(monkeypatch, capsys, scfactory):
+    """A running interpreter that diverges from the declared environment.yml
+    pin must surface as a non-pass, even though it clears the >=3.10 floor
+    that `_check_python` alone would report as PASS."""
+    _stub_claim_critical_probe(monkeypatch, scfactory)
+
+    def fake_lock(*args, **kwargs):
+        return {
+            "path": "fake/environment.yml",
+            "found": True,
+            # Guaranteed to differ from whatever interpreter runs this test.
+            "python_version": (2, 7),
+            "declared_packages": {"scanpy", "anndata", "scipy"},
+        }
+
+    monkeypatch.setattr(scfactory, "_read_environment_lock", fake_lock)
+
+    rc = scfactory.main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    lock = payload["lock_identity_match"]
+    assert lock["status"] == "warn"
+    assert lock["python"]["match"] is False
+    assert "MISMATCH" in lock["message"]
+    # A version mismatch is a warning, never an automatic suite-level fail.
+    assert payload["summary"]["fail"] == 0
+    assert rc in (0, 1)
+
+
+def test_doctor_missing_required_python_dep_is_non_pass(monkeypatch, capsys, scfactory):
+    """A dep declared in environment.yml (tier=required) that fails to import
+    must surface as non-pass at both the per-dep level and the rolled-up
+    `core_environment_ready` readiness dimension — not collapse into the
+    flat "pass" that the old hardcoded status produced."""
+    _stub_claim_critical_probe(monkeypatch, scfactory)
+    import importlib as _importlib
+
+    def fake_lock(*args, **kwargs):
+        return {
+            "path": "fake/environment.yml",
+            "found": True,
+            "python_version": (sys.version_info.major, sys.version_info.minor),
+            # Mark mofapy2 as lock-required for this test, regardless of the
+            # real environment.yml (which does not declare it).
+            "declared_packages": {"scanpy", "anndata", "scipy", "mofapy2"},
+        }
+
+    monkeypatch.setattr(scfactory, "_read_environment_lock", fake_lock)
+
+    real_import_module = _importlib.import_module
+
+    def fake_import_module(name, *args, **kwargs):
+        if name == "mofapy2":
+            raise ImportError("simulated: mofapy2 not installed")
+        return real_import_module(name, *args, **kwargs)
+
+    monkeypatch.setattr(_importlib, "import_module", fake_import_module)
+
+    rc = scfactory.main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    dep = payload["python_deps"]["deps"]["mofapy2"]
+    assert dep["tier"] == "required"
+    assert dep["present"] is False
+    assert dep["status"] == "warn"
+    assert "mofapy2" in payload["python_deps"]["missing_required"]
+    assert payload["python_deps"]["status"] == "warn"
+    assert payload["readiness"]["core_environment_ready"]["status"] == "warn"
+    # Still never a hard suite-level fail — doctor stays non-aggressive.
+    assert payload["summary"]["fail"] == 0
+    assert rc in (0, 1)
+
+
+def test_doctor_missing_optional_dep_does_not_cause_global_fail(monkeypatch, capsys, scfactory):
+    """A dep NOT declared in environment.yml (tier=optional, e.g. squidpy)
+    that fails to import must be individually visible as a warning but must
+    never push the suite-level status to fail — optional capabilities are
+    legitimately absent on many hosts."""
+    _stub_claim_critical_probe(monkeypatch, scfactory)
+    import importlib as _importlib
+
+    real_import_module = _importlib.import_module
+
+    def fake_import_module(name, *args, **kwargs):
+        if name == "squidpy":
+            raise ImportError("simulated: squidpy not installed")
+        return real_import_module(name, *args, **kwargs)
+
+    monkeypatch.setattr(_importlib, "import_module", fake_import_module)
+
+    rc = scfactory.main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    dep = payload["python_deps"]["deps"]["squidpy"]
+    assert dep["tier"] == "optional"
+    assert dep["present"] is False
+    assert dep["status"] == "warn"
+    assert "squidpy" in payload["readiness"]["optional_capabilities"]["missing"]
+    assert payload["readiness"]["optional_capabilities"]["status"] == "warn"
+    # core readiness is untouched by an optional-tier absence.
+    assert payload["readiness"]["core_environment_ready"]["status"] == "pass"
+    assert payload["summary"]["fail"] == 0
+    assert rc == 0
+
+
+def test_doctor_claim_critical_contract_unavailable_is_explicit(monkeypatch, capsys, scfactory):
+    """When the suite-root claim-critical contract cannot be read (e.g. this
+    repo cloned standalone, outside the suite), doctor must say so explicitly
+    rather than silently reporting healthy."""
+
+    def fake_load(*args, **kwargs):
+        return None, "simulated: contract not found"
+
+    monkeypatch.setattr(scfactory, "_load_claim_critical_contract", fake_load)
+
+    rc = scfactory.main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    cc = payload["claim_critical_deps"]
+    assert cc["contract_available"] is False
+    assert cc["status"] == "warn"
+    assert "simulated: contract not found" in cc["message"]
+    assert payload["readiness"]["claim_critical_ready"]["contract_available"] is False
+    # Contract unavailability is a "cannot verify" state, not a confirmed gap.
+    assert payload["summary"]["fail"] == 0
+    assert rc in (0, 1)
+
+
+def test_doctor_missing_claim_critical_dep_is_fail_and_not_maskable(monkeypatch, capsys, scfactory):
+    """A declared claim-critical dependency that fails to import in its
+    declared env must escalate all the way to "fail" — the one tier in
+    doctor allowed to do that — and that fail must survive to the overall
+    exit code even while unrelated optional deps are also (harmlessly)
+    missing on this host. This exercises the REAL cross-env subprocess probe
+    (not a mocked import), using a genuinely nonexistent module name in the
+    real `sc_gpu` env so the probe pathway itself is under test."""
+
+    def fake_load(*args, **kwargs):
+        return [{
+            "name": "definitely_not_a_real_package_xyz_123",
+            "import_name": "definitely_not_a_real_package_xyz_123",
+            "env": "sc_gpu",
+            "version": "0.0.0",
+            "declared_in": "singlecell_factory/environment_gpu.yml",
+            "guards": "singlecell_factory/workflow/modular/modules/pseudobulk_de.py",
+            "claim_effect": "test fixture",
+            "without_it": "simulated claim-path loss for test coverage",
+        }], None
+
+    monkeypatch.setattr(scfactory, "_load_claim_critical_contract", fake_load)
+
+    rc = scfactory.main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    cc = payload["claim_critical_deps"]
+    dep = cc["deps"]["definitely_not_a_real_package_xyz_123"]
+    assert dep["verifiable"] is True  # sc_gpu env is genuinely present on this host
+    assert dep["present"] is False
+    assert dep["status"] == "fail"
+    assert cc["status"] == "fail"
+    assert payload["readiness"]["claim_critical_ready"]["status"] == "fail"
+    # The fail must reach the top-level tally and exit code, unmasked by any
+    # coexisting optional-tier warnings (this host has real optional gaps,
+    # e.g. squidpy/fastparquet, which must stay warn-only and coexist with
+    # this fail rather than diluting it).
+    assert payload["summary"]["fail"] >= 1
+    assert rc == 1
+
+
+def test_doctor_claim_critical_env_absent_is_unverifiable_not_fail(monkeypatch, capsys, scfactory):
+    """A claim-critical dependency declared in a conda env that does not
+    exist on this host is honestly "unverifiable from here" (warn), not a
+    confirmed failure — doctor cannot claim to have tested something it
+    could not even launch an interpreter for."""
+
+    def fake_load(*args, **kwargs):
+        return [{
+            "name": "some_claim_critical_thing",
+            "import_name": "some_claim_critical_thing",
+            "env": "definitely_not_a_real_conda_env_xyz",
+            "version": "1.0.0",
+            "declared_in": "singlecell_factory/environment_gpu.yml",
+            "guards": "singlecell_factory/workflow/modular/modules/pseudobulk_de.py",
+            "claim_effect": "test fixture",
+            "without_it": "simulated",
+        }], None
+
+    monkeypatch.setattr(scfactory, "_load_claim_critical_contract", fake_load)
+
+    rc = scfactory.main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    dep = payload["claim_critical_deps"]["deps"]["some_claim_critical_thing"]
+    assert dep["verifiable"] is False
+    assert dep["status"] == "warn"
+    assert payload["claim_critical_deps"]["status"] == "warn"
+    assert payload["summary"]["fail"] == 0
+    assert rc in (0, 1)
 
 
 # ---------------------------------------------------------------------------

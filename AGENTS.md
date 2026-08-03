@@ -126,7 +126,7 @@ approval, and the full 14-day silent window are all proven.
 ## Current State (2026-08-02)
 
 The August pipeline-remediation round preserves the scientific claim posture
-below while adding the canonical suite quickstart, 33-gate report-all route,
+below while adding the canonical suite quickstart, 34-gate report-all route,
 measured legacy-output deprecation, render-only evidence contracts, and
 ground-truth promotion governance. Use `../QUICKSTART.md` and the committed
 suite plan at `../docs/superpowers/plans/2026-08-02-pipeline-remediation.md` for
@@ -191,7 +191,7 @@ Current claim posture:
 
 The current suite-level validation posture is intentionally honest:
 
-- The one-command suite gate is a 33-step structure/contract/science-assertion
+- The one-command suite gate is a 34-step structure/contract/science-assertion
   harness, including render-only, raw-data, documentation, real-data parity,
   and real-data science-assertion checks. Figure parity remains conditional
   where declared; the gate is not universal biological validation.

@@ -1,0 +1,23 @@
+name: multi_batch_harmony
+description: "Multi-batch design: canonical defaults plus Harmony integration"
+modality_hint: rna_only
+profile: multi_batch_harmony
+scale_preset: standard
+bundle:
+  enabled: false
+  include_protein: false
+  include_spatial: false
+  include_multimodal_obsm: false
+  schema_version: v2.1
+notes: |
+  Modules and the batch declaration are resolved from
+  workflow.modular.module_catalog.ANALYSIS_PROFILES['multi_batch_harmony'], not
+  from a copy in this file. batch_correction is sequenced directly after
+  clustering, and both differential_expression and annotation carry runs_after
+  ordering hints so their markers/labels bind to the POST-correction leiden.
+  Set the batch column with --batch-key (default: sample) and the method with
+  --batch-method (default: harmony) on the canonical CLI.
+  Measured on the LuCA LUSC cohort (92,430 cells, 87 samples, 9 datasets):
+  unintegrated ARI 0.216 / kBET 0.117 / 47 clusters vs Harmony ARI 0.471 /
+  kBET 0.554 / 23 clusters against 24 published classes
+  (governance/realrun_gt_concordance_lusc_2026-07-28.md).

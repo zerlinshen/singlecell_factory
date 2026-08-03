@@ -1,0 +1,93 @@
+name: Suite CI-safe gate (cross-repo)
+
+# This is the CHILD-repo half of remote cross-repo CI: it gates a push/PR to
+# THIS repo (singlecell_factory) by reconstructing the canonical four-repo
+# suite layout on a GitHub-hosted runner, pinning singlecell_factory to the
+# exact commit under test, and running the real suite governance harness
+# (scripts/run_all_gates.sh from the suite root) restricted to the `ci_safe`
+# partition (22 of 33 gates) that does not require a conda R/Seurat
+# environment, GPU hardware, or this host's staged real data.
+#
+# This is additive alongside the pre-existing, narrower
+# .github/workflows/factory-governance.yml (unchanged, still self-contained
+# and path-filtered). That workflow proves this repo alone is internally
+# consistent on data-free gates; this workflow proves the ci_safe subset of
+# the WHOLE suite still holds with this commit's singlecell_factory dropped
+# in. Neither replaces the local pre-push hook, which alone runs all 33
+# gates including the 11 host_only ones (R/Seurat env, GPU, staged real
+# data).
+#
+# See ../../docs/CI_SETUP.md in the suite root for: the exact secret
+# required, PAT scope, which repos need it, how to verify this workflow, and
+# the full per-gate ci_safe/host_only classification with rationale.
+#
+# Honesty note: a green run here proves the ci_safe partition passed on an
+# independent host with THIS commit. It does NOT prove the full 33-gate
+# suite passed. The job always prints/records a "CI-SAFE PARTITION: N/33
+# executed" report (also in the job summary) naming every gate it did not
+# run, so this cannot be misread as full validation.
+
+on:
+  push:
+    branches: [wave6-trevino-v5.1]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: suite-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci-safe-gate:
+    runs-on: ubuntu-latest
+    steps:
+      # Suite root (private, cross-repo): checked out first, at the
+      # workspace root, so it plays the role of <suite_root>/.
+      - name: Checkout suite root
+        uses: actions/checkout@v4
+        with:
+          repository: zerlinshen/bioinformatics-research-pipeline
+          ref: master
+          token: ${{ secrets.SUITE_CI_TOKEN }}
+
+      # Self, pinned to the exact commit under test (push SHA, or the PR
+      # merge ref on pull_request). `repository`/`ref` are intentionally
+      # omitted so actions/checkout falls back to its own correct default
+      # for both event types.
+      - name: Checkout singlecell_factory (commit under test)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SUITE_CI_TOKEN }}
+          path: singlecell_factory
+
+      - name: Checkout r_multiomics_factory (sibling, private)
+        uses: actions/checkout@v4
+        with:
+          repository: zerlinshen/r_multiomics_factory
+          ref: master
+          token: ${{ secrets.SUITE_CI_TOKEN }}
+          path: r_multiomics_factory
+
+      - name: Checkout plotting_factory (sibling, private)
+        uses: actions/checkout@v4
+        with:
+          repository: zerlinshen/plotting_factory
+          ref: master
+          token: ${{ secrets.SUITE_CI_TOKEN }}
+          path: plotting_factory
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CI-safe Python dependencies
+        run: python -m pip install --upgrade pip pytest pyyaml matplotlib pandas numpy pillow
+
+      - name: Run suite gate (ci_safe partition)
+        env:
+          SUITE_GATE_CI_SAFE_ONLY: "1"
+          GATE_REPORT_ALL: "1"
+        run: bash scripts/run_all_gates.sh

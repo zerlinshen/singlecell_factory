@@ -230,3 +230,45 @@ peak RSS is the binding evidence.
 - Wave 4 candidate: re-evaluate M1 once cuSOLVER / cupy is upgraded or
   rapids-singlecell adopts a non-eigh PCA path (e.g. randomized SVD on GPU).
   This would unlock the leaner memory profile M1 promises.
+
+## US-W3-3 required-flip closure (2026-08-03)
+
+The "required-flip of the 200k regression test" referenced above never
+actually landed as a real gate: `test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix`
+and two sibling ACs (`test_200k_m2_mechanism_under_budget`,
+`test_200k_post_fix_tight_ratio`) were left under an unconditional
+`@pytest.mark.skip`, citing an environmental scanpy+numba+pytest crash.
+That meant the M2 mechanism's 32%-reduction claim was asserted only by a
+standalone script nothing ever ran automatically — a real regression
+could have landed and every gate would have stayed green.
+
+Root-caused and fixed 2026-08-03. There were actually **two** distinct
+bugs stacked on top of each other, not one:
+
+1. Running the 200k scanpy `normalize_total`/`log1p` sequence directly
+   inside a pytest process crashes numba's typing pass
+   (`AttributeError: 'function' object has no attribute
+   'get_call_template'`, numba 0.61.2) — reproducible with a
+   project-import-free 15-line script, and with `--no-cov`, so it is
+   pytest-vs-numba, not this codebase or pytest-cov.
+2. This repo's `tests/conftest.py` sets `NUMBA_DISABLE_JIT=1` for the
+   whole pytest session (to stabilize *other* numba-touching tests).
+   With JIT off, scanpy 1.12's `_normalize_csr`
+   (scanpy/preprocessing/_normalization.py:65) has its own real bug: it
+   unconditionally returns `counts_per_cols`, which is only assigned
+   inside `if exclude_highly_expressed:` — so the default
+   `exclude_highly_expressed=False` call raises
+   `UnboundLocalError: cannot access local variable 'counts_per_cols'`.
+   This is invisible under normal JIT compilation and was only
+   discovered by inheriting conftest's env into a subprocess.
+
+Fix: the three ACs now run `scripts/dev/wave3_us_w3_3_m2_200k_stress.py`
+as a real subprocess with `NUMBA_DISABLE_JIT` explicitly forced to `0`
+in that child's environment, sidestepping both bugs at once. They are
+opt-in via the new `memory_stress` pytest marker (`pytest -m
+memory_stress`), following the same convention as `perf`/`r_contract`/
+`*_real`. Re-run 2026-08-03: pre-fix peak 9.31 GB, M2 peak 6.33 GB,
+reduction 32.0% — both ACs met, tight-ratio AC met (6.33 / 10.0 = 0.63x
+<= 1.2x). `3 passed` for real in `378.53s`, not skipped. See
+`tests/test_clustering_memory_regression.py::wave3_200k_stress_result`
+for the full diagnosis in code.

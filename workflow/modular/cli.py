@@ -23,14 +23,21 @@ from .config import (
     VelocityConfig,
     scale_mode_to_capabilities,
 )
+from .batch_risk import (
+    BATCH_STRATEGY_AUTO,
+    BATCH_STRATEGY_CHOICES,
+    BatchStrategyConflict,
+    announce_batch_risk,
+    plan_batch_risk,
+)
 from .module_catalog import DEFAULT_OPTIONAL_MODULES as DEFAULT_OPTIONAL_MODULE_NAMES
-from .module_catalog import module_help_list
+from .module_catalog import MANDATORY_MODULES, module_help_list
 from .legacy_output import (
     LEGACY_DEFAULT_OUTPUT_DIR,
     legacy_output_warning_message,
     record_legacy_output_access,
 )
-from .pipeline import MODULE_DEPENDENCIES, run_pipeline
+from .pipeline import MODULE_DEPENDENCIES, _resolve_execution_order, run_pipeline
 
 
 DEFAULT_OPTIONAL_MODULES = ",".join(DEFAULT_OPTIONAL_MODULE_NAMES)
@@ -401,6 +408,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--regress-cell-cycle", action="store_true", help="Regress out cell cycle effects")
 
     # Batch correction
+    parser.add_argument(
+        "--batch-strategy",
+        default=BATCH_STRATEGY_AUTO,
+        choices=list(BATCH_STRATEGY_CHOICES),
+        help=(
+            "Declare the batch design of the input. 'auto' (default) is the "
+            "ABSENCE of a declaration: multi-batch input detected without one "
+            "is warned about and its clustering/annotation output is recorded "
+            "as exploratory. 'single-batch' asserts a single batch and FAILS if "
+            "obs contradicts it. 'integrate' requires batch_correction in the "
+            "plan (and is inferred automatically when it is present). "
+            "'accept-uncorrected' records a deliberate uncorrected multi-batch "
+            "run, which stays exploratory. Silence never clears the warning."
+        ),
+    )
     parser.add_argument("--batch-key", default="sample", help="Column in obs for batch labels")
     parser.add_argument(
         "--batch-method",
@@ -1045,6 +1067,128 @@ def _validate_args(args: argparse.Namespace) -> None:
         )
 
 
+def _write_crash_manifest(
+    exc: BaseException,
+    *,
+    run_dir: Path,
+    run_id: str | None,
+    cfg: PipelineConfig,
+    args: argparse.Namespace,
+    ledger: object | None,
+    factory_root: Path,
+    phase: str = "pipeline",
+) -> None:
+    """Write a failure envelope for a run that died before its own manifest.
+
+    Every step is individually guarded against BaseException, not merely
+    Exception: a KeyboardInterrupt or SystemExit landing mid-write must not
+    replace the traceback the operator actually needs, so this function swallows
+    its own failures and logs them; the caller re-raises the original.
+
+    ``phase`` distinguishes the two shapes of failure this envelope covers:
+
+    * ``pipeline``                — run_pipeline raised; module lists are partial
+      and ``overall_status: crashed`` describes the analysis itself.
+    * ``governed_manifest_write`` — the RUN COMPLETED and only the project-root
+      manifest write failed. Modules are all recorded ok, which without this
+      field reads as a contradiction against ``crashed``. The producer's own
+      ``run_manifest.json`` is intact in that case and remains the record of the
+      analysis; the crash envelope documents the governed-write failure only.
+    """
+    import logging
+    import socket
+    import traceback
+
+    log = logging.getLogger(__name__)
+    try:
+        from .manifest_writer import MANIFEST_STATUS_CRASHED, write_manifest
+        from .project_paths import logs_dir
+
+        traceback_artifact = ""
+        try:
+            target = logs_dir(run_dir) / "crash_traceback.txt"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                ),
+                encoding="utf-8",
+            )
+            traceback_artifact = str(target)
+        except BaseException as tb_exc:
+            log.warning("crash traceback artifact could not be written: %s", tb_exc)
+
+        requested = list(dict.fromkeys([*MANDATORY_MODULES, *cfg.optional_modules]))
+        try:
+            planned = _resolve_execution_order(
+                list(MANDATORY_MODULES), list(cfg.optional_modules)
+            )
+        except BaseException as plan_exc:
+            log.warning("crash manifest could not resolve planned modules: %s", plan_exc)
+            planned = []
+
+        # The RunLedger is the only per-module progress record the CLI holds at
+        # crash time; run_pipeline's own module_status never reached disk.
+        results: list[dict] = []
+        if ledger is not None:
+            try:
+                results = ledger.module_results()
+            except BaseException as ledger_exc:
+                log.warning("crash manifest could not read the ledger: %s", ledger_exc)
+        executed = [str(row.get("name")) for row in results if row.get("name")]
+        completed = [
+            str(row.get("name")) for row in results if row.get("status") == "ok"
+        ]
+        skipped = [
+            str(row.get("name"))
+            for row in results
+            if str(row.get("status", "")).startswith("skipped")
+        ]
+        failed = [
+            str(row.get("name")) for row in results if row.get("status") == "failed"
+        ]
+
+        write_manifest(
+            run_dir,
+            project_id=cfg.project,
+            run_id=run_id or Path(run_dir).name,
+            modules_run=completed,
+            requested_modules=requested,
+            planned_modules=planned,
+            executed_modules=executed,
+            completed_modules=completed,
+            skipped_modules=skipped,
+            failed_modules=failed,
+            overall_status=MANIFEST_STATUS_CRASHED,
+            produced_on=socket.gethostname(),
+            factory_python_path=factory_root,
+            batch_risk=getattr(cfg, "batch_risk", None),
+            extra={
+                "allow_partial_run": bool(getattr(args, "allow_partial_run", False)),
+                "crash": {
+                    "phase": phase,
+                    "exception_class": type(exc).__name__,
+                    "exception_module": type(exc).__module__,
+                    "message": str(exc),
+                    "traceback_artifact": traceback_artifact,
+                    "last_completed_module": completed[-1] if completed else "",
+                    "module_results": results,
+                    "input": {
+                        "sample_root": str(cfg.cellranger.sample_root),
+                        "input_h5ad": (
+                            str(cfg.cellranger.input_h5ad)
+                            if cfg.cellranger.input_h5ad is not None
+                            else ""
+                        ),
+                        "output_dir": str(cfg.output_dir),
+                    },
+                },
+            },
+        )
+    except BaseException as envelope_exc:
+        log.warning("crash manifest write failed: %s", envelope_exc)
+
+
 def main() -> None:
     """CLI entrypoint."""
     import faulthandler
@@ -1294,6 +1438,7 @@ def main() -> None:
         gpu_mode=args.gpu_mode,
         scale_mode=args.scale_mode,
         scientific_profile=args.scientific_profile,
+        batch_strategy=args.batch_strategy,
         scientific_non_equivalence_acknowledged=(
             args.scientific_non_equivalence_acknowledged
         ),
@@ -1316,6 +1461,19 @@ def main() -> None:
         hic_tad_window_bins=args.hic_tad_window_bins,
         hic_tad_boundary_k=args.hic_tad_boundary_k,
     )
+    # Plan-time batch accounting, BEFORE any compute: the operator sees the
+    # warning while there is still a decision to make, a contradicted
+    # declaration fails at exit code 2 like any other argument error, and the
+    # resolved envelope is carried into both manifests.
+    try:
+        cfg.batch_risk = plan_batch_risk(
+            cfg, _resolve_execution_order(list(MANDATORY_MODULES), cfg.optional_modules)
+        )
+    except BatchStrategyConflict as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    announce_batch_risk(cfg.batch_risk)
+
     ledger = None
     try:
         _ledger_ctx = type("_LedgerCtx", (), {"cfg": cfg})()
@@ -1336,14 +1494,30 @@ def main() -> None:
         except Exception as _wd_exc:
             logging.getLogger(__name__).warning("MemoryWatchdog start failed: %s", _wd_exc)
 
+    # Set when the run itself completed and only the governed manifest write
+    # failed. Without it the envelope labels such a run "crashed" while listing
+    # every module as ok, which reads as a contradiction.
+    _crash_phase = "pipeline"
+    _partial_run_exit = False
     try:
         manifest_result = run_pipeline(cfg, ledger=ledger)
         print(manifest_result)
         manifest, producer_manifest = _load_pipeline_manifest(manifest_result)
         if _run_dir is not None:
+            _crash_phase = "governed_manifest_write"
             try:
                 modules_run = list(manifest.get("modules_run", []))
                 bundle_sha256 = manifest.get("bundle_sha256", "")
+                # The producer reconciles the plan-time claim against the object
+                # it actually produced; that reading is authoritative. Falling
+                # back to cfg.batch_risk covers producers that never reached
+                # manifest time (and is what the crash envelope records).
+                producer_risk = (manifest.get("metadata") or {}).get("batch_risk")
+                resolved_batch_risk = (
+                    producer_risk
+                    if isinstance(producer_risk, dict) and producer_risk
+                    else cfg.batch_risk
+                )
                 write_manifest(
                     _run_dir,
                     project_id=args.project,
@@ -1361,6 +1535,7 @@ def main() -> None:
                     factory_python_state=manifest.get("factory_python"),
                     produced_on=socket.gethostname(),
                     factory_python_path=_FACTORY_ROOT,
+                    batch_risk=resolved_batch_risk,
                     extra={"allow_partial_run": bool(args.allow_partial_run)},
                 )
             except Exception as _mf_exc:
@@ -1372,7 +1547,30 @@ def main() -> None:
                 + ", ".join(str(name) for name in manifest["failed_modules"]),
                 file=sys.stderr,
             )
+            _partial_run_exit = True
             raise SystemExit(1)
+    except BaseException as exc:
+        # Without this, a fatal exception left the run directory with no
+        # manifest at all — a crashed run was indistinguishable from a run that
+        # never started. The envelope never replaces the original traceback.
+        #
+        # The partial-run exit above is the ONLY exemption, and it identifies
+        # itself with a flag rather than by its type: a blanket
+        # `except SystemExit: raise` also swallowed any sys.exit() raised from
+        # inside a module, which is a real abort and deserves an envelope like
+        # any other.
+        if _run_dir is not None and not _partial_run_exit:
+            _write_crash_manifest(
+                exc,
+                run_dir=_run_dir,
+                run_id=_run_id,
+                cfg=cfg,
+                args=args,
+                ledger=ledger,
+                factory_root=_FACTORY_ROOT,
+                phase=_crash_phase,
+            )
+        raise
     finally:
         run_shutdown_cleanup()
 

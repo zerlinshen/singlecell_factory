@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf and not r_contract and not small_real and not medium_real and not full_real'"
+addopts = "--cov=workflow --cov-report=term-missing --cov-report=xml -m 'not perf and not r_contract and not small_real and not medium_real and not full_real and not memory_stress'"
 markers = [
     "perf: performance regression gate (run explicitly via `pytest -m perf`)",
     "r_contract: Python <-> R bundle round-trip tests (require Rscript env; run explicitly via `pytest -m r_contract`)",
@@ -9,6 +9,7 @@ markers = [
     "medium_real: real-data tier ~500k cells (NC2024 subset; run via `pytest -m medium_real`)",
     "full_real: full NC2024 cohort 884k cells (publication-grade; run via `pytest -m full_real`)",
     "wave5_blocking: Wave 5 cross-module integration gate — must pass before any real Trevino run (US-W5-4)",
+    "memory_stress: 200k-cell subprocess memory-regression stress (~4-6 min wall, ~10GB peak RSS; run explicitly via `pytest -m memory_stress`). Runs tests/test_clustering_memory_regression.py's heavy checks as a subprocess of scripts/dev/wave3_us_w3_3_m2_200k_stress.py because the in-process scanpy+numba path crashes under pytest in this conda env (see that fixture's docstring).",
 ]
 
 [tool.coverage.run]

@@ -148,6 +148,20 @@ class RunLedger:
         except Exception as exc:
             logger.warning("RunLedger.record_module failed: %s", exc)
 
+    def module_results(self) -> list[dict]:
+        """Return the per-module records captured so far.
+
+        Read-only snapshot for callers that need live progress before
+        ``record_end`` — notably the CLI crash envelope, which has no other
+        source of executed/completed modules when the pipeline died before
+        writing its own manifest. Non-raising like the rest of the ledger.
+        """
+        try:
+            return [dict(entry) for entry in self._module_results]
+        except Exception as exc:
+            logger.warning("RunLedger.module_results failed: %s", exc)
+            return []
+
     def record_end(self, final_adata_path: Path | None) -> None:
         try:
             self._rss_poller.stop()

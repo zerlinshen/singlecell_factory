@@ -3,28 +3,43 @@
 200k and 800k synthetic stress fixtures for the Hotspot 1 instrumentation trail.
 
 Strategy:
-  * 200k fixture: generated programmatically per-test (NOT committed to git);
-    fast enough for default CI lane but large enough to surface AnnData
-    duplication cost.
+  * 200k stress: NOT run inline under pytest (see wave3_200k_stress_result()'s
+    docstring for the two stacked scanpy/numba/pytest bugs that makes that
+    unsafe in this conda env). Instead it runs scripts/dev/wave3_us_w3_3_m2_200k_stress.py
+    as a real subprocess, opt-in via `pytest -m memory_stress`, and is
+    ratcheted so it only re-runs for real when a watched source file changes
+    (see the `_ratchet_*` helpers below) -- otherwise it reports an explicit,
+    reasoned skip naming the last real measurement. Wired into the suite gate
+    (../scripts/run_all_gates.sh) as a host_only step, not the default fast
+    lane: ~4-6 min wall / ~10 GB peak RSS on a real run.
   * 800k fixture: env-gated on MEMORY_GUARD_800K=1 — only runs when the host
     explicitly opts in (≥80GB free RAM). Programmatic synthetic; not committed.
 
-Both tests:
-  1. Generate a sparse synthetic AnnData (cells × ~20k genes, ~0.3 density).
-  2. Run the FOUNDATIONAL preamble of clustering (the materialize + preserve_raw
-     pattern that drives Hotspot 1), without the full GPU/CPU run (rapids not
-     guaranteed to be installed).
-  3. Capture peak RSS via resource.getrusage.
+Both stress paths:
+  1. Generate a sparse synthetic AnnData (cells × ~20k genes, ~0.1-0.3 density).
+  2. Run the M2 mechanism (mandate adata.raw + in-place host preprocessing;
+     no host clone of the full adata) that replaced the original triple-copy
+     Hotspot 1 pattern.
+  3. Capture RSS (peak via resource.getrusage for the 800k in-process path;
+     /proc/self/status VmRSS checkpoints for the 200k subprocess path).
   4. Assert peak stays under the budget.
 
-Budgets are sized to catch a future Hotspot-1 regression: 15 GB for 200k cells
-is well above the ~5 GB true sparse storage but well below the ~30+ GB seen
-when the `adata.copy()` triple-pattern triggers.
+Realistic post-fix budget at 200k is <35 GB (the original <15GB AC target was
+infeasible without rewriting AnnData to share X across copy() — see
+docs/HOTSPOT1_DIAGNOSIS.md "Empirical 200k / 800k validation"), with a tighter
+canary at <=1.2x the ~10GB theoretical minimum and a required >=30% reduction
+vs. the pre-fix triple-copy pattern.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import resource
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import anndata as ad
@@ -32,6 +47,80 @@ import numpy as np
 import pandas as pd
 import pytest
 import scipy.sparse as sp
+
+_SC_ROOT = Path(__file__).resolve().parents[1]
+
+# Canonical 200k memory-regression stress script. See wave3_200k_stress_result()
+# below for why the pytest tests below invoke it as a SUBPROCESS instead of
+# reproducing its body inline under pytest.
+_WAVE3_200K_SCRIPT = _SC_ROOT / "scripts" / "dev" / "wave3_us_w3_3_m2_200k_stress.py"
+
+# --- Ratchet: makes the ~4-6 min / ~10GB stress cheap to re-verify -----------
+#
+# `memory_stress` is opt-in and expensive, so it is wired into the suite gate
+# (../scripts/run_all_gates.sh) rather than the default fast lane. Running the
+# full subprocess on EVERY gate invocation, unconditionally, would roughly
+# double local pre-push cost -- exactly the kind of tax that makes people
+# reach for SKIP_SUITE_GATE=1 (see validate_claim_critical_deps.py's C5/C6
+# rationale for why that is treated as a real risk in this repo). Instead:
+# re-run the real subprocess only when a source file the measurement actually
+# depends on has changed since the last recorded PASS; otherwise report an
+# explicit, reasoned, visible skip naming the prior measurement. This is
+# different from the unconditional `@pytest.mark.skip` this file used to
+# carry: the condition is checked at collection time from real file content,
+# and the reason string names exactly what was last measured and when, so a
+# reader (or `assert_selftest_integrity.py --allow-skip-reason-substring`)
+# can tell a legitimate ratchet skip from coverage quietly going missing.
+_RATCHET_PATH = Path(__file__).resolve().parent / "memory_regression_ratchet.json"
+_RATCHET_WATCHED_PATHS = (
+    _SC_ROOT / "workflow" / "modular" / "modules" / "clustering.py",
+    _SC_ROOT / "workflow" / "modular" / "_mem_guard.py",
+    _SC_ROOT / "workflow" / "modular" / "_mem_watchdog.py",
+    _WAVE3_200K_SCRIPT,
+    Path(__file__).resolve(),
+)
+_RATCHET_SKIP_REASON_TAG = "memory-regression ratchet"
+
+
+def _ratchet_watched_hash() -> str:
+    """SHA256 over the content of every watched path, order-independent by name."""
+    digest = hashlib.sha256()
+    for path in sorted(_RATCHET_WATCHED_PATHS, key=lambda p: str(p)):
+        digest.update(str(path.relative_to(_SC_ROOT)).encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes() if path.is_file() else b"<missing>")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _ratchet_skip_reason() -> str | None:
+    """None -> must run for real. A string -> safe to skip, and why."""
+    if not _RATCHET_PATH.is_file():
+        return None
+    try:
+        record = json.loads(_RATCHET_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    if record.get("verdict") != "pass":
+        return None
+    if record.get("watched_sha256") != _ratchet_watched_hash():
+        return None
+    return (
+        f"{_RATCHET_SKIP_REASON_TAG}: unchanged since {record.get('recorded_utc', '?')} "
+        f"(watched_sha256={record.get('watched_sha256', '?')[:12]}...). Last measured "
+        f"pre-fix={record.get('pre_fix_peak_gb')}GB m2={record.get('m2_peak_gb')}GB "
+        f"reduction={record.get('reduction_pct')}%. Delete "
+        f"tests/{_RATCHET_PATH.name} to force a real re-run."
+    )
+
+
+# Computed once at collection time (cheap: a handful of small source-file hashes,
+# NOT the 200k stress itself). Applied to all three memory_stress tests below.
+_RATCHET_SKIP_REASON = _ratchet_skip_reason()
+_ratchet_skipif = pytest.mark.skipif(
+    _RATCHET_SKIP_REASON is not None,
+    reason=_RATCHET_SKIP_REASON or "(unreachable: ratchet says run)",
+)
 
 
 def _peak_rss_gb() -> float:
@@ -109,19 +198,120 @@ def _exercise_hotspot1_pattern(adata: ad.AnnData, preserve_raw_via_ctx: bool = T
     }
 
 
-@pytest.mark.skip(
-    reason="Environmental: scanpy.pp.normalize_total + pytest + numba interact "
-           "badly in this conda env (AttributeError on get_call_template inside "
-           "numba ol_np_zeros impl; persists with NUMBA_DISABLE_JIT=1 via a "
-           "different UnboundLocalError in scanpy/_normalization.py:65). The "
-           "canonical Wave 3 US-W3-3 empirical evidence is "
-           "scripts/dev/wave3_us_w3_3_m2_200k_stress.py — runs cleanly OUTSIDE "
-           "pytest and recorded pre-fix peak 9.31 GB / M2 peak 6.32 GB / "
-           "reduction 32.1% / both budgets met (raw output "
-           "/tmp/wave3_m2_200k_stress.json). Tracking the env bug separately."
-)
-def test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix():
-    """Wave 3 US-W3-3 — peak RSS < 35 GB AND ≥30% drop vs pre-fix at 200k.
+@pytest.fixture(scope="module")
+def wave3_200k_stress_result() -> dict:
+    """Run the Wave 3 US-W3-3 200k memory-regression stress as a SUBPROCESS.
+
+    WHY A SUBPROCESS INSTEAD OF RUNNING THE STRESS INLINE UNDER PYTEST
+    --------------------------------------------------------------------
+    Running scanpy.pp.normalize_total/log1p over a 200k x 20k sparse
+    synthetic AnnData directly inside a pytest test function crashes
+    reproducibly in this conda env (re-verified 2026-08-03: scanpy 1.12,
+    numba 0.61.2, pytest 9.0.2, numpy 2.2.6):
+
+        AttributeError: 'function' object has no attribute
+        'get_call_template'
+        (numba/core/types/functions.py:538, raised while resolving an
+        `ol_np_zeros` overload reached from scanpy/_normalization.py)
+
+    This was re-confirmed with `--no-cov` (rules out the coverage tracer)
+    and with a minimal 15-line repro that imports nothing from this
+    project (rules out the project's import graph / pytest-cov / a
+    project-specific bug). It is specifically an interaction with running
+    under `python -m pytest`: the byte-for-byte identical code, executed
+    as a plain `python script.py` process, completes cleanly every time
+    (confirmed both at this 200k scale and originally at 2026-05-15 in
+    this file's prior skip reasons).
+
+    SECOND, DISTINCT BUG THIS FIXTURE ALSO WORKS AROUND: this repo's own
+    tests/conftest.py sets `NUMBA_DISABLE_JIT=1` (module scope, to
+    stabilize *other* numba-touching tests) for the whole pytest session.
+    A bare subprocess.run() inherits that into the child by default, and
+    with JIT disabled, scanpy 1.12's `_normalize_csr`
+    (scanpy/preprocessing/_normalization.py:65) has a REAL upstream bug:
+    it unconditionally returns `counts_per_cell, counts_per_cols`, but
+    `counts_per_cols` is only ever assigned inside
+    `if exclude_highly_expressed:` -- so with the default
+    `exclude_highly_expressed=False` (what this stress script uses),
+    plain-Python execution raises
+    `UnboundLocalError: cannot access local variable 'counts_per_cols'`.
+    Under normal JIT compilation this particular bug is masked (numba's
+    SSA-based typing does not raise the same CPython-semantics error), so
+    it is invisible except when JIT is off -- exactly this repo's pytest
+    default. Verified 2026-08-03 by running the stress subprocess with
+    the inherited environment (crashes with the UnboundLocalError above)
+    vs. an explicit `NUMBA_DISABLE_JIT=0` override (passes cleanly).
+
+    So: run the canonical stress script
+    (scripts/dev/wave3_us_w3_3_m2_200k_stress.py) as a real subprocess
+    with an explicit environment that force-enables numba JIT
+    (`NUMBA_DISABLE_JIT=0`), regardless of what the parent pytest process
+    has set. That sidesteps BOTH bugs: the numba-JIT-triggering compiler
+    crash never executes inside the pytest process, and JIT stays enabled
+    in the child so the scanpy UnboundLocalError bug's un-JIT-ed code
+    path is never reached either -- while the assertions below still run
+    for real, every time this fixture's marker is selected, instead of
+    being permanently skipped.
+
+    Opt-in only (`pytest -m memory_stress`; excluded from the default
+    fast lane via addopts in pyproject.toml, same convention already used
+    for `perf` / `r_contract` / `*_real`). Real cost: ~4-6 min wall,
+    ~10 GB peak RSS on this host (JIT warmup dominates the wall time; the
+    tracked VmRSS checkpoints stay near the numbers in this docstring's
+    empirical baseline). Module-scoped so the three tests below that
+    consume it only pay for one subprocess run, not three.
+    """
+    if not _WAVE3_200K_SCRIPT.is_file():
+        pytest.fail(f"canonical stress script missing: {_WAVE3_200K_SCRIPT}")
+    # Force JIT ON in the child regardless of what conftest.py set for the
+    # parent pytest process (see docstring above) -- this is what actually
+    # makes the subprocess strategy work, not merely "not being pytest".
+    child_env = dict(os.environ)
+    child_env["NUMBA_DISABLE_JIT"] = "0"
+    proc = subprocess.run(
+        [sys.executable, str(_WAVE3_200K_SCRIPT)],
+        capture_output=True, text=True, timeout=600, env=child_env,
+    )
+    if proc.returncode != 0:
+        pytest.fail(
+            "wave3_us_w3_3_m2_200k_stress.py subprocess failed "
+            f"(exit {proc.returncode}):\n"
+            f"STDOUT:\n{proc.stdout}\nSTDERR (tail):\n{proc.stderr[-4000:]}"
+        )
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        pytest.fail(
+            f"could not parse stress-script JSON stdout ({exc}):\n{proc.stdout}"
+        )
+    result = payload["us_w3_3_m2_200k_stress"]
+
+    # Ratchet write: only record a "pass" checkpoint when ALL THREE downstream
+    # ACs (not just the script's own ac_met, which only covers two of them)
+    # actually hold. A partial/failing result must NOT be ratcheted, or a
+    # future unchanged-sources run would wrongly skip past a real regression.
+    m2_peak = result["m2"]["rss_peak_gb"]
+    all_acs_met = (
+        bool(result.get("budget_35GB_met"))
+        and bool(result.get("reduction_30pct_met"))
+        and m2_peak <= 1.2 * 10.0
+    )
+    if all_acs_met:
+        _RATCHET_PATH.write_text(json.dumps({
+            "verdict": "pass",
+            "recorded_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "watched_sha256": _ratchet_watched_hash(),
+            "pre_fix_peak_gb": result["pre_fix"]["rss_peak_gb"],
+            "m2_peak_gb": m2_peak,
+            "reduction_pct": result["reduction_pct"],
+        }, indent=2) + "\n")
+    return result
+
+
+@_ratchet_skipif
+@pytest.mark.memory_stress
+def test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix(wave3_200k_stress_result):
+    """Wave 3 US-W3-3 — peak RSS < 35 GB AND >=30% drop vs pre-fix at 200k.
 
     Replaces the pre-Wave-3 Site-2-skip vs Site-2-keep comparison (both arms
     of which still called adata.copy() and produced 0% reduction) with the
@@ -130,94 +320,42 @@ def test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix():
       - M2 arm:      adata.raw = adata.copy() + in-place normalize/log1p
                      (no host clone of adata itself)
 
-    Empirical 2026-05-15 (density=0.1, 20k genes, 200k cells):
-      pre-fix peak: 9.31 GB
-      M2 peak:      6.32 GB
-      reduction:    32.1%
+    Original empirical baseline 2026-05-15 (density=0.1, 20k genes, 200k cells):
+      pre-fix peak: 9.31 GB / M2 peak: 6.32 GB / reduction: 32.1%
     """
-    import scanpy as sc
+    r = wave3_200k_stress_result
+    pre = r["pre_fix"]["rss_peak_gb"]
+    m2 = r["m2"]["rss_peak_gb"]
+    reduction_pct = r["reduction_pct"]
 
-    adata = _synthetic_adata(n_cells=200_000, n_genes=20_000, density=0.1, seed=42)
-    adata_gpu = adata.copy()
-    adata_gpu.raw = adata_gpu
-    if sp.issparse(adata_gpu.X):
-        adata_gpu.X = adata_gpu.X.tocsr().astype(np.float32)
-    sc.pp.normalize_total(adata_gpu, target_sum=1e4)
-    sc.pp.log1p(adata_gpu)
-    pre_rss = _current_rss_gb()
-    del adata_gpu, adata
-    import gc; gc.collect()
+    print(f"\n  pre-fix peak = {pre:.2f} GB")
+    print(f"  M2 peak      = {m2:.2f} GB")
+    print(f"  reduction    = {reduction_pct:.1f}%")
 
-    adata = _synthetic_adata(n_cells=200_000, n_genes=20_000, density=0.1, seed=42)
-    adata.raw = adata.copy()
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
-    post_rss = _current_rss_gb()
-    reduction_pct = 100.0 * (pre_rss - post_rss) / pre_rss if pre_rss > 0 else 0.0
-
-    print(f"\n  pre-fix current_rss = {pre_rss:.2f} GB")
-    print(f"  M2 current_rss      = {post_rss:.2f} GB")
-    print(f"  reduction           = {reduction_pct:.1f}%")
-
-    assert post_rss < 35.0, f"post-fix RSS={post_rss:.2f}GB exceeded 35GB budget"
-    assert reduction_pct >= 30.0, f"RSS reduction {reduction_pct:.1f}% < required 30%"
+    assert r["budget_35GB_met"], f"M2 peak RSS={m2:.2f}GB exceeded 35GB budget"
+    assert r["reduction_30pct_met"], f"RSS reduction {reduction_pct:.1f}% < required 30%"
 
 
-@pytest.mark.skip(
-    reason="Environmental scanpy+pytest+numba bug — see "
-           "test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix above for full "
-           "diagnosis. Canonical evidence: scripts/dev/wave3_us_w3_3_m2_200k_stress.py."
-)
-def test_200k_m2_mechanism_under_budget():
+@_ratchet_skipif
+@pytest.mark.memory_stress
+def test_200k_m2_mechanism_under_budget(wave3_200k_stress_result):
     """Wave 3 US-W3-3 — measure M2 mechanism's actual peak RSS at 200k.
 
-    Empirical 2026-05-15 (CPU sparse pattern, density=0.1, 20k genes):
-      pre-fix peak: 9.31 GB
-      M2 peak: 6.32 GB
-      reduction: 32.1%
-    Both ACs (< 35 GB AND >= 30% reduction) met.
-
-    This test re-runs the comparison and asserts the M2 mechanism continues
-    to deliver the budgeted savings. Locks in the empirical result so
-    future refactors that re-introduce a host-side clone fail this gate.
+    Locks in the empirical result so future refactors that re-introduce a
+    host-side clone of the full adata fail this gate. Shares the single
+    subprocess run from wave3_200k_stress_result with the sibling tests in
+    this file rather than re-running the 200k stress a second time.
     """
-    import scanpy as sc
-
-    # Pre-fix arm: historical adata.copy() + raw + materialize pattern.
-    adata = _synthetic_adata(n_cells=200_000, n_genes=20_000, density=0.1, seed=42)
-    pre_rss_before = _current_rss_gb()
-    adata_gpu = adata.copy()
-    adata_gpu.raw = adata_gpu
-    if sp.issparse(adata_gpu.X):
-        adata_gpu.X = adata_gpu.X.tocsr().astype(np.float32)
-    sc.pp.normalize_total(adata_gpu, target_sum=1e4)
-    sc.pp.log1p(adata_gpu)
-    pre_peak = _current_rss_gb()
-    del adata_gpu, adata
-    import gc; gc.collect()
-
-    # M2 arm: skip .copy(), mandate adata.raw, mutate adata.X in place.
-    adata = _synthetic_adata(n_cells=200_000, n_genes=20_000, density=0.1, seed=42)
-    adata.raw = adata.copy()
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
-    m2_peak = _current_rss_gb()
-
-    reduction_pct = 100.0 * (pre_peak - m2_peak) / pre_peak if pre_peak > 0 else 0.0
-    print(f"\n  pre-fix peak: {pre_peak:.2f} GB")
-    print(f"  M2 peak:      {m2_peak:.2f} GB")
-    print(f"  reduction:    {reduction_pct:.1f}%")
-
-    assert m2_peak < 35.0, f"M2 peak RSS {m2_peak:.2f} GB exceeded 35 GB budget"
-    assert reduction_pct >= 30.0, f"M2 reduction {reduction_pct:.1f}% < required 30%"
+    r = wave3_200k_stress_result
+    m2 = r["m2"]["rss_peak_gb"]
+    reduction_pct = r["reduction_pct"]
+    assert m2 < 35.0, f"M2 peak RSS {m2:.2f} GB exceeded 35 GB budget"
+    assert r["reduction_30pct_met"], f"M2 reduction {reduction_pct:.1f}% < required 30%"
 
 
-@pytest.mark.skip(
-    reason="Environmental scanpy+pytest+numba bug — see "
-           "test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix above for full "
-           "diagnosis. Canonical evidence: scripts/dev/wave3_us_w3_3_m2_200k_stress.py."
-)
-def test_200k_post_fix_tight_ratio():
+@_ratchet_skipif
+@pytest.mark.memory_stress
+def test_200k_post_fix_tight_ratio(wave3_200k_stress_result):
     """Wave 3 US-W3-3 AC-3 — canary against memory regressions slipping under 35GB slack.
 
     Theoretical minimum host RSS for 200k x 20k sparse-float32 at density=0.1
@@ -230,31 +368,14 @@ def test_200k_post_fix_tight_ratio():
 
     Tighter assertion: peak <= 1.2x theoretical minimum.
     """
-    import scanpy as sc
-
     THEORETICAL_MIN_GB = 10.0
-    adata = _synthetic_adata(n_cells=200_000, n_genes=20_000, density=0.1, seed=42)
-    adata.raw = adata.copy()
-    sc.pp.normalize_total(adata, target_sum=1e4)
-    sc.pp.log1p(adata)
-    m2_peak = _current_rss_gb()
-    print(f"\n  M2 peak: {m2_peak:.2f} GB  theoretical_min: {THEORETICAL_MIN_GB:.2f} GB  ratio: {m2_peak/THEORETICAL_MIN_GB:.2f}x")
-    assert m2_peak <= 1.2 * THEORETICAL_MIN_GB, (
-        f"M2 peak {m2_peak:.2f} GB > 1.2x theoretical_min ({1.2*THEORETICAL_MIN_GB:.2f} GB) "
+    m2 = wave3_200k_stress_result["m2"]["rss_peak_gb"]
+    ratio = m2 / THEORETICAL_MIN_GB if THEORETICAL_MIN_GB > 0 else float("inf")
+    print(f"\n  M2 peak: {m2:.2f} GB  theoretical_min: {THEORETICAL_MIN_GB:.2f} GB  ratio: {ratio:.2f}x")
+    assert m2 <= 1.2 * THEORETICAL_MIN_GB, (
+        f"M2 peak {m2:.2f} GB > 1.2x theoretical_min ({1.2 * THEORETICAL_MIN_GB:.2f} GB) "
         f"— possible memory regression upstream of clustering"
     )
-
-
-def test_200k_fits_under_15GB_PLACEHOLDER():
-    """Legacy AC name retained as a doc-only placeholder.
-
-    The original AC budget of <15GB at 200k was infeasible without rewriting
-    AnnData to share X across copy() — out of scope for US-007. The realistic
-    post-fix budget is <35GB (see test_200k_post_fix_under_35GB_and_drops_30pct_vs_prefix
-    above). This placeholder keeps the AC name discoverable but is intentionally
-    a no-op pass — see docs/HOTSPOT1_DIAGNOSIS.md "Measured" section.
-    """
-    pass
 
 
 @pytest.mark.skipif(

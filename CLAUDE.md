@@ -112,6 +112,17 @@ Opt-in env vars (use with explicit human approval only):
   `SC_REQUIRE_PROJECT_ROOT=1 python -m workflow.modular.cli --project-root /home/zerlinshen/projects/<id> --project <name> --sample-root <path> --optional-modules <modules>`
 - Run pipeline (legacy, still works, emits DeprecationWarning):
   `python -m workflow.modular.cli --project <name> --sample-root <path> --optional-modules <modules>`
+- Run multi-batch input with integration (the DEFAULT optional-module set has NO
+  integration step; multi-batch input without a declaration is warned about and
+  its clustering claim is recorded as `exploratory` in the manifest):
+  `python -m workflow.modular.cli --project-root <path> --project <name> --sample-root <path> --optional-modules clustering,batch_correction,differential_expression,annotation --batch-key <col>`
+- Declare a batch design (`auto` = no declaration; `single-batch` fails at plan
+  time if `.obs` contradicts it; `integrate` requires `batch_correction`;
+  `accept-uncorrected` stays `exploratory`):
+  `python -m workflow.modular.cli ... --batch-strategy single-batch|integrate|accept-uncorrected`
+- Named designs via the recipe mechanism (catalog profiles `single_batch` /
+  `multi_batch_harmony`):
+  `python scripts/scfactory.py run <input> --recipe multi_batch_harmony --dry-run`
 - Run with recovery:
   `python -m workflow.modular.cli ... --checkpoint`
 - Resume:

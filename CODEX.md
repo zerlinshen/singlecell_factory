@@ -54,6 +54,11 @@ blocked with named data asks.
 ## Core Commands
 - Run pipeline:
   `python -m workflow.modular.cli --project <name> --sample-root <path> --optional-modules <modules>`
+- Run multi-batch input with integration (defaults carry NO integration step):
+  `python -m workflow.modular.cli --project <name> --sample-root <path> --optional-modules clustering,batch_correction,differential_expression,annotation --batch-key <col>`
+- Declare a batch design explicitly (`auto` is the absence of a declaration and
+  downgrades the clustering claim to `exploratory` on multi-batch input):
+  `python -m workflow.modular.cli ... --batch-strategy single-batch|integrate|accept-uncorrected`
 - Run with recovery:
   `python -m workflow.modular.cli ... --checkpoint`
 - Resume:

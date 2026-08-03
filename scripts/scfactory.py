@@ -27,6 +27,7 @@ import datetime as _dt
 import html
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -54,8 +55,19 @@ _added_repo_path = _repo_path not in sys.path
 if _added_repo_path:
     sys.path.insert(0, _repo_path)
 try:
+    from workflow.modular.batch_risk import (
+        BATCH_STRATEGY_AUTO,
+        BATCH_STRATEGY_CHOICES,
+        BatchStrategyConflict,
+        announce_batch_risk,
+        detect_batch_structure,
+        resolve_batch_risk,
+        resolve_obs_source,
+    )
     from workflow.modular.legacy_output import LEGACY_DEFAULT_OUTPUT_DIR
     from workflow.modular.module_catalog import MODULE_SPECS
+    from workflow.modular.module_catalog import analysis_profile
+    from workflow.modular.module_catalog import analysis_profile_names
     from workflow.modular.module_catalog import optional_modules_for_modality
 finally:
     if _added_repo_path:
@@ -286,12 +298,36 @@ def _validate_recipe(data: dict[str, Any], path: Path, expected_name: str) -> No
         )
         raise SystemExit(2)
 
-    # optional_modules required, must be list[str], all known
+    # Exactly one module source: a named catalog profile, or an inline list.
+    # `profile` is preferred for designs the catalog owns — it resolves through
+    # module_catalog.ANALYSIS_PROFILES instead of copying module names into
+    # YAML, so the catalog stays the single source of truth.
+    profile_name = data.get("profile")
     mods = data.get("optional_modules")
+    if profile_name is not None and mods is not None:
+        print(
+            f"scfactory: {where}: set either 'profile' or 'optional_modules', "
+            f"not both.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    if profile_name is not None:
+        if not isinstance(profile_name, str):
+            print(
+                f"scfactory: {where}: 'profile' must be a string", file=sys.stderr
+            )
+            raise SystemExit(2)
+        try:
+            analysis_profile(profile_name)
+        except ValueError as exc:
+            print(f"scfactory: {where}: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+        mods = []
     if not isinstance(mods, list) or not all(isinstance(m, str) for m in mods):
         print(
-            f"scfactory: {where}: 'optional_modules' is required and must be "
-            f"a list of strings.",
+            f"scfactory: {where}: 'optional_modules' is required (or a "
+            f"'profile' naming one of: {', '.join(analysis_profile_names())}) "
+            f"and must be a list of strings.",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -313,6 +349,17 @@ def _validate_recipe(data: dict[str, Any], path: Path, expected_name: str) -> No
         print(
             f"scfactory: {where}: 'scale_preset' must be one of "
             f"{list(VALID_SCALE_PRESETS)}, got {sp!r}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    # batch_strategy optional; must be a declared strategy when present. A
+    # recipe that names a profile inherits the profile's strategy instead.
+    bs = data.get("batch_strategy")
+    if bs is not None and bs not in BATCH_STRATEGY_CHOICES:
+        print(
+            f"scfactory: {where}: 'batch_strategy' must be one of "
+            f"{list(BATCH_STRATEGY_CHOICES)}, got {bs!r}",
             file=sys.stderr,
         )
         raise SystemExit(2)
@@ -415,15 +462,40 @@ def cmd_run(args: argparse.Namespace) -> int:
     #   1. --optional-modules (escape hatch) overrides everything.
     #   2. --recipe provides the optional_modules list.
     #   3. Auto-detect (existing logic) fills the gap.
+    # A recipe naming a catalog profile resolves its modules AND its batch
+    # declaration from module_catalog, never from a copy in the YAML.
+    recipe_profile = (
+        analysis_profile(str(recipe["profile"]))
+        if recipe is not None and recipe.get("profile")
+        else None
+    )
     if args.optional_modules:
         planned = [m.strip() for m in args.optional_modules.split(",") if m.strip()]
         plan_source = "user-provided --optional-modules"
+    elif recipe_profile is not None:
+        planned = list(recipe_profile.optional_modules)
+        plan_source = f"recipe={recipe['name']} profile={recipe_profile.name}"
     elif recipe is not None:
         planned = [str(m) for m in recipe.get("optional_modules", [])]
         plan_source = f"recipe={recipe['name']}"
     else:
         planned = plan_optional_modules(modality)
         plan_source = f"auto for modality={modality}"
+
+    # Batch declaration precedence mirrors the module precedence above:
+    # explicit flag > recipe (profile or literal) > undeclared.
+    if args.batch_strategy and args.batch_strategy != BATCH_STRATEGY_AUTO:
+        batch_strategy = args.batch_strategy
+        batch_strategy_source = "user-provided --batch-strategy"
+    elif recipe_profile is not None:
+        batch_strategy = recipe_profile.batch_strategy
+        batch_strategy_source = f"profile={recipe_profile.name}"
+    elif recipe is not None and recipe.get("batch_strategy"):
+        batch_strategy = str(recipe["batch_strategy"])
+        batch_strategy_source = f"recipe={recipe['name']}"
+    else:
+        batch_strategy = BATCH_STRATEGY_AUTO
+        batch_strategy_source = "undeclared"
 
     unknown_modules = sorted(set(planned) - _known_module_names())
     if unknown_modules:
@@ -434,6 +506,33 @@ def cmd_run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Plan-time batch accounting. Runs on the dry-run path too: previewing a
+    # plan that will silently produce batch-driven clusters is exactly the
+    # moment the operator can still change it. The canonical CLI re-resolves
+    # this itself (cheap: obs-only) and owns the manifest record.
+    detection = detect_batch_structure(
+        resolve_obs_source(
+            input_h5ad=input_path if input_path.is_file() else None,
+            sample_root=None if input_path.is_file() else input_path,
+        ),
+        preferred_key="sample",
+    )
+    try:
+        batch_risk = resolve_batch_risk(
+            detection=detection,
+            declared_strategy=batch_strategy,
+            planned_modules=planned,
+        )
+    except BatchStrategyConflict as exc:
+        print(
+            f"scfactory: {exc}\n"
+            f"  batch strategy came from: {batch_strategy_source}\n"
+            "  no dry-run or real run was started.",
+            file=sys.stderr,
+        )
+        return 2
+    announce_batch_risk(batch_risk)
 
     project = args.project or (
         f"scfactory_{recipe['name']}" if recipe else f"scfactory_{modality}"
@@ -471,6 +570,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         cli_cmd += ["--output-dir", output_dir]
 
     cli_cmd += ["--optional-modules", ",".join(planned)]
+
+    if batch_strategy != BATCH_STRATEGY_AUTO:
+        cli_cmd += ["--batch-strategy", batch_strategy]
 
     if args.scientific_profile:
         cli_cmd += ["--scientific-profile", args.scientific_profile]
@@ -516,6 +618,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         + (f"  recipe: {recipe['name']} ({recipe.get('description', '')})\n"
            if recipe else "")
         + (f"  scale_preset: {scale_preset}\n" if scale_preset else "")
+        + (f"  batch strategy: {batch_strategy} ({batch_strategy_source}); "
+           f"detected_batches={batch_risk['detected_batches']} "
+           f"key={batch_risk['key'] or '-'}; "
+           f"claim={batch_risk['clustering_claim_status']}\n")
         + (f"  env overrides: {recipe_env}\n" if recipe_env else "")
         + (f"  bundle: enabled={bundle_enabled} cfg={bundle_cfg}\n"
            if recipe or args.bundle else "")
@@ -626,6 +732,92 @@ def _resolve_rscript() -> tuple[str | None, str]:
     return None, "not found"
 
 
+ENVIRONMENT_LOCK_PATH = REPO_ROOT / "environment.yml"
+# The R-side lock lives in the sibling factory repo (this repo has no R
+# dependency file of its own). README.md's "installed and validated" list and
+# PROTOCOL.md's Tier-3 table both point at that renv-managed environment, so
+# it — not a hardcoded guess — is the source of truth for which R packages
+# are actually declared.
+R_LOCK_PATH = REPO_ROOT.parent / "r_multiomics_factory" / "renv.lock"
+
+
+def _read_environment_lock(path: Path = ENVIRONMENT_LOCK_PATH) -> dict[str, Any]:
+    """Best-effort parse of environment.yml: declared python pin + package names.
+
+    Deliberately NOT a full YAML parse — doctor stays dependency-light and
+    must not gain a hard PyYAML requirement just to run. Only extracts what
+    doctor needs: the flat list of `dependencies:` entries (conda-level and
+    nested `pip:` entries alike) and the `python=X.Y` pin. Read-only; never
+    raises. A missing/unparseable lock degrades to ``found=False`` so callers
+    can surface an honest "could not verify" warning instead of a false pass.
+    """
+    result: dict[str, Any] = {
+        "path": str(path),
+        "found": False,
+        "python_version": None,  # (major, minor) or None
+        "declared_packages": set(),
+    }
+    if not path.is_file():
+        return result
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return result
+    result["found"] = True
+    in_deps = False
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if not in_deps:
+            if stripped == "dependencies:":
+                in_deps = True
+            continue
+        if not stripped.startswith("-"):
+            continue
+        entry = stripped[1:].strip().split("#", 1)[0].strip().rstrip(":")
+        if not entry:
+            continue
+        if entry.startswith("python"):
+            m = re.search(r"python\s*=\s*(\d+)\.(\d+)", entry)
+            if m:
+                result["python_version"] = (int(m.group(1)), int(m.group(2)))
+            continue
+        name = re.split(r"[=<>! ]", entry, maxsplit=1)[0].strip().lower()
+        if name:
+            result["declared_packages"].add(name)
+    return result
+
+
+def _read_r_lock(path: Path = R_LOCK_PATH) -> dict[str, Any]:
+    """Best-effort parse of the sibling r_multiomics_factory renv.lock.
+
+    Read-only; absence (e.g. the sibling repo is not checked out on this
+    host) degrades to ``found=False`` rather than raising — doctor must never
+    crash the host it is diagnosing.
+    """
+    result: dict[str, Any] = {
+        "path": str(path),
+        "found": False,
+        "r_version": None,
+        "declared_packages": set(),
+    }
+    if not path.is_file():
+        return result
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return result
+    result["found"] = True
+    r_info = data.get("R")
+    if isinstance(r_info, dict):
+        ver = r_info.get("Version")
+        if isinstance(ver, str):
+            result["r_version"] = ver
+    packages = data.get("Packages")
+    if isinstance(packages, dict):
+        result["declared_packages"] = {str(k) for k in packages}
+    return result
+
+
 def _check_python() -> dict[str, Any]:
     v = sys.version_info
     status = "pass" if (v.major, v.minor) >= (3, 10) else "warn"
@@ -705,36 +897,111 @@ def _check_bridges() -> dict[str, Any]:
 
 
 def _check_python_deps() -> dict[str, Any]:
+    """Probe optional/scientific python deps and classify each pass/warn.
+
+    Each dep is tiered "required" or "optional" by looking it up in
+    environment.yml's own declared dependency list (see
+    ``_read_environment_lock``) rather than a hardcoded guess: scanpy/anndata/
+    scipy are pinned there, so a host missing them is materially broken;
+    pyarrow/fastparquet/squidpy/muon/mofapy2 are NOT declared there — they
+    back genuinely optional, module-gated capabilities (bundle parquet
+    export, spatial_neighborhoods, multimodal_integration MOFA) that clean-
+    skip at runtime when absent. A missing dep — required or optional — is
+    always individually visible and never silently collapsed into "pass";
+    this section's own status is "warn" whenever anything is missing so a
+    wrong environment cannot summarize as all-green. It still never escalates
+    to "fail": optional capabilities are legitimately absent on many hosts,
+    and the fail-worthy distinction (required vs optional) is surfaced
+    separately in `readiness.core_environment_ready` /
+    `readiness.optional_capabilities`.
+    """
     deps = ("scanpy", "anndata", "pyarrow", "fastparquet", "scipy",
             "squidpy", "muon", "mofapy2")
+    lock = _read_environment_lock()
+    declared = lock["declared_packages"]
+
     out: dict[str, Any] = {}
+    missing_required: list[str] = []
+    missing_optional: list[str] = []
     import importlib
     import importlib.metadata as _imd
     for name in deps:
+        tier = "required" if name.lower() in declared else "optional"
         try:
             importlib.import_module(name)
+            present = True
+        except Exception:
+            present = False
+        ver: str | None = None
+        if present:
             try:
                 ver = _imd.version(name)
             except Exception:
                 ver = "unknown"
-            out[name] = {"present": True, "version": ver}
-        except Exception:
-            out[name] = {"present": False, "version": None}
+        else:
+            (missing_required if tier == "required" else missing_optional).append(name)
+        out[name] = {
+            "present": present,
+            "version": ver,
+            "tier": tier,
+            "status": "pass" if present else "warn",
+        }
+
+    any_missing = bool(missing_required or missing_optional)
     return {
-        "status": "pass",  # informational only
+        "status": "warn" if any_missing else "pass",
         "deps": out,
+        "missing_required": missing_required,
+        "missing_optional": missing_optional,
+        "lock_source": lock["path"] if lock["found"] else None,
         "message": "python deps: "
-                   + ", ".join(f"{n}={'ok' if v['present'] else 'missing'}"
-                               for n, v in out.items()),
+                   + ", ".join(
+                       f"{n}=ok" if v["present"] else f"{n}=MISSING({v['tier']})"
+                       for n, v in out.items()
+                   ),
     }
 
 
 def _check_r_packages(rscript_path: str | None) -> dict[str, Any]:
-    if rscript_path is None:
-        return {"status": "warn", "packages": {},
-                "message": "R: not available; skipping package probe"}
+    """Probe R bridge/bundle packages and classify each pass/warn.
+
+    Tiering comes from the sibling repo's renv.lock (see ``_read_r_lock``):
+    packages it declares (Seurat, arrow, jsonlite, Matrix, zellkonverter,
+    harmony) are required for the R-bundle/bridge lane; SeuratDisk is
+    deliberately absent from that lock — README.md documents it as
+    intentionally not installed (conda-forge SeuratDisk currently conflicts
+    with R 4.5 / zellkonverter via old spatstat requirements; zellkonverter/
+    hdf5r cover the same h5ad-bridge need) — so it is tiered "optional", not
+    a defect. When renv.lock cannot be read at all (e.g. the sibling repo
+    isn't checked out on this host), tiering degrades to "unknown" rather
+    than guessing.
+    """
     pkgs = ("Seurat", "arrow", "jsonlite", "Matrix", "zellkonverter",
             "SeuratDisk", "harmony")
+    r_lock = _read_r_lock()
+    declared = r_lock["declared_packages"]
+
+    def _tier(pkg: str) -> str:
+        if not r_lock["found"]:
+            return "unknown"
+        return "required" if pkg in declared else "optional"
+
+    lock_source = r_lock["path"] if r_lock["found"] else None
+
+    if rscript_path is None:
+        packages = {
+            p: {"present": False, "version": None, "tier": _tier(p), "status": "warn"}
+            for p in pkgs
+        }
+        return {
+            "status": "warn",
+            "packages": packages,
+            "missing_required": [p for p, v in packages.items() if v["tier"] == "required"],
+            "missing_optional": [p for p, v in packages.items() if v["tier"] != "required"],
+            "lock_source": lock_source,
+            "message": "R: not available; skipping package probe",
+        }
+
     pkg_vec = ",".join(f"'{p}'" for p in pkgs)
     code = (
         f"for (p in c({pkg_vec})) "
@@ -749,9 +1016,13 @@ def _check_r_packages(rscript_path: str | None) -> dict[str, Any]:
         )
     except subprocess.TimeoutExpired:
         return {"status": "warn", "packages": {},
+                "missing_required": [], "missing_optional": [],
+                "lock_source": lock_source,
                 "message": "R package probe timed out (>5s)"}
     except Exception as exc:
         return {"status": "warn", "packages": {},
+                "missing_required": [], "missing_optional": [],
+                "lock_source": lock_source,
                 "message": f"R package probe failed: {exc}"}
 
     parsed: dict[str, str] = {}
@@ -759,11 +1030,35 @@ def _check_r_packages(rscript_path: str | None) -> dict[str, Any]:
         if "|" in line:
             name, ver = line.split("|", 1)
             parsed[name.strip()] = ver.strip()
+
+    packages: dict[str, Any] = {}
+    missing_required: list[str] = []
+    missing_optional: list[str] = []
+    for p in pkgs:
+        ver = parsed.get(p, "MISSING")
+        present = ver != "MISSING"
+        tier = _tier(p)
+        if not present:
+            (missing_required if tier == "required" else missing_optional).append(p)
+        packages[p] = {
+            "present": present,
+            "version": ver if present else None,
+            "tier": tier,
+            "status": "pass" if present else "warn",
+        }
+
+    any_missing = bool(missing_required or missing_optional)
     return {
-        "status": "pass",
-        "packages": parsed,
+        "status": "warn" if any_missing else "pass",
+        "packages": packages,
+        "missing_required": missing_required,
+        "missing_optional": missing_optional,
+        "lock_source": lock_source,
         "message": "R packages: "
-                   + ", ".join(f"{n}={v}" for n, v in parsed.items()),
+                   + ", ".join(
+                       f"{n}={v['version']}" if v["present"] else f"{n}=MISSING({v['tier']})"
+                       for n, v in packages.items()
+                   ),
     }
 
 
@@ -828,6 +1123,458 @@ def _check_last_run(project_roots: list[Path] | None = None) -> dict[str, Any]:
                 "message": f"could not parse {newest}: {exc}"}
 
 
+# The claim-critical dependency contract lives at the SUITE root (one level
+# above every factory repo, including this one), not inside any single
+# factory. It records dependencies whose presence is what separates a
+# scientific result the suite will let you CLAIM from one it marks
+# exploratory (see the contract file's own rationale: the 2026-08-02 audit
+# found pydeseq2/pertpy/multiHiCcompare installed but declared in NO
+# committed spec, and pertpy was additionally installed-but-unimportable for
+# an unknown period, silently downgrading every scCODA composition analysis
+# to a compositionally-invalid fallback). This is a SEPARATE, higher-severity
+# tier above the environment.yml/renv.lock-derived "required" tier used by
+# `_check_python_deps` / `_check_r_packages`.
+CLAIM_CRITICAL_CONTRACT_PATH = REPO_ROOT.parent / "contracts" / "claim_critical_dependencies.yaml"
+CONDA_ENVS_ROOT = Path.home() / "conda" / "envs"
+# sc_gpu-hosted claim-critical deps (pydeseq2, pertpy) transitively import
+# jax/numpyro/torch; a cold-cache import can legitimately take well past the
+# 5s budget used for the lightweight R package probe elsewhere in this file.
+CLAIM_CRITICAL_PROBE_TIMEOUT = 180
+
+
+def _load_claim_critical_contract(
+    path: Path = CLAIM_CRITICAL_CONTRACT_PATH,
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """Best-effort load of the suite-root claim-critical dependency contract.
+
+    Returns ``(dependencies, error)``. ``dependencies`` is None when the
+    contract cannot be read at all — this repo cloned standalone outside the
+    suite, PyYAML unavailable, or the file malformed — so callers can surface
+    an explicit "contract unavailable" state instead of silently reporting
+    healthy. This does not replace the dedicated suite gate at
+    ``scripts/validate_claim_critical_deps.py`` (which enforces the contract's
+    own structure — C1-C4: schema completeness, declared_in actually
+    mentioning the dep, guards file existing); doctor only asks the
+    environment-readiness question (that gate's C5), escalated to failure
+    severity per the 2026-08-02 pertpy incident (see module docstring above).
+    """
+    if not path.is_file():
+        return None, (
+            f"contract not found at {path} "
+            "(suite root not checked out alongside this repo?)"
+        )
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        return None, "PyYAML not installed; cannot parse the claim-critical dependency contract"
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return None, f"could not parse {path}: {exc}"
+    if not isinstance(data, dict):
+        return None, f"{path} did not parse to a mapping"
+    deps = data.get("dependencies")
+    if not isinstance(deps, list) or not deps:
+        return None, f"{path} declares no dependencies"
+    return deps, None
+
+
+def _probe_python_env_imports(env_prefix: Path, import_names: list[str]) -> dict[str, str | None]:
+    """Actually IMPORT each name in one subprocess under ``env_prefix``'s python.
+
+    Deliberately a real ``import <name>``, not merely
+    ``importlib.metadata.version()``: the 2026-08-02 pertpy incident was
+    exactly a package whose metadata was present but whose import raised
+    (jax removed ``xla_pmap_p``, numpyro 0.20.1 still referenced it) — a
+    metadata-only probe would have kept reporting healthy throughout that
+    incident. Batches all names for one env into a single subprocess launch
+    (mirrors ``_check_r_packages`` batching multiple R packages into one
+    Rscript call). Returns ``{import_name: version-or-None}``; None means
+    "not importable" (or the probe subprocess itself could not run) — this
+    function does not distinguish the two, since either way the dependency
+    cannot be relied on from this host right now.
+    """
+    python = env_prefix / "bin" / "python"
+    if not python.is_file():
+        return {n: None for n in import_names}
+    safe_names = [n for n in import_names if n.isidentifier()]
+    lines = ["import json", "out = {}"]
+    for n in safe_names:
+        lines += [
+            "try:",
+            f"    import {n} as _mod",
+            "    try:",
+            "        import importlib.metadata as _md",
+            f"        out[{n!r}] = _md.version({n!r})",
+            "    except Exception:",
+            f"        out[{n!r}] = getattr(_mod, '__version__', 'unknown')",
+            "except Exception:",
+            f"    out[{n!r}] = None",
+        ]
+    lines.append("print(json.dumps(out))")
+    try:
+        proc = subprocess.run(
+            [str(python), "-c", "\n".join(lines)],
+            capture_output=True, text=True, timeout=CLAIM_CRITICAL_PROBE_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return {n: None for n in import_names}
+    out_lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+    try:
+        parsed = json.loads(out_lines[-1]) if out_lines else {}
+    except Exception:
+        parsed = {}
+    return {n: parsed.get(n) for n in import_names}
+
+
+def _probe_r_env_package(env_prefix: Path, r_package: str) -> str | None:
+    """``requireNamespace()``-based probe for one R package under ``env_prefix``.
+
+    Like ``_check_r_packages``, ``requireNamespace`` actually attempts to
+    load the package's namespace rather than only consulting installed
+    package metadata.
+    """
+    rscript = env_prefix / "bin" / "Rscript"
+    if not rscript.is_file():
+        return None
+    code = (
+        f'if (requireNamespace("{r_package}", quietly=TRUE)) '
+        f'cat(as.character(packageVersion("{r_package}"))) else cat("ABSENT")'
+    )
+    try:
+        proc = subprocess.run(
+            [str(rscript), "-e", code],
+            capture_output=True, text=True, timeout=CLAIM_CRITICAL_PROBE_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    value = proc.stdout.strip()
+    return None if (not value or value == "ABSENT") else value
+
+
+def _check_claim_critical_deps(envs_root: Path = CONDA_ENVS_ROOT) -> dict[str, Any]:
+    """Environment-readiness check for suite-declared claim-critical deps.
+
+    A missing/unimportable claim-critical dependency escalates this check's
+    status all the way to "fail" — the one place in doctor where a missing
+    dep is allowed to do that. Every other dependency tier in this file tops
+    out at "warn" because optional/required-but-absent capabilities are
+    still an honest, loud degradation the pipeline handles gracefully; a
+    claim-critical gap is different in kind — it silently converts a
+    confirmatory scientific result into an unclaimable one (or, in the
+    pertpy case, produced compositionally-invalid statistics
+    indistinguishable from the valid path for an unknown period). Doctor
+    should be loud here even though it stays quiet elsewhere.
+
+    When the target conda env is not present on this host at all, the
+    per-dependency status is "warn", not "fail": that is an honest
+    "unverifiable from here" rather than a confirmed gap (mirrors
+    ``validate_claim_critical_deps.py``'s ``env_unavailable`` info finding).
+    """
+    deps, load_error = _load_claim_critical_contract()
+    if deps is None:
+        return {
+            "status": "warn",
+            "contract_available": False,
+            "contract_path": str(CLAIM_CRITICAL_CONTRACT_PATH),
+            "deps": {},
+            "message": f"claim-critical dependency contract unavailable: {load_error}",
+        }
+
+    by_env_python: dict[str, list[dict[str, Any]]] = {}
+    r_deps: list[dict[str, Any]] = []
+    for dep in deps:
+        if not isinstance(dep, dict) or not dep.get("name") or not dep.get("env"):
+            continue
+        if dep.get("r_package"):
+            r_deps.append(dep)
+        else:
+            by_env_python.setdefault(dep["env"], []).append(dep)
+
+    results: dict[str, Any] = {}
+
+    for env_name, env_deps in by_env_python.items():
+        env_prefix = envs_root / env_name
+        env_present = env_prefix.is_dir()
+        import_names = [d.get("import_name", d["name"]) for d in env_deps]
+        versions = _probe_python_env_imports(env_prefix, import_names) if env_present else {}
+        for dep in env_deps:
+            iname = dep.get("import_name", dep["name"])
+            declared_version = str(dep.get("version") or "") or None
+            if not env_present:
+                results[dep["name"]] = {
+                    "env": env_name, "verifiable": False, "present": None,
+                    "version": None, "declared_version": declared_version,
+                    "status": "warn",
+                    "message": (
+                        f"env '{env_name}' not present on this host; claim-critical "
+                        f"status of '{dep['name']}' cannot be verified from here"
+                    ),
+                }
+                continue
+            installed_version = versions.get(iname)
+            present = installed_version is not None
+            results[dep["name"]] = {
+                "env": env_name, "verifiable": True, "present": present,
+                "version": installed_version, "declared_version": declared_version,
+                "status": "pass" if present else "fail",
+                "message": (
+                    f"{dep['name']} {installed_version} importable in env '{env_name}'"
+                    if present else
+                    f"{dep['name']} NOT importable in env '{env_name}' — "
+                    f"{dep.get('without_it', '').strip()[:160]}"
+                ),
+            }
+
+    for dep in r_deps:
+        env_name = dep["env"]
+        env_prefix = envs_root / env_name
+        env_present = env_prefix.is_dir()
+        declared_version = str(dep.get("version") or "") or None
+        if not env_present:
+            results[dep["name"]] = {
+                "env": env_name, "verifiable": False, "present": None,
+                "version": None, "declared_version": declared_version,
+                "status": "warn",
+                "message": (
+                    f"env '{env_name}' not present on this host; claim-critical "
+                    f"status of '{dep['name']}' cannot be verified from here"
+                ),
+            }
+            continue
+        installed_version = _probe_r_env_package(env_prefix, dep["name"])
+        present = installed_version is not None
+        results[dep["name"]] = {
+            "env": env_name, "verifiable": True, "present": present,
+            "version": installed_version, "declared_version": declared_version,
+            "status": "pass" if present else "fail",
+            "message": (
+                f"{dep['name']} {installed_version} loadable in env '{env_name}'"
+                if present else
+                f"{dep['name']} NOT loadable in env '{env_name}' — "
+                f"{dep.get('without_it', '').strip()[:160]}"
+            ),
+        }
+
+    if any(v["status"] == "fail" for v in results.values()):
+        overall = "fail"
+    elif any(v["status"] == "warn" for v in results.values()):
+        overall = "warn"
+    else:
+        overall = "pass"
+
+    return {
+        "status": overall,
+        "contract_available": True,
+        "contract_path": str(CLAIM_CRITICAL_CONTRACT_PATH),
+        "deps": results,
+        "message": "claim-critical deps: " + ", ".join(
+            f"{n}=ok({v['version']})" if v["present"]
+            else f"{n}={'UNVERIFIABLE' if not v['verifiable'] else 'MISSING'}"
+            for n, v in results.items()
+        ),
+    }
+
+
+def _check_lock_identity(rscript_path: str | None) -> dict[str, Any]:
+    """Compare the RUNNING interpreter/R against the repo's declared locks.
+
+    Distinct from ``_check_python``'s ``>= 3.10`` floor check: that check
+    passes for any modern python. This check compares against the ACTUAL
+    pin recorded in environment.yml (``python=3.11``) and, when the sibling
+    r_multiomics_factory renv.lock is reachable, the R version it records. A
+    version-mismatched interpreter can pass the floor check while running
+    code the lock was never validated against — that mismatch is invisible
+    unless something explicitly diffs against the declared lock, which is
+    what this check exists to do.
+    """
+    py_lock = _read_environment_lock()
+    running_py = (sys.version_info.major, sys.version_info.minor)
+    py_declared = py_lock["python_version"]
+    py_match: bool | None = (running_py == py_declared) if py_declared else None
+
+    r_lock = _read_r_lock()
+    r_declared = r_lock["r_version"]
+    r_running: str | None = None
+    r_match: bool | None = None
+    if rscript_path is not None and r_declared is not None:
+        try:
+            proc = subprocess.run(
+                [rscript_path, "-e", "cat(as.character(getRversion()))"],
+                capture_output=True, text=True, timeout=5,
+            )
+            r_running = proc.stdout.strip() or None
+        except Exception:
+            r_running = None
+        if r_running:
+            # Compare major.minor only; R patch releases are routinely mixed
+            # across hosts without breaking package ABI.
+            r_match = tuple(r_running.split(".")[:2]) == tuple(r_declared.split(".")[:2])
+
+    unverifiable = py_declared is None or (rscript_path is not None and r_lock["found"] and r_declared is not None and r_running is None)
+    mismatched = (py_match is False) or (r_match is False)
+    status = "warn" if (mismatched or unverifiable) else "pass"
+
+    parts: list[str] = []
+    if py_declared is None:
+        parts.append(
+            f"python lock unverifiable ({py_lock['path']} "
+            + ("not found" if not py_lock["found"] else "no python= pin found")
+            + ")"
+        )
+    else:
+        parts.append(
+            f"python: running {running_py[0]}.{running_py[1]} vs locked "
+            f"{py_declared[0]}.{py_declared[1]} "
+            f"({'match' if py_match else 'MISMATCH'})"
+        )
+    if r_declared is None:
+        parts.append(
+            f"R lock unverifiable ({r_lock['path']} "
+            + ("not found" if not r_lock["found"] else "no R version recorded")
+            + ")"
+        )
+    elif r_running is None:
+        parts.append(f"R: locked {r_declared}, running version could not be probed")
+    else:
+        parts.append(
+            f"R: running {r_running} vs locked {r_declared} "
+            f"({'match' if r_match else 'MISMATCH'})"
+        )
+
+    return {
+        "status": status,
+        "python": {
+            "running": f"{running_py[0]}.{running_py[1]}",
+            "declared": (f"{py_declared[0]}.{py_declared[1]}" if py_declared else None),
+            "lock_path": py_lock["path"],
+            "match": py_match,
+        },
+        "r": {
+            "running": r_running,
+            "declared": r_declared,
+            "lock_path": r_lock["path"],
+            "match": r_match,
+        },
+        "message": "; ".join(parts),
+    }
+
+
+def _rollup_readiness(report: dict[str, Any]) -> dict[str, Any]:
+    """Roll the atomic checks up into legible, decision-relevant questions.
+
+    These are DERIVED views for human/automation legibility — they
+    deliberately do NOT feed the top-level pass/warn/fail tally (their
+    inputs already do, via ``python``, ``python_deps``, ``rscript``,
+    ``r_packages``, ``lock_identity_match``); counting them again would
+    double-count the same underlying signal.
+    """
+    python_deps = report["python_deps"]["deps"]
+    r_packages = report["r_packages"]["packages"]
+
+    core_missing = [
+        n for n, v in python_deps.items() if v["tier"] == "required" and not v["present"]
+    ]
+    core_ok = report["python"]["status"] == "pass" and not core_missing
+    core_reasons: list[str] = []
+    if report["python"]["status"] != "pass":
+        core_reasons.append(report["python"]["message"])
+    if core_missing:
+        core_reasons.append(f"missing required deps (per environment.yml): {core_missing}")
+    core = {
+        "status": "pass" if core_ok else "warn",
+        "message": (
+            "core python interpreter + required deps (scanpy/anndata/scipy "
+            "per environment.yml) are usable"
+            if core_ok else
+            "core environment is degraded: " + "; ".join(core_reasons)
+        ),
+    }
+
+    bundle_missing_r = [
+        n for n, v in r_packages.items() if v["tier"] == "required" and not v["present"]
+    ]
+    have_parquet_writer = (
+        python_deps.get("pyarrow", {}).get("present", False)
+        or python_deps.get("fastparquet", {}).get("present", False)
+    )
+    rscript_ok = report["rscript"]["status"] == "pass"
+    profile_ok = rscript_ok and not bundle_missing_r and have_parquet_writer
+    profile_reasons: list[str] = []
+    if not rscript_ok:
+        profile_reasons.append("Rscript not resolved")
+    if bundle_missing_r:
+        profile_reasons.append(f"missing required R packages (per renv.lock): {bundle_missing_r}")
+    if not have_parquet_writer:
+        profile_reasons.append("no parquet writer (pyarrow or fastparquet) available")
+    _profile_heuristic_note = (
+        " (heuristic: this is NOT tied to whatever --recipe/profile you are "
+        "about to run — doctor has no notion of an active profile today and "
+        "reports readiness of the R-bundle/bridge lane, the most commonly "
+        "exercised non-default lane in this repo, as a stand-in)"
+    )
+    profile = {
+        "status": "pass" if profile_ok else "warn",
+        "rscript_ok": rscript_ok,
+        "missing_r_packages": bundle_missing_r,
+        "parquet_writer_available": have_parquet_writer,
+        "message": (
+            "R-bundle export lane (--bundle / bridge_ready modules) is ready"
+            + _profile_heuristic_note
+            if profile_ok else
+            "R-bundle export lane is degraded: " + "; ".join(profile_reasons)
+            + _profile_heuristic_note
+        ),
+    }
+
+    optional_missing = [
+        n for n, v in python_deps.items() if v["tier"] == "optional" and not v["present"]
+    ] + [
+        n for n, v in r_packages.items() if v["tier"] != "required" and not v["present"]
+    ]
+    optional = {
+        "status": "warn" if optional_missing else "pass",
+        "missing": optional_missing,
+        "message": (
+            f"optional capabilities not installed (legitimately absent unless "
+            f"you need them): {optional_missing}"
+            if optional_missing else
+            "all probed optional capabilities are present"
+        ),
+    }
+
+    claim_critical = report["claim_critical_deps"]
+    if not claim_critical.get("contract_available", False):
+        cc_message = claim_critical["message"]
+    elif claim_critical["status"] == "pass":
+        cc_message = (
+            "all suite-declared claim-critical dependencies import cleanly "
+            "in their declared envs"
+        )
+    else:
+        cc_deps = claim_critical["deps"]
+        failing = [n for n, v in cc_deps.items() if v["status"] == "fail"]
+        unverifiable = [n for n, v in cc_deps.items() if v["status"] == "warn"]
+        parts = []
+        if failing:
+            parts.append(f"NOT importable, claim path broken: {failing}")
+        if unverifiable:
+            parts.append(f"unverifiable from this host (env absent): {unverifiable}")
+        cc_message = "claim-critical dependency gap — " + "; ".join(parts)
+    claim_critical_ready = {
+        "status": claim_critical["status"],
+        "contract_available": claim_critical.get("contract_available", False),
+        "message": cc_message,
+    }
+
+    return {
+        "core_environment_ready": core,
+        "selected_profile_ready": profile,
+        "optional_capabilities": optional,
+        "claim_critical_ready": claim_critical_ready,
+    }
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     rscript = _check_rscript()
     project_roots = [
@@ -841,13 +1588,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "python_deps": _check_python_deps(),
         "r_packages": _check_r_packages(rscript.get("path")),
         "last_run": _check_last_run(project_roots or None),
+        "lock_identity_match": _check_lock_identity(rscript.get("path")),
+        "claim_critical_deps": _check_claim_critical_deps(),
     }
 
+    # `counts` intentionally tallies only the atomic checks above — the
+    # readiness rollup added below is a derived view over the same signals
+    # and is deliberately excluded so nothing is double-counted.
     counts = {"pass": 0, "warn": 0, "fail": 0}
     for v in report.values():
         s = v.get("status", "warn")
         counts[s] = counts.get(s, 0) + 1
     report["summary"] = counts
+    report["readiness"] = _rollup_readiness(report)
 
     if args.json:
         print(json.dumps(report, indent=2, default=str))
@@ -855,10 +1608,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print("scfactory doctor — read-only environment health check")
         print("=" * 56)
         for key in ("python", "conda_envs", "rscript", "bridge_symlinks",
-                    "python_deps", "r_packages", "last_run"):
+                    "python_deps", "r_packages", "last_run", "lock_identity_match",
+                    "claim_critical_deps"):
             v = report[key]
             tag = v["status"].upper()
             print(f"[{tag:4}] {key}: {v['message']}")
+        print("-" * 56)
+        print("readiness dimensions:")
+        for key, v in report["readiness"].items():
+            tag = v["status"].upper()
+            print(f"  [{tag:4}] {key}: {v['message']}")
         print("-" * 56)
         print(f"summary: pass={counts['pass']} warn={counts['warn']} "
               f"fail={counts['fail']}")
@@ -1333,6 +2092,11 @@ def build_parser() -> argparse.ArgumentParser:
             "  1. --optional-modules <list>   (escape hatch; overrides all)\n"
             "  2. --recipe <name>             (preset modules + env + bundle)\n"
             "  3. auto-detected modality      (fills any remaining gap)\n\n"
+            "Batch declaration follows the same precedence:\n"
+            "  1. --batch-strategy <name>\n"
+            "  2. --recipe (its named profile, or its batch_strategy field)\n"
+            "  3. undeclared (multi-batch input is warned about and the "
+            "clustering claim is downgraded to exploratory)\n\n"
             "--bundle and recipe.bundle.enabled are OR-ed: passing --bundle "
             "always forces bundle on even if the recipe disables it."
         ),
@@ -1380,6 +2144,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--recipe", default=None,
                        help=f"Apply a preset recipe from {RECIPES_DIR.name}/<name>.yaml "
                             "(modules + scale-mode + env + bundle config)")
+    p_run.add_argument(
+        "--batch-strategy",
+        default=BATCH_STRATEGY_AUTO,
+        choices=list(BATCH_STRATEGY_CHOICES),
+        help=(
+            "Declare the batch design of the input; forwarded to the canonical "
+            "CLI. 'auto' is the absence of a declaration and leaves multi-batch "
+            "clustering marked exploratory. Wins over a recipe's declaration."
+        ),
+    )
     p_run.add_argument("--list-recipes", action="store_true",
                        help="List available recipes (one per line) and exit 0")
     p_run.add_argument(

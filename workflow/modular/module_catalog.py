@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .batch_risk import (
+    BATCH_STRATEGY_INTEGRATE,
+    BATCH_STRATEGY_SINGLE_BATCH,
+)
+
 
 @dataclass(frozen=True)
 class ModuleSpec:
@@ -56,6 +61,58 @@ MODALITY_OPTIONAL_MODULES: dict[str, tuple[str, ...]] = {
         "spatial_ingest",
         "spatial_neighborhoods",
         "multimodal_integration",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class AnalysisProfile:
+    """A named, explicitly declared optional-module plan.
+
+    Distinct from MODALITY_OPTIONAL_MODULES, which answers "what assay is
+    this?". A profile answers "what design is this, and what has the operator
+    declared about it?" — so it carries the batch declaration alongside the
+    module list. ``batch_strategy`` values come from
+    :mod:`workflow.modular.batch_risk`, never from a re-typed literal.
+    """
+
+    name: str
+    optional_modules: tuple[str, ...]
+    batch_strategy: str
+    description: str
+
+
+# Named designs. These exist because DEFAULT_OPTIONAL_MODULES contains no
+# integration step: running it on multi-batch input is a legitimate choice only
+# when it is a choice. Selecting a profile is that choice, recorded in the
+# manifest. See batch_risk.py for the measured cost of getting this wrong.
+ANALYSIS_PROFILES: dict[str, AnalysisProfile] = {
+    "single_batch": AnalysisProfile(
+        name="single_batch",
+        optional_modules=DEFAULT_OPTIONAL_MODULES,
+        batch_strategy=BATCH_STRATEGY_SINGLE_BATCH,
+        description=(
+            "Canonical defaults with an affirmative single-batch declaration. "
+            "Fails at plan time if the input actually spans multiple batches."
+        ),
+    ),
+    "multi_batch_harmony": AnalysisProfile(
+        name="multi_batch_harmony",
+        # batch_correction sits directly after clustering: it depends_on
+        # clustering and OVERWRITES obs["leiden"], so every leiden consumer must
+        # be sequenced after it (see the runs_after hints on
+        # differential_expression and annotation).
+        optional_modules=(
+            "clustering",
+            "batch_correction",
+            "differential_expression",
+            "annotation",
+        ),
+        batch_strategy=BATCH_STRATEGY_INTEGRATE,
+        description=(
+            "Canonical defaults plus Harmony integration for multi-batch input "
+            "(batch key from --batch-key; method from --batch-method)."
+        ),
     ),
 }
 
@@ -135,9 +192,17 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     "differential_expression": ModuleSpec(
         name="differential_expression",
         depends_on=("clustering",),
+        runs_after=("batch_correction",),
         layer="markers",
         bridge_ready=True,
-        description="Cluster marker differential expression.",
+        description=(
+            "Cluster marker differential expression. Ordering-only runs_after "
+            "batch_correction for the same reason annotation carries it: "
+            "batch_correction declares provides obs.leiden and overwrites the "
+            "labels, so markers computed before it describe pre-correction "
+            "clusters that no longer exist in final_adata. Does NOT auto-include "
+            "batch_correction."
+        ),
     ),
     "annotation": ModuleSpec(
         name="annotation",
@@ -513,6 +578,34 @@ def optional_modules_for_modality(modality: str) -> tuple[str, ...]:
         raise ValueError(
             f"unknown modality {modality!r}; expected one of: {choices}"
         ) from exc
+
+
+def analysis_profile_names() -> tuple[str, ...]:
+    """Return every named analysis profile in stable catalog order."""
+
+    return tuple(ANALYSIS_PROFILES)
+
+
+def analysis_profile(name: str) -> AnalysisProfile:
+    """Return the named analysis profile.
+
+    Unknown names are rejected so an adapter cannot advertise a profile that has
+    no catalog entry, or silently fall back to the unintegrated defaults.
+    """
+
+    try:
+        return ANALYSIS_PROFILES[name]
+    except KeyError as exc:
+        choices = ", ".join(ANALYSIS_PROFILES)
+        raise ValueError(
+            f"unknown analysis profile {name!r}; expected one of: {choices}"
+        ) from exc
+
+
+def optional_modules_for_profile(name: str) -> tuple[str, ...]:
+    """Return the canonical optional-module list for a named profile."""
+
+    return analysis_profile(name).optional_modules
 
 
 def module_help_list() -> str:

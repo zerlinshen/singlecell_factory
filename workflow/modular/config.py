@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from .batch_risk import BATCH_STRATEGY_AUTO
 from .module_catalog import DEFAULT_OPTIONAL_MODULES
 
 
@@ -336,6 +337,14 @@ class PipelineConfig:
     resolved_scientific_parameter_diff: dict[str, dict[str, object]] = field(
         default_factory=dict
     )
+    # Operator declaration about the batch design of the input. "auto" is the
+    # ABSENCE of a declaration, not a claim that the input is single-batch;
+    # see batch_risk.py. Values: batch_risk.BATCH_STRATEGY_CHOICES.
+    batch_strategy: str = BATCH_STRATEGY_AUTO
+    # Plan-time batch-risk envelope, resolved by the launcher before the run so
+    # the warning precedes any compute. None means "not resolved yet";
+    # run_pipeline resolves it itself for programmatic callers.
+    batch_risk: Optional[dict] = None
     # Resource flags — set explicitly or expanded from scale_mode.
     lazy_read: str = "auto"          # auto, true, false
     checkpoint_policy: str = "full"  # full
