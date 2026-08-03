@@ -1,7 +1,14 @@
 {
   "verdict": "pass",
-  "recorded_utc": "2026-08-03T01:37:11+00:00",
-  "watched_sha256": "eb99424992a40884e861d3ecf917c13b6a4b51917084cbf91f7a4ea02bcc5bc6",
+  "recorded_utc": "2026-08-03T02:27:38+00:00",
+  "watched_sha256": "0fd7f527cccc619e4da3d50b919d64960ac5f770f1d58ad0b63927a99c6954dd",
+  "watched_files": {
+    "scripts/dev/wave3_us_w3_3_m2_200k_stress.py": "e5f4e218060c8c07225d00e572e412d56bc85ee84a565fb0aacbdb15639a6d35",
+    "tests/test_clustering_memory_regression.py": "8328ce6b79a4de65d586af205ce4e0fb71841085bc3b82216ea2de92f90aa2b8",
+    "workflow/modular/_mem_guard.py": "695ec2572d6a565afdeb5d37c1e32fc3b117baba633463f2f13a76770ef99458",
+    "workflow/modular/_mem_watchdog.py": "78e285e051c03dff6b0329ea8049dd449a44ac7a90b1530d3e9290209555a5ba",
+    "workflow/modular/modules/clustering.py": "8f66e2d3fc111b433411d05a9a64ce6f5a127d0d17374c9bf0ac33305cc4d92f"
+  },
   "pre_fix_peak_gb": 9.31,
   "m2_peak_gb": 6.33,
   "reduction_pct": 32.0

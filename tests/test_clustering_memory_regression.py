@@ -7,11 +7,18 @@ Strategy:
     docstring for the two stacked scanpy/numba/pytest bugs that makes that
     unsafe in this conda env). Instead it runs scripts/dev/wave3_us_w3_3_m2_200k_stress.py
     as a real subprocess, opt-in via `pytest -m memory_stress`, and is
-    ratcheted so it only re-runs for real when a watched source file changes
-    (see the `_ratchet_*` helpers below) -- otherwise it reports an explicit,
-    reasoned skip naming the last real measurement. Wired into the suite gate
-    (../scripts/run_all_gates.sh) as a host_only step, not the default fast
-    lane: ~4-6 min wall / ~10 GB peak RSS on a real run.
+    ratcheted against a git-tracked baseline (tests/memory_regression_ratchet.json)
+    keyed on a hash of the sources the measurement depends on (see the
+    `_ratchet_*` helpers below). The suite gate (../scripts/run_all_gates.sh)
+    does NOT invoke `-m memory_stress` directly -- it runs ONLY
+    test_memory_regression_ratchet_is_current, a read-only ~0s hash check that
+    SKIPS (naming the last real measurement) when unchanged, or FAILS FAST
+    (naming which watched file changed, no subprocess) when stale. An operator
+    who sees that failure runs `-m memory_stress` by hand (~4-6 min wall,
+    ~10 GB peak RSS), which performs the real measurement and refreshes the
+    tracked baseline -- which they then commit. This split (auto-checked vs.
+    human-triggered-and-committed) exists so the gate never rewrites a tracked
+    artifact after a pre-push commit is already built.
   * 800k fixture: env-gated on MEMORY_GUARD_800K=1 — only runs when the host
     explicitly opts in (≥80GB free RAM). Programmatic synthetic; not committed.
 
@@ -82,19 +89,35 @@ _RATCHET_WATCHED_PATHS = (
 _RATCHET_SKIP_REASON_TAG = "memory-regression ratchet"
 
 
-def _ratchet_watched_hash() -> str:
-    """SHA256 over the content of every watched path, order-independent by name."""
-    digest = hashlib.sha256()
+def _ratchet_watched_file_hashes() -> dict[str, str]:
+    """{relative_path: sha256_of_content} for every watched path, one file at a time.
+
+    Kept separate per file (not just one combined digest) so a divergence can
+    be reported as "these specific files changed" rather than an opaque hash
+    mismatch -- that detail is what lets the gate's failure message actually
+    tell the operator what to go look at.
+    """
+    hashes: dict[str, str] = {}
     for path in sorted(_RATCHET_WATCHED_PATHS, key=lambda p: str(p)):
-        digest.update(str(path.relative_to(_SC_ROOT)).encode())
+        rel = str(path.relative_to(_SC_ROOT))
+        content = path.read_bytes() if path.is_file() else b"<missing>"
+        hashes[rel] = hashlib.sha256(content).hexdigest()
+    return hashes
+
+
+def _ratchet_watched_hash(file_hashes: dict[str, str] | None = None) -> str:
+    """SHA256 over the per-file hash table, order-independent (dict is sorted)."""
+    digest = hashlib.sha256()
+    for rel, h in sorted((file_hashes or _ratchet_watched_file_hashes()).items()):
+        digest.update(rel.encode())
         digest.update(b"\0")
-        digest.update(path.read_bytes() if path.is_file() else b"<missing>")
+        digest.update(h.encode())
         digest.update(b"\0")
     return digest.hexdigest()
 
 
-def _ratchet_skip_reason() -> str | None:
-    """None -> must run for real. A string -> safe to skip, and why."""
+def _ratchet_record() -> dict | None:
+    """Parsed ratchet JSON, or None if missing/unreadable/not a recorded pass."""
     if not _RATCHET_PATH.is_file():
         return None
     try:
@@ -103,11 +126,43 @@ def _ratchet_skip_reason() -> str | None:
         return None
     if record.get("verdict") != "pass":
         return None
-    if record.get("watched_sha256") != _ratchet_watched_hash():
+    return record
+
+
+def _ratchet_diverged_files(record: dict) -> list[str]:
+    """Human-readable list of what changed vs. the recorded per-file hashes.
+
+    Falls back to a generic "recorded ratchet predates per-file tracking"
+    message for older ratchet records that only stored the aggregate hash.
+    """
+    recorded_files = record.get("watched_files")
+    current = _ratchet_watched_file_hashes()
+    if not isinstance(recorded_files, dict):
+        return ["(recorded ratchet predates per-file tracking -- re-run to upgrade it)"]
+    changes = []
+    for rel in sorted(set(current) | set(recorded_files)):
+        old, new = recorded_files.get(rel), current.get(rel)
+        if old is None:
+            changes.append(f"{rel} (new watched file, not in the recorded ratchet)")
+        elif new is None:
+            changes.append(f"{rel} (recorded in the ratchet but no longer exists)")
+        elif old != new:
+            changes.append(f"{rel} (content changed: {old[:10]}... -> {new[:10]}...)")
+    return changes or ["(no per-file difference found -- aggregate hash mismatch only)"]
+
+
+def _ratchet_skip_reason() -> str | None:
+    """None -> ratchet is stale/missing, real measurement needed. A string -> safe
+    to skip, and why."""
+    record = _ratchet_record()
+    if record is None:
+        return None
+    current_hash = _ratchet_watched_hash()
+    if record.get("watched_sha256") != current_hash:
         return None
     return (
         f"{_RATCHET_SKIP_REASON_TAG}: unchanged since {record.get('recorded_utc', '?')} "
-        f"(watched_sha256={record.get('watched_sha256', '?')[:12]}...). Last measured "
+        f"(watched_sha256={current_hash[:12]}...). Last measured "
         f"pre-fix={record.get('pre_fix_peak_gb')}GB m2={record.get('m2_peak_gb')}GB "
         f"reduction={record.get('reduction_pct')}%. Delete "
         f"tests/{_RATCHET_PATH.name} to force a real re-run."
@@ -115,7 +170,7 @@ def _ratchet_skip_reason() -> str | None:
 
 
 # Computed once at collection time (cheap: a handful of small source-file hashes,
-# NOT the 200k stress itself). Applied to all three memory_stress tests below.
+# NOT the 200k stress itself). Applied to all four ratchet-aware tests below.
 _RATCHET_SKIP_REASON = _ratchet_skip_reason()
 _ratchet_skipif = pytest.mark.skipif(
     _RATCHET_SKIP_REASON is not None,
@@ -297,15 +352,70 @@ def wave3_200k_stress_result() -> dict:
         and m2_peak <= 1.2 * 10.0
     )
     if all_acs_met:
+        file_hashes = _ratchet_watched_file_hashes()
         _RATCHET_PATH.write_text(json.dumps({
             "verdict": "pass",
             "recorded_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "watched_sha256": _ratchet_watched_hash(),
+            "watched_sha256": _ratchet_watched_hash(file_hashes),
+            "watched_files": file_hashes,
             "pre_fix_peak_gb": result["pre_fix"]["rss_peak_gb"],
             "m2_peak_gb": m2_peak,
             "reduction_pct": result["reduction_pct"],
         }, indent=2) + "\n")
     return result
+
+
+@_ratchet_skipif
+def test_memory_regression_ratchet_is_current():
+    """THE GATE. ../scripts/run_all_gates.sh invokes exactly this test by name --
+    not `-m memory_stress`, and never the three tests above directly.
+
+    This is a cheap, read-only hash comparison (~0s, no subprocess, no fixture
+    dependency on wave3_200k_stress_result) so it can run on every push without
+    materially changing suite-gate cost. Two outcomes:
+
+      * Ratchet unchanged (this function's @_ratchet_skipif condition is True):
+        SKIPPED, naming the last real measurement. Same message as the three
+        memory_stress tests above use, so the story is consistent wherever a
+        reader encounters it.
+      * Ratchet stale or missing: this test BODY runs (below) and FAILS FAST,
+        naming which watched file(s) changed and exactly what to run to fix it.
+        It deliberately does NOT invoke wave3_200k_stress_result or run the
+        ~5-6 min subprocess itself.
+
+    Why fail-fast instead of auto-running the stress inline (the design this
+    replaced, 2026-08-03): tests/memory_regression_ratchet.json is a git-tracked
+    artifact that the fixture only writes AFTER a real pass. If this gate had
+    auto-run the subprocess during `git push`'s pre-push hook, a passing run
+    would rewrite that tracked file *after* the commit was already built --
+    leaving the pushed commit without the refreshed baseline, the working tree
+    dirty with an unstaged artifact (tripping `SUITE_RELEASE_LANE`'s
+    child_repo_dirty check), and every other clone still seeing a diverged hash
+    and paying the full cost again. Committing the refreshed baseline has to be
+    part of the human's flow, not a side effect of a gate they may not even be
+    watching run.
+    """
+    record = _ratchet_record()
+    if record is None:
+        pytest.fail(
+            "memory-regression ratchet is STALE: no valid recorded PASS found "
+            f"at tests/{_RATCHET_PATH.name} (missing, unparseable, or last run "
+            "did not meet all three budgets). Run `pytest --no-cov -q -m "
+            "memory_stress tests/test_clustering_memory_regression.py` to "
+            f"measure for real (~5-6 min, ~10GB RSS), then commit the refreshed "
+            f"tests/{_RATCHET_PATH.name}."
+        )
+    diverged = _ratchet_diverged_files(record)
+    pytest.fail(
+        "memory-regression ratchet is STALE -- watched source(s) changed since "
+        f"the last recorded PASS ({record.get('recorded_utc', '?')}): "
+        + "; ".join(diverged)
+        + ". Run `pytest --no-cov -q -m memory_stress "
+        "tests/test_clustering_memory_regression.py` to re-measure for real "
+        f"(~5-6 min, ~10GB RSS), then commit the refreshed "
+        f"tests/{_RATCHET_PATH.name}. This check is read-only and does not run "
+        "the stress itself."
+    )
 
 
 @_ratchet_skipif
