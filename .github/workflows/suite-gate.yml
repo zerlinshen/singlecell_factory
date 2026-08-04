@@ -125,7 +125,7 @@ jobs:
 
       - name: Install CI-safe Python dependencies
         if: steps.ci_token.outputs.available == '1'
-        run: python -m pip install --upgrade pip pytest pyyaml matplotlib pandas numpy pillow
+        run: python -m pip install --upgrade pip pytest pytest-cov pyarrow pyyaml matplotlib pandas numpy pillow
 
       - name: Run suite gate (ci_safe partition)
         if: steps.ci_token.outputs.available == '1'
