@@ -81,6 +81,7 @@ jobs:
         if: steps.ci_token.outputs.available == '1'
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           repository: zerlinshen/bioinformatics-research-pipeline
           ref: master
           token: ${{ secrets.SUITE_CI_TOKEN }}
@@ -93,6 +94,7 @@ jobs:
         if: steps.ci_token.outputs.available == '1'
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ secrets.SUITE_CI_TOKEN }}
           path: singlecell_factory
 
@@ -100,6 +102,7 @@ jobs:
         if: steps.ci_token.outputs.available == '1'
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           repository: zerlinshen/r_multiomics_factory
           ref: master
           token: ${{ secrets.SUITE_CI_TOKEN }}
@@ -109,6 +112,7 @@ jobs:
         if: steps.ci_token.outputs.available == '1'
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           repository: zerlinshen/plotting_factory
           ref: master
           token: ${{ secrets.SUITE_CI_TOKEN }}
