@@ -132,4 +132,27 @@ jobs:
         env:
           SUITE_GATE_CI_SAFE_ONLY: "1"
           GATE_REPORT_ALL: "1"
-        run: bash scripts/run_all_gates.sh
+          MPLBACKEND: "Agg"
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -o pipefail
+          echo "python=$(command -v python) version=$(python -V 2>&1) cwd=$(pwd)"
+          ls -la
+          bash scripts/run_all_gates.sh 2>&1 | tee gate-run.log
+          status=${PIPESTATUS[0]}
+          {
+            echo "## Suite gate result (exit ${status})"
+            echo
+            echo '```text'
+            tail -n 250 gate-run.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${status}"
+
+      - name: Upload suite gate log
+        if: failure() && steps.ci_token.outputs.available == '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: suite-gate-log
+          path: gate-run.log
+          if-no-files-found: ignore
