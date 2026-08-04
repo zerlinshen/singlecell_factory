@@ -2,9 +2,13 @@
 
 > **NC2024 ABORTED (2026-05-20).** De Zuani 2024 (E-MTAB-13526) reproduction
 > was aborted after a +58% cell-calling divergence; 157 GB purged. NC2024
-> sections below are historical. Current focus: NG2025 LUAD+LUSC 3D-genome
-> reproduction — Yost et al. Nature Genetics 2025
-> (`/home/zerlinshen/projects/ng2025-3d-genome/`).
+> sections below are historical. The Yost/NG2025/LKB1 line is retired; its
+> canonical bounded history is
+> `/home/zerlinshen/projects/pipeline-publication-baselines/runs/retired_yost_ng2025_lkb1_v1/`.
+> That capsule preserves historical records and conclusions only: it supports
+> no new scientific claim and is not a full-evidence seal. H2170
+> (`/home/zerlinshen/projects/h2170-serpine2-loops/`) is a separate active
+> 3D-genome project under strict retention and must not be deleted or substituted.
 > See: `.claude/projects/-home-zerlinshen/memory/project_nc_de_zuani_2024_aborted_2026-05-20.md`
 
 ## Authority / Read This First
@@ -2759,7 +2763,7 @@ The most recent canonical work is the **wave5 Trevino PCW21** biology-aware vali
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-02T17:19:02Z`
+Last refreshed: `2026-08-04T05:44:12Z`
 
 ![Workspace structure](docs/architecture/structure.png)
 
@@ -2773,24 +2777,24 @@ Last refreshed: `2026-08-02T17:19:02Z`
 | `CODEX.md` | `file` | governance / entrypoint |
 | `PROTOCOL.md` | `file` | governance / entrypoint |
 | `README.md` | `file` | governance / entrypoint |
-| `.omx` | `dir` | agent-facing memory |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
 | `contracts` | `dir` | contracts / schemas |
 | `data` | `dir` | data / generated artifacts |
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
-| `envs` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
 | `ops` | `dir` | agent-facing memory |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
-| `results` | `dir` | data / generated artifacts |
 | `rna_velocity_pseudotime_analysis` | `dir` | workspace area (inferred) |
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
 | `tests` | `dir` | execution / code |
+| `tools` | `dir` | execution / code |
+| `workflow` | `dir` | execution / code |
+| `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 

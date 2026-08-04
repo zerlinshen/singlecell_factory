@@ -3,8 +3,13 @@
 > **HISTORICAL NOTE (2026-05-20):** NC2024 (De Zuani 2024, E-MTAB-13526)
 > reproduction was ABORTED 2026-05-20 (+58% cell-calling divergence; 157 GB
 > purged). References to NC2024 validation scripts, test files, and audit
-> directories in this file are historical. Current focus is NG2025 LUAD+LUSC
-> 3D-genome reproduction. See:
+> directories in this file are historical. The Yost/NG2025/LKB1 line is
+> retired; its canonical bounded history is
+> `/home/zerlinshen/projects/pipeline-publication-baselines/runs/retired_yost_ng2025_lkb1_v1/`.
+> That capsule supports no new scientific claim and is not a full-evidence
+> seal. H2170 (`/home/zerlinshen/projects/h2170-serpine2-loops/`) is a separate
+> active 3D-genome project under strict retention and must not be deleted or
+> substituted. See:
 > `.claude/projects/-home-zerlinshen/memory/project_nc_de_zuani_2024_aborted_2026-05-20.md`
 
 Canonical onboarding index for AI agents entering
@@ -283,8 +288,11 @@ reference env. See
 > `ops/nc2024_methodology_audit/` were also deleted. Run ledger archives remain
 > under `ops/run_ledger/nc2024_*_v2_*.json`.
 >
-> **Current focus: NG2025 LUAD+LUSC 3D-genome reproduction**
-> (`/home/zerlinshen/projects/ng2025-3d-genome/`).
+> **Retired line:** Yost/NG2025/LKB1. Its canonical bounded history is
+> `/home/zerlinshen/projects/pipeline-publication-baselines/runs/retired_yost_ng2025_lkb1_v1/`;
+> it supports no new scientific claim and is not a full-evidence seal. H2170
+> (`/home/zerlinshen/projects/h2170-serpine2-loops/`) is a separate active
+> 3D-genome project under strict retention and must not be deleted or substituted.
 
 The Cell/Trevino validation remains in the governance record:
 `ops/governance_records/2026-05-18-two-real-dataset-final-validation/REPORT.md`
@@ -331,7 +339,14 @@ For every project, use the project-owned latest-run retention and final-backup r
 - never delete raw data, prepared canonical inputs, launch scripts, source code, environment definitions, governance records, or currently cited report assets;
 - do not recreate or cite `singlecell_factory/results/<project>` as a canonical scientific output location. Scientific outputs belong under `/home/zerlinshen/projects/<project-id>/runs/`.
 
-NC2024/cancer work was ABORTED 2026-05-20. The former structure-validation run at `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/` is no longer the current source of truth. Current focus: NG2025 LUAD+LUSC 3D-genome reproduction (`/home/zerlinshen/projects/ng2025-3d-genome/`).
+NC2024/cancer work was ABORTED 2026-05-20. The former structure-validation run
+at `/home/zerlinshen/projects/nc-reproduction/runs/2026-05-18T0900Z-13c2c88/`
+is no longer the current source of truth. The Yost/NG2025/LKB1 line is retired;
+its canonical bounded history is
+`/home/zerlinshen/projects/pipeline-publication-baselines/runs/retired_yost_ng2025_lkb1_v1/`,
+which supports no new scientific claim and is not a full-evidence seal. H2170
+(`/home/zerlinshen/projects/h2170-serpine2-loops/`) is a separate active
+3D-genome project under strict retention and must not be deleted or substituted.
 
 
 ## Paper Reproduction Ladder

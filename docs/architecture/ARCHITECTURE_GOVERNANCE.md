@@ -3,7 +3,7 @@
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-02T17:19:02Z`
+Last refreshed: `2026-08-04T05:44:12Z`
 
 ![Workspace structure](structure.png)
 
@@ -17,24 +17,24 @@ Last refreshed: `2026-08-02T17:19:02Z`
 | `CODEX.md` | `file` | governance / entrypoint |
 | `PROTOCOL.md` | `file` | governance / entrypoint |
 | `README.md` | `file` | governance / entrypoint |
-| `.omx` | `dir` | agent-facing memory |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
 | `contracts` | `dir` | contracts / schemas |
 | `data` | `dir` | data / generated artifacts |
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
-| `envs` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
 | `ops` | `dir` | agent-facing memory |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
-| `results` | `dir` | data / generated artifacts |
 | `rna_velocity_pseudotime_analysis` | `dir` | workspace area (inferred) |
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
 | `tests` | `dir` | execution / code |
+| `tools` | `dir` | execution / code |
+| `workflow` | `dir` | execution / code |
+| `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 
