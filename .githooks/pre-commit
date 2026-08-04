@@ -16,6 +16,9 @@ set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+# Suite retired-path guard (Yost/NG2025/LKB1 + legacy factory roots)
+bash "/home/zerlinshen/Bioinformatics Research Pipeline/scripts/pre_commit_retired_path_guard.sh" || exit 1
+
 echo "[pre-commit] Running reference manager..."
 python3 scripts/update_references.py
 if git diff --name-only | grep -q '^README\.md$'; then

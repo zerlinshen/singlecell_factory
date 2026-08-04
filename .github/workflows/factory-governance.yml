@@ -46,8 +46,10 @@ jobs:
           if [ -d "$parent/r_multiomics_factory" ] && [ -d "$parent/plotting_factory" ]; then
             bash scripts/ci/cross_factory_contract_gate.sh
           else
+            echo "::warning title=CROSS-FACTORY GATE SKIPPED::sibling repos not present on this runner; cross_factory_contract_gate.sh did not execute. This workflow is NOT the suite gate — see suite-gate.yml for full suite CI."
             echo "SKIP cross_factory_contract_gate.sh — sibling repos not present on CI runner."
-            echo "  (this cross-repo gate runs in the local pre-push suite gate where siblings exist)"
+            echo "  This job validated only singlecell-local data-free checks."
+            echo "  Full cross-repo enforcement: suite-gate.yml (requires SUITE_CI_TOKEN) + local pre-push."
           fi
 
       - name: Figure parity gate unit coverage (data-free)

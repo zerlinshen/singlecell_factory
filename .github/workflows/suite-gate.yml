@@ -5,7 +5,7 @@ name: Suite CI-safe gate (cross-repo)
 # suite layout on a GitHub-hosted runner, pinning singlecell_factory to the
 # exact commit under test, and running the real suite governance harness
 # (scripts/run_all_gates.sh from the suite root) restricted to the `ci_safe`
-# partition (22 of 33 gates) that does not require a conda R/Seurat
+# partition (22 of 34 gates) that does not require a conda R/Seurat
 # environment, GPU hardware, or this host's staged real data.
 #
 # This is additive alongside the pre-existing, narrower
@@ -13,8 +13,8 @@ name: Suite CI-safe gate (cross-repo)
 # and path-filtered). That workflow proves this repo alone is internally
 # consistent on data-free gates; this workflow proves the ci_safe subset of
 # the WHOLE suite still holds with this commit's singlecell_factory dropped
-# in. Neither replaces the local pre-push hook, which alone runs all 33
-# gates including the 11 host_only ones (R/Seurat env, GPU, staged real
+# in. Neither replaces the local pre-push hook, which alone runs all 34
+# gates including the 12 host_only ones (R/Seurat env, GPU, staged real
 # data).
 #
 # See ../../docs/CI_SETUP.md in the suite root for: the exact secret
@@ -22,8 +22,8 @@ name: Suite CI-safe gate (cross-repo)
 # the full per-gate ci_safe/host_only classification with rationale.
 #
 # Honesty note: a green run here proves the ci_safe partition passed on an
-# independent host with THIS commit. It does NOT prove the full 33-gate
-# suite passed. The job always prints/records a "CI-SAFE PARTITION: N/33
+# independent host with THIS commit. It does NOT prove the full 34-gate
+# suite passed. The job always prints/records a "CI-SAFE PARTITION: N/34
 # executed" report (also in the job summary) naming every gate it did not
 # run, so this cannot be misread as full validation.
 
@@ -46,14 +46,11 @@ jobs:
     steps:
       # Token probe: secrets cannot be referenced in step-level `if:`
       # conditions, so detect SUITE_CI_TOKEN here and gate every step that
-      # needs it. A MISSING secret means the cross-repo private checkouts
-      # cannot authenticate -- that is unconfigured-credential setup debt
-      # (docs/CI_SETUP.md in the suite root), not a suite regression, so the
-      # job then skips loudly (green + warning annotation + step summary)
-      # instead of failing red at the first private checkout. A PRESENT but
-      # invalid token still fails at checkout, which remains the correct
-      # signal. The real gate re-activates automatically once the secret
-      # exists.
+      # needs it. A MISSING secret is unconfigured-credential setup debt
+      # (docs/CI_SETUP.md) that must fail closed: warning/error annotation +
+      # step summary + exit 1 (never a green badge for 0 gates). A PRESENT
+      # but invalid token still fails at checkout. The real gate re-activates
+      # automatically once the secret exists.
       - name: Detect SUITE_CI_TOKEN
         id: ci_token
         env:
@@ -65,17 +62,18 @@ jobs:
             echo "available=0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Skip notice (SUITE_CI_TOKEN not configured)
+      - name: Fail when SUITE_CI_TOKEN is not configured
         if: steps.ci_token.outputs.available == '0'
         run: |
-          echo "::warning title=CI-SAFE GATE SKIPPED::SUITE_CI_TOKEN is not configured in this repo's Actions secrets; the cross-repo ci_safe partition did not run (0/34 gates executed). This is setup debt, not a suite regression -- configure per docs/CI_SETUP.md and the real gate activates on the next push with no further code change."
+          echo "::error title=CI-SAFE GATE NOT CONFIGURED::SUITE_CI_TOKEN is not configured in this repo's Actions secrets; the cross-repo ci_safe partition did not run (0/34 gates executed). This is fail-closed setup debt -- configure per docs/CI_SETUP.md. A green badge must never mean 0 gates executed."
           {
-            echo "## CI-SAFE GATE SKIPPED -- 0/34 gates executed"
+            echo "## CI-SAFE GATE FAILED -- 0/34 gates executed (secret missing)"
             echo ""
-            echo "\`SUITE_CI_TOKEN\` is not configured in this repository's Actions secrets, so the cross-repo checkouts cannot authenticate against the private sibling repos. **This run validated nothing.**"
+            echo "\`SUITE_CI_TOKEN\` is not configured in this repository's Actions secrets, so the cross-repo checkouts cannot authenticate against the private sibling repos. **This run validated nothing and therefore fails.**"
             echo ""
-            echo "Configure the secret per \`docs/CI_SETUP.md\` (fine-grained PAT, Contents: Read-only on all four repos, added as \`SUITE_CI_TOKEN\` to each repo). The real gate then activates automatically -- the skip only applies while the secret is absent."
+            echo "Configure the secret per \`docs/CI_SETUP.md\` (fine-grained PAT, Contents: Read-only on all four repos, added as \`SUITE_CI_TOKEN\` to each repo). The real gate activates automatically once the secret exists."
           } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       # Suite root (private, cross-repo): checked out first, at the
       # workspace root, so it plays the role of <suite_root>/.

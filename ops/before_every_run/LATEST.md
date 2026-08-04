@@ -1,3 +1,27 @@
+# CURRENT STATUS BANNER — 2026-08-04 (read first)
+
+**Yost / NG2025 / LKB1 research line is RETIRED.** Do not execute historical
+Yost renderers, reopen deleted project roots, or treat entries below as live
+work instructions.
+
+- Retired project roots (absent by design):
+  - `/home/zerlinshen/projects/yost-stk11-lkb1-storyline`  <!-- [retired-path-doc-ok] -->
+  - `/home/zerlinshen/projects/ng2025-3d-genome`  <!-- [retired-path-doc-ok] -->
+  - `/home/zerlinshen/projects/lkb1-frontend-rehearsal`  <!-- [retired-path-doc-ok] -->
+- Evidence capsule (historical only):
+  `/home/zerlinshen/projects/pipeline-publication-baselines/runs/retired_yost_ng2025_lkb1_v1/`
+  governed by suite `contracts/retired_research_lines.yaml` (`sealed_verified`).
+- Active figure-parity registry (Trevino-only, 8 entries):
+  `governance/figure_parity_references_2026-08-04.json` under the suite root.
+- Forbidden plotting route IDs must not reappear in the live plotting registry
+  (see `forbidden_active_route_ids` in the retirement contract).
+
+Sections below this banner are **append-only historical journal**. Paths that
+mention deleted figure packages or `render_yost_*` scripts are archival and
+must not be re-run.
+
+---
+
 # Suite Optimization (env + figure-parity gate, no run) - 2026-05-29
 
 - Doc/code optimization round; NO pipeline run executed. Evidence:
