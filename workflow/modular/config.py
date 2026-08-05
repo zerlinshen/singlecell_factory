@@ -363,8 +363,10 @@ class PipelineConfig:
     # Cohort subset: obs_col=val1,val2 filter applied after loading (supports list for AND-chaining)
     cohort_subset: Optional[list[str]] = None
     annotation_strategy: str = "cluster_voting"  # cluster_voting, cell_argmax
-    # Marker intelligence (P1A)
-    tissue: str = "lung"
+    # Marker intelligence (P1A). Default tissue is unspecified (Wave-2 W2.5):
+    # silently defaulting to lung caused off-tissue annotation footguns.
+    # Operators and lung recipes must pass --tissue lung explicitly.
+    tissue: str = "unspecified"
     condition: str = "NSCLC"
     validate_context: bool = False
     context_mismatch_threshold: float = 0.3

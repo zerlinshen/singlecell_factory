@@ -67,9 +67,36 @@ class MetacellModule:
             n_metacells, adata.n_obs, adata.n_obs // n_metacells,
         )
 
-        labels = self._try_seacells(adata, n_metacells)
+        labels, engine, engine_detail = self._try_seacells(adata, n_metacells)
         if labels is None:
             labels = self._fallback_kmeans(adata, n_metacells)
+            engine = "minibatch_kmeans_fallback"
+            engine_detail = engine_detail or "SEACells unavailable or failed"
+            logger.warning(
+                "METACELL_ENGINE_FALLBACK: SEACells primary path unavailable "
+                "(%s). Using MiniBatchKMeans on X_pca. metacell_claimable=False "
+                "— do not cite as SEACells metacells (Persad 2023).",
+                engine_detail,
+            )
+
+        # Claim honesty (Wave-2): only SEACells path is claimable as paper method.
+        claimable = engine == "seacells"
+        claim_reason = (
+            "seacells_primary"
+            if claimable
+            else "exploratory_kmeans_fallback_not_seacells"
+        )
+        ctx.metadata["metacell_engine"] = engine
+        ctx.metadata["metacell_engine_detail"] = engine_detail
+        ctx.metadata["metacell_claimable"] = claimable
+        ctx.metadata["metacell_claim_reason"] = claim_reason
+        adata.uns["metacell"] = {
+            "engine": engine,
+            "engine_detail": engine_detail,
+            "claimable": claimable,
+            "claim_reason": claim_reason,
+            "n_metacells_requested": int(n_metacells),
+        }
 
         adata.obs["metacell"] = pd.Categorical(labels.astype(str))
 
@@ -89,12 +116,18 @@ class MetacellModule:
         ctx.metadata["metacell_median_size"] = int(np.median(summary_df["n_cells"]))
 
         # Visualizations
-        self._plot_umap(adata, ctx)
+        self._plot_umap(adata, ctx, claimable=claimable, engine=engine)
         self._plot_size_hist(summary_df, ctx)
 
     @staticmethod
-    def _try_seacells(adata, n_metacells: int) -> np.ndarray | None:
-        """Attempt metacell construction via SEACells."""
+    def _try_seacells(
+        adata, n_metacells: int
+    ) -> tuple[np.ndarray | None, str, str]:
+        """Attempt metacell construction via SEACells.
+
+        Returns ``(labels_or_None, engine_tag, detail)``. On success engine is
+        ``seacells``; on failure labels is None and detail carries the reason.
+        """
         try:
             from SEACells.core import SEACells as SEACellsModel
 
@@ -109,10 +142,18 @@ class MetacellModule:
             # Map SEACell identifiers to integer labels
             unique = np.unique(labels)
             mapping = {v: i for i, v in enumerate(unique)}
-            return np.array([mapping[v] for v in labels])
+            return (
+                np.array([mapping[v] for v in labels]),
+                "seacells",
+                "Persad_SEACells_2023",
+            )
         except Exception as exc:
-            logger.info("SEACells unavailable or failed (%s), using MiniBatchKMeans fallback.", exc)
-            return None
+            detail = f"{type(exc).__name__}: {exc}"
+            logger.info(
+                "SEACells unavailable or failed (%s); will use MiniBatchKMeans fallback.",
+                detail,
+            )
+            return None, "seacells_failed", detail
 
     @staticmethod
     def _fallback_kmeans(adata, n_metacells: int) -> np.ndarray:
@@ -173,7 +214,13 @@ class MetacellModule:
         return mc_adata, summary_df
 
     @staticmethod
-    def _plot_umap(adata, ctx: PipelineContext) -> None:
+    def _plot_umap(
+        adata,
+        ctx: PipelineContext,
+        *,
+        claimable: bool = True,
+        engine: str = "seacells",
+    ) -> None:
         """UMAP colored by metacell assignment (density-style for many groups)."""
         if "X_umap" not in adata.obsm:
             logger.warning("No UMAP embedding found; skipping metacell UMAP plot.")
@@ -196,7 +243,10 @@ class MetacellModule:
             ax.legend(fontsize=6, markerscale=3, bbox_to_anchor=(1.05, 1), loc="upper left")
         ax.set_xlabel("UMAP1")
         ax.set_ylabel("UMAP2")
-        ax.set_title(f"Metacell assignments (n={n_mc})")
+        title = f"Metacell assignments (n={n_mc}; engine={engine})"
+        if not claimable:
+            title += " [EXPLORATORY / non-claimable fallback]"
+        ax.set_title(title)
         plt.tight_layout()
         plt.savefig(ctx.figure_dir / "metacell_umap.png", bbox_inches="tight")
         plt.close()

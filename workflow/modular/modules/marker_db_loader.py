@@ -148,7 +148,16 @@ class MarkerDbLoaderModule:
         if ctx.adata is None:
             raise ValueError(f"{self.name} requires loaded AnnData.")
 
-        tissue = getattr(ctx.cfg, "tissue", None) or "lung"
+        tissue_raw = getattr(ctx.cfg, "tissue", None)
+        tissue = str(tissue_raw).strip() if tissue_raw else "unspecified"
+        if tissue.lower() in ("", "unspecified", "unknown", "none"):
+            # Do not invent lung (Wave-2 W2.5). Curated overlays may miss; that
+            # is preferable to silently loading NSCLC panels on brain data.
+            tissue = "unspecified"
+            logger.warning(
+                "MarkerDbLoader: cfg.tissue is unspecified; not assuming lung. "
+                "Pass --tissue explicitly for tissue-validated marker panels."
+            )
         condition = getattr(ctx.cfg, "condition", None) or "NSCLC"
         logger.info("MarkerDbLoader: resolving markers for tissue=%s condition=%s", tissue, condition)
 

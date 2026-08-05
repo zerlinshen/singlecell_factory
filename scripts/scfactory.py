@@ -384,6 +384,50 @@ def _validate_recipe(data: dict[str, Any], path: Path, expected_name: str) -> No
         print(f"scfactory: {where}: 'bundle' must be a mapping", file=sys.stderr)
         raise SystemExit(2)
 
+    # required_python_packages optional: list of importable module names that
+    # must be present before the recipe may run (Wave-2 spatial preflight).
+    rpp = data.get("required_python_packages")
+    if rpp is not None:
+        if not isinstance(rpp, list) or not all(isinstance(x, str) and x for x in rpp):
+            print(
+                f"scfactory: {where}: 'required_python_packages' must be a "
+                f"list of non-empty strings.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+
+
+# Modules that require squidpy for their primary analytics path.
+_MODULES_REQUIRING_SQUIDPY = frozenset({"spatial_neighborhoods"})
+
+
+def _missing_python_packages(names: list[str]) -> list[str]:
+    """Return package names that fail importlib.import_module."""
+    import importlib
+
+    missing: list[str] = []
+    for name in names:
+        try:
+            importlib.import_module(name)
+        except Exception:
+            missing.append(name)
+    return missing
+
+
+def _recipe_and_module_required_packages(
+    recipe: dict[str, Any] | None, planned_modules: list[str]
+) -> list[str]:
+    """Union of recipe-declared required packages and module-implied deps."""
+    required: list[str] = []
+    if recipe is not None:
+        for name in recipe.get("required_python_packages") or []:
+            if isinstance(name, str) and name and name not in required:
+                required.append(name)
+    if any(m in _MODULES_REQUIRING_SQUIDPY for m in planned_modules):
+        if "squidpy" not in required:
+            required.append("squidpy")
+    return required
+
 
 def cmd_list_recipes() -> int:
     """Print available recipes (one per line: 'name: description'). Exit 0."""
@@ -481,6 +525,37 @@ def cmd_run(args: argparse.Namespace) -> int:
     else:
         planned = plan_optional_modules(modality)
         plan_source = f"auto for modality={modality}"
+
+    # Wave-2 W2.1: fail early when recipe/modules require packages that are
+    # not installed (e.g. squidpy for spatial_neighborhoods / visium recipe).
+    # Applies to dry-run too so operators discover the gap before a long run.
+    required_pkgs = _recipe_and_module_required_packages(recipe, planned)
+    missing_pkgs = _missing_python_packages(required_pkgs)
+    if missing_pkgs:
+        hint_lines = [
+            f"scfactory: missing required Python package(s) for this run: "
+            f"{missing_pkgs}",
+            f"  planned modules: {planned}",
+        ]
+        if recipe is not None:
+            hint_lines.append(f"  recipe: {recipe.get('name')}")
+        if "squidpy" in missing_pkgs:
+            hint_lines.append(
+                "  spatial_neighborhoods / visium_neighborhoods need squidpy "
+                "(Palla et al. 2022). Install into the active env, e.g.:"
+            )
+            hint_lines.append("    pip install 'squidpy>=1.2'   # or conda-forge squidpy")
+            hint_lines.append(
+                "  then re-run `scfactory doctor --json` and check "
+                "readiness.spatial_analytics."
+            )
+        else:
+            hint_lines.append(
+                "  install the packages into the active Python env, then "
+                "re-run `scfactory doctor --json`."
+            )
+        print("\n".join(hint_lines), file=sys.stderr)
+        return 2
 
     # Batch declaration precedence mirrors the module precedence above:
     # explicit flag > recipe (profile or literal) > undeclared.
@@ -1545,6 +1620,25 @@ def _rollup_readiness(report: dict[str, Any]) -> dict[str, Any]:
         ),
     }
 
+    # Wave-2: explicit spatial analytics readiness (squidpy).
+    squidpy_present = bool(python_deps.get("squidpy", {}).get("present"))
+    spatial = {
+        "status": "pass" if squidpy_present else "warn",
+        "package": "squidpy",
+        "present": squidpy_present,
+        "required_by": [
+            "spatial_neighborhoods",
+            "recipe:visium_neighborhoods",
+        ],
+        "message": (
+            "squidpy present — spatial_neighborhoods / visium_neighborhoods ready"
+            if squidpy_present else
+            "squidpy MISSING — spatial_neighborhoods and recipe "
+            "visium_neighborhoods will fail preflight (install squidpy, then "
+            "re-check). Other scRNA modules are unaffected."
+        ),
+    }
+
     claim_critical = report["claim_critical_deps"]
     if not claim_critical.get("contract_available", False):
         cc_message = claim_critical["message"]
@@ -1573,6 +1667,7 @@ def _rollup_readiness(report: dict[str, Any]) -> dict[str, Any]:
         "core_environment_ready": core,
         "selected_profile_ready": profile,
         "optional_capabilities": optional,
+        "spatial_analytics": spatial,
         "claim_critical_ready": claim_critical_ready,
     }
 

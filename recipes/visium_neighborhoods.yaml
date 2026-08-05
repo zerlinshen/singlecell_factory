@@ -7,6 +7,10 @@ optional_modules:
   - annotation
   - spatial_ingest
   - spatial_neighborhoods
+# Wave-2: scfactory fails preflight if these packages cannot be imported
+# (do not start a long run that will only discover the gap mid-module).
+required_python_packages:
+  - squidpy
 scale_preset: standard
 bundle:
   enabled: true
@@ -18,6 +22,7 @@ notes: |
   Visium / generic spatial workflow. spatial_ingest attaches (x,y) coords +
   library metadata; spatial_neighborhoods computes Moran's I, neighborhood
   enrichment, and co-occurrence.
-  Requires squidpy in the active environment for full neighborhood
-  analytics; without it, spatial_neighborhoods will degrade to a no-op
-  with a warning. The v2.1 bundle's spatial extension is enabled.
+  Requires squidpy in the active environment (enforced at scfactory preflight
+  and surfaced in `scfactory doctor` readiness.spatial_analytics). Without
+  squidpy the recipe exits non-zero before the modular pipeline starts.
+  The v2.1 bundle's spatial extension is enabled.

@@ -2,6 +2,22 @@
 
 Notable changes to `singlecell_factory`. Most recent first.
 
+## 2026-08-05 — Wave-2 operator safety + secondary claim stamps
+
+Follow-up to Wave-1 claim honesty (`806a384`). Plan:
+`projects/pipeline-scientific-audit-20260805/reports/03_remediation/WAVE2_RALPLAN.md`.
+
+- **scfactory**: recipe/module preflight for required packages (squidpy);
+  `visium_neighborhoods` declares `required_python_packages`; doctor
+  `readiness.spatial_analytics`.
+- **metacell**: SEACells vs MiniBatchKMeans engine/claim stamps; exploratory
+  UMAP title on fallback.
+- **cell_cycle**: design C — `cell_cycle_regressed_after_layout` + force
+  clustering claim exploratory when regress runs after layout.
+- **config/cli**: default `--tissue` / `tissue` is `unspecified` (not lung).
+- **marker_db_loader**: does not invent lung when tissue unspecified.
+- Tests: metacell/cell_cycle/pathway depth + visium preflight.
+
 ## 2026-08-05 — Wave-1 scientific claim honesty (audit remediation)
 
 Governed scientific audit project:

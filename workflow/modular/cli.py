@@ -746,8 +746,12 @@ def parse_args() -> argparse.Namespace:
     # Marker intelligence (P1A)
     parser.add_argument(
         "--tissue",
-        default="lung",
-        help="Tissue type for marker DB routing (default: lung)",
+        default="unspecified",
+        help=(
+            "Tissue type for marker DB routing (default: unspecified). "
+            "Pass an explicit tissue (e.g. lung, brain) for claimable "
+            "tissue-aware annotation / marker_db panels."
+        ),
     )
     parser.add_argument(
         "--condition",

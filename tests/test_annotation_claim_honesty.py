@@ -15,7 +15,7 @@ from workflow.modular.modules.annotation import (
 
 class _Cfg:
     markers = {}
-    tissue = "lung"
+    tissue = "unspecified"
     annotation_strategy = "cluster_voting"
     annotation_confidence_threshold = -1e9  # keep all assignments
     reference_adata = None
@@ -66,6 +66,7 @@ def _brainish_adata():
 
 def test_default_markers_are_nonclaimable_even_on_lung_tissue(monkeypatch):
     """Starter pack must never be confirmatory without operator markers."""
+    # explicit lung still non-claimable for DEFAULT_MARKERS (Wave-1)
     import scanpy as sc
 
     monkeypatch.setattr(
@@ -94,7 +95,9 @@ def test_default_markers_are_nonclaimable_even_on_lung_tissue(monkeypatch):
     )
 
     adata = _brainish_adata()
-    ctx = _Ctx(adata)
+    cfg = _Cfg()
+    cfg.tissue = "lung"
+    ctx = _Ctx(adata, cfg=cfg)
     AnnotationModule().run(ctx)
     assert ctx.metadata["annotation_marker_source"] == DEFAULT_MARKER_SOURCE
     assert ctx.metadata["annotation_claimable"] is False
@@ -173,3 +176,12 @@ def test_default_markers_tissue_mismatch_reason(monkeypatch):
     AnnotationModule().run(ctx)
     assert ctx.metadata["annotation_claimable"] is False
     assert "tissue_mismatch" in ctx.metadata["annotation_claim_reason"]
+
+
+def test_default_tissue_is_unspecified_not_lung():
+    """Wave-2 W2.5: config default must not silently assume lung."""
+    import dataclasses
+    from workflow.modular.config import PipelineConfig
+
+    fields = {f.name: f for f in dataclasses.fields(PipelineConfig)}
+    assert fields["tissue"].default == "unspecified"

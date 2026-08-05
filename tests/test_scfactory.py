@@ -97,7 +97,11 @@ def test_run_detects_protein_h5ad(tmp_path, capsys, scfactory):
     assert "spatial_ingest" not in out
 
 
-def test_run_detects_spatial_h5ad(tmp_path, capsys, scfactory):
+def test_run_detects_spatial_h5ad(tmp_path, monkeypatch, capsys, scfactory):
+    # Wave-2 preflight requires squidpy whenever spatial_neighborhoods is
+    # planned; this host may lack it. Stub package check so this test only
+    # covers modality detection + planning (not install state).
+    monkeypatch.setattr(scfactory, "_missing_python_packages", lambda names: [])
     h5ad = _make_minimal_adata(tmp_path, with_spatial=True)
     rc = scfactory.main(["run", str(h5ad), "--dry-run"])
     out = capsys.readouterr().out
@@ -456,8 +460,13 @@ def test_doctor_json_shape(monkeypatch, capsys, scfactory):
     for k in ("pass", "warn", "fail"):
         assert k in summary
         assert isinstance(summary[k], int)
-    for key in ("core_environment_ready", "selected_profile_ready",
-                "optional_capabilities", "claim_critical_ready"):
+    for key in (
+        "core_environment_ready",
+        "selected_profile_ready",
+        "optional_capabilities",
+        "spatial_analytics",
+        "claim_critical_ready",
+    ):
         assert key in payload["readiness"], f"missing readiness dimension: {key}"
         assert "status" in payload["readiness"][key]
     assert rc in (0, 1)
@@ -588,10 +597,44 @@ def test_doctor_missing_optional_dep_does_not_cause_global_fail(monkeypatch, cap
     assert dep["status"] == "warn"
     assert "squidpy" in payload["readiness"]["optional_capabilities"]["missing"]
     assert payload["readiness"]["optional_capabilities"]["status"] == "warn"
+    # Wave-2: explicit spatial readiness surface.
+    assert payload["readiness"]["spatial_analytics"]["present"] is False
+    assert payload["readiness"]["spatial_analytics"]["status"] == "warn"
+    assert "squidpy" in payload["readiness"]["spatial_analytics"]["message"]
     # core readiness is untouched by an optional-tier absence.
     assert payload["readiness"]["core_environment_ready"]["status"] == "pass"
     assert payload["summary"]["fail"] == 0
     assert rc == 0
+
+
+def test_visium_recipe_preflight_fails_without_squidpy(
+    tmp_path, monkeypatch, capsys, scfactory
+):
+    """Wave-2 W2.1: visium_neighborhoods must fail before pipeline start."""
+    import importlib as _importlib
+
+    real_import_module = _importlib.import_module
+
+    def fake_import_module(name, *args, **kwargs):
+        if name == "squidpy":
+            raise ImportError("simulated: squidpy not installed")
+        return real_import_module(name, *args, **kwargs)
+
+    monkeypatch.setattr(_importlib, "import_module", fake_import_module)
+    h5ad = _make_minimal_adata(tmp_path)
+    rc = scfactory.main(
+        [
+            "run",
+            str(h5ad),
+            "--recipe",
+            "visium_neighborhoods",
+            "--dry-run",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 2, err
+    assert "squidpy" in err
+    assert "missing required Python package" in err
 
 
 def test_doctor_claim_critical_contract_unavailable_is_explicit(monkeypatch, capsys, scfactory):
