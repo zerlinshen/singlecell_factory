@@ -2,6 +2,15 @@
 
 Notable changes to `singlecell_factory`. Most recent first.
 
+## 2026-08-05 — Wave-5 within-LUSC stage LIANA contrast
+
+- Per-stage (I/II/III) bounded LIANA on Tumor LUSC (~2.5k cells/stage).
+- Checkpoint edge-set Jaccard I–III ≈ 0.46; VEGF/EGF panel sizes vary by stage;
+  classic VEGF–KDR still unrecovered.
+- HCI: `scripts/liana_stage_contrast_summary.py`; nc2024_paper recipe notes
+  require explicit `--tissue lung`.
+- Claim matrix F2-03/F2-04 evidence upgraded with stage stratification caveats.
+
 ## 2026-08-05 — Wave-4 communication panel filters + standing auto-remediation
 
 - Standing owner mandate: auto ralplan+execute (science-first); see suite AGENTS.md.
