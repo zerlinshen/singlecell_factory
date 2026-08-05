@@ -1,4 +1,4 @@
-# CURRENT STATUS BANNER — 2026-08-04 (read first)
+# CURRENT STATUS BANNER — 2026-08-05 (read first)
 
 **Yost / NG2025 / LKB1 research line is RETIRED.** Do not execute historical
 Yost renderers, reopen deleted project roots, or treat entries below as live
@@ -19,6 +19,35 @@ work instructions.
 Sections below this banner are **append-only historical journal**. Paths that
 mention deleted figure packages or `render_yost_*` scripts are archival and
 must not be re-run.
+
+## Active Wave-9 memory — LUCA patient LIANA / E-MTAB-13530
+
+- Canonical W9.2 run:
+  `/home/zerlinshen/projects/pipeline-scientific-audit-20260805/runs/2026-08-05T1345Z-4e5392e/`.
+  It completed 8 LUAD + 8 LUSC donors (16/16, 0 errors) in 69.33 s with
+  1.79 GB maximum RSS; strict `--resume` replay completed in 1.51 s.
+- **Regression of previous issue:** `scanpy.read_h5ad(..., backed="r")`
+  materialized the 892k-cell LUCA atlas-wide `obsp` graphs. The kernel killed
+  the first W9.2 process at 91.7 GB RSS. The fixed driver reads only required
+  HDF5 observation columns and selected CSR expression rows, processes donors
+  sequentially, and checkpoints each donor. Preserve this sparse/staged route.
+- W9.1 is complete (unblocked the same day). The zero-payload block lifted:
+  a content-first HTTPS re-probe returned real bytes (HDF5 magic at offset 0,
+  real tar header), and all 32 E-MTAB-13530 payloads were staged and passed
+  content validation (size + magic/members + non-zero byte; SHA-256 in
+  `DOWNLOAD_VALIDATION_20260805_HTTPS_STAGED.json`). Canonical W9.1 run:
+  `/home/zerlinshen/projects/pipeline-scientific-audit-20260805/runs/2026-08-05T1459Z-4e5392e/`
+  — 16/16 sections, 0 errors, 75.81 s wall, ~2.3 GB max RSS; paired
+  tumour-vs-background contrast on 4 patients. F4-01/F4-02 stay `partial`;
+  `figure_parity=false`. **Treat the EBI route as flaky: always validate
+  content, never size.** Earlier zero-filled placeholders remain quarantined
+  under `downloads/invalid_zero_placeholders_20260805/`.
+- Final validation passed all 34/34 suite gates at 2026-08-05T15:21Z with the
+  W9.1-complete record set (focused tests 6/6). The raw-data root records
+  `staged_valid` with 16/16 sections. No commit or push was performed.
+- Full entries:
+  `journal/2026-08-05-wave9-luca-liana-oom-recovery.md`,
+  `journal/2026-08-05-wave9-nsclc-visium-w91-unblocked.md`.
 
 ---
 

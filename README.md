@@ -536,6 +536,7 @@ Regenerate with `python scripts/generate_factories_report.py`.
 | [docs/NEXT_ROUND_PIPELINE_REVIEW_AND_MODULE_INTEGRATION_README.md](docs/NEXT_ROUND_PIPELINE_REVIEW_AND_MODULE_INTEGRATION_README.md) | Next-session plan for GitHub method intake, upstream/downstream comparison, figure QA, and default-change gates |
 | [docs/SINGLECELL_PREPROCESSING_DECISION_GATES_2026-05-22.md](docs/SINGLECELL_PREPROCESSING_DECISION_GATES_2026-05-22.md) | QC, normalization, resolution, batch, annotation, and CNV decision gates |
 | [docs/HOTSPOT1_DIAGNOSIS.md](docs/HOTSPOT1_DIAGNOSIS.md) | Clustering peak-RSS diagnosis and the 200k memory-regression ratchet (gate 33) that protects the 32% reduction |
+| [docs/LIANA_PAPER_DESIGN_COMPARISON.md](docs/LIANA_PAPER_DESIGN_COMPARISON.md) | Wave-9 boundary doc: De Zuani paper CellPhoneDB multi-condition design vs our LIANA descriptive recurrence (F2-04/F4 claims stay partial) |
 
 ### Engineering Disciplines (Phase 7+)
 
@@ -2267,6 +2268,15 @@ Module coverage check: **25 / 25 core modules documented and citation-aligned**.
 | **Implementation** | `liana.mt.rank_aggregate(groupby="cell_type", resource_name="consensus")` |
 | **Fallback** | Manual L-R scoring: pre-computed mean expression matrix, outer-product scoring for 18 curated TME L-R pairs (PD-L1/PD-1, VEGFA/KDR, TGFB1/TGFBR2, etc.) |
 | **Reference** | **Dimitrov et al., *Nature Communications*, 2022.** DOI: [10.1038/s41467-022-30755-0](https://doi.org/10.1038/s41467-022-30755-0) |
+
+Wave-9 large-atlas donor expansion uses
+`scripts/liana_luca_patient_expansion.py`. On the 892k-cell LUCA H5AD it reads
+only the required observation columns and selected CSR expression rows; it does
+not materialize atlas-wide `obsp`, `obsm`, or layers. Use `--resume` after an
+interruption: a donor is reused only when both `donor_summary.json` and
+`tables/cell_communication_liana.csv` validate. Avoid replacing this loader
+with `scanpy.read_h5ad(..., backed="r")`, which still loaded the large LUCA
+graphs and produced a confirmed 91.7 GB OOM.
 
 ---
 

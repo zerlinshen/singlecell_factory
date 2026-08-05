@@ -187,6 +187,34 @@ Targeted evidence lane for NC2024 subtype checkpoint closure:
 - Joint spatial×communication smoke: `scripts/test_joint_spatial_liana_smoke.py`
   (Visium mouse brain demo — stamp non-NSCLC; do not promote to NSCLC localization).
 
+### Wave-9 HCI — patient expansion + NSCLC paper-tissue Visium lane
+
+- Donor expansion driver: `python scripts/liana_luca_patient_expansion.py
+  --atlas <luca.h5ad> --output-dir <run>/python/patient_liana
+  [--n-per-histology 8 --cell-cap 1000 --seed 47 --resume]`.
+  Reuses the Wave-8 engine/output contract; donor eligibility (≥800 tumour
+  cells, ≥6 types after ≥5 cells/type) and exclusions are recorded in
+  `patient_liana_meta.json` — never silently include low-diversity donors.
+  For the 892k LUCA atlas, the driver reads only required HDF5 observation
+  columns and selected CSR expression rows. Do not replace this with
+  `scanpy.read_h5ad(..., backed="r")`: backed mode still materializes the
+  atlas-wide `obsp` graphs and caused a confirmed 91.7 GB OOM. Each completed
+  donor writes `donor_summary.json`; `--resume` reuses only a valid summary+CSV
+  pair and refreshes `patient_liana_meta.json` after every donor.
+- Paper design vs factory lane: `docs/LIANA_PAPER_DESIGN_COMPARISON.md`
+  (CellPhoneDB tumour/background/healthy exclusivity + Bonferroni design vs
+  our LIANA descriptive recurrence; F2 claims stay `partial`).
+- NSCLC Visium lane: `python scripts/nsclc_visium_spatial_liana.py
+  --sections-root /home/zerlinshen/data/raw/nc2024_nsclc_visium_emtab13530/sections
+  --section-map .../section_map.csv --output-dir <run>/python/nsclc_spatial_liana`.
+  First **paper-cohort NSCLC tissue** spatial lane (E-MTAB-13530, De Zuani
+  2024's own Visium): joint spatial×LIANA + De Zuani panel scores + Moran's I.
+  All outputs stamped `figure_parity=false` — Leiden spot clusters are not
+  cell2location deconvolution and there is no pathologist annotation; F4
+  claims stay `partial` (see boundary strings in every summary).
+- `checkpoint_immune` panel is **0 by construction** on Visium lanes (Leiden
+  `cluster_X` labels never match curated immune labels); use `checkpoint_any`.
+
 ---
 
 ## 0A. Opt-in environment variables (Principle 9 / F-3 pattern)
