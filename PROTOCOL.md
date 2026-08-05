@@ -177,6 +177,16 @@ Targeted evidence lane for NC2024 subtype checkpoint closure:
   `de_zuani_stab1_foetal` or `de_zuani_stab1_signature_reconstructed` over the
   Mulder-inspired `foetal_like_mac` panel when claiming De Zuani 2024 alignment.
 
+### Patient-level LIANA recurrence (Wave-8 HCI)
+
+- Prefer donor-stratified LIANA (tumor_primary, min cell types) over a single
+  pooled pseudo-bulk when arguing **patient-level** checkpoint / VEGF recurrence.
+- Helper: `python scripts/liana_patient_recurrence.py --donor HIST:DONOR=path/to/liana.csv ...`
+- Output is **descriptive recurrence** (fraction of donors with a ligand|receptor);
+  it does not prove paper multi-condition hierarchy or causality.
+- Joint spatial×communication smoke: `scripts/test_joint_spatial_liana_smoke.py`
+  (Visium mouse brain demo — stamp non-NSCLC; do not promote to NSCLC localization).
+
 ---
 
 ## 0A. Opt-in environment variables (Principle 9 / F-3 pattern)
