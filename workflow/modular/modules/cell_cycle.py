@@ -74,59 +74,86 @@ class CellCycleModule:
         phase_counts = adata.obs["phase"].value_counts().to_dict()
         ctx.metadata["cell_cycle_phases"] = phase_counts
 
+        # Detect whether layout already exists (Wave-3 option A: prefer
+        # pre-layout when clustering.runs_after=cell_cycle is honored).
+        layout_present = bool(
+            getattr(adata, "obsm", None) is not None
+            and (
+                "X_pca" in adata.obsm
+                or "X_umap" in adata.obsm
+                or "leiden" in getattr(adata, "obs", {})
+            )
+        )
+
         # Optionally regress out cell cycle effects.
         if ctx.cfg.regress_cell_cycle:
-            # Guard (Luecken & Theis 2019) + Wave-2 design C: this module runs
-            # AFTER clustering (module_catalog depends_on=("clustering",)), which
-            # already computed PCA/neighbors/UMAP/Leiden. regress_out only
-            # rewrites adata.X, so the existing embedding/clustering will NOT
-            # change. Stamp that layout is exploratory for cell-cycle-corrected
-            # biology rather than reordering the DAG (Wave-3 product option A).
-            msg = (
-                "regress_cell_cycle=True but cell_cycle runs after clustering; "
-                "regress_out rewrites adata.X only and CANNOT affect the already-"
-                "computed PCA/UMAP/Leiden embedding. Layout remains pre-regression; "
-                "cell_cycle_regressed_after_layout=True and layout claim is "
-                "exploratory. To regress cell cycle into the embedding, run "
-                "regression before clustering (Wave-3 option A)."
-            )
-            ctx.status("cell_cycle", "warning", msg)
-            ctx.metadata["cell_cycle_regress_out_embedding_effect"] = (
-                "none_runs_after_clustering"
-            )
-            ctx.metadata["cell_cycle_regress_out_warning"] = msg
-            ctx.metadata["cell_cycle_regressed_after_layout"] = True
-            ctx.metadata["cell_cycle_layout_claimable"] = False
-            ctx.metadata["cell_cycle_layout_claim_reason"] = (
-                "regress_after_layout_exploratory"
-            )
-            # Downgrade clustering claim on the authoritative batch_risk surface
-            # (manifest consumers read batch_risk.clustering_claim_status).
-            risk = ctx.metadata.get("batch_risk")
-            if not isinstance(risk, dict):
-                risk = {}
-                ctx.metadata["batch_risk"] = risk
-            prev = risk.get("clustering_claim_status")
-            if prev not in (None, "exploratory"):
-                risk["clustering_claim_status_before_cell_cycle"] = prev
-            risk["clustering_claim_status"] = "exploratory"
-            risk["clustering_claim_reason"] = (
-                "exploratory_cell_cycle_regressed_after_layout"
-            )
-            # Mirror top-level keys for modules that only read flat metadata.
-            ctx.metadata["clustering_claim_status"] = "exploratory"
-            ctx.metadata["clustering_claim_reason"] = risk["clustering_claim_reason"]
-            if isinstance(getattr(adata, "uns", None), dict):
-                cc = dict(adata.uns.get("cell_cycle") or {})
-                cc.update(
-                    {
-                        "regressed_after_layout": True,
-                        "layout_claimable": False,
-                        "layout_claim_reason": "regress_after_layout_exploratory",
-                        "embedding_effect": "none_runs_after_clustering",
-                    }
+            if layout_present:
+                # Wave-2 design C residual path: ordering failed or only
+                # cell_cycle requested after a prior clustering object.
+                msg = (
+                    "regress_cell_cycle=True but layout already exists "
+                    "(X_pca/X_umap/leiden); regress_out rewrites adata.X only and "
+                    "CANNOT rewrite the existing embedding. "
+                    "cell_cycle_regressed_after_layout=True; layout claim exploratory. "
+                    "Request cell_cycle with clustering so catalog ordering runs "
+                    "regression before PCA (Wave-3 option A)."
                 )
-                adata.uns["cell_cycle"] = cc
+                ctx.status("cell_cycle", "warning", msg)
+                ctx.metadata["cell_cycle_regress_out_embedding_effect"] = (
+                    "none_runs_after_clustering"
+                )
+                ctx.metadata["cell_cycle_regress_out_warning"] = msg
+                ctx.metadata["cell_cycle_regressed_after_layout"] = True
+                ctx.metadata["cell_cycle_layout_claimable"] = False
+                ctx.metadata["cell_cycle_layout_claim_reason"] = (
+                    "regress_after_layout_exploratory"
+                )
+                risk = ctx.metadata.get("batch_risk")
+                if not isinstance(risk, dict):
+                    risk = {}
+                    ctx.metadata["batch_risk"] = risk
+                prev = risk.get("clustering_claim_status")
+                if prev not in (None, "exploratory"):
+                    risk["clustering_claim_status_before_cell_cycle"] = prev
+                risk["clustering_claim_status"] = "exploratory"
+                risk["clustering_claim_reason"] = (
+                    "exploratory_cell_cycle_regressed_after_layout"
+                )
+                ctx.metadata["clustering_claim_status"] = "exploratory"
+                ctx.metadata["clustering_claim_reason"] = risk["clustering_claim_reason"]
+                if isinstance(getattr(adata, "uns", None), dict):
+                    cc = dict(adata.uns.get("cell_cycle") or {})
+                    cc.update(
+                        {
+                            "regressed_after_layout": True,
+                            "layout_claimable": False,
+                            "layout_claim_reason": "regress_after_layout_exploratory",
+                            "embedding_effect": "none_runs_after_clustering",
+                        }
+                    )
+                    adata.uns["cell_cycle"] = cc
+            else:
+                # Wave-3 option A: regress before layout so subsequent clustering
+                # consumes cycle-corrected counts (Luecken & Theis practice).
+                ctx.metadata["cell_cycle_regressed_after_layout"] = False
+                ctx.metadata["cell_cycle_regress_out_embedding_effect"] = (
+                    "applied_before_clustering"
+                )
+                ctx.metadata["cell_cycle_layout_claimable"] = True
+                ctx.metadata["cell_cycle_layout_claim_reason"] = (
+                    "regress_before_layout"
+                )
+                if isinstance(getattr(adata, "uns", None), dict):
+                    cc = dict(adata.uns.get("cell_cycle") or {})
+                    cc.update(
+                        {
+                            "regressed_after_layout": False,
+                            "layout_claimable": True,
+                            "layout_claim_reason": "regress_before_layout",
+                            "embedding_effect": "applied_before_clustering",
+                        }
+                    )
+                    adata.uns["cell_cycle"] = cc
             sc.pp.regress_out(adata, ["S_score", "G2M_score"])
         else:
             ctx.metadata["cell_cycle_regressed_after_layout"] = False

@@ -154,15 +154,25 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     "clustering": ModuleSpec(
         name="clustering",
         depends_on=("doublet_detection",),
+        # Wave-3 option A: when cell_cycle is also requested, run it first so
+        # regress_out can affect PCA/neighbors/UMAP/Leiden (Luecken & Theis).
+        # Ordering-only — does not auto-include cell_cycle.
+        runs_after=("cell_cycle",),
         layer="latent_structure",
         bridge_ready=True,
         description="PCA/neighbors/UMAP/Leiden latent structure.",
     ),
     "cell_cycle": ModuleSpec(
         name="cell_cycle",
-        depends_on=("clustering",),
+        # Wave-3: no longer depends_on clustering. Hard dep is post-doublet
+        # expression so scoring/regress can precede layout when both modules
+        # are requested (see clustering.runs_after).
+        depends_on=("doublet_detection",),
         layer="covariates",
-        description="Cell-cycle scoring and optional regression inputs.",
+        description=(
+            "Cell-cycle scoring and optional regression. Prefer running before "
+            "clustering when regress_cell_cycle=True so embeddings are cycle-corrected."
+        ),
     ),
     "integration_select": ModuleSpec(
         name="integration_select",

@@ -94,3 +94,46 @@ def test_no_regress_does_not_force_layout_exploratory(monkeypatch):
     CellCycleModule().run(ctx)
     assert ctx.metadata["cell_cycle_regressed_after_layout"] is False
     assert ctx.metadata.get("clustering_claim_status") == "claimable"
+
+
+def test_regress_before_layout_is_applied_before_clustering(monkeypatch):
+    """Wave-3 option A: no X_pca/umap/leiden yet → embedding-affecting regress."""
+    import scanpy as sc
+
+    def fake_score(adata, s_genes=None, g2m_genes=None, **kw):
+        n = adata.n_obs
+        adata.obs["S_score"] = np.linspace(0, 1, n)
+        adata.obs["G2M_score"] = np.linspace(1, 0, n)
+        adata.obs["phase"] = ["G1"] * n
+
+    called = {"regress": 0}
+
+    def fake_regress(adata, keys, **kw):
+        called["regress"] += 1
+
+    monkeypatch.setattr(sc.tl, "score_genes_cell_cycle", fake_score, raising=False)
+    monkeypatch.setattr(sc.pp, "regress_out", fake_regress, raising=False)
+
+    adata = _adata_with_cc_genes()
+    # Pre-layout: strip embeddings that _adata_with_cc_genes may have set
+    if "X_umap" in adata.obsm:
+        del adata.obsm["X_umap"]
+    ctx = _Ctx(adata, regress=True)
+    CellCycleModule().run(ctx)
+    assert called["regress"] == 1
+    assert ctx.metadata["cell_cycle_regressed_after_layout"] is False
+    assert ctx.metadata["cell_cycle_regress_out_embedding_effect"] == (
+        "applied_before_clustering"
+    )
+    assert ctx.metadata["cell_cycle_layout_claimable"] is True
+    assert adata.uns["cell_cycle"]["embedding_effect"] == "applied_before_clustering"
+
+
+def test_catalog_orders_cell_cycle_before_clustering_when_both_requested():
+    from workflow.modular.pipeline import MANDATORY_MODULES, _resolve_execution_order
+
+    order = _resolve_execution_order(
+        list(MANDATORY_MODULES), ["cell_cycle", "clustering"]
+    )
+    assert "cell_cycle" in order and "clustering" in order
+    assert order.index("cell_cycle") < order.index("clustering")

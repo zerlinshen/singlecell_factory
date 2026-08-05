@@ -2,6 +2,15 @@
 
 Notable changes to `singlecell_factory`. Most recent first.
 
+## 2026-08-05 — Wave-3 cell-cycle pre-layout order + spatial/comm evidence
+
+- **cell_cycle option A**: depends on doublet_detection; clustering
+  `runs_after` cell_cycle so regress_out can affect embeddings when both
+  modules are requested. Post-layout regress still uses Wave-2 exploratory stamps.
+- **C4 Visium**: squidpy installed; Moran's I 8/8 markers I>0.2 on 10x mouse brain.
+- **Communication**: bounded LUSC LIANA lane (claimable engine) under audit project;
+  NC2024-F2 rows remain partial (method lane, not full paper multi-condition).
+
 ## 2026-08-05 — Wave-2 operator safety + secondary claim stamps
 
 Follow-up to Wave-1 claim honesty (`806a384`). Plan:
