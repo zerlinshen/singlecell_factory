@@ -25,6 +25,18 @@ __references__ = {
         "doi": "10.1126/science.aad0501",
         "description": "Signature score methodology (mean expression minus matched control bin). sc.tl.score_genes implements this.",
     },
+    "Mulder_mac_atlas_2021": {
+        "title": "Cross-tissue single-cell landscape of human monocytes and macrophages in health and disease",
+        "authors": "Mulder et al.",
+        "journal": "Immunity",
+        "year": "2021",
+        "doi": "10.1016/j.immuni.2021.07.007",
+        "description": (
+            "Cross-tissue monocyte/macrophage programmes; tissue-resident / foetal-like "
+            "macrophage panels (FOLR2/LYVE1/MRC1-axis) inform the foetal_like_mac builtin. "
+            "Panel is literature-inspired, not an exact paper gene-list reimplementation."
+        ),
+    },
 }
 
 
@@ -70,6 +82,17 @@ BUILTIN_SIGNATURES = {
     "glycolysis": [
         "HK2", "PFKP", "PKM", "LDHA", "ENO1", "GAPDH", "TPI1", "ALDOA",
     ],
+    # Foetal-like / tissue-resident macrophage (TRM) programme — Mulder-inspired
+    # (Wave-6 LUCA lane F3-02). Not the exact NC2024 paper gene list; claim-class
+    # partial only when used for directional histology contrast.
+    "foetal_like_mac": [
+        "FOLR2", "LYVE1", "MRC1", "SIGLEC1", "C1QA", "C1QB",
+        "SELENOP", "RNASE1", "F13A1", "CD163", "MARCO",
+    ],
+    # Contrasting SPP1+ / inflammatory macrophage axis (companion panel)
+    "spp1_mac": [
+        "SPP1", "FABP5", "TREM2", "APOE", "CTSB", "CTSD", "LGALS3", "CHIT1",
+    ],
 }
 
 
@@ -82,7 +105,8 @@ class GeneSignatureScoringModule:
 
     Built-in signatures cover: proliferation, apoptosis resistance, angiogenesis,
     invasion, EMT (Tan et al. 2014), stemness (Malta et al. 2018), hypoxia
-    (Buffa et al. 2010), DNA damage response, and glycolysis.
+    (Buffa et al. 2010), DNA damage response, glycolysis, and macrophage programmes
+    (foetal_like_mac / spp1_mac; Mulder-inspired TRM panel).
     """
 
     name = "gene_signature_scoring"
