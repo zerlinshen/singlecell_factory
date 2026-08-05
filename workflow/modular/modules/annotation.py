@@ -65,6 +65,25 @@ DEFAULT_MARKERS = {
     "Dendritic cell": ["CD1C", "CLEC9A", "FCER1A", "IRF8"],
 }
 
+# DEFAULT_MARKERS is a hand-curated tumor/immune/stromal *starter* pack (NSCLC-
+# flavoured). It is never a tissue-validated atlas. Scientific audit 2026-08-05
+# (C1 Trevino brain smoke) showed majority "NK cell" labels on neural clusters
+# when this pack ran without a tissue-specific marker map.
+DEFAULT_MARKER_SOURCE = "default_tumor_immune_starter"
+# Tissues for which the starter pack is *plausible* (still non-claimable without
+# an explicit operator-supplied marker map or marker_db). Used only for messaging.
+_STARTER_PACK_PLAUSIBLE_TISSUES = frozenset(
+    {
+        "lung",
+        "nsclc",
+        "lusc",
+        "luad",
+        "lung_cancer",
+        "lung-cancer",
+        "tumor_lung",
+    }
+)
+
 EPITHELIAL_QC_MARKERS = ("EPCAM", "KRT8", "KRT18")
 
 # Label written by the confidence gates for cells whose marker evidence did not
@@ -115,6 +134,7 @@ class AnnotationModule:
         leiden_key = self._resolve_leiden_key(adata)
         ctx.metadata["annotation_leiden_source"] = leiden_key
 
+        using_default_markers = not bool(ctx.cfg.markers)
         marker_map = ctx.cfg.markers or DEFAULT_MARKERS
         available = {
             cell_type: [gene for gene in genes if gene in adata.var_names]
@@ -126,6 +146,65 @@ class AnnotationModule:
 
         strategy = getattr(ctx.cfg, "annotation_strategy", "cluster_voting")
         ctx.metadata["annotation_strategy"] = strategy
+
+        # --- Marker provenance + claim honesty (audit 2026-08-05 W1.2) ---
+        tissue = str(getattr(ctx.cfg, "tissue", "") or "").strip().lower()
+        marker_db_present = bool(
+            isinstance(getattr(adata, "uns", None), dict)
+            and adata.uns.get("marker_db_index")
+        )
+        if using_default_markers:
+            marker_source = DEFAULT_MARKER_SOURCE
+            # Default starter pack is never confirmatory cell-type evidence.
+            # Operators must supply --markers-json or run marker_db_loader for
+            # claimable annotation (tissue-validated panels).
+            annotation_claimable = False
+            claim_reason = "default_tumor_immune_starter_nonclaimable"
+            if tissue and tissue not in _STARTER_PACK_PLAUSIBLE_TISSUES:
+                claim_reason = (
+                    "default_starter_pack_tissue_mismatch:"
+                    f"tissue={tissue or 'unspecified'}"
+                )
+                logger.warning(
+                    "ANNOTATION_TISSUE_MISMATCH: using DEFAULT_MARKERS (tumor/"
+                    "immune starter pack) while cfg.tissue=%r. Labels are "
+                    "exploratory and NOT claimable. Supply --markers-json or "
+                    "run marker_db_loader for tissue-validated markers "
+                    "(scientific audit 2026-08-05 C1: brain cells labeled NK).",
+                    tissue,
+                )
+            else:
+                logger.warning(
+                    "ANNOTATION_DEFAULT_STARTER_PACK: using DEFAULT_MARKERS "
+                    "(tumor/immune starter; NSCLC-flavoured). "
+                    "annotation_claimable=False. For claimable labels pass "
+                    "--markers-json or populate marker_db_loader "
+                    "(cfg.tissue=%r).",
+                    tissue or "unspecified",
+                )
+        elif marker_db_present:
+            marker_source = "marker_db_or_operator"
+            annotation_claimable = True
+            claim_reason = "operator_or_marker_db_panel"
+        else:
+            marker_source = "operator_markers_json"
+            annotation_claimable = True
+            claim_reason = "operator_supplied_markers"
+
+        ctx.metadata["annotation_marker_source"] = marker_source
+        ctx.metadata["annotation_tissue"] = tissue or "unspecified"
+        ctx.metadata["annotation_claimable"] = annotation_claimable
+        ctx.metadata["annotation_claim_reason"] = claim_reason
+        if "annotation" not in adata.uns or not isinstance(adata.uns.get("annotation"), dict):
+            adata.uns["annotation"] = {}
+        adata.uns["annotation"].update(
+            {
+                "marker_source": marker_source,
+                "tissue": tissue or "unspecified",
+                "claimable": annotation_claimable,
+                "claim_reason": claim_reason,
+            }
+        )
 
         # Score genes on full adata (per cell) — populates score_* obs columns and
         # provides per-cell confidence used by reference mapping conservative gate.
@@ -213,11 +292,14 @@ class AnnotationModule:
         self._write_epithelial_marker_qc(adata, ctx)
 
         # --- Visualizations ---
+        cell_type_what = "Marker-based cell type"
+        if not annotation_claimable:
+            cell_type_what = "Marker-based cell type (EXPLORATORY / non-claimable)"
         self._plot_label_umap(
             adata, ctx,
             key="cell_type",
             filename="umap_cell_type.png",
-            what="Marker-based cell type",
+            what=cell_type_what,
             palette_token="cell_type_qualitative",
             label_noun="cell types",
         )

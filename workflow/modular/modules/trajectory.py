@@ -94,6 +94,44 @@ class TrajectoryModule:
 
         ctx.metadata["trajectory_embedding_key"] = embedding_key
 
+        # Neighbor graph must match the embedding used for PAGA/DPT.
+        # Preferring X_wnn while reusing a PCA-neighbors graph (historical bug)
+        # misattributes multiome geometry. Rebuild when WNN is selected.
+        # PCA path keeps the existing clustering neighbors when present.
+        neighbor_rep = embedding_key
+        if embedding_key == "X_wnn":
+            n_neighbors = int(getattr(ctx.cfg, "n_neighbors", 15) or 15)
+            random_state = int(getattr(ctx, "random_state", 0) or 0)
+            sc.pp.neighbors(
+                adata,
+                use_rep="X_wnn",
+                n_neighbors=n_neighbors,
+                random_state=random_state,
+            )
+            ctx.metadata["trajectory_neighbors_rebuilt_on"] = "X_wnn"
+            neighbor_rep = "X_wnn"
+        else:
+            # Clustering normally left neighbors on X_pca; do not silently
+            # rebuild unless the graph is missing (fail-soft rebuild on PCA).
+            has_neighbors = (
+                "neighbors" in getattr(adata, "uns", {})
+                and "connectivities" in getattr(adata, "obsp", {})
+            )
+            if not has_neighbors:
+                n_neighbors = int(getattr(ctx.cfg, "n_neighbors", 15) or 15)
+                random_state = int(getattr(ctx, "random_state", 0) or 0)
+                sc.pp.neighbors(
+                    adata,
+                    use_rep="X_pca",
+                    n_neighbors=n_neighbors,
+                    random_state=random_state,
+                )
+                ctx.metadata["trajectory_neighbors_rebuilt_on"] = "X_pca_missing_graph"
+            else:
+                ctx.metadata["trajectory_neighbors_rebuilt_on"] = "existing"
+            neighbor_rep = "X_pca"
+        ctx.metadata["trajectory_neighbor_rep"] = neighbor_rep
+
         # --- PAGA trajectory graph ---
         if "leiden" in adata.obs:
             sc.tl.paga(adata, groups="leiden")
@@ -145,6 +183,8 @@ class TrajectoryModule:
             "method": "paga_dpt",
             "scanpy_version": scanpy_version,
             "embedding_key": embedding_key,
+            "neighbor_rep": neighbor_rep,
+            "neighbors_rebuilt_on": ctx.metadata.get("trajectory_neighbors_rebuilt_on"),
             "iroot": int(adata.uns.get("iroot", 0)),
             "root_cluster": (
                 str(root_cluster) if root_cluster is not None else None

@@ -578,6 +578,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         cli_cmd += ["--scientific-profile", args.scientific_profile]
     if args.acknowledge_scientific_non_equivalence:
         cli_cmd.append("--acknowledge-scientific-non-equivalence")
+    if getattr(args, "allow_dirty", False):
+        cli_cmd.append("--allow-dirty")
 
     # Recipe scale_preset -> --scale-mode passthrough (only if not overridden
     # by a user --optional-modules escape, which is purely about modules).
@@ -2168,6 +2170,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Forward explicit acknowledgement for non-canonical scientific "
             "settings"
+        ),
+    )
+    p_run.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help=(
+            "Forward to the modular CLI: allow a dirty factory git tree and "
+            "record the diff in the run manifest (required when uncommitted "
+            "factory changes are present)"
         ),
     )
     p_run.add_argument("--dry-run", action="store_true",

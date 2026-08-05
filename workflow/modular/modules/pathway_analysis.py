@@ -105,29 +105,26 @@ class PathwayAnalysisModule:
 
         de_df = pd.read_csv(de_csv)
 
-        # Try gseapy first, then decoupler, then the built-in overlap fallback.
-        #
-        # CLAIMABILITY (added 2026-08-02). These three tiers are NOT interchangeable
-        # methods with the same guarantees:
-        #   1. gseapy    -- rank-based GSEA against MSigDB with a permutation null
-        #                   (Subramanian 2005). The field standard.
-        #   2. decoupler -- PROGENy pathway-activity scoring; a different question
-        #                   (signalling activity), not GSEA.
-        #   3. fallback  -- simple overlap counting against bundled gene sets. No
-        #                   permutation null, no ranking, and a different (much smaller)
-        #                   gene-set universe.
+        # Backend ladder (claimability, scientific audit 2026-08-05 P0 fix):
+        #   1. gseapy prerank -- Subramanian 2005 rank-based GSEA with a
+        #      permutation null. ONLY this tier may be labeled GSEA/confirmatory.
+        #   2. gseapy enrich  -- over-representation (ORA / Enrichr-style) on a
+        #      truncated gene list. Valid enrichment, NOT GSEA; must not inherit
+        #      the rank_based_gsea claim stamp (historical bug used gp.enrich while
+        #      recording engine=gseapy_gsea).
+        #   3. decoupler PROGENy -- pathway-activity scoring (different question).
+        #   4. builtin overlap -- no permutation null; non-claimable fallback.
         #
         # Previously the tier was chosen at logger.info/warning severity and ctx.metadata
         # recorded only `pathway_top_terms`, so nothing downstream could tell which method
         # produced the result. gseapy and decoupler are declared in both env specs but
         # installed only in sc_gpu, so a default CPU-env run silently degraded all the way
-        # to tier 3 and looked identical to a real GSEA run. This is the same defect class
+        # to tier 4 and looked identical to a real GSEA run. This is the same defect class
         # as composition.py's scCODA fallback; the fix follows pseudobulk_de.py's pattern.
         results = None
         engine = None
         try:
-            results = self._run_gseapy(de_df, adata, ctx)
-            engine = "gseapy_gsea"
+            results, engine = self._run_gseapy(de_df, adata, ctx)
         except ImportError:
             logger.warning("gseapy NOT INSTALLED -- trying decoupler backend.")
         except Exception as exc:
@@ -151,14 +148,25 @@ class PathwayAnalysisModule:
                 "Pathway analysis fell back to simple overlap enrichment: no permutation "
                 "null, no ranking, and a smaller bundled gene-set universe than MSigDB. "
                 "Result marked non-claimable. Install gseapy (already declared in both "
-                "environment specs) to obtain a claimable GSEA result."
+                "environment specs) to obtain a claimable prerank GSEA result."
             )
 
-        # gseapy is rank-based GSEA with a permutation null -> confirmatory.
-        # decoupler answers a DIFFERENT question (pathway activity, not enrichment), so it
-        # is recorded as supported-but-distinct rather than as a GSEA substitute.
+        # Inference stamps must match the algorithm that actually ran.
+        # gseapy_gsea (prerank) is confirmatory GSEA; gseapy_ora is claimable ORA
+        # but must never be described as rank-based GSEA.
         inference = {
             "gseapy_gsea": ("rank_based_gsea", "supported_confirmatory", True),
+            "gseapy_ora": (
+                "over_representation_analysis",
+                "supported_ora_not_gsea",
+                True,
+            ),
+            # Some clusters prerank, others ORA: never promote the whole table to GSEA.
+            "gseapy_mixed": (
+                "mixed_prerank_and_ora",
+                "supported_partial_gsea_not_uniform",
+                False,
+            ),
             "decoupler_progeny": ("pathway_activity_scoring", "supported_different_question", True),
             "builtin_overlap_fallback": (
                 "overlap_enrichment_fallback", "exploratory_nonclaimable_overlap_fallback", False),
@@ -167,6 +175,18 @@ class PathwayAnalysisModule:
         ctx.metadata["pathway_inference_class"] = inference[0]
         ctx.metadata["pathway_inference_status"] = inference[1]
         ctx.metadata["pathway_claimable"] = inference[2]
+        if engine == "gseapy_ora":
+            logger.warning(
+                "Pathway backend used gseapy.enrich (ORA on a truncated gene list), not "
+                "prerank GSEA. Metadata records pathway_engine=gseapy_ora / "
+                "pathway_inference_class=over_representation_analysis. Do not cite this "
+                "output as Subramanian-style rank-based GSEA."
+            )
+        elif engine == "gseapy_mixed":
+            logger.warning(
+                "Pathway backend mixed gseapy.prerank and gseapy.enrich across clusters. "
+                "pathway_claimable=False; do not cite the combined table as uniform GSEA."
+            )
 
         if results is not None and not results.empty:
             results.to_csv(ctx.table_dir / "pathway_enrichment.csv", index=False)
@@ -175,16 +195,72 @@ class PathwayAnalysisModule:
             )
             self._plot_enrichment(results, ctx)
 
-    def _run_gseapy(self, de_df: pd.DataFrame, adata, ctx) -> pd.DataFrame | None:
-        """Run enrichment using gseapy with MSigDB Hallmark gene sets."""
+    def _run_gseapy(
+        self, de_df: pd.DataFrame, adata, ctx
+    ) -> tuple[pd.DataFrame | None, str | None]:
+        """Run gseapy enrichment against MSigDB Hallmark gene sets.
+
+        Prefers ``gp.prerank`` (true rank-based GSEA) when per-gene scores are
+        available. Falls back to ``gp.enrich`` (ORA) and returns engine tag
+        ``gseapy_ora`` so claim metadata cannot mislabel ORA as GSEA.
+        """
         import gseapy as gp
 
-        all_results = []
+        prerank_results: list[pd.DataFrame] = []
+        ora_results: list[pd.DataFrame] = []
+        used_prerank = False
+
         for cluster in de_df["group"].unique():
+            cluster_df = de_df[de_df["group"] == cluster].copy()
+            if cluster_df.empty or "names" not in cluster_df.columns:
+                continue
+            # Prefer a signed ranking metric for prerank GSEA.
+            score_col = next(
+                (c for c in ("scores", "logfoldchanges", "log_fc", "score") if c in cluster_df.columns),
+                None,
+            )
+            if score_col is not None and cluster_df[score_col].notna().sum() >= 15:
+                rnk = (
+                    cluster_df[["names", score_col]]
+                    .dropna()
+                    .drop_duplicates(subset=["names"], keep="first")
+                    .set_index("names")[score_col]
+                    .astype(float)
+                    .sort_values(ascending=False)
+                )
+                # prerank needs a non-degenerate ranking; drop exact ties collapse.
+                if rnk.nunique() >= 15:
+                    try:
+                        enr = gp.prerank(
+                            rnk=rnk,
+                            gene_sets="MSigDB_Hallmark_2020",
+                            outdir=None,
+                            no_plot=True,
+                            seed=int(getattr(ctx, "random_state", 0) or 0),
+                            verbose=False,
+                        )
+                        table = getattr(enr, "res2d", None)
+                        if table is None:
+                            table = getattr(enr, "results", None)
+                        if table is not None and not getattr(table, "empty", True):
+                            res = table.copy() if hasattr(table, "copy") else pd.DataFrame(table)
+                            if not isinstance(res, pd.DataFrame):
+                                res = pd.DataFrame(res)
+                            res["cluster"] = cluster
+                            prerank_results.append(res)
+                            used_prerank = True
+                            continue
+                    except Exception as exc:
+                        logger.debug(
+                            "gseapy.prerank failed for cluster %s (%s); trying ORA.",
+                            cluster,
+                            exc,
+                        )
+
             cluster_genes = (
-                de_df[de_df["group"] == cluster]
-                .sort_values("scores", ascending=False)["names"]
-                .tolist()
+                cluster_df.sort_values(score_col, ascending=False)["names"].tolist()
+                if score_col is not None
+                else cluster_df["names"].tolist()
             )
             if len(cluster_genes) < 5:
                 continue
@@ -199,16 +275,43 @@ class PathwayAnalysisModule:
                 if enr.results is not None and not enr.results.empty:
                     res = enr.results.copy()
                     res["cluster"] = cluster
-                    all_results.append(res)
+                    ora_results.append(res)
             except Exception:
                 continue
 
-        if not all_results:
-            return None
+        rename_map = {
+            "Term": "term",
+            "Adjusted P-value": "padj",
+            "FDR q-val": "padj",
+            "fdr": "padj",
+        }
 
-        combined = pd.concat(all_results, ignore_index=True)
-        combined = combined.rename(columns={"Term": "term", "Adjusted P-value": "padj"})
-        return combined
+        if used_prerank and prerank_results and ora_results:
+            # Keep both cluster sets; stamp mixed so claim metadata cannot
+            # silently drop ORA clusters while advertising pure GSEA.
+            for frame in prerank_results:
+                frame["pathway_method"] = "prerank_gsea"
+            for frame in ora_results:
+                frame["pathway_method"] = "ora_enrich"
+            combined = pd.concat(prerank_results + ora_results, ignore_index=True)
+            combined = combined.rename(columns=rename_map)
+            return combined, "gseapy_mixed"
+
+        if used_prerank and prerank_results:
+            combined = pd.concat(prerank_results, ignore_index=True)
+            combined = combined.rename(columns=rename_map)
+            if "pathway_method" not in combined.columns:
+                combined["pathway_method"] = "prerank_gsea"
+            return combined, "gseapy_gsea"
+
+        if ora_results:
+            combined = pd.concat(ora_results, ignore_index=True)
+            combined = combined.rename(columns=rename_map)
+            if "pathway_method" not in combined.columns:
+                combined["pathway_method"] = "ora_enrich"
+            return combined, "gseapy_ora"
+
+        return None, None
 
     def _run_decoupler(self, adata, ctx) -> pd.DataFrame | None:
         """Run pathway activity scoring using decoupler + PROGENy."""

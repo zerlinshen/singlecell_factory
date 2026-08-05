@@ -72,9 +72,19 @@ def _patch_scanpy_tl(monkeypatch):
     def _stub_dpt(a, **kw):
         a.obs["dpt_pseudotime"] = np.linspace(0, 1, a.n_obs)
 
+    def _stub_neighbors(a, **kw):
+        # Minimal neighbor graph so trajectory can proceed without full scanpy.
+        n = a.n_obs
+        a.obsp["connectivities"] = np.eye(n, dtype=np.float32)
+        a.obsp["distances"] = np.eye(n, dtype=np.float32)
+        a.uns["neighbors"] = {
+            "params": {"use_rep": kw.get("use_rep"), "n_neighbors": kw.get("n_neighbors")},
+        }
+
     monkeypatch.setattr(sc.tl, "diffmap", _stub_diffmap, raising=False)
     monkeypatch.setattr(sc.tl, "dpt", _stub_dpt, raising=False)
     monkeypatch.setattr(sc.tl, "paga", lambda a, **kw: None, raising=False)
+    monkeypatch.setattr(sc.pp, "neighbors", _stub_neighbors, raising=False)
 
 
 def test_x_pca_used_when_only_pca_present(monkeypatch):
@@ -106,6 +116,9 @@ def test_x_wnn_preferred_over_x_pca(monkeypatch):
 
     TrajectoryModule().run(ctx)
     assert ctx.metadata["trajectory_embedding_key"] == "X_wnn"
+    assert ctx.metadata["trajectory_neighbors_rebuilt_on"] == "X_wnn"
+    assert ctx.metadata["trajectory_neighbor_rep"] == "X_wnn"
+    assert adata.uns["trajectory"]["neighbor_rep"] == "X_wnn"
 
 
 def test_explicit_biologically_justified_root_is_claimable(monkeypatch):

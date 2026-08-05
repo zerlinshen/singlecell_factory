@@ -39,6 +39,54 @@ from ..context import PipelineContext
 
 logger = logging.getLogger(__name__)
 
+__references__ = {
+    "Luecken_integration_benchmark_2022": {
+        "title": (
+            "Benchmarking atlas-level data integration in single-cell genomics"
+        ),
+        "authors": "Luecken et al.",
+        "journal": "Nature Methods",
+        "year": "2022",
+        "doi": "10.1038/s41592-021-01336-8",
+        "description": (
+            "Atlas-scale integration method comparison; grounds label-free "
+            "selection metrics and the need for per-dataset method choice."
+        ),
+    },
+    "Korsunsky_Harmony_2019": {
+        "title": (
+            "Fast, sensitive and accurate integration of single-cell data "
+            "with Harmony"
+        ),
+        "authors": "Korsunsky et al.",
+        "journal": "Nature Methods",
+        "year": "2019",
+        "doi": "10.1038/s41592-019-0619-0",
+        "description": "Primary candidate backend scored by this gate (Harmony).",
+    },
+    "Lopez_scVI_2018": {
+        "title": "Deep generative modeling for single-cell transcriptomics",
+        "authors": "Lopez et al.",
+        "journal": "Nature Methods",
+        "year": "2018",
+        "doi": "10.1038/s41592-018-0229-2",
+        "description": (
+            "scVI candidate embeddings scored by the seed sweep in this gate."
+        ),
+    },
+    "project_local_discovery_gate": {
+        "title": "Per-run discovery integration-selection gate",
+        "authors": "singlecell_factory",
+        "year": "2026",
+        "doi": "",
+        "description": (
+            "Project-local disqualifying-gate rule over label-free discovery "
+            "metrics (see scripts/bench/integration). Not a published paper; "
+            "recommendation is opt-in and must be re-validated per cohort."
+        ),
+    },
+}
+
 
 # Factory tree root (workflow/modular/modules/integration_select.py -> repo root).
 _FACTORY_ROOT = Path(__file__).resolve().parents[3]
