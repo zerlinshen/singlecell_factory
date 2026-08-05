@@ -17,9 +17,13 @@ bundle:
   include_multimodal_obsm: false
   schema_version: v2.1
 notes: |
-  Honors NC2024 paper-aligned parameters.
+  Honors NC2024 paper-aligned parameters (De Zuani et al. Nat Commun 2024).
   Uses sparse-exact clustering (Phase 7+ default for ~300k+ cohorts).
   Bundle is OFF by default — paper_repro emits its own parity artifacts;
   pass --bundle explicitly if you also want the v2.1 R bundle.
   HCI (Wave-5): pass `--tissue lung` (and markers / marker_db as needed).
   Default tissue is `unspecified` since Wave-2 — do not rely on a silent lung default.
+  HCI (Wave-7): LIANA requires gene symbols — map Ensembl→symbol (e.g. feature_name)
+  on LUCA-like objects before cell_communication. For foetal-like mac claims use
+  gene_signature_scoring builtins de_zuani_stab1_foetal or
+  de_zuani_stab1_signature_reconstructed (not only Mulder-inspired foetal_like_mac).

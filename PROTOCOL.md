@@ -166,6 +166,16 @@ Targeted evidence lane for NC2024 subtype checkpoint closure:
   - current paper-facing top20 visibility
 - Keep the checkpoint verdict `partial` unless the paper-facing hierarchy itself is reproduced, not merely because the raw pairs are present.
 
+### Gene namespace for LIANA / communication (Wave-7 HCI)
+
+- LIANA ligand–receptor databases use **human gene symbols**.
+- Atlases that store Ensembl IDs as `var_names` (e.g. **LUCA core** / Salcher 2022) must map to symbols before communication:
+  - Prefer a curated symbol column such as `adata.var["feature_name"]` (or equivalent).
+  - Do **not** run LIANA on raw Ensembl IDs — results will be empty or non-claimable.
+- Factory helpers: `workflow.modular._gene_symbols` (namespace contract tests in `tests/test_gene_namespace_contract.py`).
+- Foetal-like / STAB1 macrophage scores for NC2024-F3-02 should prefer builtins
+  `de_zuani_stab1_foetal` or `de_zuani_stab1_signature_reconstructed` over the
+  Mulder-inspired `foetal_like_mac` panel when claiming De Zuani 2024 alignment.
 
 ---
 

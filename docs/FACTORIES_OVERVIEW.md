@@ -320,7 +320,7 @@ Source: `r_multiomics_factory/docs/NSCLC_CLAIM_VALIDATION_MATRIX.md`. 15 claims 
 | NC2024-F2-03 | VEGF/EGFR interaction pattern | cell-cell communication | none | unsupported | no current communication run |
 | NC2024-F2-04 | LUSC-specific checkpoint wiring | cell-cell communication | none | unsupported | no current communication run |
 | NC2024-F3-01 | macrophage state diversity | immune/TME | 900k_survivability | partial | 900k proxy v3 immune + TME outputs |
-| NC2024-F3-02 | foetal-like macrophage programme | pathway/regulatory | none | unsupported | current runs lack dedicated pathway/regulatory analysis for this claim |
+| NC2024-F3-02 | foetal-like macrophage programme | pathway/regulatory | luca_de_zuani_stab1_panels | partial | De Zuani STAB1/foetal builtins + LUCA re-score (Wave-7); see claim matrix |
 | NC2024-F4-01 | spatial localization | spatial | bundle_v2.1 | partial | AnnData -> bundle v2.1 `spatial` extension -> `R/spatial_module.R::plot_spatial... |
 | NC2024-F4-02 | spatial interaction context | spatial + communication | bundle_v2.1 | partial | bundle v2.1 `spatial` extension + upstream `spatial_neighborhoods.py` (squidpy-... |
 | NC2024-ABS-02 | macrophage vs cytotoxic inverse relationship | immune/TME | 900k_survivability | partial | 900k immune subtype summary + composition + TME |

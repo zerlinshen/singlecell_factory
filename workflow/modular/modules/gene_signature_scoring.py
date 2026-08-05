@@ -37,6 +37,22 @@ __references__ = {
             "Panel is literature-inspired, not an exact paper gene-list reimplementation."
         ),
     },
+    "DeZuani_NSCLC_2024": {
+        "title": "Single-cell and spatial transcriptomics analysis of non-small cell lung cancer",
+        "authors": "De Zuani et al.",
+        "journal": "Nature Communications",
+        "year": "2024",
+        "doi": "10.1038/s41467-024-48700-8",
+        "description": (
+            "STAB1+ tumour macrophages with oncofoetal reprogramming, iron export "
+            "(SLC40A1/ferroportin), and cholesterol-export programmes (ABCA1/TREM2). "
+            "Paper text names foetal-typical STAB1 signature genes: STAB1, FOLR2, "
+            "SLC40A1, MERTK, GPR34, F13A1. Full 20-gene STAB1 signature is Fig 5I; "
+            "de_zuani_stab1_signature_reconstructed is DEA-reconstructed from "
+            "Supplementary Data 20/21 (AM∩AIM STAB1-up, padj≤0.05, |log2FC|≥1, top-20 "
+            "by min|log2FC|), not a pixel OCR of Fig 5I."
+        ),
+    },
 }
 
 
@@ -83,8 +99,7 @@ BUILTIN_SIGNATURES = {
         "HK2", "PFKP", "PKM", "LDHA", "ENO1", "GAPDH", "TPI1", "ALDOA",
     ],
     # Foetal-like / tissue-resident macrophage (TRM) programme — Mulder-inspired
-    # (Wave-6 LUCA lane F3-02). Not the exact NC2024 paper gene list; claim-class
-    # partial only when used for directional histology contrast.
+    # (Wave-6). Secondary to De Zuani paper-anchored panels below.
     "foetal_like_mac": [
         "FOLR2", "LYVE1", "MRC1", "SIGLEC1", "C1QA", "C1QB",
         "SELENOP", "RNASE1", "F13A1", "CD163", "MARCO",
@@ -92,6 +107,24 @@ BUILTIN_SIGNATURES = {
     # Contrasting SPP1+ / inflammatory macrophage axis (companion panel)
     "spp1_mac": [
         "SPP1", "FABP5", "TREM2", "APOE", "CTSB", "CTSD", "LGALS3", "CHIT1",
+    ],
+    # De Zuani et al. 2024 Nat Commun — foetal-typical STAB1 signature genes
+    # named in Results (oncofoetal reprogramming section). Prefer this panel for
+    # NC2024-F3-02 directional claims over foetal_like_mac.
+    "de_zuani_stab1_foetal": [
+        "STAB1", "FOLR2", "SLC40A1", "MERTK", "GPR34", "F13A1",
+    ],
+    # DEA-reconstructed STAB1 signature (Supp Data 20 AM vs STAB1 + Data 21 AIM vs
+    # STAB1): STAB1-up (negative LFC in other-vs-STAB1 tables), padj≤0.05,
+    # |log2FC|≥1, intersection ranked by min|log2FC|, top 20. Approx. Fig 5I.
+    "de_zuani_stab1_signature_reconstructed": [
+        "SLC40A1", "SELENOP", "OLFML3", "FCGBP", "IGSF21", "IL2RA", "C3",
+        "SIGLEC8", "F13A1", "ITGA9", "CTTNBP2", "STAB1", "ADGRG6", "ADAMDEC1",
+        "CXCL12", "NCKAP5", "ENPP2", "SRGAP3", "AC079015.1", "IGF1",
+    ],
+    # Cholesterol export / lipid handling markers highlighted for tumour AMɸ/AIMɸ
+    "de_zuani_cholesterol_export": [
+        "ABCA1", "TREM2", "APOE", "APOC1", "SPP1", "FABP5",
     ],
 }
 
@@ -105,8 +138,10 @@ class GeneSignatureScoringModule:
 
     Built-in signatures cover: proliferation, apoptosis resistance, angiogenesis,
     invasion, EMT (Tan et al. 2014), stemness (Malta et al. 2018), hypoxia
-    (Buffa et al. 2010), DNA damage response, glycolysis, and macrophage programmes
-    (foetal_like_mac / spp1_mac; Mulder-inspired TRM panel).
+    (Buffa et al. 2010), DNA damage response, glycolysis, Mulder-inspired TRM
+    (foetal_like_mac / spp1_mac), and De Zuani 2024 STAB1/oncofoetal panels
+    (de_zuani_stab1_foetal, de_zuani_stab1_signature_reconstructed,
+    de_zuani_cholesterol_export).
     """
 
     name = "gene_signature_scoring"
