@@ -2,6 +2,15 @@
 
 Notable changes to `singlecell_factory`. Most recent first.
 
+## 2026-08-05 — Wave-4 communication panel filters + standing auto-remediation
+
+- Standing owner mandate: auto ralplan+execute (science-first); see suite AGENTS.md.
+- `scripts/filter_liana_claim_panels.py`: VEGF/EGF and checkpoint family filters
+  on LIANA tables with claim-honesty notes.
+- NC2024-F2-03/F2-04 → partial (method-lane panel evidence; classic VEGF–KDR
+  absent; no LUAD-vs-LUSC contrast).
+- `environment.yml`: declare `squidpy>=1.2` under pip for spatial preflight HCI.
+
 ## 2026-08-05 — Wave-3 cell-cycle pre-layout order + spatial/comm evidence
 
 - **cell_cycle option A**: depends on doublet_detection; clustering

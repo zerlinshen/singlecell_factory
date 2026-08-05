@@ -43,6 +43,9 @@ dependencies:
       - gseapy
       - decoupler>=1.4.0
       - liana>=0.1.7
+      # Spatial neighbourhood analytics (Palla et al. 2022); required for
+      # spatial_neighborhoods / recipe visium_neighborhoods preflight.
+      - squidpy>=1.2
       - infercnvpy
       - harmonypy
       - scanorama

@@ -996,6 +996,10 @@ def _check_python_deps() -> dict[str, Any]:
             "squidpy", "muon", "mofapy2")
     lock = _read_environment_lock()
     declared = lock["declared_packages"]
+    # Listed in environment.yml for install discoverability but recipe-gated
+    # (Wave-2 spatial preflight; Wave-4 env pin). Always capability-optional
+    # for doctor core rollup even when declared.
+    capability_optional = frozenset({"squidpy"})
 
     out: dict[str, Any] = {}
     missing_required: list[str] = []
@@ -1003,7 +1007,10 @@ def _check_python_deps() -> dict[str, Any]:
     import importlib
     import importlib.metadata as _imd
     for name in deps:
-        tier = "required" if name.lower() in declared else "optional"
+        if name.lower() in capability_optional:
+            tier = "optional"
+        else:
+            tier = "required" if name.lower() in declared else "optional"
         try:
             importlib.import_module(name)
             present = True
