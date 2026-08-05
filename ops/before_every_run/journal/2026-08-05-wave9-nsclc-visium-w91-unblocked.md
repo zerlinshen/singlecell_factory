@@ -75,5 +75,6 @@ labels; use `checkpoint_any`. No claim was upgraded.
   content (HDF5 magic, tar members, non-zero payload) before use.
 - `/tmp/e13530_targets.json` is now the corrected 32-file list (dupes removed,
   P25_B2 added); recreate from the live directory listing if lost.
-- Wave-9 is validated (34/34) but **not committed or pushed** as of this entry;
-  the sc/r/suite trees carry the Wave-9 dirty-tree candidate.
+- Wave-9 was validated (34/34) and then pushed the same day: sc `d9d4ea2`
+  (`wave6-trevino-v5.1`), r `4707744` (`master`), suite `a60d15d` (`master`).
+  The earlier entries' "no commit or push" notes describe the pre-push state.

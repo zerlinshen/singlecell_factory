@@ -44,7 +44,8 @@ must not be re-run.
   under `downloads/invalid_zero_placeholders_20260805/`.
 - Final validation passed all 34/34 suite gates at 2026-08-05T15:21Z with the
   W9.1-complete record set (focused tests 6/6). The raw-data root records
-  `staged_valid` with 16/16 sections. No commit or push was performed.
+  `staged_valid` with 16/16 sections. **Wave-9 pushed:** sc `d9d4ea2`
+  (`wave6-trevino-v5.1`), r `4707744` (`master`), suite `a60d15d` (`master`).
 - Full entries:
   `journal/2026-08-05-wave9-luca-liana-oom-recovery.md`,
   `journal/2026-08-05-wave9-nsclc-visium-w91-unblocked.md`.
