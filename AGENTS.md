@@ -372,3 +372,8 @@ Final report must include:
 - No new dependencies without explicit request.
 - Do not silently alter biological interpretation logic.
 - Do not weaken validation or skip reproducibility metadata.
+
+## Kimi Code Tooling (added 2026-08-06)
+
+- Project skills: `.kimi-code/skills/plot-qc-review` (vision rubric — every emitted figure is read and verdicted PASS/NOTES/FAIL before acceptance) and `.kimi-code/skills/h5ad-sanity-check` (structural probe of .h5ad outputs vs `contracts/project_run_contract.yaml`; probe script beside the SKILL.md).
+- A global PreToolUse hook blocks deletion under `data/raw`, `data/references`, `ops/run_ledger`, `contracts/` and flags writes into raw dirs (raw immutability principle).

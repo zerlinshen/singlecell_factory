@@ -157,6 +157,9 @@ class ExportConfig:
     # hic_ingest/hic_tad wrote the canonical uns payloads.
     include_hic: bool = False
     hic_max_contacts: int = 1_000_000
+    # v2.2 Ribo-seq extension: opt-in, active only when ribo_ingest wrote
+    # adata.uns["ribo_translation_efficiency"].
+    include_ribo: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +169,15 @@ class ExportConfig:
 # Known extension keys. Readers ignore unknown keys with a "skipping unknown
 # extension" message; producers may freely register additional keys. Keep this
 # list in sync with the R reader's known-extensions handling.
-KNOWN_EXTENSION_KEYS = ("protein", "spatial", "multimodal_obsm", "marker_resolutions", "atac", "hic")
+KNOWN_EXTENSION_KEYS = (
+    "protein",
+    "spatial",
+    "multimodal_obsm",
+    "marker_resolutions",
+    "atac",
+    "hic",
+    "ribo",
+)
 
 
 def _unknown_hic_tad_metadata() -> dict[str, object]:
@@ -954,6 +965,103 @@ def maybe_export_hic(
     )
 
 
+def maybe_export_ribo(
+    manifest: dict,
+    output_dir: Path,
+    adata,
+) -> dict | None:
+    """Write the v2.2 Ribo-seq extension from ribo_ingest AnnData uns payloads."""
+    uns = getattr(adata, "uns", {})
+    if "ribo_translation_efficiency" not in uns:
+        return None
+
+    te = uns["ribo_translation_efficiency"]
+    if not isinstance(te, pd.DataFrame):
+        te = pd.DataFrame(te)
+    required = {"gene", "sample", "footprint_count", "rna_count", "te"}
+    missing = required - set(te.columns)
+    if missing:
+        raise ValueError(
+            "Ribo-seq export requires columns "
+            f"{sorted(required)}; missing {sorted(missing)}"
+        )
+    te_df = te.loc[:, ["gene", "sample", "footprint_count", "rna_count", "te"]].copy()
+    if te_df.empty:
+        raise ValueError("Ribo-seq export requires at least one row")
+
+    for col in ("gene", "sample"):
+        if te_df[col].isna().any():
+            raise ValueError("Ribo-seq export requires non-empty gene and sample identifiers")
+        te_df[col] = te_df[col].astype(str).str.strip()
+    if (te_df[["gene", "sample"]] == "").any(axis=None):
+        raise ValueError("Ribo-seq export requires non-empty gene and sample identifiers")
+    if te_df.duplicated(["gene", "sample"]).any():
+        raise ValueError("Ribo-seq export found duplicate gene/sample rows")
+
+    for col in ("footprint_count", "rna_count", "te"):
+        values = pd.to_numeric(te_df[col], errors="coerce").to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError(
+                "Ribo-seq export requires finite numeric values in "
+                "footprint_count, rna_count, and te"
+            )
+        te_df[col] = values
+
+    count_values = te_df[["footprint_count", "rna_count"]].to_numpy(dtype=float)
+    if (count_values < 0).any() or (te_df["te"].to_numpy(dtype=float) < 0).any():
+        raise ValueError("Ribo-seq export requires non-negative counts and te values")
+    if not np.equal(count_values, np.floor(count_values)).all():
+        raise ValueError("Ribo-seq export requires integer-valued footprint_count and rna_count")
+
+    pseudocount = 1.0
+    expected_te = te_df["footprint_count"] / (te_df["rna_count"] + pseudocount)
+    if not np.allclose(
+        te_df["te"].to_numpy(dtype=float),
+        expected_te.to_numpy(dtype=float),
+        rtol=1e-9,
+        atol=1e-12,
+    ):
+        raise ValueError(
+            "Ribo-seq export te does not match footprint_count / (rna_count + 1.0)"
+        )
+
+    ext_dir = output_dir / "extensions" / "ribo"
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    te_path = ext_dir / "translation_efficiency.parquet"
+    _write_table_parquet(te_df, te_path)
+
+    manifest_files = manifest.setdefault("files", {})
+    manifest_files["ribo_te"] = file_record(
+        te_path,
+        output_dir,
+        te_df.shape[0],
+        te_df.shape[1],
+        {"format": "parquet"},
+    )
+
+    extension_fields = {
+        "status": "active",
+        "table": {
+            "te_path": "extensions/ribo/translation_efficiency.parquet",
+            "index_column": "gene",
+        },
+        "n_genes": int(te_df["gene"].nunique()) if not te_df.empty else 0,
+        "n_samples": int(te_df["sample"].nunique()) if not te_df.empty else 0,
+        "n_rows": int(te_df.shape[0]),
+        "te_mean": float(te_df["te"].mean()),
+        "te_median": float(te_df["te"].median()),
+        "method": "footprint_over_rna_plus_pseudocount",
+        "pseudocount": pseudocount,
+    }
+    return add_extension(
+        manifest,
+        "ribo",
+        version="1.0",
+        files=["ribo_te"],
+        **extension_fields,
+    )
+
+
 def _coerce_jsonable(value):
     """Best-effort coercion of small uns metadata values into JSON-friendly types."""
     if isinstance(value, (str, int, float, bool)) or value is None:
@@ -1465,6 +1573,8 @@ def export_bundle(config: ExportConfig) -> dict[str, object]:
         raise ValueError("--include-atac requires --schema-version v2.2")
     if config.include_hic and config.schema_version != "v2.2":
         raise ValueError("--include-hic requires --schema-version v2.2")
+    if config.include_ribo and config.schema_version != "v2.2":
+        raise ValueError("--include-ribo requires --schema-version v2.2")
     if config.format not in ("auto", "csv", "parquet", "mtx"):
         raise ValueError("--format must be 'auto', 'csv', 'parquet', or 'mtx'.")
 
@@ -1761,6 +1871,13 @@ def _export_bundle_v2(adata, cell_idx: np.ndarray, config: ExportConfig) -> dict
                 max_contacts=config.hic_max_contacts,
             )
             manifest["bundle"]["required_files"] = sorted(manifest["files"])
+        if getattr(config, "include_ribo", False):
+            maybe_export_ribo(
+                manifest,
+                config.output_dir,
+                adata,
+            )
+            manifest["bundle"]["required_files"] = sorted(manifest["files"])
     # PREC-1: write provenance.json after all parquet/mtx files are in place so
     # the bundle_sha256 it records covers the complete file set.
     _write_bundle_provenance(config.output_dir)
@@ -1873,6 +1990,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hic-max-contacts", type=int, default=1_000_000,
                         help=("Maximum non-zero contacts to serialize into the compact HIC extension "
                               "(default: 1,000,000). Use coarser bins or filtering for larger matrices."))
+    parser.add_argument("--include-ribo", action="store_true",
+                        help=("v2.2 only: write extensions/ribo/translation_efficiency.parquet "
+                              "from ribo_ingest AnnData uns payloads and register the `ribo` extension."))
     return parser
 
 
@@ -1972,6 +2092,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         atac_peaks_uns_key=args.atac_peaks_uns_key,
         include_hic=bool(args.include_hic),
         hic_max_contacts=int(args.hic_max_contacts),
+        include_ribo=bool(args.include_ribo),
     )
     manifest = export_bundle(config)
     result = {"output_dir": str(config.output_dir), "manifest": manifest["schema_version"]}

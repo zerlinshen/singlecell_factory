@@ -4,6 +4,7 @@ import gzip
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ ad = pytest.importorskip("anndata")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle
+from scripts.export_singlecell_r_bundle import ExportConfig, export_bundle, maybe_export_ribo
 
 
 def read_bundle_csv(path: Path) -> pd.DataFrame:
@@ -24,7 +25,12 @@ def read_bundle_csv(path: Path) -> pd.DataFrame:
         return pd.read_csv(handle, index_col=0)
 
 
-def make_tiny_h5ad(path: Path, include_pca: bool = True, include_hic: bool = False) -> None:
+def make_tiny_h5ad(
+    path: Path,
+    include_pca: bool = True,
+    include_hic: bool = False,
+    include_ribo: bool = False,
+) -> None:
     x = sparse.csr_matrix(
         np.array(
             [
@@ -100,6 +106,24 @@ def make_tiny_h5ad(path: Path, include_pca: bool = True, include_hic: bool = Fal
             "compartment_status": "confident",
             "low_information_chromosomes": [],
             "compartment_status_by_chrom": {"chr1": "confident"},
+        }
+    if include_ribo:
+        te = pd.DataFrame(
+            {
+                "gene": ["CD3E", "LYZ", "ELF3", "KRT8"],
+                "sample": ["S0", "S0", "S1", "S1"],
+                "footprint_count": [10.0, 20.0, 15.0, 5.0],
+                "rna_count": [100.0, 50.0, 30.0, 10.0],
+                "te": [10.0 / 101.0, 20.0 / 51.0, 15.0 / 31.0, 5.0 / 11.0],
+            }
+        )
+        adata.uns["ribo_translation_efficiency"] = te
+        adata.uns["ribo_ingest_metadata"] = {
+            "n_genes_with_footprints": 4,
+            "n_samples": 2,
+            "te_mean": float(te["te"].mean()),
+            "te_median": float(te["te"].median()),
+            "min_footprint_threshold": 1,
         }
     adata.write_h5ad(path)
 
@@ -229,6 +253,105 @@ def test_export_bundle_v2_mtx_records_sidecar_integrity(tmp_path: Path) -> None:
     assert manifest["files"]["marker_expr_genes"]["n_rows"] == 3
     assert (out_dir / "marker_expr.barcodes.tsv.gz").exists()
     assert (out_dir / "marker_expr.genes.tsv.gz").exists()
+
+
+def test_export_bundle_v22_ribo_extension(tmp_path: Path) -> None:
+    input_path = tmp_path / "tiny_ribo.h5ad"
+    out_dir = tmp_path / "bundle_v22_ribo"
+    make_tiny_h5ad(input_path, include_ribo=True)
+
+    manifest = export_bundle(
+        ExportConfig(
+            input_h5ad=input_path,
+            output_dir=out_dir,
+            schema_version="v2.2",
+            format="parquet",
+            markers=("CD3E", "LYZ"),
+            include_ribo=True,
+        )
+    )
+
+    ribo_ext = manifest["extensions"]["ribo"]
+    assert ribo_ext["status"] == "active"
+    assert ribo_ext["files"] == ["ribo_te"]
+    assert ribo_ext["n_genes"] == 4
+    assert ribo_ext["n_samples"] == 2
+    assert ribo_ext["table"]["te_path"] == "extensions/ribo/translation_efficiency.parquet"
+    assert "ribo_te" in manifest["files"]
+    assert "ribo_te" in manifest["bundle"]["required_files"]
+
+    te = pd.read_parquet(out_dir / "extensions" / "ribo" / "translation_efficiency.parquet")
+    assert list(te.columns) == ["gene", "sample", "footprint_count", "rna_count", "te"]
+    assert te.shape[0] == 4
+    assert (te["te"] >= 0).all()
+
+
+@pytest.mark.parametrize(
+    ("bad_case", "message"),
+    [
+        ("blank_id", "non-empty gene and sample"),
+        ("duplicate_key", "duplicate gene/sample"),
+        ("non_numeric", "finite numeric"),
+        ("non_finite", "finite numeric"),
+        ("negative_count", "non-negative"),
+        ("fractional_count", "integer-valued"),
+        ("te_mismatch", "does not match footprint_count /"),
+        ("empty", "at least one row"),
+    ],
+)
+def test_ribo_extension_rejects_malformed_payload_before_writing(
+    tmp_path: Path,
+    bad_case: str,
+    message: str,
+) -> None:
+    te = pd.DataFrame(
+        {
+            "gene": ["CD3E", "LYZ"],
+            "sample": ["S0", "S0"],
+            "footprint_count": [10.0, 20.0],
+            "rna_count": [100.0, 50.0],
+            "te": [10.0 / 101.0, 20.0 / 51.0],
+        }
+    )
+    if bad_case == "blank_id":
+        te.loc[0, "gene"] = "  "
+    elif bad_case == "duplicate_key":
+        te.loc[1, ["gene", "sample"]] = te.loc[0, ["gene", "sample"]]
+    elif bad_case == "non_numeric":
+        te["footprint_count"] = te["footprint_count"].astype(object)
+        te.loc[0, "footprint_count"] = "not-a-number"
+    elif bad_case == "non_finite":
+        te.loc[0, "te"] = np.inf
+    elif bad_case == "negative_count":
+        te.loc[0, "rna_count"] = -1
+    elif bad_case == "fractional_count":
+        te.loc[0, "footprint_count"] = 1.5
+    elif bad_case == "te_mismatch":
+        te.loc[0, "te"] = 999.0
+    elif bad_case == "empty":
+        te = te.iloc[0:0]
+
+    output_dir = tmp_path / "bundle"
+    adata = SimpleNamespace(uns={"ribo_translation_efficiency": te})
+    with pytest.raises(ValueError, match=message):
+        maybe_export_ribo({}, output_dir, adata)
+    assert not (output_dir / "extensions" / "ribo").exists()
+
+
+def test_export_bundle_ribo_requires_v22(tmp_path: Path) -> None:
+    input_path = tmp_path / "tiny_ribo_v21.h5ad"
+    out_dir = tmp_path / "bundle_ribo_v21"
+    make_tiny_h5ad(input_path, include_ribo=True)
+    with pytest.raises(ValueError, match="include-ribo requires"):
+        export_bundle(
+            ExportConfig(
+                input_h5ad=input_path,
+                output_dir=out_dir,
+                schema_version="v2.1",
+                format="parquet",
+                include_ribo=True,
+            )
+        )
 
 
 def test_export_bundle_v22_hic_extension(tmp_path: Path) -> None:

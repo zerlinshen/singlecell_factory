@@ -3,9 +3,9 @@
 Scope: this note documents the current Phase 2 multi-omics contract between
 `singlecell_factory`, `r_multiomics_factory` (R-native analysis), and
 `plotting_factory` (introduced 2026-05-18; `r/modality/*_plots.R` owns the plot
-halves extracted from each R modality module in Phase 2.1). ATAC and Hi-C are
-active v2.2 vertical slices. VDJ and Ribo-seq remain reserved bundle slots until
-their exporters have full Python-to-R round-trip tests.
+halves extracted from each R modality module in Phase 2.1). ATAC, Hi-C, and
+Ribo-seq are active v2.2 vertical slices. VDJ remains reserved until its
+exporter has full Python-to-R round-trip tests.
 
 ## ATAC ingest
 
@@ -127,11 +127,15 @@ Literature support:
 - Shannon 1948, doi:10.1002/j.1538-7305.1948.tb01338.x: entropy metric used for
   repertoire diversity.
 
-## Ribo-seq reserved slot
+## Ribo-seq active slot
 
-Rationale: Ribo-seq ingest can compute per-gene, per-sample translation
-efficiency from footprint and RNA counts, but the bundle slot stays `reserved`
-until exporter and R reader tests are present.
+Rationale: Ribo-seq ingest computes per-gene, per-sample translation efficiency
+from footprint and RNA counts. The v2.2 bundle slot is **active** when
+`--include-ribo` exports `extensions/ribo/translation_efficiency.parquet`
+from `adata.uns["ribo_translation_efficiency"]`. R-side `load_ribo_extension`
+returns NULL when the payload is absent. Export fails before bundle publication
+when identifiers or gene/sample keys are invalid, count values are not finite
+non-negative integers, or TE does not equal `footprint_count / (rna_count + 1)`.
 
 Literature support:
 

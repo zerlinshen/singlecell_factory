@@ -83,13 +83,14 @@ def test_schema_parity_after_ribo_contract_check():
     assert sf.read_bytes() == rf.read_bytes()
 
 
-def test_ribo_slot_reserved_until_bundle_vertical_slice():
+def test_ribo_slot_active_with_te_table_contract():
     import yaml
     doc = yaml.safe_load((FACTORY_ROOT / "contracts" / "bundle_schema.yaml").read_text())
     ribo = doc["extensions_v22"]["ribo"]
-    assert ribo["status"] == "reserved"
+    assert ribo["status"] == "active"
     assert "table" in ribo
     assert "te_path" in ribo["table"]
+    assert ribo["table"]["te_path"] == "extensions/ribo/translation_efficiency.parquet"
 
 
 def test_r_extension_registry_includes_ribo():

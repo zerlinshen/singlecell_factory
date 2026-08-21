@@ -16,7 +16,7 @@
 #   v2.1 — additive superset of v2; adds optional top-level extensions map
 #           (protein, spatial, multimodal_obsm). On-disk layout identical to v2.
 #   v2.2 — additive superset of v2.1; adds marker_resolutions, atac, and hic
-#           extensions (active) and reserves vdj/ribo slots. Each Phase 2
+#           extensions (active) and reserves the vdj slot (ribo is active). Each Phase 2
 #           slice merge flips its slot from reserved -> active. v2.1 loaders that
 #           ignore unknown extension keys remain fully compatible.
 #
@@ -406,7 +406,7 @@ tables:
 #                         columns: [cell_type, marker_set, source_db, source_version, score] }
 #   atac:               { status: active, required_when: include_atac_exported }
 #   vdj:                { status: reserved }
-#   ribo:               { status: reserved }
+#   ribo:               { status: active }
 #   hic:                { status: active, required_when: include_hic_exported }
 extensions_v22:
   marker_resolutions:
@@ -471,11 +471,12 @@ extensions_v22:
       diversity_path: "extensions/vdj/diversity.parquet"
       index_column: clonotype_id
   ribo:
-    status: reserved
+    status: active
     description: >
-      Reserved ribosome profiling vertical slice (Phase 2, P2.S21-S22): per-gene
-      per-sample translation efficiency (footprint / RNA + pseudocount).
-      R-side loaders must return NULL until the exporter publishes this slot.
+      Ribosome profiling vertical slice (Phase 2, P2.S21-S22): per-gene
+      per-sample translation efficiency (footprint / RNA + pseudocount) produced
+      by ribo_ingest and exported when --schema-version v2.2 --include-ribo is
+      used. R-side loaders return NULL for absent payloads.
     columns:
       te:
         - gene

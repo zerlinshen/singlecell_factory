@@ -25,10 +25,37 @@ child checkout with:
 GATE_REPORT_ALL=1 bash ../scripts/run_all_gates.sh
 ```
 
-## Current Validation Status (2026-05-28)
+## Current Validation Status (2026-08-15)
 
-Current factory readiness is split into structural validation and bounded
-real-data proof:
+Current factory readiness is split into the **34-gate** suite harness, the
+2026-08-05 scientific audit, and bounded project SOT runs. It is **not** a
+publication-wide certification.
+
+- Suite harness: `/home/zerlinshen/Bioinformatics Research Pipeline/scripts/run_all_gates.sh`
+  (`DECLARED_GATE_TOTAL=34`, pre-push enforced). Gates #33/#34 check retained
+  real-data parity and IMR90/TP63 assertions only.
+- Scientific audit:
+  `/home/zerlinshen/projects/pipeline-scientific-audit-20260805/reports/00_master/SCIENTIFIC_AUDIT_2026-08-05.md`
+  (CONDITIONAL PASS). Wave-1–9 records live in that project. Residuals remain:
+  ambient absolute calibration, doublet recall, NSCLC-default annotation off
+  lung, spatial squidpy env, composition/scCODA non-claimable.
+- 2026-08-15 Grok review (documentation/governance only):
+  `…/reports/04_grok_review/2026-08-15-suite-governance-science.md`.
+- Live project index: `/home/zerlinshen/projects/CATALOG.md`.
+  Per-run rules: `/home/zerlinshen/projects/RUN_RULES.md`.
+- Current bounded proofs still cited by the harness: Round9 handoff
+  `round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`; LUSC ArmJ
+  `lusc-gt-concordance-20260728/runs/2026-07-28T1953Z-a6e0541`; LUSC
+  projection smoke `…/runs/2026-08-13T1328Z-7c9d3f1` (1000 query; not full
+  promotion).
+- Failed exploratory raw-input attempt
+  `hgmm-smoke/runs/2026-05-24T1930Z-0321773` is not validation evidence.
+
+### Historical May 2026 validation (not current startup status)
+
+The 2026-05-28 follow-up remains evidence under
+`/home/zerlinshen/projects/pipeline-validation-20260527/` and
+`pipeline-validation-20260528/`. Summary at that time:
 
 - Round 3 evidence is recorded under
   `/home/zerlinshen/projects/pipeline-validation-20260528/`:
@@ -68,16 +95,6 @@ real-data proof:
   - Current follow-up verdict is
     `PASS_SUPPORTED_NOT_FINAL_WITH_REVIEW_FLAGS`: supported for bounded tested
     claims, not final biological claim readiness.
-- Suite gate: `/home/zerlinshen/Bioinformatics Research Pipeline/scripts/run_all_gates.sh`
-  runs 10 structure/contract checks across the three factories.
-- Real-data handoff proof:
-  `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`
-  exports a retained Round9 LUSC consensus AnnData through the current bundle
-  exporter and renders it with `r_multiomics_factory`/`plotting_factory`.
-- Failed exploratory raw-input attempt:
-  `/home/zerlinshen/projects/hgmm-smoke/runs/2026-05-24T1930Z-0321773`
-  hung after scaffold creation and is not scientific validation evidence.
-
 Do not summarize the current suite as fully scientifically validated. The
 restored real-data harness and curated figure-parity gate remain open debt.
 
@@ -1515,8 +1532,12 @@ Known extension keys:
 | `marker_resolutions` | marker DB evidence table | `maybe_export_marker_resolutions(...)` | `r_multiomics_factory/R/marker_db_module.R` |
 | `atac` | scATAC LSI + peak metadata (v2.2) | `maybe_export_atac(...)` | `r_multiomics_factory/R/atac_module.R::load_atac_extension(bundle)` |
 | `hic` | Hi-C/scHi-C bins, sparse contacts, TAD boundaries, compartments (v2.2) | `maybe_export_hic(...)` | `r_multiomics_factory/R/hic_module.R::load_hic_extension(bundle)` |
+| `ribo` | Ribo-seq translation efficiency (gene×sample TE; v2.2) | `maybe_export_ribo(...)` | `r_multiomics_factory/R/ribo_module.R::load_ribo_extension(bundle)` |
 
-v2.2 still reserves `vdj` and `ribo` in `contracts/bundle_schema.yaml`. HIC is
+v2.2 keeps `vdj` reserved. `ribo` and `hic` are active when exported via
+`--include-ribo` / `--include-hic`. The Ribo exporter validates identifiers,
+unique gene/sample keys, finite non-negative integer counts, and the declared
+TE formula before atomically publishing a bundle. HIC is
 active only when the source AnnData carries `hic_contact_matrix` + `hic_bins`
 from `hic_ingest`, and optional `hic_tad_boundaries` / `hic_compartments` from
 `hic_tad`. `hic_tad` computes insulation as upstream-window by

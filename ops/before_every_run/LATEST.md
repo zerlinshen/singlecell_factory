@@ -1,4 +1,29 @@
-# CURRENT STATUS BANNER — 2026-08-05 (read first)
+# CURRENT STATUS BANNER — 2026-08-15 (read first)
+
+**Governance review (docs only, 2026-08-15).** Grok independently checked live
+READMEs against disk. Analysis code was not changed. Use
+`/home/zerlinshen/projects/CATALOG.md` and
+`/home/zerlinshen/projects/RUN_RULES.md`. Review:
+`/home/zerlinshen/projects/pipeline-scientific-audit-20260805/reports/04_grok_review/2026-08-15-suite-governance-science.md`.
+
+- `projects/README.md` no longer lists retired `ng2025-3d-genome` as current.
+- Suite / factory live status now says 34 gates, not 10.
+- LUSC 2026-08-13 projection remains a 1000-query smoke: 24 reference labels,
+  22 scored in the query; ArmJ is still the pipeline SOT.
+- H2170 factory 3C release stays blocked. The verify tree is a separate
+  primer panel. FASTQs under `h2170-serpine2-loops/data/fastq/` are retired
+  (manifests only).
+- Real-data re-run the same day: #33 14/14 pass; #34 IMR90 F1 recomputed
+  0.5959; H2170 release still blocked; A549 140 tests pass.
+- LuCA `luca_core_salcher2022_v1` is now `absent_pending_replay` to match
+  the 2026-08-14 raw retirement (12 GB H5AD gone; hashes/URL retained).
+  Suite self-tests `576 passed`. Publication support remains false.
+
+**Yost / NG2025 / LKB1 research line is RETIRED.** Do not execute historical
+Yost renderers, reopen deleted project roots, or treat entries below as live
+work instructions.
+
+# Historical banner — 2026-08-05 (append-only)
 
 **Yost / NG2025 / LKB1 research line is RETIRED.** Do not execute historical
 Yost renderers, reopen deleted project roots, or treat entries below as live
@@ -19,6 +44,40 @@ work instructions.
 Sections below this banner are **append-only historical journal**. Paths that
 mention deleted figure packages or `render_yost_*` scripts are archival and
 must not be re-run.
+
+## 2026-08-13 — LUSC held-out reference projection real smoke passed
+
+- Dev OS routing sent the unchanged bounded module run to
+  `execute-and-recover-pipeline/controller_validation`, not the multi-model
+  development chain.
+- Successful real-data smoke:
+  `/home/zerlinshen/projects/lusc-gt-concordance-20260728/runs/2026-08-13T1328Z-7c9d3f1/`
+  (1,000 held-out query; 4,781 reference; 24 labels; macro-F1 0.8134;
+  balanced accuracy 0.8508; exact match 0.8260; coverage 1.0).
+- Isolation attestation passed: projection had no project-root, GT, or user-home
+  mount. The earlier retained failure `2026-08-13T1321Z-4a6c1e2` was a real
+  deterministic `future.globals.maxSize` 500 MiB guard failure, repaired with
+  a scoped/restored 2 GiB limit recorded in the manifest.
+- Carry forward: real smoke only. Full 5,736-query/24,000-reference tier,
+  immutable evidence IDs, and maturity promotion remain pending.
+- Full entry:
+  `journal/2026-08-13-lusc-reference-projection-real-smoke.md`.
+
+## 2026-08-06 — project-guards gate chain installed and first full-chain smoke passed
+
+- New operational contract: shell hooks now BLOCK deletion under `data/raw`,
+  `data/references`, `ops/run_ledger`, `contracts/` (raw immutability), and every
+  run's figures / .h5ad must pass the two project skills before acceptance:
+  `/skill:plot-qc-review` (vision rubric) + `/skill:h5ad-sanity-check`
+  (structural probe — use the WRITER env's python; older anndata cannot read
+  sc_gpu-written files). Details: global `~/.kimi-code/AGENTS.md` `<project_guards>`.
+- First exercise: gate-chain smoke run `/tmp/gate-chain-smoke/runs/2026-08-06T0831Z-d2fc4a3/`
+  (3k-cell subsample of canonical prepared input, 7/7 modules ok). Gates:
+  h5ad-sanity PASS; plot-qc PASS with NOTES (doublet prior/threshold
+  parameterization; volcano floor pileup — verify from data before citing).
+- Watch: interpreter segfault during shutdown GC after ledger+manifest written —
+  cosmetic, do not misread as run failure.
+- Full entry: `journal/2026-08-06-gate-chain-smoke-project-guards.md`.
 
 ## Active Wave-9 memory — LUCA patient LIANA / E-MTAB-13530
 
