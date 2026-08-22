@@ -58,7 +58,7 @@ graph TD
 ```
 
 1. **Census I/O Lane (`sc_census_io`)**: Python 3.12, `cellxgene-census==1.18.0`, `tiledbsoma`, `anndata`. Used exclusively by `scripts/materialize_cellxgene_reference.py`.
-2. **GPU Compute Lane (`sc_gpu_rapids2608`)**: Python 3.13.15, cuML 26.08.00, PyTorch CUDA 12.8, scvi-tools 1.5.0.post1. Census is **not** installed here to avoid package conflicts with RAPIDS.
+2. **GPU Compute Lane (`sc_gpu_rapids2608`)**: Python 3.13.15, cuML 26.8.0, PyTorch CUDA 12.8, scvi-tools 1.5.0.post1. Census is **not** installed here to avoid package conflicts with RAPIDS.
 3. **CPU Baseline Lane (`sc10x` / system Python)**: Python 3.11 / 3.12, scikit-learn, scanpy.
 
 ---
@@ -175,20 +175,17 @@ While `scvi-tools` 1.5.0.post1 is installed in `sc_gpu_rapids2608`:
 
 ---
 
-## 8. Current Technical Evidence (2026-08-22)
+## 8. Evidence Status and Non-Routing Policy (2026-08-23)
 
-- **Census I/O smoke**: clean factory commit `26f9123`, build `2025-11-08`, 600 cells × 61,497 genes, sparse raw counts, 4 datasets and 69 donors. The H5AD reopened successfully and matched receipt SHA-256 `4fbb4f05...4220`; all 600 sorted `soma_joinid` values matched the H5AD row order. The receipt contains exactly 107 observed labels, zero zero-count categories, and a label-count sum of 600; it records `factory_git_dirty=false` and materializer SHA-256 `d788e7b6...b3ec`. Evidence: `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1314Z-26f9123/python/reference/`.
-- **Trevino OOD**: 4,143 query cells and 9,496 reference cells over 3,000 Scanpy Seurat HVGs selected only from the purged reference cells. Known-label acceptance was 93.80%; macro-F1 against pipeline proxy labels was 0.9516 on accepted known cells and 0.8184 across all known cells when rejections were scored as `Unknown`. Held-out Microglia rejection recall was 91.83%, and OOD-vs-known rejection separation was 85.63 percentage points. All predeclared technical gates passed.
-- **CPU/GPU parity**: on clean factory commit `26f9123`, candidate labels, assignment status, accepted labels, rejection rate, known-label macro-F1, and held-out OOD recall agreed exactly; maximum mean-distance difference was `1.73e-6` (`rtol=1e-4`, `atol=1e-4`). Median end-to-end mapping time was 1.2551 s on CPU and 0.1332 s on GPU (about 9.42× faster) with 2.16 ms measured H2D+D2H overhead. GPU memory was 530.25 MB after warmup and 556.25 MB after the query, a 26 MB incremental delta on the live CUDA pool; cumulative process RSS was not lane-isolated. Evidence: `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation/`.
-- **Claim boundary**: these results validate the technical OOD and accelerator contracts on pipeline-derived proxy labels. They are not biological ground truth or a general speedup guarantee for every module or dataset size.
+The 2026-08-22 materialization and 9.42x timing record are historical technical evidence only. Its benchmark used cumulative-process timing/RSS and is not process-isolated; it is therefore superseded for attributable performance or GPU-routing claims. Preserve it at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/`, but do not quote it as a current speed result.
 
-### Backend Routing Policy
+The amended benchmark freezes the source hash, sample-disjoint split, upstream retained `highly_variable` feature order (deterministically capped at 3,000), matrices, cell IDs, parameters, and full-precision calibration threshold before launching either lane. CPU and GPU then run in independent processes under the same `sc_gpu_rapids2608` interpreter, each records three measured repetitions, child-process `ru_maxrss`, output hashes, helper transfer/fit/query timing, and GPU VRAM by child PID when available. A GPU error publishes a failure receipt and returns `FAIL_NOT_PROMOTED`; it is never converted to sklearn execution.
 
-Production routing does not compare CPU and GPU on every new input because agreement between two implementations does not establish biological correctness. Instead, `ops/policy/gpu_backend_validations.json` records an offline, real-data certificate by module, data domain, backend version, predeclared scientific gates, numerical fidelity, and performance. `--reference-device auto` selects GPU only when `--reference-validation-domain` matches a promoted certificate and the cuML version is exact; otherwise it runs CPU directly. Explicit GPU requests fail closed on missing certificates or version drift. CPU remains subject to the same scientific validation and is not treated as ground truth by definition.
+At this documentation revision, the fresh isolated materialization and benchmark evidence is pending. The policy registry status is `validated_p0_not_promoted`: it is evidence-only, cannot select a runtime device, and does not establish biological validation or production promotion. A future technical result may be reported only if all artifact-integrity, OOD, CUDA-residency, and parity gates pass without post-hoc tuning. Trevino labels remain pipeline-derived proxy labels, not biological ground truth.
 
-The current certificate `reference-knn-trevino-20260822-v1` promotes cuML 26.08.00 only for `trevino-fetal-cortex-v1`. Its evidence uses published Trevino material but pipeline-derived proxy cell labels, so the promotion is technical and domain-bounded, not a biological atlas claim.
+### Backend Device Contract
 
-Independent final review: Grok 4.6, xhigh, read-only `PASS`, with no P0/P1 remaining. Review bundle: `/home/zerlinshen/projects/reference-atlas-ood-validation/reviews/2026-08-22T1340Z-reference-atlas-ood-final/`.
+`cpu` is the CLI and programmatic default. `auto` is rejected. Explicit `gpu` is experimental and requires `gpu_mode != off`, cuML/CUDA availability, and an observed CUDA-resident execution; it never falls back to sklearn. The complete JSON-safe mapping summary is mirrored into both run metadata and `adata.uns["annotation"]["reference_mapping"]`, including source identity, alignment, calibration receipt, backend/residency, thresholds, accepted/rejected counts, override counts, timing, claim class, and SCANVI status.
 
 ---
 

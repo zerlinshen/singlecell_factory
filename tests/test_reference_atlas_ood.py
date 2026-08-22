@@ -12,11 +12,20 @@ import pandas as pd
 import pytest
 import scipy.sparse as sp
 
-from scripts.benchmark_reference_mapping import select_reference_hvg_genes
+import scripts.benchmark_reference_mapping as benchmark_module
+from scripts.benchmark_reference_mapping import (
+    _write_frozen_input_manifest,
+    compute_sha256,
+    run_lane,
+    select_reference_hvg_genes,
+    verify_frozen_inputs,
+)
 from scripts.materialize_cellxgene_reference import (
     materialize_reference,
+    required_observation_columns,
     select_stratified_soma_joinids,
     validate_census_build_date,
+    verify_materialization_receipt,
 )
 from workflow.modular._reference_mapping import (
     ASSIGNMENT_STATUS_ACCEPTED,
@@ -127,11 +136,38 @@ def test_census_materialization_with_mock_client(tmp_path: Path):
     get_anndata_kwargs = mock_client.get_anndata.call_args.kwargs
     assert "obs_column_names" in get_anndata_kwargs
     assert "column_names" not in get_anndata_kwargs
+    assert get_anndata_kwargs["obs_column_names"] == required_observation_columns("cell_type", "donor_id")
+    assert receipt["matrix_storage"] == "csr"
+    assert receipt["environment_locks"]
+    receipt_path = Path(receipt["artifacts"]["reference_h5ad_path"]).parent / "census_reference_receipt.json"
+    assert verify_materialization_receipt(receipt_path)["status"] == "verified"
 
     # Reopen and check
     reopened = ad.read_h5ad(receipt["artifacts"]["reference_h5ad_path"])
     assert reopened.shape == (20, 30)
     assert reopened.obs["soma_joinid"].tolist() == sorted(reopened.obs["soma_joinid"].tolist())
+
+    h5ad_path = Path(receipt["artifacts"]["reference_h5ad_path"])
+    original_h5ad = h5ad_path.read_bytes()
+    h5ad_path.write_bytes(original_h5ad + b"tamper")
+    with pytest.raises(ValueError, match="Artifact SHA-256 mismatch"):
+        verify_materialization_receipt(receipt_path)
+    h5ad_path.write_bytes(original_h5ad)
+
+    joinids_path = Path(receipt["artifacts"]["selected_joinids_path"])
+    original_joinids = joinids_path.read_text(encoding="utf-8")
+    joinids_path.write_text(original_joinids + "999999\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Artifact SHA-256 mismatch"):
+        verify_materialization_receipt(receipt_path)
+    joinids_path.write_text(original_joinids, encoding="utf-8")
+
+    original_receipt = receipt_path.read_text(encoding="utf-8")
+    receipt_payload = json.loads(original_receipt)
+    receipt_payload["seed"] = 999
+    receipt_path.write_text(json.dumps(receipt_payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Receipt SHA-256"):
+        verify_materialization_receipt(receipt_path)
+    receipt_path.write_text(original_receipt, encoding="utf-8")
 
 
 def test_census_stratified_selection_handles_categorical_labels():
@@ -169,7 +205,19 @@ def test_census_build_metadata_mismatch_fails_closed(tmp_path: Path):
     receipts = list(tmp_path.glob("runs/*/python/reference/census_reference_receipt.json"))
     assert len(receipts) == 1
     payload = json.loads(receipts[0].read_text(encoding="utf-8"))
-    assert payload["status"] == "failed_build_mismatch"
+    assert payload["status"] == "failed_materialization"
+
+
+def test_census_materializer_network_free_import_failure_writes_receipt(tmp_path: Path, monkeypatch):
+    """Tests can import and exercise the materializer without Census installed."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "cellxgene_census", None)
+    monkeypatch.setitem(sys.modules, "tiledbsoma", None)
+    with pytest.raises(RuntimeError, match="dependencies not installed"):
+        materialize_reference(project_root=tmp_path, census_build="2025-11-08")
+    receipt_path = next(tmp_path.glob("runs/*/python/reference/census_reference_receipt.json"))
+    assert json.loads(receipt_path.read_text(encoding="utf-8"))["status"] == "failed_materialization"
 
 
 # ---------------------------------------------------------------------------
@@ -230,82 +278,51 @@ def test_reference_hvg_feature_selection_excludes_query_signal():
         obs=pd.DataFrame(index=obs_names),
         var=pd.DataFrame(index=var_names),
     )
+    adata.var["highly_variable"] = [idx < 12 for idx in range(50)]
+    changed_query.var["highly_variable"] = [idx < 12 for idx in range(50)]
     reference_cells = [f"ref_{i}" for i in range(40)]
     selected = select_reference_hvg_genes(adata, reference_cells, max_genes=10)
     selected_after_query_perturbation = select_reference_hvg_genes(changed_query, reference_cells, max_genes=10)
     assert selected == selected_after_query_perturbation
+    assert selected == [f"G_{idx}" for idx in range(10)]
 
 
-def test_reference_device_auto_uses_cpu_without_validated_domain():
-    device, receipt = resolve_reference_device("auto")
+def test_reference_hvg_feature_selection_requires_upstream_field():
+    adata = ad.AnnData(
+        X=sp.csr_matrix(np.ones((3, 3))),
+        obs=pd.DataFrame(index=["r1", "r2", "q1"]),
+        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    )
+    with pytest.raises(ValueError, match="must contain an upstream 'highly_variable' field"):
+        select_reference_hvg_genes(adata, ["r1", "r2"], max_genes=3)
+
+
+def test_reference_device_default_is_explicit_cpu_and_auto_is_rejected():
+    assert PipelineConfig(project="test", output_dir=Path("/tmp"), cellranger=None).reference_device == "cpu"
+    device, receipt = resolve_reference_device("cpu")
     assert device == "cpu"
-    assert receipt["decision"] == "cpu_unvalidated_domain"
+    assert receipt["decision"] == "explicit_cpu"
+    with pytest.raises(ValueError, match="must be cpu or gpu"):
+        resolve_reference_device("auto")
 
 
-def test_reference_device_uses_promoted_domain_without_production_dual_run(tmp_path: Path, monkeypatch):
+def test_reference_gpu_mode_off_and_missing_backend_fail_without_cpu_fallback(monkeypatch):
+    with pytest.raises(ValueError, match="gpu_mode='off'"):
+        resolve_reference_device("gpu", gpu_mode="off")
+
+    def _missing_backend(_name):
+        raise ImportError("missing test backend")
+
+    monkeypatch.setattr("workflow.modular._reference_mapping.importlib.import_module", _missing_backend)
+    with pytest.raises(RuntimeError, match="No CPU fallback is allowed"):
+        resolve_reference_device("gpu", gpu_mode="auto")
+
+
+def test_validation_policy_cannot_route_reference_execution(tmp_path: Path):
     policy_path = tmp_path / "policy.json"
-    policy_path.write_text(
-        json.dumps(
-            {
-                "modules": {
-                    "reference_mapping_knn": {
-                        "domains": {
-                            "validated-domain": {
-                                "status": "promoted",
-                                "certificate_id": "cert-1",
-                                "validated_backend": {"cuml_version": "26.08.00"},
-                                "evidence_run": "/evidence/run",
-                                "claim_scope": "bounded",
-                            }
-                        }
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "workflow.modular._reference_mapping.importlib.import_module",
-        lambda name: type("FakeCuML", (), {"__version__": "26.08.00"})(),
-    )
-    device, receipt = resolve_reference_device(
-        "auto", validation_domain="validated-domain", policy_path=policy_path
-    )
-    assert device == "gpu"
-    assert receipt["decision"] == "gpu_promoted_for_validated_domain"
-    assert receipt["certificate_id"] == "cert-1"
-
-
-def test_reference_device_version_drift_routes_auto_to_cpu_and_blocks_explicit_gpu(tmp_path: Path, monkeypatch):
-    policy_path = tmp_path / "policy.json"
-    policy_path.write_text(
-        json.dumps(
-            {
-                "modules": {
-                    "reference_mapping_knn": {
-                        "domains": {
-                            "validated-domain": {
-                                "status": "promoted",
-                                "validated_backend": {"cuml_version": "26.08.00"},
-                            }
-                        }
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "workflow.modular._reference_mapping.importlib.import_module",
-        lambda name: type("FakeCuML", (), {"__version__": "99.0"})(),
-    )
-    device, receipt = resolve_reference_device(
-        "auto", validation_domain="validated-domain", policy_path=policy_path
-    )
-    assert device == "cpu"
-    assert receipt["decision"] == "cpu_backend_version_drift"
-    with pytest.raises(RuntimeError, match="revalidate before use"):
-        resolve_reference_device("gpu", validation_domain="validated-domain", policy_path=policy_path)
+    policy_path.write_text('{"modules":{"reference_mapping_knn":{"domains":{"anything":{"status":"promoted"}}}}}')
+    with pytest.raises(TypeError):
+        resolve_reference_device("cpu", validation_domain="anything")
 
 
 def test_normalize_l2_preserves_sparsity():
@@ -357,6 +374,26 @@ def test_ood_calibration_whole_group_split():
     )
     assert 0.0 < thresh < 2.0
     assert "whole_group_split_on_sample" in receipt["split_method"]
+    assert receipt["distance_threshold"] == thresh
+    assert receipt["fit_groups"] == sorted(receipt["fit_groups"])
+    assert receipt["calibration_groups"] == sorted(receipt["calibration_groups"])
+    assert not set(receipt["fit_groups"]) & set(receipt["calibration_groups"])
+    assert len(receipt["fit_groups_sha256"]) == 64
+    assert len(receipt["calibration_groups_sha256"]) == 64
+
+
+def test_ood_calibration_is_query_independent_and_seed_repeatable():
+    rng = np.random.default_rng(13)
+    ref = ad.AnnData(
+        X=rng.normal(size=(60, 8)),
+        obs=pd.DataFrame({"sample": [f"S{idx // 10}" for idx in range(60)]}),
+        var=pd.DataFrame(index=[f"G_{idx}" for idx in range(8)]),
+    )
+    query = ad.AnnData(X=rng.normal(size=(12, 8)), var=ref.var.copy())
+    before = calibrate_reference_ood_threshold(ref, list(ref.var_names), group_key="sample", seed=42, k=5)
+    query.X = query.X * 10_000.0  # Held-out query values never enter calibration.
+    after = calibrate_reference_ood_threshold(ref, list(ref.var_names), group_key="sample", seed=42, k=5)
+    assert before == after
 
 
 def test_ood_calibration_fails_closed_for_missing_group_and_small_reference():
@@ -459,6 +496,8 @@ def test_requested_reference_missing_file_fails_loud(tmp_path: Path):
             output_dir=tmp_path,
             cellranger=None,
             reference_adata=tmp_path / "non_existent.h5ad",
+            reference_ood_mode="fixed",
+            reference_fixed_distance_threshold=0.5,
         ),
         run_dir=tmp_path,
         figure_dir=tmp_path,
@@ -471,6 +510,103 @@ def test_requested_reference_missing_file_fails_loud(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError, match="Requested reference H5AD file does not exist"):
         AnnotationModule._try_reference_mapping(adata, ctx)
+
+
+def test_requested_reference_quantile_requires_group_before_reference_io(tmp_path: Path):
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="test",
+            output_dir=tmp_path,
+            cellranger=None,
+            reference_adata=tmp_path / "non_existent.h5ad",
+            reference_ood_mode="reference_quantile",
+            reference_calibration_group_key=None,
+        ),
+        run_dir=tmp_path,
+        figure_dir=tmp_path,
+        table_dir=tmp_path,
+    )
+    adata = ad.AnnData(X=np.zeros((1, 1)), var=pd.DataFrame(index=["G1"]))
+    with pytest.raises(ValueError, match="requires reference_calibration_group_key before reference compute"):
+        AnnotationModule._try_reference_mapping(adata, ctx)
+
+
+def test_programmatic_gpu_mode_off_fails_before_reference_io(tmp_path: Path):
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="test",
+            output_dir=tmp_path,
+            cellranger=None,
+            reference_adata=tmp_path / "non_existent.h5ad",
+            reference_ood_mode="fixed",
+            reference_fixed_distance_threshold=0.5,
+            reference_device="gpu",
+            gpu_mode="off",
+        ),
+        run_dir=tmp_path,
+        figure_dir=tmp_path,
+        table_dir=tmp_path,
+    )
+    adata = ad.AnnData(X=np.zeros((1, 1)), var=pd.DataFrame(index=["G1"]))
+    with pytest.raises(ValueError, match="gpu_mode='off'"):
+        AnnotationModule._try_reference_mapping(adata, ctx)
+
+
+def test_no_reference_records_marker_only_skip(tmp_path: Path):
+    ctx = PipelineContext(
+        cfg=PipelineConfig(project="test", output_dir=tmp_path, cellranger=None),
+        run_dir=tmp_path,
+        figure_dir=tmp_path,
+        table_dir=tmp_path,
+    )
+    adata = ad.AnnData(X=np.ones((2, 2)), var=pd.DataFrame(index=["G1", "G2"]))
+    adata.obs["cell_type"] = ["MarkerA", "MarkerB"]
+    AnnotationModule._try_reference_mapping(adata, ctx)
+    assert adata.obs["cell_type"].tolist() == ["MarkerA", "MarkerB"]
+    assert ctx.metadata["reference_mapping_status"] == "skipped_no_reference"
+    assert adata.uns["annotation"]["reference_mapping"]["status"] == "skipped_no_reference"
+
+
+def test_override_all_preserves_rejected_marker_labels(tmp_path: Path):
+    reference = ad.AnnData(
+        X=np.array([[1.0, 0.0], [0.9, 0.0], [0.0, 1.0], [0.0, 0.9]]),
+        obs=pd.DataFrame({"cell_type": ["TypeA", "TypeA", "TypeB", "TypeB"]}),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    reference_path = tmp_path / "reference.h5ad"
+    reference.write_h5ad(reference_path)
+    query = ad.AnnData(
+        X=np.array([[1.0, 0.0], [-1.0, 0.0]]),
+        obs=pd.DataFrame(
+            {
+                "cell_type": ["MarkerA", "MarkerRejected"],
+                "cell_type_marker": ["MarkerA", "MarkerRejected"],
+                "annotation_confidence": [0.0, 0.0],
+            },
+            index=["accepted", "rejected"],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    ctx = PipelineContext(
+        cfg=PipelineConfig(
+            project="test",
+            output_dir=tmp_path,
+            cellranger=None,
+            reference_adata=reference_path,
+            reference_k=1,
+            reference_min_shared_genes=2,
+            reference_ood_mode="fixed",
+            reference_fixed_distance_threshold=0.1,
+            reference_override_mode="all",
+        ),
+        run_dir=tmp_path,
+        figure_dir=tmp_path,
+        table_dir=tmp_path,
+    )
+    AnnotationModule._try_reference_mapping(query, ctx)
+    assert query.obs.loc["accepted", "cell_type"] == "TypeA"
+    assert query.obs.loc["rejected", "reference_cell_type"] == "Unknown"
+    assert query.obs.loc["rejected", "cell_type"] == "MarkerRejected"
 
 
 def test_invalid_programmatic_reference_override_mode_fails_before_io(tmp_path: Path):
@@ -527,9 +663,174 @@ def test_cpu_gpu_parity_comparison_logic():
     assert metrics["candidate_label_agreement"] == 1.0
     assert metrics["assignment_status_agreement"] == 1.0
 
-    # Perturb 20 cells in df_b
-    df_b.loc[idx[:20], "reference_predicted_label"] = "C"
-    df_b.loc[idx[:20], "reference_assignment_status"] = ASSIGNMENT_STATUS_REJECTED_LOW_CONF
-    metrics_fail = compute_parity_metrics(df_a, df_b)
-    assert metrics_fail["parity_verdict"] == "FAIL"
-    assert metrics_fail["candidate_label_agreement"] == 0.8
+    label_only = df_a.copy()
+    label_only.loc[idx[:20], "reference_predicted_label"] = "C"
+    assert compute_parity_metrics(df_a, label_only)["parity_verdict"] == "FAIL"
+
+    status_only = df_a.copy()
+    status_only.loc[idx[:20], "reference_assignment_status"] = ASSIGNMENT_STATUS_REJECTED_LOW_CONF
+    assert compute_parity_metrics(df_a, status_only)["parity_verdict"] == "FAIL"
+
+    distance_only = df_a.copy()
+    distance_only.loc[idx[0], "reference_distance"] = 0.5
+    assert compute_parity_metrics(df_a, distance_only)["parity_verdict"] == "FAIL"
+
+
+def _write_frozen_input_fixture(tmp_path: Path) -> Path:
+    frozen = tmp_path / "frozen_inputs"
+    frozen.mkdir()
+    reference = sp.csr_matrix(np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32))
+    query = sp.csr_matrix(np.tile(np.array([[1.0, 0.0]], dtype=np.float32), (256, 1)))
+    sp.save_npz(frozen / "reference_matrix.npz", reference)
+    sp.save_npz(frozen / "query_matrix.npz", query)
+    (frozen / "reference_cells.txt").write_text("r1\nr2\n", encoding="utf-8")
+    (frozen / "query_cells.txt").write_text("".join(f"q{idx}\n" for idx in range(256)), encoding="utf-8")
+    (frozen / "reference_labels.txt").write_text("A\nB\n", encoding="utf-8")
+    (frozen / "query_proxy_labels.txt").write_text("".join("A\n" for _ in range(256)), encoding="utf-8")
+    (frozen / "genes.txt").write_text("G1\nG2\n", encoding="utf-8")
+    _write_frozen_input_manifest(
+        frozen,
+        {"source_sha256": "a" * 64, "n_reference_cells": 2, "n_query_cells": 256, "n_genes": 2},
+        {"distance_threshold": 0.123456789, "ood_calibration_mode": "reference_quantile"},
+        {
+            "k": 1,
+            "min_confidence": 0.5,
+            "seed": 42,
+            "warmup_rows": 256,
+            "measured_repetitions": 3,
+            "consumed_output_columns": [],
+        },
+    )
+    return frozen
+
+
+@pytest.mark.parametrize(
+    "artifact_name",
+    [
+        "reference_matrix.npz",
+        "genes.txt",
+        "ood_threshold_receipt.json",
+        "parameters.json",
+        "query_cells.txt",
+    ],
+)
+def test_process_lane_contract_rejects_hash_mismatch(tmp_path: Path, artifact_name: str):
+    frozen = _write_frozen_input_fixture(tmp_path)
+    target = frozen / artifact_name
+    if artifact_name.endswith(".npz"):
+        sp.save_npz(target, sp.csr_matrix(np.ones((2, 2), dtype=np.float32)))
+    else:
+        target.write_text(target.read_text(encoding="utf-8") + "tampered\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=f"Frozen input SHA-256 mismatch: {artifact_name}"):
+        verify_frozen_inputs(frozen)
+
+
+def test_within_lane_nondeterminism_writes_failure_receipt(tmp_path: Path, monkeypatch):
+    frozen = _write_frozen_input_fixture(tmp_path)
+    calls = {"count": 0}
+
+    def _nondeterministic_map(*, query_adata, **_kwargs):
+        calls["count"] += 1
+        label = "A" if calls["count"] % 2 else "B"
+        frame = pd.DataFrame(
+            {
+                "reference_predicted_label": label,
+                "reference_confidence": 1.0,
+                "reference_distance": 0.1,
+                "reference_assignment_status": ASSIGNMENT_STATUS_ACCEPTED,
+                "reference_cell_type": label,
+                "reference_ood": False,
+            },
+            index=query_adata.obs_names,
+        )
+        return frame, {"device_info": {"backend_residency": "host_cpu"}}
+
+    monkeypatch.setattr(benchmark_module, "map_knn_reference", _nondeterministic_map)
+    output_dir = tmp_path / "lane"
+    with pytest.raises(RuntimeError, match="nondeterministic"):
+        run_lane(
+            device="cpu",
+            input_dir=frozen,
+            output_dir=output_dir,
+            expected_input_manifest_sha256=compute_sha256(frozen / "input_manifest.json"),
+        )
+    assert json.loads((output_dir / "lane_receipt.json").read_text(encoding="utf-8"))["status"] == "failed"
+
+
+def test_failed_gpu_child_is_fail_not_promoted(tmp_path: Path, monkeypatch):
+    frozen = _write_frozen_input_fixture(tmp_path)
+    query_ids = [f"q{idx}" for idx in range(256)]
+    query_labels = ["Microglia"] * 128 + ["A"] * 128
+    query = ad.AnnData(
+        X=sp.csr_matrix(np.ones((256, 2))),
+        obs=pd.DataFrame({"cell_type": query_labels}, index=query_ids),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    reference = ad.AnnData(
+        X=sp.csr_matrix(np.ones((20, 2))),
+        obs=pd.DataFrame({"sample": ["S1"] * 10 + ["S2"] * 10, "cell_type": ["A"] * 10 + ["B"] * 10}),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+
+    def _prepared(**_kwargs):
+        return {
+            "reference_adata": reference,
+            "query_adata": query,
+            "genes": ["G1", "G2"],
+            "frozen_dir": frozen,
+            "split_receipt": {
+                "source_sha256": "a" * 64,
+                "held_out_ood_label": "Microglia",
+                "n_reference_cells": 2,
+                "n_query_cells": 256,
+                "n_genes": 2,
+                "feature_selection": {
+                    "selection_route": "source_highly_variable_ordered_cap",
+                    "ordered_genes_sha256": compute_sha256(frozen / "genes.txt"),
+                },
+            },
+        }
+
+    cpu_mapping = pd.DataFrame(
+        {
+            "reference_predicted_label": "A",
+            "reference_confidence": 1.0,
+            "reference_distance": 0.1,
+            "reference_assignment_status": ASSIGNMENT_STATUS_ACCEPTED,
+            "reference_cell_type": "A",
+            "reference_ood": False,
+        },
+        index=query_ids,
+    )
+    cpu_metrics = {"median_wall_seconds": 0.1, "ru_maxrss_mb": 1.0, "metadata": {"device_info": {}}}
+
+    monkeypatch.setattr(benchmark_module, "prepare_trevino_split", _prepared)
+    monkeypatch.setattr(
+        benchmark_module,
+        "calibrate_reference_ood_threshold",
+        lambda **_kwargs: (0.5, {"distance_threshold": 0.5}),
+    )
+
+    def _launch(*, device, output_dir, **_kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if device == "gpu":
+            (output_dir / "lane_receipt.json").write_text(
+                json.dumps({"status": "failed", "error_message": "forced GPU child failure"}), encoding="utf-8"
+            )
+            return {"exit_code": 1, "log_path": "forced-gpu.log", "vram_poll": {}}
+        return {"exit_code": 0, "log_path": "forced-cpu.log", "vram_poll": {}}
+
+    monkeypatch.setattr(benchmark_module, "_run_lane_process", _launch)
+    monkeypatch.setattr(
+        benchmark_module,
+        "verify_lane_output",
+        lambda _output_dir, *, device, **_kwargs: (cpu_mapping, cpu_metrics) if device == "cpu" else pytest.fail("GPU output must not be accepted"),
+    )
+    monkeypatch.setattr(benchmark_module, "_write_run_manifest", lambda **_kwargs: tmp_path / "manifest.json")
+    result = benchmark_module.run_benchmark(
+        project_root=tmp_path,
+        run_id="2026-08-23T2359Z-0000000",
+        allow_dirty=True,
+    )
+    assert result["technical_verdict"] == "FAIL_NOT_PROMOTED"
+    assert "no CPU fallback" in result["failure_reason"]

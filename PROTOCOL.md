@@ -850,10 +850,38 @@ After a run:
 
 - **Missing reference file**: Verify `--reference-adata` path. The pipeline fails loud with `FileNotFoundError` if a requested file is absent; it never silently skips requested reference mapping.
 - **Dynamic Census build rejected**: Dynamic aliases like `latest` or `stable` are rejected locally before network calls. Supply an explicit date-form string, e.g. `--census-build 2025-11-08`.
-- **GPU KNN routing**: Production inputs are not dual-run. `--reference-device auto` routes directly from the offline real-data certificate registry in `ops/policy/gpu_backend_validations.json`; an empty/unknown `--reference-validation-domain` or backend-version drift selects CPU. The promoted bounded domain is `trevino-fetal-cortex-v1` with cuML 26.08.00. Explicit `gpu` fails closed when the certificate or version does not match; use CPU until that domain/version is revalidated.
+- **Device contract**: Reference mapping defaults to CPU. `--reference-device auto` is invalid. `--reference-device gpu` is an experimental technical opt-in and fails loud if `--gpu-mode off`, cuML, CUDA availability, or CUDA residency checks fail; it never executes sklearn as a fallback. `ops/policy/gpu_backend_validations.json` is evidence-only and cannot route a production invocation.
 - **Insufficient shared genes**: If shared genes < 50, verify gene namespaces (e.g. HGNC symbols vs Ensembl IDs). Positional joins are forbidden.
 - **Invalid calibration contract**: `reference_quantile` requires an explicit group column; it must exist and contain at least two groups. Calibration and mapping use the same aligned genes, and `k` is never silently reduced. Use a larger reference or an explicitly reviewed fixed threshold.
 - **OOD Rejection**: Cells with high distance or low confidence are classified as `rejected_*` with `reference_cell_type=Unknown` and are never allowed to override `cell_type`.
+
+### 15.7 Reference-atlas materialization, verification, benchmark, and recovery
+
+Run Census materialization only in the isolated Python 3.12 lane and only into a project-owned run. The build must be an explicit date; the reference receipt is published only after its H5AD, coordinate sidecar, sparse storage, and row order verify.
+
+```bash
+project_root=/home/zerlinshen/projects/reference-atlas-ood-validation
+run_id=<UTC-timestamp>-<clean-short-sha>
+/home/zerlinshen/conda/envs/sc_census_io/bin/python \
+  scripts/materialize_cellxgene_reference.py \
+  --project-root "$project_root" --run-id "$run_id" \
+  --census-build 2025-11-08 --label-key cell_type --group-key donor_id \
+  --max-cells 600 --max-cells-per-label 10 --seed 42
+/home/zerlinshen/conda/envs/sc_census_io/bin/python \
+  scripts/materialize_cellxgene_reference.py \
+  --project-root "$project_root" --run-id "$run_id" --verify-only
+```
+
+The benchmark is a bounded coordinator with isolated private CPU/GPU child processes. It freezes source identity, split, matrices, cell order, genes, parameters, and the full-precision threshold before either child starts. Each child warms exactly 256 query rows once, makes three measured repetitions, records its own `ru_maxrss`, and emits a failure receipt on any integrity or GPU failure. A GPU failure is `FAIL_NOT_PROMOTED`, not a CPU fallback.
+
+```bash
+/home/zerlinshen/conda/envs/sc_gpu_rapids2608/bin/python \
+  scripts/benchmark_reference_mapping.py \
+  --project-root /home/zerlinshen/projects/reference-atlas-ood-validation \
+  --run-id <UTC-timestamp>-<clean-short-sha>
+```
+
+If materialization fails because of a transient network failure, retain the failure receipt and use at most one fresh-run retry. If receipt verification, frozen-input identity, GPU residency, OOD gates, or parity gates fail, retain the resulting evidence as `FAIL_NOT_PROMOTED`; do not tune the threshold, labels, feature selection, or caps after seeing the held-out result. Validate a completed project run with `scripts/validate_project_governance.py <project-root> --run-id <run-id> --json`.
 
 ---
 

@@ -744,14 +744,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--reference-device",
-        default="auto",
-        choices=["auto", "cpu", "gpu"],
-        help="Reference KNN device. auto uses GPU only for a promoted validation domain; otherwise CPU.",
-    )
-    parser.add_argument(
-        "--reference-validation-domain",
-        default="",
-        help="Offline real-data validation certificate domain required for governed GPU reference mapping",
+        default="cpu",
+        choices=["cpu", "gpu"],
+        help=(
+            "Reference KNN device. CPU is the default; GPU is an explicit "
+            "experimental technical opt-in and fails closed when CUDA/cuML is unavailable."
+        ),
     )
     parser.add_argument(
         "--reference-ood-mode",
@@ -1126,13 +1124,18 @@ def _validate_args(args: argparse.Namespace) -> None:
             raise SystemExit("Error: --reference-ood-mode fixed requires an explicit --reference-fixed-distance-threshold")
         if not (0.0 <= args.reference_fixed_distance_threshold <= 2.0):
             raise SystemExit(f"Error: --reference-fixed-distance-threshold must be in [0.0, 2.0], got {args.reference_fixed_distance_threshold}")
+    if args.reference_adata and args.reference_ood_mode == "reference_quantile":
+        if not str(args.reference_calibration_group_key or "").strip():
+            raise SystemExit(
+                "Error: --reference-ood-mode reference_quantile with --reference-adata "
+                "requires --reference-calibration-group-key."
+            )
+    if args.reference_device == "gpu" and args.gpu_mode == "off":
+        raise SystemExit("Error: --reference-device gpu cannot be used with --gpu-mode off")
     if args.reference_adata:
         ref_p = Path(args.reference_adata)
         if not ref_p.exists():
             raise SystemExit(f"Error: Requested --reference-adata file does not exist: {ref_p}")
-    if args.reference_device == "gpu":
-        if args.gpu_mode == "off":
-            raise SystemExit("Error: --reference-device gpu cannot be used with --gpu-mode off")
 
 
 def _write_crash_manifest(
@@ -1504,7 +1507,6 @@ def main() -> None:
         reference_min_confidence=args.reference_min_confidence,
         reference_override_mode=args.reference_override_mode,
         reference_device=args.reference_device,
-        reference_validation_domain=args.reference_validation_domain or None,
         reference_ood_mode=args.reference_ood_mode,
         reference_distance_quantile=args.reference_distance_quantile,
         reference_fixed_distance_threshold=args.reference_fixed_distance_threshold,

@@ -15,6 +15,7 @@ import logging
 import importlib
 import importlib.metadata
 import json
+import hashlib
 import os
 import sys
 import time
@@ -36,102 +37,73 @@ ASSIGNMENT_STATUS_REJECTED_LOW_CONF = "rejected_low_confidence"
 ASSIGNMENT_STATUS_REJECTED_OOD_DIST = "rejected_ood_distance"
 ASSIGNMENT_STATUS_REJECTED_BOTH = "rejected_low_confidence_and_ood_distance"
 
-DEFAULT_GPU_VALIDATION_POLICY = (
-    Path(__file__).resolve().parents[2] / "ops" / "policy" / "gpu_backend_validations.json"
-)
-
-
 def resolve_reference_device(
     requested_device: str,
-    validation_domain: Optional[str] = None,
-    policy_path: Optional[Path] = None,
+    *,
+    gpu_mode: str = "auto",
 ) -> tuple[str, dict[str, Any]]:
-    """Resolve CPU/GPU directly from an offline real-data validation certificate.
+    """Resolve an explicit CPU/GPU request without certificate-driven routing.
 
-    No production input is dual-run. Unknown domains and version drift route
-    ``auto`` to CPU; an explicit GPU request fails closed unless it matches a
-    promoted certificate.
+    The offline validation registry is evidence-only.  It must never select a
+    production backend, so this function intentionally accepts only ``cpu`` or
+    ``gpu`` and performs the same fail-closed GPU preflight for CLI and
+    programmatic callers.
     """
     requested = str(requested_device).strip().lower()
-    if requested not in {"auto", "cpu", "gpu"}:
-        raise ValueError(f"reference device must be auto, cpu, or gpu; got {requested_device!r}")
-    domain = str(validation_domain or "").strip()
+    if requested not in {"cpu", "gpu"}:
+        raise ValueError(f"reference device must be cpu or gpu; got {requested_device!r}")
+    resolved_gpu_mode = str(gpu_mode or "auto").strip().lower()
     receipt: dict[str, Any] = {
         "requested_device": requested,
-        "validation_domain": domain or None,
-        "policy_path": str(policy_path or DEFAULT_GPU_VALIDATION_POLICY),
-        "decision_basis": "offline_real_data_validation_certificate",
+        "gpu_mode": resolved_gpu_mode,
+        "decision_basis": "explicit_operator_selection",
+        "validation_registry_role": "evidence_only_not_runtime_routing",
     }
 
     if requested == "cpu":
         receipt.update({"effective_device": "cpu", "decision": "explicit_cpu"})
         return "cpu", receipt
 
-    if not domain:
-        if requested == "gpu":
-            raise ValueError(
-                "Explicit GPU reference mapping requires --reference-validation-domain matching a promoted "
-                "offline real-data certificate."
-            )
-        receipt.update({"effective_device": "cpu", "decision": "cpu_unvalidated_domain"})
-        return "cpu", receipt
-
-    resolved_policy_path = Path(policy_path or DEFAULT_GPU_VALIDATION_POLICY)
+    if resolved_gpu_mode == "off":
+        raise ValueError("reference_device='gpu' cannot be used when gpu_mode='off'.")
     try:
-        policy = json.loads(resolved_policy_path.read_text(encoding="utf-8"))
+        cp = importlib.import_module("cupy")
+        cuml = importlib.import_module("cuml")
+        importlib.import_module("cuml.neighbors")
     except Exception as exc:
-        if requested == "gpu":
-            raise RuntimeError(f"Cannot read GPU validation policy {resolved_policy_path}: {exc}") from exc
-        receipt.update({"effective_device": "cpu", "decision": "cpu_policy_unavailable", "reason": str(exc)})
-        return "cpu", receipt
+        raise RuntimeError(
+            "Explicit GPU reference mapping requires importable CuPy and cuML. "
+            "No CPU fallback is allowed."
+        ) from exc
 
-    certificate = (
-        policy.get("modules", {})
-        .get("reference_mapping_knn", {})
-        .get("domains", {})
-        .get(domain)
-    )
-    if not certificate or certificate.get("status") != "promoted":
-        if requested == "gpu":
-            raise ValueError(f"No promoted GPU certificate for reference mapping domain {domain!r}.")
-        receipt.update({"effective_device": "cpu", "decision": "cpu_domain_not_promoted"})
-        return "cpu", receipt
-
-    expected_version = str(certificate.get("validated_backend", {}).get("cuml_version", ""))
     try:
-        actual_version = str(importlib.import_module("cuml").__version__)
-    except Exception as exc:
-        if requested == "gpu":
-            raise RuntimeError(f"Promoted GPU domain {domain!r} requires cuML, but it is unavailable: {exc}") from exc
-        receipt.update({"effective_device": "cpu", "decision": "cpu_gpu_backend_unavailable", "reason": str(exc)})
-        return "cpu", receipt
-    if actual_version != expected_version:
-        if requested == "gpu":
-            raise RuntimeError(
-                f"GPU certificate for {domain!r} requires cuML {expected_version}, found {actual_version}; "
-                "revalidate before use."
-            )
-        receipt.update(
-            {
-                "effective_device": "cpu",
-                "decision": "cpu_backend_version_drift",
-                "expected_cuml_version": expected_version,
-                "actual_cuml_version": actual_version,
-            }
+        device_count = int(cp.cuda.runtime.getDeviceCount())
+        if device_count < 1:
+            raise RuntimeError("CuPy reports zero CUDA devices.")
+        free_bytes, total_bytes = cp.cuda.runtime.memGetInfo()
+        properties = cp.cuda.runtime.getDeviceProperties(0)
+        raw_name = properties.get("name", b"unknown")
+        device_name = (
+            raw_name.decode("utf-8", errors="replace")
+            if isinstance(raw_name, bytes)
+            else str(raw_name)
         )
-        return "cpu", receipt
+    except Exception as exc:
+        raise RuntimeError(
+            "Explicit GPU reference mapping requires an available CUDA device. "
+            "No CPU fallback is allowed."
+        ) from exc
 
-    receipt.update(
-        {
-            "effective_device": "gpu",
-            "decision": "gpu_promoted_for_validated_domain",
-            "certificate_id": certificate.get("certificate_id"),
-            "expected_cuml_version": expected_version,
-            "actual_cuml_version": actual_version,
-            "evidence_run": certificate.get("evidence_run"),
-            "claim_scope": certificate.get("claim_scope"),
-        }
-    )
+    receipt.update({
+        "effective_device": "gpu",
+        "decision": "explicit_gpu_preflight_passed",
+        "cuml_version": str(getattr(cuml, "__version__", "unknown")),
+        "cuda_device_count": device_count,
+        "cuda_device": device_name,
+        "cuda_free_mb": round(float(free_bytes) / (1024.0 ** 2), 2),
+        "cuda_total_mb": round(float(total_bytes) / (1024.0 ** 2), 2),
+        "cuda_preflight_verified": True,
+    })
     return "gpu", receipt
 
 VALID_ASSIGNMENT_STATUSES = {
@@ -140,6 +112,12 @@ VALID_ASSIGNMENT_STATUSES = {
     ASSIGNMENT_STATUS_REJECTED_OOD_DIST,
     ASSIGNMENT_STATUS_REJECTED_BOTH,
 }
+
+
+def _stable_json_sha256(value: Any) -> str:
+    """Hash JSON-safe calibration identities with a canonical representation."""
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def normalize_l2(matrix: Union[sp.spmatrix, np.ndarray]) -> Union[sp.csr_matrix, np.ndarray]:
@@ -272,6 +250,7 @@ def calibrate_reference_ood_threshold(
         receipt = {
             "ood_calibration_mode": "fixed",
             "distance_threshold": thresh,
+            "distance_threshold_display": round(thresh, 6),
             "quantile": None,
             "group_key": None,
             "cal_fraction": None,
@@ -307,13 +286,23 @@ def calibrate_reference_ood_threshold(
     if group_key and group_key not in ref_adata.obs.columns:
         raise ValueError(f"Requested reference calibration group key {group_key!r} is absent from reference .obs.")
 
-    groups = np.array(ref_adata.obs[group_key].astype(str).unique())
+    groups = np.array(sorted(ref_adata.obs[group_key].astype(str).unique().tolist()))
     if len(groups) >= 2:
         rng.shuffle(groups)
         n_cal_groups = max(1, int(round(len(groups) * cal_fraction)))
-        cal_groups = set(groups[:n_cal_groups])
-        fit_mask = ~ref_adata.obs[group_key].astype(str).isin(cal_groups)
-        cal_mask = ref_adata.obs[group_key].astype(str).isin(cal_groups)
+        cal_groups = sorted(str(value) for value in groups[:n_cal_groups])
+        fit_groups = sorted(str(value) for value in groups[n_cal_groups:])
+        if not fit_groups:
+            raise ValueError(
+                "Reference calibration split left no fit groups; use a smaller calibration fraction."
+            )
+        cal_group_set = set(cal_groups)
+        fit_group_set = set(fit_groups)
+        if (cal_group_set & fit_group_set) or ((cal_group_set | fit_group_set) != set(groups.astype(str))):
+            raise RuntimeError("Reference calibration group split is not a disjoint exhaustive partition.")
+        group_series = ref_adata.obs[group_key].astype(str)
+        fit_mask = group_series.isin(fit_groups)
+        cal_mask = group_series.isin(cal_groups)
         fit_indices = np.where(fit_mask)[0]
         cal_indices = np.where(cal_mask)[0]
         split_method = f"whole_group_split_on_{group_key}"
@@ -345,9 +334,19 @@ def calibrate_reference_ood_threshold(
 
     derived_threshold = float(np.quantile(mean_cal_dists, float(quantile)))
 
+    group_counts = {
+        str(group): int(count)
+        for group, count in group_series.value_counts().sort_index().items()
+    }
+    fit_group_counts = {group: group_counts[group] for group in fit_groups}
+    cal_group_counts = {group: group_counts[group] for group in cal_groups}
+
     receipt = {
         "ood_calibration_mode": "reference_quantile",
-        "distance_threshold": round(derived_threshold, 6),
+        # Mapping consumes this full-precision value.  The display value is
+        # explicitly separate so a rendered receipt cannot change behavior.
+        "distance_threshold": derived_threshold,
+        "distance_threshold_display": round(derived_threshold, 6),
         "quantile": float(quantile),
         "split_method": split_method,
         "group_key": group_key,
@@ -356,6 +355,13 @@ def calibrate_reference_ood_threshold(
         "n_reference_total": int(n_cells),
         "n_fit_cells": int(len(fit_indices)),
         "n_cal_cells": int(len(cal_indices)),
+        "fit_groups": fit_groups,
+        "calibration_groups": cal_groups,
+        "fit_groups_sha256": _stable_json_sha256(fit_groups),
+        "calibration_groups_sha256": _stable_json_sha256(cal_groups),
+        "fit_group_counts": fit_group_counts,
+        "calibration_group_counts": cal_group_counts,
+        "all_group_counts": group_counts,
         "n_aligned_features": int(len(ref_genes)),
         "cal_distance_min": float(np.min(mean_cal_dists)),
         "cal_distance_median": float(np.median(mean_cal_dists)),
@@ -449,6 +455,7 @@ def map_knn_reference(
     device_info: dict[str, Any] = {
         "device": device,
         "backend_residency": "cuda" if device == "gpu" else "host_cpu",
+        "cuda_residency_verified": False,
         "numpy_version": importlib.metadata.version("numpy"),
         "scipy_version": importlib.metadata.version("scipy"),
     }
@@ -518,6 +525,7 @@ def map_knn_reference(
                 "vram_used_before_mb": round(float(used_before) / (1024.0 ** 2), 2),
                 "vram_used_after_query_mb": round(float(used_after) / (1024.0 ** 2), 2),
                 "vram_delta_mb": round(float(used_after - used_before) / (1024.0 ** 2), 2),
+                "cuda_residency_verified": True,
             })
         except Exception as exc:
             raise RuntimeError(f"cuML GPU KNN execution failed: {exc}. No silent CPU fallback allowed.") from exc
@@ -605,12 +613,13 @@ def map_knn_reference(
         "status": "completed",
         "alignment_route": route,
         "n_shared_genes": n_shared,
-        "query_gene_fraction": round(q_frac, 4),
-        "ref_gene_fraction": round(r_frac, 4),
+        "query_gene_fraction": float(q_frac),
+        "ref_gene_fraction": float(r_frac),
         "requested_k": int(k),
         "effective_k": int(effective_k),
         "min_confidence": min_conf,
-        "distance_threshold": round(dist_thresh, 6),
+        "distance_threshold": dist_thresh,
+        "distance_threshold_display": round(dist_thresh, 6),
         "device_info": device_info,
         "timings": timing_metrics,
         "total_query_cells": n_total,

@@ -178,15 +178,25 @@ CELLxGENE Census reference materialization lives in an isolated Python 3.12 I/O 
 
 | Component | Version / Specification |
 |---|---|
-| Python | 3.12 |
+| Python | 3.12.14 |
 | `cellxgene-census` | 1.18.0 (pinned) |
-| `tiledbsoma` | 2.3.0 in the generated lock |
-| `anndata` | 0.13.2 in the generated lock |
+| `tiledbsoma` | 2.3.0 (pinned) |
+| `anndata` | 0.13.2 (pinned) |
 | Purpose | Governed, version-pinned reference atlas extraction from TileDB-SOMA coordinates |
 
-Do not install Census or TileDB-SOMA into `sc_gpu_rapids2608`. Reference H5AD files materialized via `scripts/materialize_cellxgene_reference.py` are loaded directly by the compute lanes. The mapping/OOD contract and validation protocol are documented in [`docs/REFERENCE_ATLAS_OOD.md`](docs/REFERENCE_ATLAS_OOD.md).
+Do not install Census or TileDB-SOMA into `sc_gpu_rapids2608`. `environments/sc_census_io.lock.conda` is the exact conda/base layer and `environments/sc_census_io.lock.txt` is the mandatory exact pip layer; recreate both in a temporary prefix before a Census release run:
 
-Reference-mapping backend selection is certificate-driven, not decided by a production CPU/GPU dual run. `--reference-device auto` uses CPU unless `--reference-validation-domain` names a promoted offline real-data certificate in `ops/policy/gpu_backend_validations.json` and the validated cuML version matches. The current `trevino-fetal-cortex-v1` certificate permits the cuML 26.08 KNN lane for that bounded domain; unknown domains and version drift route directly to CPU. CPU/GPU agreement is supporting implementation evidence, not biological truth.
+```bash
+census_tmp_root=$(mktemp -d)
+census_tmp_prefix="$census_tmp_root/sc_census_io"
+conda create --yes --prefix "$census_tmp_prefix" --file environments/sc_census_io.lock.conda
+"$census_tmp_prefix/bin/python" -m pip install -r environments/sc_census_io.lock.txt
+"$census_tmp_prefix/bin/python" -c 'import anndata, cellxgene_census, tiledbsoma; print(cellxgene_census.__version__)'
+conda env remove --yes --prefix "$census_tmp_prefix"
+rmdir "$census_tmp_root"
+```
+
+Reference H5AD files materialized via `scripts/materialize_cellxgene_reference.py` are loaded directly by the compute lanes and can be rechecked offline with `--verify-only`. Reference mapping defaults to CPU. `--reference-device gpu` is an explicit experimental technical opt-in: it requires `gpu_mode != off`, cuML, CUDA device availability, and demonstrated CUDA residency; it never falls back to sklearn. `auto` and validation-domain routing are rejected. The validation registry is evidence-only and cannot route production execution. CPU/GPU agreement is implementation evidence, not biological truth or production promotion. The mapping/OOD contract and runbook are in [`docs/REFERENCE_ATLAS_OOD.md`](docs/REFERENCE_ATLAS_OOD.md) and [PROTOCOL.md](PROTOCOL.md).
 
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
@@ -1974,8 +1984,7 @@ checkpoints or change numerical analysis settings.
 | `--reference-k` | 15 | K neighbors for reference mapping |
 | `--reference-min-confidence` | 0.6 | Min confidence needed to override marker label |
 | `--reference-override-mode` | `conservative` | `conservative` (override Unknown/low-confidence only) or `all` |
-| `--reference-device` | `auto` | `auto` selects GPU only for a matching promoted offline validation domain; otherwise CPU. Explicit `gpu` also requires a matching certificate. |
-| `--reference-validation-domain` | empty | Real-data backend certificate domain, currently `trevino-fetal-cortex-v1`; empty/unknown domains route `auto` directly to CPU |
+| `--reference-device` | `cpu` | `cpu` is the programmatic and CLI default. `gpu` is an explicit experimental opt-in requiring cuML/CUDA residency and `--gpu-mode` other than `off`; it never falls back to CPU. |
 | `--reference-ood-mode` | `reference_quantile` | OOD calibration mode: `reference_quantile` (reference-only split) or `fixed` |
 | `--reference-distance-quantile` | 0.95 | Upper quantile of reference calibration distances for OOD rejection threshold |
 | `--reference-fixed-distance-threshold` | empty | Operator-fixed cosine distance threshold for OOD rejection (used with `fixed` mode) |

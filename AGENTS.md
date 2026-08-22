@@ -132,7 +132,12 @@ Never rely on the legacy `results/` fallback. It is governed by
 an access event outside the checkout. Do not remove it until migration, owner
 approval, and the full 14-day silent window are all proven.
 
-## Current State (2026-08-02)
+## Current State (2026-08-23)
+
+The Reference Atlas OOD P0 amendment is in controlled implementation. Its CPU-default,
+explicit-GPU, receipt-integrity, and isolated-benchmark changes are technical safeguards;
+fresh evidence is required before any promotion or biological claim. See
+`docs/REFERENCE_ATLAS_OOD.md` for the bounded contract and claim limit.
 
 The August pipeline-remediation round preserves the scientific claim posture
 below while adding the canonical suite quickstart, 34-gate report-all route,

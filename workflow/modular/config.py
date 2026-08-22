@@ -329,7 +329,13 @@ class PipelineConfig:
     reference_k: int = 15
     reference_min_confidence: float = 0.6
     reference_override_mode: str = "conservative"  # conservative, all
-    reference_device: str = "auto"  # auto, cpu, gpu
+    # Reference mapping is deliberately CPU-first.  ``gpu`` is an explicit
+    # experimental technical opt-in and is never selected from an evidence
+    # registry at runtime.
+    reference_device: str = "cpu"  # cpu, gpu
+    # Retained only so older programmatic callers deserialize cleanly.  The
+    # annotation path never reads this field; validation certificates are
+    # evidence-only and cannot route a production backend.
     reference_validation_domain: str | None = None
     reference_ood_mode: str = "reference_quantile"  # reference_quantile, fixed
     reference_distance_quantile: float = 0.95

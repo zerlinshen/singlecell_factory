@@ -362,8 +362,6 @@ def test_cli_reference_mapping_args(monkeypatch):
             "all",
             "--reference-device",
             "gpu",
-            "--reference-validation-domain",
-            "trevino-fetal-cortex-v1",
             "--reference-ood-mode",
             "fixed",
             "--reference-fixed-distance-threshold",
@@ -383,12 +381,47 @@ def test_cli_reference_mapping_args(monkeypatch):
     assert abs(args.reference_min_confidence - 0.75) < 1e-8
     assert args.reference_override_mode == "all"
     assert args.reference_device == "gpu"
-    assert args.reference_validation_domain == "trevino-fetal-cortex-v1"
     assert args.reference_ood_mode == "fixed"
     assert abs(args.reference_fixed_distance_threshold - 0.42) < 1e-8
     assert args.reference_calibration_group_key == "donor"
     assert abs(args.reference_calibration_fraction - 0.25) < 1e-8
     assert args.reference_min_shared_genes == 75
+
+
+def test_cli_reference_device_and_quantile_contracts(monkeypatch):
+    import workflow.modular.cli as mod
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["prog", "--project", "x", "--sample-root", "/tmp/s", "--reference-device", "auto"],
+    )
+    with pytest.raises(SystemExit):
+        mod.parse_args()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog", "--project", "x", "--sample-root", "/tmp/s",
+            "--reference-adata", "/tmp/missing-reference.h5ad",
+            "--reference-ood-mode", "reference_quantile",
+        ],
+    )
+    args = mod.parse_args()
+    with pytest.raises(SystemExit, match="requires --reference-calibration-group-key"):
+        mod._validate_args(args)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prog", "--project", "x", "--sample-root", "/tmp/s",
+            "--reference-adata", "/tmp/missing-reference.h5ad",
+            "--reference-device", "gpu", "--gpu-mode", "off",
+            "--reference-ood-mode", "fixed", "--reference-fixed-distance-threshold", "0.5",
+        ],
+    )
+    args = mod.parse_args()
+    with pytest.raises(SystemExit, match="cannot be used with --gpu-mode off"):
+        mod._validate_args(args)
 
 
 def test_cli_signature_json(monkeypatch):
@@ -2495,6 +2528,14 @@ def test_annotation_reference_mapping_overrides_labels(monkeypatch, tmp_path):
     assert ctx.metadata["reference_mapping_source_size_bytes"] == ref_path.stat().st_size
     assert ctx.metadata["reference_mapping_backend"] == "knn"
     assert ctx.metadata["reference_mapping_scanvi_status"] == "not_run_missing_real_compatible_model_artifact"
+    summary = ctx.metadata["reference_mapping"]
+    assert summary == adata.uns["annotation"]["reference_mapping"]
+    assert summary["reference"]["sha256"] == ctx.metadata["reference_mapping_source_sha256"]
+    assert summary["alignment"]["shared_genes"] == 60
+    assert summary["parameters"]["effective_k"] == 3
+    assert summary["counts"]["accepted"] + summary["counts"]["rejected_total"] == adata.n_obs
+    assert summary["backend"]["residency"] == "host_cpu"
+    assert summary["claim_class"] == "technical_reference_mapping_not_biological_ground_truth"
     assert int((adata.obs["cell_type"] == "TypeB").sum()) >= 2
 
 
@@ -2523,9 +2564,11 @@ def test_annotation_reference_mapping_missing_file_fails(monkeypatch, tmp_path):
         project="p",
         output_dir=tmp_path / "out",
         cellranger=CellRangerConfig(sample_root=tmp_path, outs_dir=tmp_path),
-        markers={"TypeA": ["G0"], "TypeB": ["G1"]},
-        reference_adata=tmp_path / "not_exists.h5ad",
-    )
+            markers={"TypeA": ["G0"], "TypeB": ["G1"]},
+            reference_adata=tmp_path / "not_exists.h5ad",
+            reference_ood_mode="fixed",
+            reference_fixed_distance_threshold=0.5,
+        )
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     ctx = PipelineContext(

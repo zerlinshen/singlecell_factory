@@ -1,13 +1,14 @@
 {
-  "schema_version": "1.0",
-  "policy": "Offline real-data scientific validation selects the production backend. CPU/GPU agreement is supporting evidence, not biological truth. Unknown domains and version drift route to CPU without dual-running production inputs.",
+  "schema_version": "2.0",
+  "policy": "This registry is evidence-only. It never selects a runtime backend: reference mapping defaults to CPU and explicit GPU remains an experimental technical opt-in that must prove cuML/CUDA residency without fallback.",
   "modules": {
     "reference_mapping_knn": {
       "default_unvalidated_device": "cpu",
+      "runtime_routing": "forbidden",
       "domains": {
         "trevino-fetal-cortex-v1": {
           "certificate_id": "reference-knn-trevino-20260822-v1",
-          "status": "promoted",
+          "status": "validated_p0_not_promoted",
           "validated_backend": {
             "implementation": "cuml.neighbors.NearestNeighbors",
             "cuml_version": "26.08.00",
@@ -36,9 +37,11 @@
             "parity_passed": true
           },
           "performance": {
+            "evidence_class": "historical_cumulative_process_non_isolated_superseded",
             "cpu_median_seconds": 1.2551,
             "gpu_median_seconds": 0.1332,
-            "speedup": 9.42
+            "historical_speedup": 9.42,
+            "replacement_condition": "A fresh benchmark must use separate child processes, hash-identical serialized inputs, child RSS, and PID-scoped VRAM polling."
           },
           "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation",
           "evidence_sha256": {
@@ -46,7 +49,7 @@
             "heldout_ood_metrics.json": "86b351423cb4e6914564cbf430f87f082d7bc4fec7d10bf3053612652e8310bb",
             "cpu_gpu_parity.json": "e4d1d19ad0a8e377c665c160bd7f97ccd9159353a7436f7fe97f290ed334c38e"
           },
-          "claim_scope": "Technical KNN/OOD backend promotion for this declared data domain; not biological ground truth and not a general GPU-module guarantee."
+          "claim_scope": "Historical technical P0 KNN/OOD validation for this declared data domain. It is not production routing, biological ground truth, or a general GPU-module guarantee."
         }
       }
     }

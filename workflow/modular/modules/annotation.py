@@ -394,6 +394,15 @@ class AnnotationModule:
         ref_path = ctx.cfg.reference_adata
         if ref_path is None:
             ctx.metadata["reference_mapping_status"] = "skipped_no_reference"
+            if "annotation" not in adata.uns or not isinstance(adata.uns.get("annotation"), dict):
+                adata.uns["annotation"] = {}
+            skipped_summary = {
+                "status": "skipped_no_reference",
+                "claim_class": "not_run_no_reference_requested",
+                "scanvi_status": "not_run_missing_real_compatible_model_artifact",
+            }
+            ctx.metadata["reference_mapping"] = skipped_summary
+            adata.uns["annotation"]["reference_mapping"] = skipped_summary
             return
 
         mode = str(ctx.cfg.reference_override_mode).strip().lower()
@@ -402,6 +411,20 @@ class AnnotationModule:
                 f"Unsupported reference_override_mode {ctx.cfg.reference_override_mode!r}; "
                 "expected 'all' or 'conservative'."
             )
+
+        ood_mode = str(getattr(ctx.cfg, "reference_ood_mode", "reference_quantile")).strip().lower()
+        group_key = str(getattr(ctx.cfg, "reference_calibration_group_key", "") or "").strip() or None
+        if ood_mode == "reference_quantile" and not group_key:
+            raise ValueError(
+                "A requested reference with reference_ood_mode='reference_quantile' requires "
+                "reference_calibration_group_key before reference compute."
+            )
+
+        requested_device = str(getattr(ctx.cfg, "reference_device", "cpu")).strip().lower()
+        device, device_policy = resolve_reference_device(
+            requested_device,
+            gpu_mode=getattr(ctx.cfg, "gpu_mode", "auto"),
+        )
 
         ref_path = Path(ref_path)
         if not ref_path.exists():
@@ -431,15 +454,8 @@ class AnnotationModule:
         if label_key not in ref.obs.columns:
             raise ValueError(f"Requested reference label key {label_key!r} not found in {ref_path} .obs columns.")
 
-        requested_device = getattr(ctx.cfg, "reference_device", "auto")
-        device, device_policy = resolve_reference_device(
-            requested_device,
-            validation_domain=getattr(ctx.cfg, "reference_validation_domain", None),
-        )
-        ood_mode = getattr(ctx.cfg, "reference_ood_mode", "reference_quantile")
         dist_quantile = getattr(ctx.cfg, "reference_distance_quantile", 0.95)
         fixed_threshold = getattr(ctx.cfg, "reference_fixed_distance_threshold", None)
-        group_key = getattr(ctx.cfg, "reference_calibration_group_key", None)
         cal_fraction = getattr(ctx.cfg, "reference_calibration_fraction", 0.2)
         min_shared = getattr(ctx.cfg, "reference_min_shared_genes", 50)
         k = int(ctx.cfg.reference_k)
@@ -504,6 +520,79 @@ class AnnotationModule:
 
         applied = int(override_mask.sum())
         total = int(adata.n_obs)
+        rejected_low_confidence = int(map_meta["rejected_low_confidence"])
+        rejected_ood_distance = int(map_meta["rejected_ood_distance"])
+        rejected_both = int(map_meta["rejected_low_confidence_and_ood_distance"])
+        accepted_cells = int(map_meta["accepted_cells"])
+        rejected_cells = int(map_meta["rejected_cells"])
+        device_info = dict(map_meta.get("device_info", {}))
+        mapping_summary = {
+            "status": "completed",
+            "reference": {
+                "path": str(ref_path),
+                "size_bytes": int(ref_stat_after.st_size),
+                "sha256": reference_sha256,
+                "label_key": str(label_key),
+                "calibration_group_key": group_key,
+            },
+            "alignment": {
+                "route": str(map_meta["alignment_route"]),
+                "shared_genes": int(map_meta["n_shared_genes"]),
+                "query_gene_fraction": float(map_meta["query_gene_fraction"]),
+                "reference_gene_fraction": float(map_meta["ref_gene_fraction"]),
+            },
+            "parameters": {
+                "requested_k": int(map_meta["requested_k"]),
+                "effective_k": int(map_meta["effective_k"]),
+                "min_confidence": float(map_meta["min_confidence"]),
+                "distance_threshold": float(dist_thresh),
+                "distance_threshold_display": round(float(dist_thresh), 6),
+                "ood_mode": ood_mode,
+                "seed": seed,
+                "override_mode": mode,
+            },
+            "backend": {
+                "name": "knn",
+                "requested_device": requested_device,
+                "effective_device": device,
+                "device_preflight": device_policy,
+                "backend_class": device_info.get("backend_class"),
+                "residency": device_info.get("backend_residency"),
+                "cuda_residency_verified": bool(device_info.get("cuda_residency_verified", False)),
+                "package_versions": {
+                    key: value
+                    for key, value in device_info.items()
+                    if key.endswith("_version")
+                },
+            },
+            "calibration": cal_receipt,
+            "counts": {
+                "total_query_cells": total,
+                "accepted": accepted_cells,
+                "rejected_total": rejected_cells,
+                "rejected_low_confidence": rejected_low_confidence,
+                "rejected_ood_distance": rejected_ood_distance,
+                "rejected_low_confidence_and_ood_distance": rejected_both,
+                "accepted_pct": round(100.0 * accepted_cells / max(total, 1), 2),
+                "rejected_pct": round(100.0 * rejected_cells / max(total, 1), 2),
+                "rejected_low_confidence_pct": round(100.0 * rejected_low_confidence / max(total, 1), 2),
+                "rejected_ood_distance_pct": round(100.0 * rejected_ood_distance / max(total, 1), 2),
+                "rejected_both_pct": round(100.0 * rejected_both / max(total, 1), 2),
+            },
+            "override": {
+                "applied_cells": applied,
+                "applied_pct": round(100.0 * applied / max(total, 1), 2),
+                "accepted_only": True,
+            },
+            "timings": dict(map_meta.get("timings", {})),
+            "claim_class": "technical_reference_mapping_not_biological_ground_truth",
+            "scanvi_status": "not_run_missing_real_compatible_model_artifact",
+        }
+        # AnnData ``.uns`` must be JSON-compatible so it survives an h5ad
+        # roundtrip without object/pickle leakage.  The same normalized summary
+        # is mirrored into context metadata for manifests and status reporting.
+        mapping_summary = json.loads(json.dumps(mapping_summary, default=str))
+
         ctx.metadata["reference_mapping_status"] = "completed"
         ctx.metadata["reference_mapping_source"] = str(ref_path)
         ctx.metadata["reference_mapping_source_sha256"] = reference_sha256
@@ -521,12 +610,16 @@ class AnnotationModule:
         ctx.metadata["reference_mapping_override_mode"] = mode
         ctx.metadata["reference_mapping_overridden_cells"] = applied
         ctx.metadata["reference_mapping_overridden_pct"] = round(100.0 * applied / max(total, 1), 2)
-        ctx.metadata["reference_mapping_accepted_cells"] = int(map_meta["accepted_cells"])
-        ctx.metadata["reference_mapping_rejected_cells"] = int(map_meta["rejected_cells"])
-        ctx.metadata["reference_mapping_rejected_low_confidence"] = int(map_meta["rejected_low_confidence"])
-        ctx.metadata["reference_mapping_rejected_ood_distance"] = int(map_meta["rejected_ood_distance"])
+        ctx.metadata["reference_mapping_accepted_cells"] = accepted_cells
+        ctx.metadata["reference_mapping_rejected_cells"] = rejected_cells
+        ctx.metadata["reference_mapping_rejected_low_confidence"] = rejected_low_confidence
+        ctx.metadata["reference_mapping_rejected_ood_distance"] = rejected_ood_distance
         ctx.metadata["reference_mapping_cal_receipt"] = cal_receipt
         ctx.metadata["reference_mapping_timings"] = map_meta.get("timings", {})
+        ctx.metadata["reference_mapping"] = mapping_summary
+        if "annotation" not in adata.uns or not isinstance(adata.uns.get("annotation"), dict):
+            adata.uns["annotation"] = {}
+        adata.uns["annotation"]["reference_mapping"] = mapping_summary
 
         logger.info(
             "Reference mapping applied: %d/%d cells overridden (mode=%s, k=%d, min_conf=%.3f, dist_thresh=%.4f, accepted=%d/%d).",

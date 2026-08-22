@@ -3,13 +3,13 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python=3.12
+  - python=3.12.14
   - pip
   - pip:
       - cellxgene-census==1.18.0
-      - tiledbsoma>=1.15.3
-      - anndata>=0.10.0
-      - numpy>=1.26.0
-      - pandas>=2.0.0
-      - scipy>=1.11.0
-      - pyyaml
+      - tiledbsoma==2.3.0
+      - anndata==0.13.2
+      - numpy==2.5.2
+      - pandas==2.3.3
+      - scipy==1.18.1
+      - pyyaml==6.0.3

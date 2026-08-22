@@ -223,7 +223,12 @@ Both operation modes are valid:
 
 In both modes, this remote repo remains the run-truth surface.
 
-## Current State (2026-08-02)
+## Current State (2026-08-23)
+
+The Reference Atlas OOD P0 amendment is in controlled implementation. CPU is the
+default; explicit GPU is a fail-closed technical opt-in, and fresh isolated evidence
+is required before any promotion or biological claim. Consult
+`docs/REFERENCE_ATLAS_OOD.md` before reporting the milestone.
 
 The August pipeline-remediation round preserves the bounded scientific verdicts
 below and adds the canonical `../QUICKSTART.md`, report-all 33-gate route,
