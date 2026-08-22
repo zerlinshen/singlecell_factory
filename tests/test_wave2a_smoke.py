@@ -179,13 +179,13 @@ def test_atac_slot_active():
 
 
 def test_reserved_and_active_modality_statuses():
-    """VDJ/Ribo remain reserved; Hi-C is active after its vertical slice landed."""
+    """VDJ remains reserved; Ribo and Hi-C are active after their vertical slices landed."""
     import yaml
     sf = FACTORY_ROOT / "contracts" / "bundle_schema.yaml"
     doc = yaml.safe_load(sf.read_text())
-    for ext_name in ("vdj", "ribo"):
-        assert doc["extensions_v22"][ext_name]["status"] == "reserved"
-    assert doc["extensions_v22"]["hic"]["status"] == "active"
+    assert doc["extensions_v22"]["vdj"]["status"] == "reserved"
+    for ext_name in ("ribo", "hic"):
+        assert doc["extensions_v22"][ext_name]["status"] == "active"
 
 
 def test_r_extension_registry_includes_atac():
