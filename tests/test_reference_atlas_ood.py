@@ -19,6 +19,7 @@ from scripts.benchmark_reference_mapping import (
     run_lane,
     select_reference_hvg_genes,
     verify_frozen_inputs,
+    verify_lane_output,
 )
 from scripts.materialize_cellxgene_reference import (
     materialize_reference,
@@ -739,7 +740,7 @@ def test_process_lane_contract_rejects_hash_mismatch(tmp_path: Path, artifact_na
         verify_frozen_inputs(frozen)
 
 
-def test_within_lane_nondeterminism_writes_failure_receipt(tmp_path: Path, monkeypatch):
+def test_within_lane_scientific_nondeterminism_writes_failure_receipt(tmp_path: Path, monkeypatch):
     frozen = _write_frozen_input_fixture(tmp_path)
     calls = {"count": 0}
 
@@ -761,7 +762,7 @@ def test_within_lane_nondeterminism_writes_failure_receipt(tmp_path: Path, monke
 
     monkeypatch.setattr(benchmark_module, "map_knn_reference", _nondeterministic_map)
     output_dir = tmp_path / "lane"
-    with pytest.raises(RuntimeError, match="nondeterministic"):
+    with pytest.raises(RuntimeError, match="scientific output"):
         run_lane(
             device="cpu",
             input_dir=frozen,
@@ -769,6 +770,65 @@ def test_within_lane_nondeterminism_writes_failure_receipt(tmp_path: Path, monke
             expected_input_manifest_sha256=compute_sha256(frozen / "input_manifest.json"),
         )
     assert json.loads((output_dir / "lane_receipt.json").read_text(encoding="utf-8"))["status"] == "failed"
+
+
+@pytest.mark.parametrize(
+    ("distance_step", "should_pass"),
+    [
+        (4e-7, True),
+        (2e-6, False),
+    ],
+)
+def test_within_lane_distance_repeatability_uses_predeclared_tolerance(
+    tmp_path: Path,
+    monkeypatch,
+    distance_step: float,
+    should_pass: bool,
+):
+    frozen = _write_frozen_input_fixture(tmp_path)
+    calls = {"count": 0}
+
+    def _distance_drift_map(*, query_adata, **_kwargs):
+        calls["count"] += 1
+        measured_repetition = max(calls["count"] - 2, 0)
+        frame = pd.DataFrame(
+            {
+                "reference_predicted_label": "A",
+                "reference_confidence": 1.0,
+                "reference_distance": 0.1 + measured_repetition * distance_step,
+                "reference_assignment_status": ASSIGNMENT_STATUS_ACCEPTED,
+                "reference_cell_type": "A",
+                "reference_ood": False,
+            },
+            index=query_adata.obs_names,
+        )
+        return frame, {"device_info": {"backend_residency": "host_cpu"}}
+
+    monkeypatch.setattr(benchmark_module, "map_knn_reference", _distance_drift_map)
+    output_dir = tmp_path / "lane"
+    kwargs = {
+        "device": "cpu",
+        "input_dir": frozen,
+        "output_dir": output_dir,
+        "expected_input_manifest_sha256": compute_sha256(frozen / "input_manifest.json"),
+    }
+    if not should_pass:
+        with pytest.raises(RuntimeError, match="exceed the predeclared"):
+            run_lane(**kwargs)
+        assert json.loads((output_dir / "lane_receipt.json").read_text(encoding="utf-8"))["status"] == "failed"
+        return
+
+    run_lane(**kwargs)
+    _, metrics = verify_lane_output(
+        output_dir,
+        device="cpu",
+        expected_input_manifest_sha256=kwargs["expected_input_manifest_sha256"],
+    )
+    repeatability = metrics["within_lane_repeatability"]
+    assert repeatability["status"] == "pass"
+    assert repeatability["contract"] == "exact_scientific_outputs_plus_bounded_float_distance"
+    assert repeatability["raw_bitwise_identical"] is False
+    assert repeatability["distance_max_abs_diff"] == pytest.approx(8e-7, abs=1e-12)
 
 
 def test_failed_gpu_child_is_fail_not_promoted(tmp_path: Path, monkeypatch):

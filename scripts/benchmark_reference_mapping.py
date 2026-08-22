@@ -62,6 +62,11 @@ _CONSUMED_OUTPUT_COLUMNS = (
 )
 _WARMUP_ROWS = 256
 _MEASURED_REPETITIONS = 3
+_WITHIN_LANE_DISTANCE_RTOL = 1e-6
+_WITHIN_LANE_DISTANCE_ATOL = 1e-6
+_EXACT_SCIENTIFIC_OUTPUT_COLUMNS = tuple(
+    column for column in _CONSUMED_OUTPUT_COLUMNS if column != "reference_distance"
+)
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -414,6 +419,81 @@ def _mapping_sha256(frame: pd.DataFrame) -> str:
     return _sha256_bytes(consumed.to_csv(lineterminator="\n").encode("utf-8"))
 
 
+def _scientific_output_sha256(frame: pd.DataFrame) -> str:
+    consumed = frame.loc[:, list(_EXACT_SCIENTIFIC_OUTPUT_COLUMNS)]
+    return _sha256_bytes(consumed.to_csv(lineterminator="\n").encode("utf-8"))
+
+
+def _assess_within_lane_repeatability(frames: list[pd.DataFrame]) -> dict[str, Any]:
+    """Require exact scientific decisions and tightly bounded float drift.
+
+    Brute-force CUDA reductions are not guaranteed to be bitwise stable across
+    repeated launches.  Scientific reproducibility is therefore evaluated at
+    the consumed-output boundary: every discrete decision and confidence value
+    must be exactly identical, while diagnostic cosine distances must remain
+    finite and within a predeclared 1e-6 tolerance.  Raw hashes are retained so
+    bitwise drift remains visible rather than being normalized away.
+    """
+    if len(frames) != _MEASURED_REPETITIONS:
+        raise RuntimeError(
+            f"Within-lane repeatability requires exactly {_MEASURED_REPETITIONS} measured outputs."
+        )
+    baseline = frames[0].loc[:, list(_CONSUMED_OUTPUT_COLUMNS)]
+    baseline_distances = baseline["reference_distance"].to_numpy(dtype=float)
+    if not np.isfinite(baseline_distances).all():
+        raise RuntimeError("Within-lane reference distances contain non-finite values.")
+
+    max_abs_diff = 0.0
+    mean_abs_diffs: list[float] = []
+    raw_hashes: list[str] = []
+    scientific_hashes: list[str] = []
+    for repetition, frame in enumerate(frames, start=1):
+        consumed = frame.loc[:, list(_CONSUMED_OUTPUT_COLUMNS)]
+        if not baseline.index.equals(consumed.index):
+            raise RuntimeError(f"Within-lane cell order changed in repetition {repetition}.")
+        for column in _EXACT_SCIENTIFIC_OUTPUT_COLUMNS:
+            if not baseline[column].equals(consumed[column]):
+                raise RuntimeError(
+                    f"Within-lane scientific output {column!r} changed in repetition {repetition}."
+                )
+        distances = consumed["reference_distance"].to_numpy(dtype=float)
+        if not np.isfinite(distances).all():
+            raise RuntimeError(
+                f"Within-lane reference distances contain non-finite values in repetition {repetition}."
+            )
+        absolute_diff = np.abs(baseline_distances - distances)
+        max_abs_diff = max(max_abs_diff, float(np.max(absolute_diff, initial=0.0)))
+        mean_abs_diffs.append(float(np.mean(absolute_diff)))
+        if not np.allclose(
+            baseline_distances,
+            distances,
+            rtol=_WITHIN_LANE_DISTANCE_RTOL,
+            atol=_WITHIN_LANE_DISTANCE_ATOL,
+        ):
+            raise RuntimeError(
+                "Within-lane reference distances exceed the predeclared "
+                f"rtol={_WITHIN_LANE_DISTANCE_RTOL:g}, atol={_WITHIN_LANE_DISTANCE_ATOL:g} contract "
+                f"in repetition {repetition} (max_abs_diff={float(np.max(absolute_diff)):.9g})."
+            )
+        raw_hashes.append(_mapping_sha256(consumed))
+        scientific_hashes.append(_scientific_output_sha256(consumed))
+
+    if len(set(scientific_hashes)) != 1:
+        raise RuntimeError("Within-lane exact scientific-output hashes differ across repetitions.")
+    return {
+        "status": "pass",
+        "contract": "exact_scientific_outputs_plus_bounded_float_distance",
+        "exact_columns": list(_EXACT_SCIENTIFIC_OUTPUT_COLUMNS),
+        "distance_rtol": _WITHIN_LANE_DISTANCE_RTOL,
+        "distance_atol": _WITHIN_LANE_DISTANCE_ATOL,
+        "distance_max_abs_diff": max_abs_diff,
+        "distance_mean_abs_diff_max": max(mean_abs_diffs, default=0.0),
+        "scientific_output_sha256": scientific_hashes[0],
+        "raw_mapping_sha256s": raw_hashes,
+        "raw_bitwise_identical": len(set(raw_hashes)) == 1,
+    }
+
+
 def run_lane(
     *,
     device: str,
@@ -458,6 +538,7 @@ def run_lane(
         map_knn_reference(query_adata=query[:_WARMUP_ROWS].copy(), **{key: value for key, value in mapping_kwargs.items() if key != "query_adata"})
 
         repetitions: list[dict[str, Any]] = []
+        repetition_mappings: list[pd.DataFrame] = []
         canonical_mapping: Optional[pd.DataFrame] = None
         canonical_metadata: Optional[dict[str, Any]] = None
         for repetition in range(_MEASURED_REPETITIONS):
@@ -465,14 +546,27 @@ def run_lane(
             mapping, metadata = map_knn_reference(**mapping_kwargs)
             elapsed = time.perf_counter() - started_rep
             mapping_hash = _mapping_sha256(mapping)
-            repetitions.append({"repetition": repetition + 1, "wall_seconds": elapsed, "mapping_sha256": mapping_hash})
+            repetition_path = output_dir / f"mapping_repetition_{repetition + 1}.csv"
+            _atomic_write_dataframe(
+                repetition_path,
+                mapping.loc[:, list(_CONSUMED_OUTPUT_COLUMNS)],
+            )
+            repetitions.append(
+                {
+                    "repetition": repetition + 1,
+                    "wall_seconds": elapsed,
+                    "mapping_path": str(repetition_path),
+                    "mapping_sha256": mapping_hash,
+                    "mapping_file_sha256": compute_sha256(repetition_path),
+                    "scientific_output_sha256": _scientific_output_sha256(mapping),
+                }
+            )
+            repetition_mappings.append(mapping)
             if canonical_mapping is None:
                 canonical_mapping = mapping
                 canonical_metadata = metadata
         assert canonical_mapping is not None and canonical_metadata is not None
-        output_hashes = {record["mapping_sha256"] for record in repetitions}
-        if len(output_hashes) != 1:
-            raise RuntimeError("Within-lane mapping outputs are nondeterministic across measured repetitions.")
+        repeatability = _assess_within_lane_repeatability(repetition_mappings)
         device_info = dict(canonical_metadata.get("device_info", {}))
         if device == "gpu" and (
             device_info.get("backend_residency") != "cuda"
@@ -498,7 +592,7 @@ def run_lane(
             "ru_maxrss_scope": "independent child process including serialized-input loading and warmup",
             "mapping_path": str(mapping_path),
             "mapping_sha256": compute_sha256(mapping_path),
-            "within_lane_output_sha256": next(iter(output_hashes)),
+            "within_lane_repeatability": repeatability,
             "metadata": canonical_metadata,
         }
         metrics_path = output_dir / "metrics.json"
@@ -552,9 +646,45 @@ def verify_lane_output(
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     if metrics.get("input_manifest_sha256") != expected_input_manifest_sha256:
         raise ValueError(f"{device} metrics did not consume the coordinator input manifest.")
-    hashes = {record.get("mapping_sha256") for record in metrics.get("repetitions", [])}
-    if len(hashes) != 1 or next(iter(hashes), None) != metrics.get("within_lane_output_sha256"):
-        raise ValueError(f"{device} child output repetitions are not deterministic.")
+    repetition_frames: list[pd.DataFrame] = []
+    for record in metrics.get("repetitions", []):
+        repetition_path = Path(record.get("mapping_path", ""))
+        if not repetition_path.is_file():
+            raise ValueError(f"{device} child repetition artifact is missing: {repetition_path}")
+        repetition_file_sha256 = compute_sha256(repetition_path)
+        if repetition_file_sha256 != record.get("mapping_file_sha256"):
+            raise ValueError(f"{device} child repetition artifact SHA-256 mismatch.")
+        repetition_frame = pd.read_csv(repetition_path, index_col=0)
+        if _mapping_sha256(repetition_frame) != record.get("mapping_sha256"):
+            raise ValueError(f"{device} child repetition mapping hash mismatch.")
+        if _scientific_output_sha256(repetition_frame) != record.get("scientific_output_sha256"):
+            raise ValueError(f"{device} child repetition scientific-output hash mismatch.")
+        repetition_frames.append(repetition_frame)
+    try:
+        verified_repeatability = _assess_within_lane_repeatability(repetition_frames)
+    except RuntimeError as exc:
+        raise ValueError(f"{device} child output repeatability failed verification: {exc}") from exc
+    recorded_repeatability = metrics.get("within_lane_repeatability", {})
+    for field in (
+        "status",
+        "contract",
+        "exact_columns",
+        "distance_rtol",
+        "distance_atol",
+        "scientific_output_sha256",
+        "raw_mapping_sha256s",
+        "raw_bitwise_identical",
+    ):
+        if recorded_repeatability.get(field) != verified_repeatability.get(field):
+            raise ValueError(f"{device} child repeatability receipt mismatch for {field}.")
+    for field in ("distance_max_abs_diff", "distance_mean_abs_diff_max"):
+        if not np.isclose(
+            float(recorded_repeatability.get(field, np.nan)),
+            float(verified_repeatability[field]),
+            rtol=0.0,
+            atol=1e-12,
+        ):
+            raise ValueError(f"{device} child repeatability receipt mismatch for {field}.")
     if device == "gpu":
         device_info = metrics.get("metadata", {}).get("device_info", {})
         if device_info.get("backend_residency") != "cuda" or not device_info.get("cuda_residency_verified"):
