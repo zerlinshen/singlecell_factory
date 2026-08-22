@@ -1,15 +1,15 @@
 {
   "verdict": "pass",
-  "recorded_utc": "2026-08-03T02:27:38+00:00",
-  "watched_sha256": "0fd7f527cccc619e4da3d50b919d64960ac5f770f1d58ad0b63927a99c6954dd",
+  "recorded_utc": "2026-08-22T16:15:44+00:00",
+  "watched_sha256": "11e65c568e96d97e1ad6b3e74594041e5262b1787afdd2b636ae7e86ae48872a",
   "watched_files": {
     "scripts/dev/wave3_us_w3_3_m2_200k_stress.py": "e5f4e218060c8c07225d00e572e412d56bc85ee84a565fb0aacbdb15639a6d35",
     "tests/test_clustering_memory_regression.py": "8328ce6b79a4de65d586af205ce4e0fb71841085bc3b82216ea2de92f90aa2b8",
     "workflow/modular/_mem_guard.py": "695ec2572d6a565afdeb5d37c1e32fc3b117baba633463f2f13a76770ef99458",
     "workflow/modular/_mem_watchdog.py": "78e285e051c03dff6b0329ea8049dd449a44ac7a90b1530d3e9290209555a5ba",
-    "workflow/modular/modules/clustering.py": "8f66e2d3fc111b433411d05a9a64ce6f5a127d0d17374c9bf0ac33305cc4d92f"
+    "workflow/modular/modules/clustering.py": "fc04bd6fdf1767ac0ec69269790f1a0fe4497a7b2fe6676a55dbf39a4389d7ef"
   },
-  "pre_fix_peak_gb": 9.31,
-  "m2_peak_gb": 6.33,
-  "reduction_pct": 32.0
+  "pre_fix_peak_gb": 9.53,
+  "m2_peak_gb": 6.55,
+  "reduction_pct": 31.3
 }
