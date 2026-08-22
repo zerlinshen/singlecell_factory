@@ -420,9 +420,10 @@ class AnnotationModule:
                 "reference_calibration_group_key before reference compute."
             )
 
-        requested_device = str(getattr(ctx.cfg, "reference_device", "cpu")).strip().lower()
+        requested_device = str(getattr(ctx.cfg, "reference_device", "auto")).strip().lower()
         device, device_policy = resolve_reference_device(
             requested_device,
+            validation_domain=getattr(ctx.cfg, "reference_validation_domain", None),
             gpu_mode=getattr(ctx.cfg, "gpu_mode", "auto"),
         )
 

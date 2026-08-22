@@ -36,6 +36,9 @@ ASSIGNMENT_STATUS_ACCEPTED = "accepted"
 ASSIGNMENT_STATUS_REJECTED_LOW_CONF = "rejected_low_confidence"
 ASSIGNMENT_STATUS_REJECTED_OOD_DIST = "rejected_ood_distance"
 ASSIGNMENT_STATUS_REJECTED_BOTH = "rejected_low_confidence_and_ood_distance"
+DEFAULT_GPU_VALIDATION_POLICY = (
+    Path(__file__).resolve().parents[2] / "ops" / "policy" / "gpu_backend_validations.json"
+)
 
 
 def _configure_cuda_toolkit_path() -> dict[str, Any]:
@@ -82,35 +85,8 @@ def _configure_cuda_toolkit_path() -> dict[str, Any]:
     )
 
 
-def resolve_reference_device(
-    requested_device: str,
-    *,
-    gpu_mode: str = "auto",
-) -> tuple[str, dict[str, Any]]:
-    """Resolve an explicit CPU/GPU request without certificate-driven routing.
-
-    The offline validation registry is evidence-only.  It must never select a
-    production backend, so this function intentionally accepts only ``cpu`` or
-    ``gpu`` and performs the same fail-closed GPU preflight for CLI and
-    programmatic callers.
-    """
-    requested = str(requested_device).strip().lower()
-    if requested not in {"cpu", "gpu"}:
-        raise ValueError(f"reference device must be cpu or gpu; got {requested_device!r}")
-    resolved_gpu_mode = str(gpu_mode or "auto").strip().lower()
-    receipt: dict[str, Any] = {
-        "requested_device": requested,
-        "gpu_mode": resolved_gpu_mode,
-        "decision_basis": "explicit_operator_selection",
-        "validation_registry_role": "evidence_only_not_runtime_routing",
-    }
-
-    if requested == "cpu":
-        receipt.update({"effective_device": "cpu", "decision": "explicit_cpu"})
-        return "cpu", receipt
-
-    if resolved_gpu_mode == "off":
-        raise ValueError("reference_device='gpu' cannot be used when gpu_mode='off'.")
+def _preflight_reference_gpu() -> dict[str, Any]:
+    """Prove the governed GPU backend is importable and CUDA-resident."""
     toolkit_receipt = _configure_cuda_toolkit_path()
     try:
         cp = importlib.import_module("cupy")
@@ -118,7 +94,7 @@ def resolve_reference_device(
         importlib.import_module("cuml.neighbors")
     except Exception as exc:
         raise RuntimeError(
-            "Explicit GPU reference mapping requires importable CuPy and cuML. "
+            "GPU reference mapping requires importable CuPy and cuML. "
             "No CPU fallback is allowed."
         ) from exc
 
@@ -136,13 +112,10 @@ def resolve_reference_device(
         )
     except Exception as exc:
         raise RuntimeError(
-            "Explicit GPU reference mapping requires an available CUDA device. "
+            "GPU reference mapping requires an available CUDA device. "
             "No CPU fallback is allowed."
         ) from exc
-
-    receipt.update({
-        "effective_device": "gpu",
-        "decision": "explicit_gpu_preflight_passed",
+    return {
         "cuml_version": str(getattr(cuml, "__version__", "unknown")),
         "cuda_device_count": device_count,
         "cuda_device": device_name,
@@ -150,7 +123,116 @@ def resolve_reference_device(
         "cuda_total_mb": round(float(total_bytes) / (1024.0 ** 2), 2),
         "cuda_preflight_verified": True,
         **toolkit_receipt,
-    })
+    }
+
+
+def resolve_reference_device(
+    requested_device: str,
+    validation_domain: Optional[str] = None,
+    policy_path: Optional[Path] = None,
+    *,
+    gpu_mode: str = "auto",
+) -> tuple[str, dict[str, Any]]:
+    """Select one production backend from an offline real-data certificate.
+
+    Production inputs are never dual-run. ``auto`` routes an unknown domain,
+    disabled GPU mode, missing backend, or version drift directly to CPU. A
+    matching promoted domain may use GPU only after CUDA preflight. Explicit
+    GPU requests are stricter: any missing certificate or preflight mismatch
+    fails closed without sklearn fallback.
+    """
+    requested = str(requested_device).strip().lower()
+    if requested not in {"auto", "cpu", "gpu"}:
+        raise ValueError(f"reference device must be auto, cpu, or gpu; got {requested_device!r}")
+    resolved_gpu_mode = str(gpu_mode or "auto").strip().lower()
+    domain = str(validation_domain or "").strip()
+    resolved_policy_path = Path(policy_path or DEFAULT_GPU_VALIDATION_POLICY)
+    receipt: dict[str, Any] = {
+        "requested_device": requested,
+        "gpu_mode": resolved_gpu_mode,
+        "validation_domain": domain or None,
+        "policy_path": str(resolved_policy_path),
+        "decision_basis": "offline_real_data_validation_certificate",
+        "production_dual_run": False,
+    }
+
+    if requested == "cpu":
+        receipt.update({"effective_device": "cpu", "decision": "explicit_cpu"})
+        return "cpu", receipt
+    if resolved_gpu_mode == "off":
+        if requested == "gpu":
+            raise ValueError("reference_device='gpu' cannot be used when gpu_mode='off'.")
+        receipt.update({"effective_device": "cpu", "decision": "cpu_gpu_mode_off"})
+        return "cpu", receipt
+    if not domain:
+        if requested == "gpu":
+            raise ValueError(
+                "Explicit GPU reference mapping requires a validation domain matching a promoted "
+                "offline real-data certificate."
+            )
+        receipt.update({"effective_device": "cpu", "decision": "cpu_unvalidated_domain"})
+        return "cpu", receipt
+
+    try:
+        policy = json.loads(resolved_policy_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        if requested == "gpu":
+            raise RuntimeError(f"Cannot read GPU validation policy {resolved_policy_path}: {exc}") from exc
+        receipt.update({"effective_device": "cpu", "decision": "cpu_policy_unavailable", "reason": str(exc)})
+        return "cpu", receipt
+    certificate = (
+        policy.get("modules", {})
+        .get("reference_mapping_knn", {})
+        .get("domains", {})
+        .get(domain)
+    )
+    if not certificate or certificate.get("status") != "promoted":
+        if requested == "gpu":
+            raise ValueError(f"No promoted GPU certificate for reference mapping domain {domain!r}.")
+        receipt.update({"effective_device": "cpu", "decision": "cpu_domain_not_promoted"})
+        return "cpu", receipt
+
+    expected_version = str(certificate.get("validated_backend", {}).get("cuml_version", ""))
+    try:
+        gpu_receipt = _preflight_reference_gpu()
+    except Exception as exc:
+        if requested == "gpu":
+            raise RuntimeError(
+                f"Promoted GPU domain {domain!r} failed CUDA/cuML preflight. No CPU fallback is allowed."
+            ) from exc
+        receipt.update(
+            {"effective_device": "cpu", "decision": "cpu_gpu_backend_unavailable", "reason": str(exc)}
+        )
+        return "cpu", receipt
+    actual_version = str(gpu_receipt["cuml_version"])
+    if actual_version != expected_version:
+        if requested == "gpu":
+            raise RuntimeError(
+                f"GPU certificate for {domain!r} requires cuML {expected_version}, found {actual_version}; "
+                "revalidate before use."
+            )
+        receipt.update(
+            {
+                "effective_device": "cpu",
+                "decision": "cpu_backend_version_drift",
+                "expected_cuml_version": expected_version,
+                "actual_cuml_version": actual_version,
+            }
+        )
+        return "cpu", receipt
+
+    receipt.update(
+        {
+            "effective_device": "gpu",
+            "decision": "gpu_promoted_for_validated_domain",
+            "certificate_id": certificate.get("certificate_id"),
+            "expected_cuml_version": expected_version,
+            "actual_cuml_version": actual_version,
+            "evidence_run": certificate.get("evidence_run"),
+            "claim_scope": certificate.get("claim_scope"),
+            **gpu_receipt,
+        }
+    )
     return "gpu", receipt
 
 VALID_ASSIGNMENT_STATUSES = {

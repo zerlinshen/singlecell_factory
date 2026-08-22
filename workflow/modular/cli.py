@@ -744,12 +744,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--reference-device",
-        default="cpu",
-        choices=["cpu", "gpu"],
+        default="auto",
+        choices=["auto", "cpu", "gpu"],
         help=(
-            "Reference KNN device. CPU is the default; GPU is an explicit "
-            "experimental technical opt-in and fails closed when CUDA/cuML is unavailable."
+            "Reference KNN device. auto uses GPU only for an exact promoted "
+            "validation domain; otherwise it runs CPU directly."
         ),
+    )
+    parser.add_argument(
+        "--reference-validation-domain",
+        default="",
+        help="Offline real-data certificate domain required for governed GPU reference mapping",
     )
     parser.add_argument(
         "--reference-ood-mode",
@@ -1507,6 +1512,7 @@ def main() -> None:
         reference_min_confidence=args.reference_min_confidence,
         reference_override_mode=args.reference_override_mode,
         reference_device=args.reference_device,
+        reference_validation_domain=args.reference_validation_domain or None,
         reference_ood_mode=args.reference_ood_mode,
         reference_distance_quantile=args.reference_distance_quantile,
         reference_fixed_distance_threshold=args.reference_fixed_distance_threshold,

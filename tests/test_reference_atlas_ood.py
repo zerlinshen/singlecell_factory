@@ -299,25 +299,94 @@ def test_reference_hvg_feature_selection_requires_upstream_field():
         select_reference_hvg_genes(adata, ["r1", "r2"], max_genes=3)
 
 
-def test_reference_device_default_is_explicit_cpu_and_auto_is_rejected():
-    assert PipelineConfig(project="test", output_dir=Path("/tmp"), cellranger=None).reference_device == "cpu"
+def test_reference_device_auto_uses_cpu_without_validated_domain():
+    assert PipelineConfig(project="test", output_dir=Path("/tmp"), cellranger=None).reference_device == "auto"
+    device, receipt = resolve_reference_device("auto")
+    assert device == "cpu"
+    assert receipt["decision"] == "cpu_unvalidated_domain"
     device, receipt = resolve_reference_device("cpu")
     assert device == "cpu"
     assert receipt["decision"] == "explicit_cpu"
-    with pytest.raises(ValueError, match="must be cpu or gpu"):
-        resolve_reference_device("auto")
 
 
-def test_reference_gpu_mode_off_and_missing_backend_fail_without_cpu_fallback(monkeypatch):
+def test_reference_gpu_mode_off_routes_auto_cpu_and_blocks_explicit_gpu():
+    device, receipt = resolve_reference_device(
+        "auto", validation_domain="validated-domain", gpu_mode="off"
+    )
+    assert device == "cpu"
+    assert receipt["decision"] == "cpu_gpu_mode_off"
     with pytest.raises(ValueError, match="gpu_mode='off'"):
-        resolve_reference_device("gpu", gpu_mode="off")
+        resolve_reference_device("gpu", validation_domain="validated-domain", gpu_mode="off")
 
-    def _missing_backend(_name):
+
+def test_reference_device_uses_promoted_domain_without_production_dual_run(tmp_path: Path, monkeypatch):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "modules": {
+                    "reference_mapping_knn": {
+                        "domains": {
+                            "validated-domain": {
+                                "status": "promoted",
+                                "certificate_id": "cert-1",
+                                "validated_backend": {"cuml_version": "26.08.00"},
+                                "evidence_run": "/evidence/run",
+                                "claim_scope": "bounded",
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "workflow.modular._reference_mapping._preflight_reference_gpu",
+        lambda: {"cuml_version": "26.08.00", "cuda_residency_verified": True},
+    )
+    device, receipt = resolve_reference_device(
+        "auto", validation_domain="validated-domain", policy_path=policy_path
+    )
+    assert device == "gpu"
+    assert receipt["decision"] == "gpu_promoted_for_validated_domain"
+    assert receipt["certificate_id"] == "cert-1"
+    assert receipt["production_dual_run"] is False
+
+
+def test_reference_gpu_missing_backend_routes_auto_cpu_and_blocks_explicit(tmp_path: Path, monkeypatch):
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "modules": {
+                    "reference_mapping_knn": {
+                        "domains": {
+                            "validated-domain": {
+                                "status": "promoted",
+                                "validated_backend": {"cuml_version": "26.08.00"},
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def _missing_backend():
         raise ImportError("missing test backend")
 
-    monkeypatch.setattr("workflow.modular._reference_mapping.importlib.import_module", _missing_backend)
+    monkeypatch.setattr("workflow.modular._reference_mapping._preflight_reference_gpu", _missing_backend)
+    device, receipt = resolve_reference_device(
+        "auto", validation_domain="validated-domain", policy_path=policy_path
+    )
+    assert device == "cpu"
+    assert receipt["decision"] == "cpu_gpu_backend_unavailable"
     with pytest.raises(RuntimeError, match="No CPU fallback is allowed"):
-        resolve_reference_device("gpu", gpu_mode="auto")
+        resolve_reference_device(
+            "gpu", validation_domain="validated-domain", policy_path=policy_path
+        )
 
 
 def test_cuda_toolkit_resolution_replaces_invalid_inherited_path(tmp_path: Path, monkeypatch):
@@ -333,11 +402,38 @@ def test_cuda_toolkit_resolution_replaces_invalid_inherited_path(tmp_path: Path,
     assert receipt["cuda_headers_verified"] is True
 
 
-def test_validation_policy_cannot_route_reference_execution(tmp_path: Path):
+def test_reference_device_version_drift_routes_auto_cpu_and_blocks_explicit(tmp_path: Path, monkeypatch):
     policy_path = tmp_path / "policy.json"
-    policy_path.write_text('{"modules":{"reference_mapping_knn":{"domains":{"anything":{"status":"promoted"}}}}}')
-    with pytest.raises(TypeError):
-        resolve_reference_device("cpu", validation_domain="anything")
+    policy_path.write_text(
+        json.dumps(
+            {
+                "modules": {
+                    "reference_mapping_knn": {
+                        "domains": {
+                            "validated-domain": {
+                                "status": "promoted",
+                                "validated_backend": {"cuml_version": "26.08.00"},
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "workflow.modular._reference_mapping._preflight_reference_gpu",
+        lambda: {"cuml_version": "99.0", "cuda_residency_verified": True},
+    )
+    device, receipt = resolve_reference_device(
+        "auto", validation_domain="validated-domain", policy_path=policy_path
+    )
+    assert device == "cpu"
+    assert receipt["decision"] == "cpu_backend_version_drift"
+    with pytest.raises(RuntimeError, match="revalidate before use"):
+        resolve_reference_device(
+            "gpu", validation_domain="validated-domain", policy_path=policy_path
+        )
 
 
 def test_normalize_l2_preserves_sparsity():
