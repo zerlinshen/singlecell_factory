@@ -1,5 +1,12 @@
 # CURRENT STATUS BANNER — 2026-08-15 (read first)
 
+**Reference Atlas OOD P0 preflight (2026-08-23).** Clean implementation
+`2fd81ea` is approved for a bounded 600-cell Census materialization and fresh
+process-isolated Trevino CPU/GPU technical benchmark. Outputs must remain under
+`/home/zerlinshen/projects/reference-atlas-ood-validation/runs/`; the GPU lane
+is explicit, fail-closed, and non-promoted. Journal:
+`journal/2026-08-23-reference-atlas-ood-p0-preflight.md`.
+
 **GPU promotion pre-commit review (2026-08-23).** Fresh focused tests passed
 120/120 and the complete canonical suite passed 34/34 after tightening the
 candidate-predecessor and PNG-structure negative controls. Evidence:
