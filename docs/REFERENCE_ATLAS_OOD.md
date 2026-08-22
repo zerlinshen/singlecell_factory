@@ -105,7 +105,7 @@ Sparse matrix format (CSR) is preserved throughout.
 
 ### Calibration Modes
 1. **`reference_quantile` (Default)**:
-   - Deterministically partitions reference cells into fit (80%) and calibration (20%) sets.
+   - Deterministically reserves approximately 20% of reference groups for calibration; the realized cell fraction depends on group sizes.
    - A valid `--reference-calibration-group-key` (e.g. `sample` or `donor_id`) is required; splitting occurs strictly at whole-group boundaries to prevent intra-sample data leakage. Random cell partitioning is forbidden.
    - KNN is fit on the fit partition. Mean neighbor cosine distances are evaluated on the calibration partition.
    - Distance threshold $D_{\text{thresh}}$ is set to the configured upper quantile (default $0.95$) of calibration distances.
@@ -177,9 +177,9 @@ While `scvi-tools` 1.5.0.post1 is installed in `sc_gpu_rapids2608`:
 
 ## 8. Current Technical Evidence (2026-08-22)
 
-- **Census I/O smoke**: build `2025-11-08`, 600 cells × 61,497 genes, sparse raw counts, 4 datasets and 69 donors. The H5AD reopened successfully and matched receipt SHA-256 `4fbb4f05...4220`; all 600 sorted `soma_joinid` values matched the H5AD row order. The receipt contains exactly 107 observed labels, zero zero-count categories, and a label-count sum of 600. Evidence: `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1255Z-b5eff2f/python/reference/`.
+- **Census I/O smoke**: clean factory commit `26f9123`, build `2025-11-08`, 600 cells × 61,497 genes, sparse raw counts, 4 datasets and 69 donors. The H5AD reopened successfully and matched receipt SHA-256 `4fbb4f05...4220`; all 600 sorted `soma_joinid` values matched the H5AD row order. The receipt contains exactly 107 observed labels, zero zero-count categories, and a label-count sum of 600; it records `factory_git_dirty=false` and materializer SHA-256 `d788e7b6...b3ec`. Evidence: `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1314Z-26f9123/python/reference/`.
 - **Trevino OOD**: 4,143 query cells and 9,496 reference cells over 3,000 Scanpy Seurat HVGs selected only from the purged reference cells. Known-label acceptance was 93.80%; macro-F1 against pipeline proxy labels was 0.9516 on accepted known cells and 0.8184 across all known cells when rejections were scored as `Unknown`. Held-out Microglia rejection recall was 91.83%, and OOD-vs-known rejection separation was 85.63 percentage points. All predeclared technical gates passed.
-- **CPU/GPU parity**: candidate labels, assignment status, accepted labels, rejection rate, known-label macro-F1, and held-out OOD recall agreed exactly; maximum mean-distance difference was `1.83e-6` (`rtol=1e-4`, `atol=1e-4`). Median end-to-end mapping time was 1.2378 s on CPU and 0.1326 s on GPU (about 9.33× faster) with 2.18 ms measured H2D+D2H overhead. GPU memory was 530.25 MB after warmup and 556.25 MB after the query, a 26 MB incremental delta on the live CUDA pool; cumulative process RSS was not lane-isolated. Evidence: `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1251Z-b5eff2f/python/validation/`.
+- **CPU/GPU parity**: on clean factory commit `26f9123`, candidate labels, assignment status, accepted labels, rejection rate, known-label macro-F1, and held-out OOD recall agreed exactly; maximum mean-distance difference was `1.73e-6` (`rtol=1e-4`, `atol=1e-4`). Median end-to-end mapping time was 1.2551 s on CPU and 0.1332 s on GPU (about 9.42× faster) with 2.16 ms measured H2D+D2H overhead. GPU memory was 530.25 MB after warmup and 556.25 MB after the query, a 26 MB incremental delta on the live CUDA pool; cumulative process RSS was not lane-isolated. Evidence: `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation/`.
 - **Claim boundary**: these results validate the technical OOD and accelerator contracts on pipeline-derived proxy labels. They are not biological ground truth or a general speedup guarantee for every module or dataset size.
 
 ### Backend Routing Policy
@@ -187,6 +187,8 @@ While `scvi-tools` 1.5.0.post1 is installed in `sc_gpu_rapids2608`:
 Production routing does not compare CPU and GPU on every new input because agreement between two implementations does not establish biological correctness. Instead, `ops/policy/gpu_backend_validations.json` records an offline, real-data certificate by module, data domain, backend version, predeclared scientific gates, numerical fidelity, and performance. `--reference-device auto` selects GPU only when `--reference-validation-domain` matches a promoted certificate and the cuML version is exact; otherwise it runs CPU directly. Explicit GPU requests fail closed on missing certificates or version drift. CPU remains subject to the same scientific validation and is not treated as ground truth by definition.
 
 The current certificate `reference-knn-trevino-20260822-v1` promotes cuML 26.08.00 only for `trevino-fetal-cortex-v1`. Its evidence uses published Trevino material but pipeline-derived proxy cell labels, so the promotion is technical and domain-bounded, not a biological atlas claim.
+
+Independent final review: Grok 4.6, xhigh, read-only `PASS`, with no P0/P1 remaining. Review bundle: `/home/zerlinshen/projects/reference-atlas-ood-validation/reviews/2026-08-22T1340Z-reference-atlas-ood-final/`.
 
 ---
 
