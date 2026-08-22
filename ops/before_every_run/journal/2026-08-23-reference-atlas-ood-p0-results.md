@@ -3,8 +3,10 @@
 ## Bounded outcome
 
 - The amendment is complete as a technical P0 implementation and evidence pass.
-- It is not a biological validation, a performance claim, or a production-GPU
-  promotion.
+- The clean process-isolated replacement run passes the declared scientific,
+  repeatability, residency, and parity gates and promotes a routing certificate
+  only for `trevino-fetal-cortex-v1` with cuML `26.08.00`.
+- It is not biological ground truth or a general GPU-module promotion.
 
 ## Census materialization
 
@@ -35,10 +37,36 @@
   so it wrote a failure receipt and the benchmark verdict is `FAIL_NOT_PROMOTED`.
   No CPU fallback, parity result, GPU timing claim, or promotion is allowed.
 
+### Scientific repeatability amendment and clean rerun
+
+- The failed raw-hash rule above conflated byte identity with scientific
+  identity. Before rerunning, the contract was amended to require exact
+  candidate label, confidence, assignment status, final reference type, and OOD
+  values, while applying a predeclared `rtol=atol=1e-6` only to floating-point
+  mean-neighbor distance. Every repetition is still persisted and SHA-verified.
+- A verifier bug in `2026-08-22T1548Z-ea425e8` compared parsed CSV
+  reserialization with original file bytes; that failed run is retained. The
+  verifier was corrected before the final clean commit and run.
+- Clean run:
+  `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1558Z-c38053d/`.
+  Factory SHA `c38053d`, frozen-input SHA-256
+  `d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89`.
+- Exact scientific-output SHA-256 across CPU/GPU and all repetitions:
+  `a24437b8da0c99b0af2179c9caf49ada80de01f29c744864a93b6ce4d5202a83`.
+  Maximum GPU within-lane distance drift was `4.7684e-7`; maximum CPU/GPU
+  distance difference was `9.2e-7`.
+- Held-out Microglia rejection recall `0.9564`, known acceptance coverage
+  `0.9319`, and known all-cell macro-F1 with rejected cells treated as unknown
+  `0.8243`; every predeclared gate passed.
+- CPU/GPU medians were `0.9080`/`0.08227` seconds (`11.04x`). The GPU child was
+  CUDA resident and observed at 522 MiB peak PID-scoped VRAM. Production runs
+  do not dual-run: exact promoted domain/version selects GPU; unknown or drifted
+  cases select CPU before mapping; explicit GPU failure remains fail-loud.
+
 ## Non-negotiable carry-forward
 
 - Do not change the source, split, labels, held-out negative control, retained
   feature set, threshold contract, or caps to repair this result.
-- Any future GPU work must start from this receipt and prove raw within-lane
-  repeatability as well as the predeclared integrity, OOD, residency, and
-  parity gates.
+- Any future certificate or backend-version change must start from these
+  receipts and rerun the predeclared integrity, exact-scientific-output,
+  bounded-distance, OOD, residency, and parity gates.

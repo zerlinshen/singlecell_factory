@@ -175,7 +175,7 @@ While `scvi-tools` 1.5.0.post1 is installed in `sc_gpu_rapids2608`:
 
 ---
 
-## 8. Evidence Status and Non-Routing Policy (2026-08-23)
+## 8. Evidence Status and Certificate-Gated Routing Policy (2026-08-23)
 
 The 2026-08-22 materialization and 9.42x timing record are historical technical evidence only. Its benchmark used cumulative-process timing/RSS and is not process-isolated; it is therefore superseded for attributable performance or GPU-routing claims. Preserve it at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/`, but do not quote it as a current speed result.
 
@@ -183,13 +183,15 @@ The amended benchmark freezes the source hash, sample-disjoint split, upstream r
 
 Fresh Census materialization completed at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1510Z-7a2a0e6/`: the 600-cell CSR H5AD is `600 x 61,497`, its H5AD SHA-256 is `f3ae9fe89f93726e9ce431150f29226beabb4c8c3eb55c734bb330468e9f4307`, and its selected join-ID SHA-256 is `50c7fdcceccd2c29cd672183d13dace5aabcec725892657e656a92fd0c92c93e`. `--verify-only` reopened the H5AD and verified its receipt, sparse layout, artifact hashes, and coordinate order.
 
-The fresh isolated benchmark is retained at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1534Z-3749a2d/` with hash-identical frozen input manifest `d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89`. Its CPU lane completed and its fixed held-out Microglia OOD gates passed. The GPU child verified its CUDA header path and was observed at 522 MiB VRAM, but its three measured consumed-output hashes differed; it therefore wrote a failure receipt and the overall benchmark verdict is `FAIL_NOT_PROMOTED`. There was no CPU fallback, no CPU/GPU parity verdict, and no current GPU timing or speedup claim. The earlier header-discovery failure at `2026-08-22T1527Z-7a2a0e6` is retained as diagnostic history.
+The first isolated CUDA-resident run at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1534Z-3749a2d/` is retained as superseded diagnostic evidence. It rejected different raw CSV hashes even though the varying field was a sub-micro-unit floating-point distance. The verifier was amended before the clean rerun to require exact label, confidence, assignment-status, final-type, and OOD columns while applying a predeclared `rtol=atol=1e-6` contract only to mean-neighbor distance. Each repetition remains a separately persisted and SHA-verified artifact; raw-byte differences remain visible.
 
-The policy registry remains `validated_p0_not_promoted`: it is evidence-only, cannot select a runtime device, and does not establish biological validation or production promotion. A future technical result may be reported only if all artifact-integrity, OOD, CUDA-residency, within-lane repeatability, and parity gates pass without post-hoc tuning. Trevino labels remain pipeline-derived proxy labels, not biological ground truth.
+The clean committed-SHA replacement at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1558Z-c38053d/` used hash-identical frozen input manifest `d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89` in independent child processes. All exact scientific columns shared SHA-256 `a24437b8da0c99b0af2179c9caf49ada80de01f29c744864a93b6ce4d5202a83`; maximum GPU within-lane distance drift was `4.7684e-7`, and CPU/GPU maximum distance difference was `9.2e-7`. Candidate labels, assignment status, final mapped type, OOD metrics, and rejection rates agreed exactly. Held-out Microglia rejection recall was `0.9564`, known acceptance coverage `0.9319`, and known all-cell macro-F1 with rejected cells treated as unknown `0.8243`. CPU/GPU medians were `0.9080`/`0.08227` seconds, an isolated `11.04x` speedup; CUDA residency and 522 MiB peak PID-scoped VRAM were observed.
+
+The policy certificate is therefore `promoted` only for `trevino-fetal-cortex-v1` with cuML `26.08.00`. This is authorization to choose the validated implementation for that exact technical domain, not biological promotion. Trevino labels remain pipeline-derived proxy labels, the retained feature set is not independently query-blind, and no result generalizes the GPU certificate to another dataset or module.
 
 ### Backend Device Contract
 
-`cpu` is the CLI and programmatic default. `auto` is rejected. Explicit `gpu` is experimental and requires `gpu_mode != off`, cuML/CUDA availability, and an observed CUDA-resident execution; it never falls back to sklearn. The complete JSON-safe mapping summary is mirrored into both run metadata and `adata.uns["annotation"]["reference_mapping"]`, including source identity, alignment, calibration receipt, backend/residency, thresholds, accepted/rejected counts, override counts, timing, claim class, and SCANVI status.
+`auto` is the CLI and programmatic default and selects one backend before execution; it never compares CPU and GPU on production data. An exact promoted domain and cuML version route to GPU after CUDA preflight. Missing/unknown certificates, `gpu_mode=off`, unavailable CUDA/cuML, and backend-version drift route `auto` directly to CPU. Explicit `gpu` requires the same certificate and fails loud on any mismatch with no sklearn fallback. The complete JSON-safe mapping summary is mirrored into both run metadata and `adata.uns["annotation"]["reference_mapping"]`, including the selection receipt, source identity, alignment, calibration receipt, backend/residency, thresholds, accepted/rejected counts, override counts, timing, claim class, and SCANVI status.
 
 ---
 
@@ -204,4 +206,5 @@ The policy registry remains `validated_p0_not_promoted`: it is evidence-only, ca
 | Missing reference label column | Annotation stage fails loud (`ValueError`) | Check `--reference-label-key` matches reference `.obs`. |
 | Insufficient gene overlap ($< 50$) | Annotation stage fails loud (`ValueError`) | Verify gene identifier namespace between query and reference. |
 | Calibration group/partition or `k` invalid | Annotation stage fails loud (`ValueError`) | Supply a valid whole-group column and adequate reference, or use an explicitly governed fixed threshold. |
-| `--reference-device gpu` requested but CUDA/cuML unavailable | Hard error (`RuntimeError`) | Run in `sc_gpu_rapids2608` or set `--reference-device cpu`. Never silently falls back. |
+| `--reference-device auto` with absent/unpromoted domain, disabled GPU, unavailable backend, or version drift | Select CPU before mapping | Supply a promoted `--reference-validation-domain` only when the input satisfies that certificate; otherwise retain CPU. |
+| `--reference-device gpu` requested without an exact promoted certificate or CUDA/cuML preflight | Hard error (`ValueError`/`RuntimeError`) | Run in `sc_gpu_rapids2608` with the exact validated domain/version, or select CPU explicitly. Never silently falls back. |

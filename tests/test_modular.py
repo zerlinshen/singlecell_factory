@@ -393,10 +393,15 @@ def test_cli_reference_device_and_quantile_contracts(monkeypatch):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["prog", "--project", "x", "--sample-root", "/tmp/s", "--reference-device", "auto"],
+        [
+            "prog", "--project", "x", "--sample-root", "/tmp/s",
+            "--reference-device", "auto",
+            "--reference-validation-domain", "trevino-fetal-cortex-v1",
+        ],
     )
-    with pytest.raises(SystemExit):
-        mod.parse_args()
+    args = mod.parse_args()
+    assert args.reference_device == "auto"
+    assert args.reference_validation_domain == "trevino-fetal-cortex-v1"
 
     monkeypatch.setattr(
         "sys.argv",

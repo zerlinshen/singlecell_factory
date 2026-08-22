@@ -1,78 +1,104 @@
 {
-  "schema_version": "2.0",
-  "policy": "This registry is evidence-only. It never selects a runtime backend: reference mapping defaults to CPU and explicit GPU remains an experimental technical opt-in that must prove cuML/CUDA residency without fallback.",
+  "schema_version": "2.1",
+  "policy": "Production selects exactly one backend before reference mapping. Unknown or unvalidated domains, disabled GPU mode, unavailable CUDA/cuML, and backend-version drift route directly to CPU. A promoted offline real-data certificate may route its exact declared domain and backend version directly to GPU. Production never dual-runs CPU and GPU; CPU is a conservative fallback, not biological ground truth.",
   "modules": {
     "reference_mapping_knn": {
       "default_unvalidated_device": "cpu",
-      "runtime_routing": "forbidden",
+      "runtime_routing": "certificate_required",
+      "production_dual_run": false,
       "domains": {
         "trevino-fetal-cortex-v1": {
-          "certificate_id": "reference-knn-trevino-20260822-v1",
-          "status": "validated_p0_not_promoted",
+          "certificate_id": "reference-knn-trevino-20260822-v2",
+          "status": "promoted",
           "validated_backend": {
             "implementation": "cuml.neighbors.NearestNeighbors",
             "cuml_version": "26.08.00",
-            "device": "NVIDIA GeForce RTX 5090 D v2"
+            "device": "NVIDIA GeForce RTX 5090 D v2",
+            "cuda_residency_verified": true
           },
           "validation_dataset": {
             "source": "Trevino fetal cortex HFT3 versus HFT7/HFT5/HFT6",
+            "source_sha256": "44b3cf6f98ef890ad9a2723f275f8ac63b51148f5a685e38cfe802d561282ad7",
             "query_cells": 4143,
             "reference_cells": 9496,
-            "features": 3000,
-            "feature_selection": "reference_only_scanpy_seurat_hvg",
+            "features": 2000,
+            "feature_selection": "source_highly_variable_ordered_cap",
+            "feature_selection_independently_query_blind": false,
             "held_out_ood_label": "Microglia",
             "labels": "pipeline-derived proxy labels"
           },
           "scientific_gates": {
-            "known_acceptance_coverage": 0.9380,
-            "known_all_cells_macro_f1_rejected_as_unknown": 0.8184,
-            "held_out_ood_rejection_recall": 0.9183,
-            "delta_rejection_rate_ood_vs_known": 0.8563,
+            "known_acceptance_coverage": 0.931938559322034,
+            "known_all_cells_macro_f1_rejected_as_unknown": 0.8243223242061022,
+            "known_accepted_macro_f1": 0.9621386824274898,
+            "held_out_ood_rejection_recall": 0.9564032697547684,
+            "delta_rejection_rate_ood_vs_known": 0.8883418290768024,
             "all_passed": true
+          },
+          "within_lane_repeatability": {
+            "contract": "exact_scientific_outputs_plus_bounded_float_distance",
+            "measured_repetitions": 3,
+            "exact_scientific_output_sha256": "a24437b8da0c99b0af2179c9caf49ada80de01f29c744864a93b6ce4d5202a83",
+            "distance_rtol": 0.000001,
+            "distance_atol": 0.000001,
+            "cpu_max_abs_distance_drift": 0.0,
+            "gpu_max_abs_distance_drift": 0.000000476837158203125,
+            "gpu_raw_bitwise_identical": false,
+            "interpretation": "GPU raw CSV bytes differ only in bounded floating-point distances; labels, confidence, assignment status, final reference cell type, and OOD flags are exact across repetitions."
           },
           "backend_fidelity": {
             "candidate_label_agreement": 1.0,
             "assignment_status_agreement": 1.0,
-            "maximum_mean_distance_difference": 0.00000173,
+            "reference_cell_type_agreement": 1.0,
+            "maximum_distance_difference": 0.00000092,
+            "delta_known_macro_f1": 0.0,
+            "delta_ood_rejection_recall": 0.0,
             "parity_passed": true
           },
           "performance": {
-            "evidence_class": "historical_cumulative_process_non_isolated_superseded",
-            "cpu_median_seconds": 1.2551,
-            "gpu_median_seconds": 0.1332,
-            "historical_speedup": 9.42,
-            "replacement_condition": "A fresh benchmark must use separate child processes, hash-identical serialized inputs, child RSS, and PID-scoped VRAM polling."
+            "evidence_class": "process_isolated_same_interpreter_hash_identical_frozen_inputs",
+            "cpu_median_seconds": 0.9080402250110637,
+            "gpu_median_seconds": 0.08227156900102273,
+            "speedup": 11.037108,
+            "cpu_child_ru_maxrss_mb": 3380.2578125,
+            "gpu_child_ru_maxrss_mb": 3380.2578125,
+            "gpu_peak_vram_mb": 522,
+            "gpu_vram_delta_mb": 22.0
           },
-          "isolated_rerun": {
-            "status": "FAIL_NOT_PROMOTED",
-            "materialization_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1510Z-7a2a0e6/python/reference",
-            "initial_benchmark_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1527Z-7a2a0e6/python/validation",
-            "benchmark_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1534Z-3749a2d/python/validation",
-            "source_sha256": "44b3cf6f98ef890ad9a2723f275f8ac63b51148f5a685e38cfe802d561282ad7",
-            "input_manifest_sha256": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
-            "execution": "Independent CPU/GPU child processes using the same sc_gpu_rapids2608 interpreter and hash-identical frozen inputs.",
-            "cpu_lane": {
-              "status": "completed",
-              "median_seconds": 0.9071675369923469,
-              "ru_maxrss_mb": 3380.578125,
-              "held_out_ood_gates": "PASS"
-            },
-            "gpu_lane": {
-              "status": "failed",
-              "failure": "Within-lane mapping outputs are nondeterministic across three measured repetitions.",
-              "cuda_headers_verified": true,
-              "peak_vram_mb": 522,
-              "fallback": "none"
-            },
-            "interpretation": "No CPU/GPU parity verdict or current GPU speed claim is published. The failed child receipt is retained as technical P0 evidence and cannot authorize routing or promotion."
+          "routing": {
+            "auto_for_exact_promoted_domain": "gpu",
+            "auto_for_unknown_or_unvalidated_domain": "cpu",
+            "auto_when_gpu_mode_off": "cpu",
+            "auto_on_backend_unavailable_or_version_drift": "cpu",
+            "explicit_gpu_failure": "fail_loud_no_cpu_fallback",
+            "production_dual_run": false
           },
-          "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation",
+          "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1558Z-c38053d/python/validation",
+          "input_manifest_sha256": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
           "evidence_sha256": {
-            "benchmark_contract.json": "4132bbd5445fa0dd7bba8c30c2ba79feae3f3260aced1d367cc65afd6f996a5e",
-            "heldout_ood_metrics.json": "86b351423cb4e6914564cbf430f87f082d7bc4fec7d10bf3053612652e8310bb",
-            "cpu_gpu_parity.json": "e4d1d19ad0a8e377c665c160bd7f97ccd9159353a7436f7fe97f290ed334c38e"
+            "benchmark_contract.json": "3d4058bedff3d93f3191ba465264982732d750591558f998e453fbb2c5ac9d37",
+            "heldout_ood_metrics.json": "35f1f32b94b1df54268c70958ac462f858e021b75bc59f3582f1da08d6e78142",
+            "cpu_gpu_parity.json": "629e44d0b1e217a66bbf072cb81b839e45b3065205e1ff731cdb9f7a79564962",
+            "cpu_metrics.json": "fb50d43f2fd884d599ef6365fc51182b913d59f191853156dcf254f3348bd375",
+            "gpu_metrics.json": "4ac925832cea4ba1fb344dd43dbf036602c7c39516433f624b9770164914e1d5",
+            "input_manifest.json": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
+            "source_and_split_receipt.json": "7c70ac2fb675065e75caa6533f656288f1e84212ba71f9b6d44073a7f7cc3fc4"
           },
-          "claim_scope": "Historical technical P0 KNN/OOD validation for this declared data domain. It is not production routing, biological ground truth, or a general GPU-module guarantee."
+          "superseded_evidence": [
+            {
+              "run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation",
+              "reason": "cumulative-process performance measurement was not process-isolated"
+            },
+            {
+              "run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1534Z-3749a2d/python/validation",
+              "reason": "raw-byte repeatability was treated as scientific nondeterminism before exact-output plus bounded-distance validation was implemented"
+            },
+            {
+              "run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1548Z-ea425e8/python/validation",
+              "reason": "artifact verifier compared parsed CSV reserialization rather than persisted file bytes"
+            }
+          ],
+          "claim_scope": "Promotes cuML 26.08 GPU routing only for the declared Trevino fetal-cortex technical domain and exact certificate contract. Trevino labels are pipeline-derived proxies; this is not biological ground truth, a general GPU-module guarantee, or authority to route other datasets to GPU."
         }
       }
     }

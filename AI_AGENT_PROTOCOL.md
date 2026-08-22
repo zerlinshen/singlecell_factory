@@ -226,9 +226,12 @@ In both modes, this remote repo remains the run-truth surface.
 ## Current State (2026-08-23)
 
 The Reference Atlas OOD P0 amendment completed its bounded technical evidence pass.
-CPU is the default; explicit GPU remains a fail-closed technical opt-in. The isolated
-GPU benchmark is retained as `FAIL_NOT_PROMOTED` because raw repeat-output hashes
-differed, so it cannot support routing, performance, biological, or production claims.
+The clean process-isolated run `2026-08-22T1558Z-c38053d` passed exact scientific-output,
+bounded-distance repeatability, OOD, CUDA-residency, and CPU/GPU parity gates, with an
+isolated `11.04x` median speedup. `auto` selects GPU only for the promoted
+`trevino-fetal-cortex-v1` / cuML `26.08.00` certificate; unknown, unvalidated, disabled,
+unavailable, or version-drift cases select CPU before mapping. Production never dual-runs.
+This is a technical routing certificate, not biological ground truth or general GPU proof.
 Consult `docs/REFERENCE_ATLAS_OOD.md` before reporting the milestone.
 
 The August pipeline-remediation round preserves the bounded scientific verdicts

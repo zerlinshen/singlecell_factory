@@ -1,10 +1,13 @@
 # CURRENT STATUS BANNER — 2026-08-15 (read first)
 
 **Reference Atlas OOD P0 results (2026-08-23).** The 600-cell Census reference
-materialization and receipt verification passed. The isolated Trevino GPU child
-proved CUDA/VRAM activity but failed raw within-lane output repeatability, so
-the benchmark is retained as `FAIL_NOT_PROMOTED`: it cannot route GPU work or
-support performance, biological, or production claims. Journal:
+materialization and receipt verification passed. The clean process-isolated
+Trevino run `2026-08-22T1558Z-c38053d` passed exact scientific-output,
+bounded-distance repeatability, OOD, CUDA-residency, and CPU/GPU parity gates;
+its isolated median speedup was `11.04x`. `auto` selects GPU only for the exact
+promoted `trevino-fetal-cortex-v1` / cuML `26.08.00` certificate and otherwise
+selects CPU before mapping; production does not dual-run. This is a technical
+routing certificate, not biological ground truth or general GPU proof. Journal:
 `journal/2026-08-23-reference-atlas-ood-p0-results.md`.
 
 **GPU promotion pre-commit review (2026-08-23).** Fresh focused tests passed

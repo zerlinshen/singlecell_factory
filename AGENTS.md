@@ -135,9 +135,12 @@ approval, and the full 14-day silent window are all proven.
 ## Current State (2026-08-23)
 
 The Reference Atlas OOD P0 amendment has completed its bounded technical evidence pass.
-Its CPU-default, explicit-GPU, and receipt-integrity safeguards are in place; the isolated
-GPU benchmark is retained as `FAIL_NOT_PROMOTED` because raw repeat-output hashes differed.
-It does not support GPU routing, performance, biological, or production-promotion claims.
+The clean process-isolated run `2026-08-22T1558Z-c38053d` passed exact scientific-output,
+bounded-distance repeatability, OOD, CUDA-residency, and CPU/GPU parity gates, with an
+isolated `11.04x` median speedup. `auto` selects GPU only for the promoted
+`trevino-fetal-cortex-v1` / cuML `26.08.00` certificate; unknown, unvalidated, disabled,
+unavailable, or version-drift cases select CPU before mapping. Production never dual-runs.
+This is a technical routing certificate, not biological ground truth or general GPU proof.
 See `docs/REFERENCE_ATLAS_OOD.md` for the bounded contract and evidence paths.
 
 The August pipeline-remediation round preserves the scientific claim posture

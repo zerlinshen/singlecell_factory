@@ -196,9 +196,9 @@ conda env remove --yes --prefix "$census_tmp_prefix"
 rmdir "$census_tmp_root"
 ```
 
-Reference H5AD files materialized via `scripts/materialize_cellxgene_reference.py` are loaded directly by the compute lanes and can be rechecked offline with `--verify-only`. Reference mapping defaults to CPU. `--reference-device gpu` is an explicit experimental technical opt-in: it requires `gpu_mode != off`, cuML, CUDA device availability, and demonstrated CUDA residency; it never falls back to sklearn. `auto` and validation-domain routing are rejected. The validation registry is evidence-only and cannot route production execution. CPU/GPU agreement is implementation evidence, not biological truth or production promotion. The mapping/OOD contract and runbook are in [`docs/REFERENCE_ATLAS_OOD.md`](docs/REFERENCE_ATLAS_OOD.md) and [PROTOCOL.md](PROTOCOL.md).
+Reference H5AD files materialized via `scripts/materialize_cellxgene_reference.py` are loaded directly by the compute lanes and can be rechecked offline with `--verify-only`. Reference mapping defaults to `auto`, but `auto` does not benchmark CPU and GPU on a production input. It selects exactly one backend from `ops/policy/gpu_backend_validations.json`: an unknown/unvalidated domain, `gpu_mode=off`, missing CUDA/cuML, or backend-version drift goes directly to CPU; the exact promoted `trevino-fetal-cortex-v1` domain with cuML `26.08.00` goes directly to GPU after preflight. Explicit GPU failure remains fail-loud with no sklearn fallback. CPU is the conservative fallback, not biological truth. The mapping/OOD contract and runbook are in [`docs/REFERENCE_ATLAS_OOD.md`](docs/REFERENCE_ATLAS_OOD.md) and [PROTOCOL.md](PROTOCOL.md).
 
-The 2026-08-22 isolated benchmark recorded CUDA residency but failed its required within-lane raw-output repeatability check; it is retained as `FAIL_NOT_PROMOTED` technical evidence. Do not quote a current GPU timing or speedup from that result.
+The clean process-isolated run `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1558Z-c38053d/` passed all predeclared OOD and parity gates. Across three repetitions, labels, confidence, assignment status, final mapped type, and OOD flags were exact; GPU distance drift was at most `4.77e-7` under the predeclared `rtol=atol=1e-6` contract. CPU/GPU medians were `0.9080`/`0.08227` seconds (`11.04x`). This promotes only the declared technical routing certificate; Trevino labels remain proxy labels and do not establish biological ground truth or general GPU correctness.
 
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
@@ -1986,7 +1986,8 @@ checkpoints or change numerical analysis settings.
 | `--reference-k` | 15 | K neighbors for reference mapping |
 | `--reference-min-confidence` | 0.6 | Min confidence needed to override marker label |
 | `--reference-override-mode` | `conservative` | `conservative` (override Unknown/low-confidence only) or `all` |
-| `--reference-device` | `cpu` | `cpu` is the programmatic and CLI default. `gpu` is an explicit experimental opt-in requiring cuML/CUDA residency and `--gpu-mode` other than `off`; it never falls back to CPU. |
+| `--reference-device` | `auto` | Select one backend before execution. `auto` uses GPU only for an exact promoted validation domain and backend version; all unknown/unvalidated or unavailable cases go directly to CPU. Explicit `gpu` fails loud and never falls back. |
+| `--reference-validation-domain` | empty | Offline real-data certificate domain used by `auto`/`gpu`, for example `trevino-fetal-cortex-v1`. Empty or unknown domains route `auto` directly to CPU. |
 | `--reference-ood-mode` | `reference_quantile` | OOD calibration mode: `reference_quantile` (reference-only split) or `fixed` |
 | `--reference-distance-quantile` | 0.95 | Upper quantile of reference calibration distances for OOD rejection threshold |
 | `--reference-fixed-distance-threshold` | empty | Operator-fixed cosine distance threshold for OOD rejection (used with `fixed` mode) |
