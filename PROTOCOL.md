@@ -874,6 +874,8 @@ run_id=<UTC-timestamp>-<clean-short-sha>
 
 The benchmark is a bounded coordinator with isolated private CPU/GPU child processes. It freezes source identity, split, matrices, cell order, genes, parameters, and the full-precision threshold before either child starts. Each child warms exactly 256 query rows once, makes three measured repetitions, records its own `ru_maxrss`, and emits a failure receipt on any integrity or GPU failure. A GPU failure is `FAIL_NOT_PROMOTED`, not a CPU fallback.
 
+The isolated 2026-08-22 Trevino run at `/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1534Z-3749a2d/` is retained as `FAIL_NOT_PROMOTED`: CUDA residency/VRAM observation succeeded, while raw consumed-output hashes differed across GPU repetitions. Do not use it for a GPU parity, speed, or production-promotion claim.
+
 ```bash
 /home/zerlinshen/conda/envs/sc_gpu_rapids2608/bin/python \
   scripts/benchmark_reference_mapping.py \

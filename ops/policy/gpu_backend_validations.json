@@ -43,6 +43,29 @@
             "historical_speedup": 9.42,
             "replacement_condition": "A fresh benchmark must use separate child processes, hash-identical serialized inputs, child RSS, and PID-scoped VRAM polling."
           },
+          "isolated_rerun": {
+            "status": "FAIL_NOT_PROMOTED",
+            "materialization_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1510Z-7a2a0e6/python/reference",
+            "initial_benchmark_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1527Z-7a2a0e6/python/validation",
+            "benchmark_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1534Z-3749a2d/python/validation",
+            "source_sha256": "44b3cf6f98ef890ad9a2723f275f8ac63b51148f5a685e38cfe802d561282ad7",
+            "input_manifest_sha256": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
+            "execution": "Independent CPU/GPU child processes using the same sc_gpu_rapids2608 interpreter and hash-identical frozen inputs.",
+            "cpu_lane": {
+              "status": "completed",
+              "median_seconds": 0.9071675369923469,
+              "ru_maxrss_mb": 3380.578125,
+              "held_out_ood_gates": "PASS"
+            },
+            "gpu_lane": {
+              "status": "failed",
+              "failure": "Within-lane mapping outputs are nondeterministic across three measured repetitions.",
+              "cuda_headers_verified": true,
+              "peak_vram_mb": 522,
+              "fallback": "none"
+            },
+            "interpretation": "No CPU/GPU parity verdict or current GPU speed claim is published. The failed child receipt is retained as technical P0 evidence and cannot authorize routing or promotion."
+          },
           "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation",
           "evidence_sha256": {
             "benchmark_contract.json": "4132bbd5445fa0dd7bba8c30c2ba79feae3f3260aced1d367cc65afd6f996a5e",

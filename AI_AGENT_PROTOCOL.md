@@ -225,10 +225,11 @@ In both modes, this remote repo remains the run-truth surface.
 
 ## Current State (2026-08-23)
 
-The Reference Atlas OOD P0 amendment is in controlled implementation. CPU is the
-default; explicit GPU is a fail-closed technical opt-in, and fresh isolated evidence
-is required before any promotion or biological claim. Consult
-`docs/REFERENCE_ATLAS_OOD.md` before reporting the milestone.
+The Reference Atlas OOD P0 amendment completed its bounded technical evidence pass.
+CPU is the default; explicit GPU remains a fail-closed technical opt-in. The isolated
+GPU benchmark is retained as `FAIL_NOT_PROMOTED` because raw repeat-output hashes
+differed, so it cannot support routing, performance, biological, or production claims.
+Consult `docs/REFERENCE_ATLAS_OOD.md` before reporting the milestone.
 
 The August pipeline-remediation round preserves the bounded scientific verdicts
 below and adds the canonical `../QUICKSTART.md`, report-all 33-gate route,

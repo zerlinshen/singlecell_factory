@@ -198,6 +198,8 @@ rmdir "$census_tmp_root"
 
 Reference H5AD files materialized via `scripts/materialize_cellxgene_reference.py` are loaded directly by the compute lanes and can be rechecked offline with `--verify-only`. Reference mapping defaults to CPU. `--reference-device gpu` is an explicit experimental technical opt-in: it requires `gpu_mode != off`, cuML, CUDA device availability, and demonstrated CUDA residency; it never falls back to sklearn. `auto` and validation-domain routing are rejected. The validation registry is evidence-only and cannot route production execution. CPU/GPU agreement is implementation evidence, not biological truth or production promotion. The mapping/OOD contract and runbook are in [`docs/REFERENCE_ATLAS_OOD.md`](docs/REFERENCE_ATLAS_OOD.md) and [PROTOCOL.md](PROTOCOL.md).
 
+The 2026-08-22 isolated benchmark recorded CUDA residency but failed its required within-lane raw-output repeatability check; it is retained as `FAIL_NOT_PROMOTED` technical evidence. Do not quote a current GPU timing or speedup from that result.
+
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
 ### Large-run DE and checkpoint behavior (2026-05-19)

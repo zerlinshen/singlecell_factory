@@ -134,10 +134,11 @@ approval, and the full 14-day silent window are all proven.
 
 ## Current State (2026-08-23)
 
-The Reference Atlas OOD P0 amendment is in controlled implementation. Its CPU-default,
-explicit-GPU, receipt-integrity, and isolated-benchmark changes are technical safeguards;
-fresh evidence is required before any promotion or biological claim. See
-`docs/REFERENCE_ATLAS_OOD.md` for the bounded contract and claim limit.
+The Reference Atlas OOD P0 amendment has completed its bounded technical evidence pass.
+Its CPU-default, explicit-GPU, and receipt-integrity safeguards are in place; the isolated
+GPU benchmark is retained as `FAIL_NOT_PROMOTED` because raw repeat-output hashes differed.
+It does not support GPU routing, performance, biological, or production-promotion claims.
+See `docs/REFERENCE_ATLAS_OOD.md` for the bounded contract and evidence paths.
 
 The August pipeline-remediation round preserves the scientific claim posture
 below while adding the canonical suite quickstart, 34-gate report-all route,
