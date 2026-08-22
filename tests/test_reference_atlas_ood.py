@@ -32,6 +32,7 @@ from workflow.modular._reference_mapping import (
     ASSIGNMENT_STATUS_REJECTED_BOTH,
     ASSIGNMENT_STATUS_REJECTED_LOW_CONF,
     ASSIGNMENT_STATUS_REJECTED_OOD_DIST,
+    _configure_cuda_toolkit_path,
     align_reference_genes,
     calibrate_reference_ood_threshold,
     compute_parity_metrics,
@@ -316,6 +317,19 @@ def test_reference_gpu_mode_off_and_missing_backend_fail_without_cpu_fallback(mo
     monkeypatch.setattr("workflow.modular._reference_mapping.importlib.import_module", _missing_backend)
     with pytest.raises(RuntimeError, match="No CPU fallback is allowed"):
         resolve_reference_device("gpu", gpu_mode="auto")
+
+
+def test_cuda_toolkit_resolution_replaces_invalid_inherited_path(tmp_path: Path, monkeypatch):
+    fake_prefix = tmp_path / "fake-env"
+    header = fake_prefix / "targets" / "x86_64-linux" / "include" / "cuda_runtime.h"
+    header.parent.mkdir(parents=True)
+    header.write_text("// test header\n", encoding="utf-8")
+    monkeypatch.setattr("workflow.modular._reference_mapping.sys.prefix", str(fake_prefix))
+    monkeypatch.setenv("CUDA_PATH", str(tmp_path / "missing-cuda"))
+    receipt = _configure_cuda_toolkit_path()
+    assert receipt["cuda_path"] == str(header.parents[1])
+    assert receipt["cuda_path_source"] == "interpreter_target_toolkit"
+    assert receipt["cuda_headers_verified"] is True
 
 
 def test_validation_policy_cannot_route_reference_execution(tmp_path: Path):

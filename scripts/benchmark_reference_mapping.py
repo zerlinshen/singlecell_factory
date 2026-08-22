@@ -617,7 +617,38 @@ def _run_lane_process(
         "--expected-input-manifest-sha256",
         expected_input_manifest_sha256,
     ]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    child_environment = os.environ.copy()
+    cuda_bootstrap: dict[str, Any] = {}
+    if device == "gpu":
+        interpreter_prefix = Path(sys.executable).resolve().parent.parent
+        toolkit_root = interpreter_prefix / "targets" / "x86_64-linux"
+        if (toolkit_root / "include" / "cuda_runtime.h").is_file():
+            # AnnData imports CuPy before lane code can run. Set this in the
+            # child process environment, rather than after import, so CuPy's
+            # lazy CUB compiler sees the interpreter's tested CUDA headers.
+            child_environment["CUDA_PATH"] = str(toolkit_root)
+            toolkit_bin = toolkit_root / "bin"
+            path_entries = [entry for entry in child_environment.get("PATH", "").split(os.pathsep) if entry]
+            if toolkit_bin.is_dir() and str(toolkit_bin) not in path_entries:
+                child_environment["PATH"] = os.pathsep.join([str(toolkit_bin), *path_entries])
+            cuda_bootstrap = {
+                "cuda_path": str(toolkit_root),
+                "cuda_headers_verified": True,
+                "source": "child_interpreter_target_toolkit",
+            }
+        else:
+            cuda_bootstrap = {
+                "cuda_path": None,
+                "cuda_headers_verified": False,
+                "source": "child_interpreter_target_toolkit_missing",
+            }
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=child_environment,
+    )
     vram_samples: list[int] = []
     vram_poll_reasons: list[str] = []
     while process.poll() is None:
@@ -629,7 +660,12 @@ def _run_lane_process(
         time.sleep(0.1)
     stdout, stderr = process.communicate()
     log_path = logs_dir / f"reference_mapping_{device}_lane.log"
-    _atomic_write_text(log_path, f"command={json.dumps(command)}\nstdout:\n{stdout}\nstderr:\n{stderr}\n")
+    _atomic_write_text(
+        log_path,
+        f"command={json.dumps(command)}\n"
+        f"cuda_bootstrap={json.dumps(cuda_bootstrap, sort_keys=True)}\n"
+        f"stdout:\n{stdout}\nstderr:\n{stderr}\n",
+    )
     polling = {
         "peak_vram_mb": max(vram_samples) if vram_samples else None,
         "reason": None if vram_samples else (vram_poll_reasons[-1] if vram_poll_reasons else "CPU lane"),
@@ -642,6 +678,7 @@ def _run_lane_process(
         "exit_code": int(process.returncode),
         "log_path": str(log_path),
         "vram_poll": polling,
+        "cuda_bootstrap": cuda_bootstrap,
     }
 
 

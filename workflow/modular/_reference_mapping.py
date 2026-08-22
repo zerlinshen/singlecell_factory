@@ -37,6 +37,51 @@ ASSIGNMENT_STATUS_REJECTED_LOW_CONF = "rejected_low_confidence"
 ASSIGNMENT_STATUS_REJECTED_OOD_DIST = "rejected_ood_distance"
 ASSIGNMENT_STATUS_REJECTED_BOTH = "rejected_low_confidence_and_ood_distance"
 
+
+def _configure_cuda_toolkit_path() -> dict[str, Any]:
+    """Resolve a usable CUDA toolkit root for explicit GPU mapping.
+
+    Invoking an environment interpreter directly does not activate it:
+    ``CONDA_PREFIX`` and inherited ``CUDA_PATH`` can still name a base
+    environment. CuPy compiles some kernels lazily, so validate the actual
+    header location before importing or executing the GPU backend.
+    """
+    inherited = os.environ.get("CUDA_PATH", "").strip()
+    candidates: list[tuple[str, Path]] = []
+    if inherited:
+        candidates.append(("inherited_cuda_path", Path(inherited)))
+    prefix = Path(sys.prefix)
+    candidates.extend(
+        [
+            ("interpreter_target_toolkit", prefix / "targets" / "x86_64-linux"),
+            ("interpreter_prefix", prefix),
+        ]
+    )
+    seen: set[Path] = set()
+    for source, candidate in candidates:
+        candidate = candidate.resolve()
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if not (candidate / "include" / "cuda_runtime.h").is_file():
+            continue
+        os.environ["CUDA_PATH"] = str(candidate)
+        bin_dir = candidate / "bin"
+        if bin_dir.is_dir():
+            path_entries = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+            if str(bin_dir) not in path_entries:
+                os.environ["PATH"] = os.pathsep.join([str(bin_dir), *path_entries])
+        return {
+            "cuda_path": str(candidate),
+            "cuda_path_source": source,
+            "cuda_headers_verified": True,
+        }
+    raise RuntimeError(
+        "Explicit GPU reference mapping requires CUDA toolkit headers under an inherited CUDA_PATH "
+        "or the active interpreter prefix. No CPU fallback is allowed."
+    )
+
+
 def resolve_reference_device(
     requested_device: str,
     *,
@@ -66,6 +111,7 @@ def resolve_reference_device(
 
     if resolved_gpu_mode == "off":
         raise ValueError("reference_device='gpu' cannot be used when gpu_mode='off'.")
+    toolkit_receipt = _configure_cuda_toolkit_path()
     try:
         cp = importlib.import_module("cupy")
         cuml = importlib.import_module("cuml")
@@ -103,6 +149,7 @@ def resolve_reference_device(
         "cuda_free_mb": round(float(free_bytes) / (1024.0 ** 2), 2),
         "cuda_total_mb": round(float(total_bytes) / (1024.0 ** 2), 2),
         "cuda_preflight_verified": True,
+        **toolkit_receipt,
     })
     return "gpu", receipt
 
@@ -461,14 +508,7 @@ def map_knn_reference(
     }
 
     if device == "gpu":
-        # Ensure CUDA_PATH is set for CuPy JIT compilation if targets directory exists
-        for candidate_dir in [
-            Path(sys.prefix) / "targets" / "x86_64-linux",
-            Path(os.environ.get("CONDA_PREFIX", "")) / "targets" / "x86_64-linux",
-        ]:
-            if candidate_dir.exists():
-                os.environ.setdefault("CUDA_PATH", str(candidate_dir))
-                break
+        toolkit_receipt = _configure_cuda_toolkit_path()
 
         try:
             import cupy as cp
@@ -482,6 +522,15 @@ def map_knn_reference(
             ) from exc
 
         try:
+            # CuPy lazily compiles CUB kernels. Trigger a tiny synchronized
+            # kernel before cuML's finite-value validation so a direct
+            # interpreter invocation exposes a missing toolkit/header error
+            # before any measured KNN work. Benchmark lane warm-up remains the
+            # separately specified 256-query mapping call.
+            t0_runtime_warmup = time.perf_counter()
+            cp.arange(1, dtype=cp.float32).sum()
+            cp.cuda.Stream.null.synchronize()
+            timing_metrics["cuda_runtime_warmup_sec"] = time.perf_counter() - t0_runtime_warmup
             free_before, total_vram = cp.cuda.runtime.memGetInfo()
             used_before = total_vram - free_before
             # Transfer to GPU device
@@ -526,6 +575,8 @@ def map_knn_reference(
                 "vram_used_after_query_mb": round(float(used_after) / (1024.0 ** 2), 2),
                 "vram_delta_mb": round(float(used_after - used_before) / (1024.0 ** 2), 2),
                 "cuda_residency_verified": True,
+                "cuda_kernel_warmup_verified": True,
+                **toolkit_receipt,
             })
         except Exception as exc:
             raise RuntimeError(f"cuML GPU KNN execution failed: {exc}. No silent CPU fallback allowed.") from exc
