@@ -2883,7 +2883,7 @@ The most recent canonical work is the **wave5 Trevino PCW21** biology-aware vali
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-22T14:05:08Z`
+Last refreshed: `2026-08-22T16:23:17Z`
 
 ![Workspace structure](docs/architecture/structure.png)
 

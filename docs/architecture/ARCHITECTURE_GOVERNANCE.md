@@ -3,7 +3,7 @@
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-22T14:05:08Z`
+Last refreshed: `2026-08-22T16:23:17Z`
 
 ![Workspace structure](structure.png)
 
