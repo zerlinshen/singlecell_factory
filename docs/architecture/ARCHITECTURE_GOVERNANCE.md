@@ -3,7 +3,7 @@
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-04T05:44:12Z`
+Last refreshed: `2026-08-22T13:10:42Z`
 
 ![Workspace structure](structure.png)
 
@@ -11,12 +11,6 @@ Last refreshed: `2026-08-04T05:44:12Z`
 
 | Surface | Type | Governance role |
 | --- | --- | --- |
-| `AGENTS.md` | `file` | governance / entrypoint |
-| `AI_AGENT_PROTOCOL.md` | `file` | governance / entrypoint |
-| `CLAUDE.md` | `file` | governance / entrypoint |
-| `CODEX.md` | `file` | governance / entrypoint |
-| `PROTOCOL.md` | `file` | governance / entrypoint |
-| `README.md` | `file` | governance / entrypoint |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
 | `contracts` | `dir` | contracts / schemas |
@@ -24,7 +18,7 @@ Last refreshed: `2026-08-04T05:44:12Z`
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
-| `ops` | `dir` | agent-facing memory |
+| `ops` | `dir` | workspace area (inferred) |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
@@ -32,9 +26,15 @@ Last refreshed: `2026-08-04T05:44:12Z`
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
 | `tests` | `dir` | execution / code |
-| `tools` | `dir` | execution / code |
+| `tools` | `dir` | workspace area (inferred) |
 | `workflow` | `dir` | execution / code |
+| `AGENTS.md` | `file` | governance / entrypoint |
+| `AI_AGENT_PROTOCOL.md` | `file` | file artifact (inferred) |
 | `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
+| `CHANGELOG.md` | `file` | file artifact (inferred) |
+| `CLAUDE.md` | `file` | file artifact (inferred) |
+| `CODEX.md` | `file` | file artifact (inferred) |
+| `coverage.xml` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 

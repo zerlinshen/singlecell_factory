@@ -172,6 +172,22 @@ runtime downgrade.
 
 Verified hardware: NVIDIA GeForce RTX 5090 D v2 (Blackwell sm_120, 24 GB VRAM).
 
+### Census I/O environment (`sc_census_io`)
+
+CELLxGENE Census reference materialization lives in an isolated Python 3.12 I/O environment (`sc_census_io`) declared in `environment_census_io.yml` and locked at `environments/sc_census_io.lock.{txt,conda}`.
+
+| Component | Version / Specification |
+|---|---|
+| Python | 3.12 |
+| `cellxgene-census` | 1.18.0 (pinned) |
+| `tiledbsoma` | 2.3.0 in the generated lock |
+| `anndata` | 0.13.2 in the generated lock |
+| Purpose | Governed, version-pinned reference atlas extraction from TileDB-SOMA coordinates |
+
+Do not install Census or TileDB-SOMA into `sc_gpu_rapids2608`. Reference H5AD files materialized via `scripts/materialize_cellxgene_reference.py` are loaded directly by the compute lanes. The mapping/OOD contract and validation protocol are documented in [`docs/REFERENCE_ATLAS_OOD.md`](docs/REFERENCE_ATLAS_OOD.md).
+
+Reference-mapping backend selection is certificate-driven, not decided by a production CPU/GPU dual run. `--reference-device auto` uses CPU unless `--reference-validation-domain` names a promoted offline real-data certificate in `ops/policy/gpu_backend_validations.json` and the validated cuML version matches. The current `trevino-fetal-cortex-v1` certificate permits the cuML 26.08 KNN lane for that bounded domain; unknown domains and version drift route directly to CPU. CPU/GPU agreement is supporting implementation evidence, not biological truth.
+
 Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step guide.
 
 ### Large-run DE and checkpoint behavior (2026-05-19)
@@ -1953,11 +1969,19 @@ checkpoints or change numerical analysis settings.
 | `--de-pval-threshold` | 0.05 | Adjusted p-value cutoff for significant DE |
 | `--de-logfc-threshold` | 0.25 | Minimum absolute log fold-change cutoff for DE |
 | `--annotation-confidence-threshold` | 0.1 | Minimum annotation confidence score before assigning `Unknown` |
-| `--reference-adata` | empty | Optional reference `h5ad` for annotation label transfer |
+| `--reference-adata` | empty | Optional reference `h5ad` for annotation label transfer (fails loud if file is missing) |
 | `--reference-label-key` | `cell_type` | Label column in reference `obs` used for transfer |
 | `--reference-k` | 15 | K neighbors for reference mapping |
 | `--reference-min-confidence` | 0.6 | Min confidence needed to override marker label |
 | `--reference-override-mode` | `conservative` | `conservative` (override Unknown/low-confidence only) or `all` |
+| `--reference-device` | `auto` | `auto` selects GPU only for a matching promoted offline validation domain; otherwise CPU. Explicit `gpu` also requires a matching certificate. |
+| `--reference-validation-domain` | empty | Real-data backend certificate domain, currently `trevino-fetal-cortex-v1`; empty/unknown domains route `auto` directly to CPU |
+| `--reference-ood-mode` | `reference_quantile` | OOD calibration mode: `reference_quantile` (reference-only split) or `fixed` |
+| `--reference-distance-quantile` | 0.95 | Upper quantile of reference calibration distances for OOD rejection threshold |
+| `--reference-fixed-distance-threshold` | empty | Operator-fixed cosine distance threshold for OOD rejection (used with `fixed` mode) |
+| `--reference-calibration-group-key` | empty | Required obs column for whole-group splitting in `reference_quantile` mode (e.g. `sample` or `donor_id`); omission fails closed |
+| `--reference-calibration-fraction` | 0.2 | Fraction of reference groups reserved for OOD calibration |
+| `--reference-min-shared-genes` | 50 | Minimum required shared genes between query and reference |
 
 ### Batch Correction
 
@@ -2605,7 +2629,7 @@ Use [`docs/MODULE_TECH_DOC_TEMPLATE.md`](docs/MODULE_TECH_DOC_TEMPLATE.md) for e
 | 2 | Yang et al., *Genome Biology*, 2020 | [10.1186/s13059-020-1950-6](https://doi.org/10.1186/s13059-020-1950-6) | `ambient_correction` (auto-detected from module source) |
 | 3 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `annotation` (Cluster-vote marker-mean scoring approach for cell type assignment.) |
 | 4 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `annotation` (auto-detected from module source) |
-| 5 | Stuart et al. et al., *Cell*, 2019 | [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031) | `annotation` (Reference-based label transfer principles; this module uses a simpler sklearn.NearestNeighbors KNN majority vote on a labeled reference.) |
+| 5 | Stuart et al. et al., *Cell*, 2019 | [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031) | `annotation` (Reference-based label transfer principles; this module uses explicit CPU/GPU KNN transfer with reference-only OOD calibration.) |
 | 6 | Stuart et al., *Cell*, 2019 | [10.1016/j.cell.2019.05.031](https://doi.org/10.1016/j.cell.2019.05.031) | `annotation` (auto-detected from module source) |
 | 7 | Cusanovich et al., *Cell*, 2018 | [10.1016/j.cell.2018.06.052](https://doi.org/10.1016/j.cell.2018.06.052) | `atac_ingest` (auto-detected from module source) |
 | 8 | Cusanovich et al. et al., *Cell*, 2018 | [10.1016/j.cell.2018.06.052](https://doi.org/10.1016/j.cell.2018.06.052) | `atac_ingest` (TF-IDF + LSI methodology for sparse ATAC peak matrices) |
@@ -2847,7 +2871,7 @@ The most recent canonical work is the **wave5 Trevino PCW21** biology-aware vali
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-04T05:44:12Z`
+Last refreshed: `2026-08-22T13:10:42Z`
 
 ![Workspace structure](docs/architecture/structure.png)
 
@@ -2855,12 +2879,6 @@ Last refreshed: `2026-08-04T05:44:12Z`
 
 | Surface | Type | Governance role |
 | --- | --- | --- |
-| `AGENTS.md` | `file` | governance / entrypoint |
-| `AI_AGENT_PROTOCOL.md` | `file` | governance / entrypoint |
-| `CLAUDE.md` | `file` | governance / entrypoint |
-| `CODEX.md` | `file` | governance / entrypoint |
-| `PROTOCOL.md` | `file` | governance / entrypoint |
-| `README.md` | `file` | governance / entrypoint |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
 | `contracts` | `dir` | contracts / schemas |
@@ -2868,7 +2886,7 @@ Last refreshed: `2026-08-04T05:44:12Z`
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
-| `ops` | `dir` | agent-facing memory |
+| `ops` | `dir` | workspace area (inferred) |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
@@ -2876,9 +2894,15 @@ Last refreshed: `2026-08-04T05:44:12Z`
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
 | `tests` | `dir` | execution / code |
-| `tools` | `dir` | execution / code |
+| `tools` | `dir` | workspace area (inferred) |
 | `workflow` | `dir` | execution / code |
+| `AGENTS.md` | `file` | governance / entrypoint |
+| `AI_AGENT_PROTOCOL.md` | `file` | file artifact (inferred) |
 | `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
+| `CHANGELOG.md` | `file` | file artifact (inferred) |
+| `CLAUDE.md` | `file` | file artifact (inferred) |
+| `CODEX.md` | `file` | file artifact (inferred) |
+| `coverage.xml` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 

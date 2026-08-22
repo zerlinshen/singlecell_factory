@@ -846,6 +846,15 @@ After a run:
 - Usually missing loom/BAM/GTF requirements.
 - Re-run with valid `--velocity-bam` and `--transcriptome-dir` (or `--velocity-gtf`).
 
+### 15.6 "Reference mapping / OOD failed"
+
+- **Missing reference file**: Verify `--reference-adata` path. The pipeline fails loud with `FileNotFoundError` if a requested file is absent; it never silently skips requested reference mapping.
+- **Dynamic Census build rejected**: Dynamic aliases like `latest` or `stable` are rejected locally before network calls. Supply an explicit date-form string, e.g. `--census-build 2025-11-08`.
+- **GPU KNN routing**: Production inputs are not dual-run. `--reference-device auto` routes directly from the offline real-data certificate registry in `ops/policy/gpu_backend_validations.json`; an empty/unknown `--reference-validation-domain` or backend-version drift selects CPU. The promoted bounded domain is `trevino-fetal-cortex-v1` with cuML 26.08.00. Explicit `gpu` fails closed when the certificate or version does not match; use CPU until that domain/version is revalidated.
+- **Insufficient shared genes**: If shared genes < 50, verify gene namespaces (e.g. HGNC symbols vs Ensembl IDs). Positional joins are forbidden.
+- **Invalid calibration contract**: `reference_quantile` requires an explicit group column; it must exist and contain at least two groups. Calibration and mapping use the same aligned genes, and `k` is never silently reduced. Use a larger reference or an explicitly reviewed fixed threshold.
+- **OOD Rejection**: Cells with high distance or low confidence are classified as `rejected_*` with `reference_cell_type=Unknown` and are never allowed to override `cell_type`.
+
 ---
 
 ## 16. Reproducibility Protocol (Recommended)

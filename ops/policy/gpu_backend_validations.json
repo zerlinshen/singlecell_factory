@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "policy": "Offline real-data scientific validation selects the production backend. CPU/GPU agreement is supporting evidence, not biological truth. Unknown domains and version drift route to CPU without dual-running production inputs.",
+  "modules": {
+    "reference_mapping_knn": {
+      "default_unvalidated_device": "cpu",
+      "domains": {
+        "trevino-fetal-cortex-v1": {
+          "certificate_id": "reference-knn-trevino-20260822-v1",
+          "status": "promoted",
+          "validated_backend": {
+            "implementation": "cuml.neighbors.NearestNeighbors",
+            "cuml_version": "26.08.00",
+            "device": "NVIDIA GeForce RTX 5090 D v2"
+          },
+          "validation_dataset": {
+            "source": "Trevino fetal cortex HFT3 versus HFT7/HFT5/HFT6",
+            "query_cells": 4143,
+            "reference_cells": 9496,
+            "features": 3000,
+            "feature_selection": "reference_only_scanpy_seurat_hvg",
+            "held_out_ood_label": "Microglia",
+            "labels": "pipeline-derived proxy labels"
+          },
+          "scientific_gates": {
+            "known_acceptance_coverage": 0.9380,
+            "known_all_cells_macro_f1_rejected_as_unknown": 0.8184,
+            "held_out_ood_rejection_recall": 0.9183,
+            "delta_rejection_rate_ood_vs_known": 0.8563,
+            "all_passed": true
+          },
+          "backend_fidelity": {
+            "candidate_label_agreement": 1.0,
+            "assignment_status_agreement": 1.0,
+            "maximum_mean_distance_difference": 0.00000183,
+            "parity_passed": true
+          },
+          "performance": {
+            "cpu_median_seconds": 1.2378,
+            "gpu_median_seconds": 0.1326,
+            "speedup": 9.33
+          },
+          "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1251Z-b5eff2f/python/validation",
+          "evidence_sha256": {
+            "benchmark_contract.json": "c31f9c1448bb242c804fff1cd134774e5bfc3a0c61aeca932e432e3ce85575b1",
+            "heldout_ood_metrics.json": "86b351423cb4e6914564cbf430f87f082d7bc4fec7d10bf3053612652e8310bb",
+            "cpu_gpu_parity.json": "02ac7699d45ec56d7d137e779ce7d6f24714d4cc21c0b414179d8c0b12049782"
+          },
+          "claim_scope": "Technical KNN/OOD backend promotion for this declared data domain; not biological ground truth and not a general GPU-module guarantee."
+        }
+      }
+    }
+  }
+}

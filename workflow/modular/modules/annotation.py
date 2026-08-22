@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import matplotlib
 from pathlib import Path
@@ -11,13 +12,18 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import normalize
 from ._scanpy_compat import import_scanpy_or_stub
 
 sc = import_scanpy_or_stub()
 
 from ..context import PipelineContext
+from .._reference_mapping import (
+    ASSIGNMENT_STATUS_ACCEPTED,
+    align_reference_genes,
+    calibrate_reference_ood_threshold,
+    map_knn_reference,
+    resolve_reference_device,
+)
 
 
 __references__ = {
@@ -35,7 +41,7 @@ __references__ = {
         "journal": "Cell",
         "year": "2019",
         "doi": "10.1016/j.cell.2019.05.031",
-        "description": "Reference-based label transfer principles; this module uses a simpler sklearn.NearestNeighbors KNN majority vote on a labeled reference.",
+        "description": "Reference-based label transfer principles; this module uses explicit CPU/GPU KNN transfer with reference-only OOD calibration.",
     },
 }
 
@@ -281,7 +287,16 @@ class AnnotationModule:
 
         score_cols = [f"score_{ct}" for ct in available]
         base_cols = ["leiden", "cell_type", "annotation_confidence", "cell_type_marker"] + score_cols
-        extra_cols = [c for c in ["reference_cell_type", "reference_confidence"] if c in adata.obs.columns]
+        extra_cols = [
+            c for c in [
+                "reference_predicted_label",
+                "reference_confidence",
+                "reference_distance",
+                "reference_assignment_status",
+                "reference_cell_type",
+                "reference_ood",
+            ] if c in adata.obs.columns
+        ]
         adata.obs[base_cols + extra_cols].to_csv(ctx.table_dir / "cell_type_annotation.csv")
 
         cluster_summary = (
@@ -375,93 +390,154 @@ class AnnotationModule:
 
     @staticmethod
     def _try_reference_mapping(adata, ctx: PipelineContext) -> None:
-        """Optional KNN label transfer from a reference h5ad."""
+        """Reference KNN label transfer with formal OOD calibration and fail-closed contracts."""
         ref_path = ctx.cfg.reference_adata
         if ref_path is None:
             ctx.metadata["reference_mapping_status"] = "skipped_no_reference"
             return
 
+        mode = str(ctx.cfg.reference_override_mode).strip().lower()
+        if mode not in {"all", "conservative"}:
+            raise ValueError(
+                f"Unsupported reference_override_mode {ctx.cfg.reference_override_mode!r}; "
+                "expected 'all' or 'conservative'."
+            )
+
         ref_path = Path(ref_path)
         if not ref_path.exists():
-            ctx.metadata["reference_mapping_status"] = "skipped_missing_reference_file"
-            ctx.metadata["reference_mapping_skip_reason"] = str(ref_path)
-            return
+            raise FileNotFoundError(f"Requested reference H5AD file does not exist: {ref_path}")
+
+        ref_stat_before = ref_path.stat()
 
         try:
             ref = ad.read_h5ad(ref_path)
         except Exception as exc:
-            ctx.metadata["reference_mapping_status"] = "skipped_reference_read_error"
-            ctx.metadata["reference_mapping_skip_reason"] = str(exc)
-            return
+            raise RuntimeError(f"Failed to read requested reference file {ref_path}: {exc}") from exc
+        ref_stat_after = ref_path.stat()
+        if (
+            ref_stat_before.st_size != ref_stat_after.st_size
+            or ref_stat_before.st_mtime_ns != ref_stat_after.st_mtime_ns
+            or ref_stat_before.st_ino != ref_stat_after.st_ino
+        ):
+            raise RuntimeError(f"Requested reference file changed while it was being read: {ref_path}")
+
+        ref_hasher = hashlib.sha256()
+        with ref_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                ref_hasher.update(chunk)
+        reference_sha256 = ref_hasher.hexdigest()
 
         label_key = ctx.cfg.reference_label_key
         if label_key not in ref.obs.columns:
-            ctx.metadata["reference_mapping_status"] = "skipped_missing_reference_label_key"
-            ctx.metadata["reference_mapping_skip_reason"] = label_key
-            return
+            raise ValueError(f"Requested reference label key {label_key!r} not found in {ref_path} .obs columns.")
 
-        shared = adata.var_names.intersection(ref.var_names)
-        if len(shared) < 50:
-            ctx.metadata["reference_mapping_status"] = "skipped_too_few_shared_genes"
-            ctx.metadata["reference_mapping_shared_genes"] = int(len(shared))
-            return
+        requested_device = getattr(ctx.cfg, "reference_device", "auto")
+        device, device_policy = resolve_reference_device(
+            requested_device,
+            validation_domain=getattr(ctx.cfg, "reference_validation_domain", None),
+        )
+        ood_mode = getattr(ctx.cfg, "reference_ood_mode", "reference_quantile")
+        dist_quantile = getattr(ctx.cfg, "reference_distance_quantile", 0.95)
+        fixed_threshold = getattr(ctx.cfg, "reference_fixed_distance_threshold", None)
+        group_key = getattr(ctx.cfg, "reference_calibration_group_key", None)
+        cal_fraction = getattr(ctx.cfg, "reference_calibration_fraction", 0.2)
+        min_shared = getattr(ctx.cfg, "reference_min_shared_genes", 50)
+        k = int(ctx.cfg.reference_k)
+        min_conf = float(ctx.cfg.reference_min_confidence)
+        seed = int(getattr(ctx, "random_state", 42))
 
-        query_x = adata[:, shared].X
-        ref_x = ref[:, shared].X
-        query_x = query_x if sparse.issparse(query_x) else np.asarray(query_x, dtype=np.float32)
-        ref_x = ref_x if sparse.issparse(ref_x) else np.asarray(ref_x, dtype=np.float32)
-        query_x = normalize(query_x, norm="l2", axis=1, copy=False)
-        ref_x = normalize(ref_x, norm="l2", axis=1, copy=False)
+        # Resolve the exact one-to-one feature space first. Calibration and
+        # query mapping must use the same reference columns so their cosine
+        # distances are comparable.
+        _, aligned_ref_genes, alignment_route, n_shared_genes, _, _ = align_reference_genes(
+            adata,
+            ref,
+            min_shared=min_shared,
+        )
 
-        k = min(int(ctx.cfg.reference_k), int(ref.n_obs))
-        if k < 1:
-            ctx.metadata["reference_mapping_status"] = "skipped_invalid_k"
-            return
+        # Calibrate distance threshold on reference-only data.
+        dist_thresh, cal_receipt = calibrate_reference_ood_threshold(
+            ref_adata=ref,
+            ref_genes=aligned_ref_genes,
+            mode=ood_mode,
+            quantile=dist_quantile,
+            fixed_threshold=fixed_threshold,
+            group_key=group_key,
+            cal_fraction=cal_fraction,
+            seed=seed,
+            k=k,
+        )
+        cal_receipt["alignment_route"] = alignment_route
+        cal_receipt["n_shared_genes"] = int(n_shared_genes)
 
-        nn = NearestNeighbors(n_neighbors=k, metric="cosine", algorithm="brute")
-        nn.fit(ref_x)
-        _, idx = nn.kneighbors(query_x)
-        ref_labels = ref.obs[label_key].astype(str).to_numpy()
+        # Execute deterministic KNN mapping
+        map_df, map_meta = map_knn_reference(
+            query_adata=adata,
+            ref_adata=ref,
+            label_key=label_key,
+            k=k,
+            min_confidence=min_conf,
+            distance_threshold=dist_thresh,
+            device=device,
+            seed=seed,
+            min_shared_genes=min_shared,
+        )
 
-        pred_labels: list[str] = []
-        pred_conf: list[float] = []
-        for neighbors in idx:
-            votes = ref_labels[neighbors]
-            values, counts = np.unique(votes, return_counts=True)
-            top = int(np.argmax(counts))
-            pred_labels.append(str(values[top]))
-            pred_conf.append(float(counts[top]) / float(k))
+        # Populate adata.obs
+        adata.obs["reference_predicted_label"] = map_df["reference_predicted_label"]
+        adata.obs["reference_confidence"] = map_df["reference_confidence"]
+        adata.obs["reference_distance"] = map_df["reference_distance"]
+        adata.obs["reference_assignment_status"] = map_df["reference_assignment_status"]
+        adata.obs["reference_cell_type"] = map_df["reference_cell_type"]
+        adata.obs["reference_ood"] = map_df["reference_ood"]
 
-        adata.obs["reference_cell_type"] = pd.Series(pred_labels, index=adata.obs_names, dtype="object")
-        adata.obs["reference_confidence"] = pd.Series(pred_conf, index=adata.obs_names, dtype=float)
-
-        mode = str(ctx.cfg.reference_override_mode).strip().lower()
-        base_mask = adata.obs["reference_confidence"] >= float(ctx.cfg.reference_min_confidence)
+        # Label override logic: ONLY accepted cells may override cell_type
+        accepted_mask = adata.obs["reference_assignment_status"] == ASSIGNMENT_STATUS_ACCEPTED
         if mode == "all":
-            override_mask = base_mask
+            override_mask = accepted_mask
         else:
             marker_unknown = adata.obs["cell_type_marker"].astype(str) == "Unknown"
             marker_low = adata.obs["annotation_confidence"] < float(ctx.cfg.annotation_confidence_threshold)
-            override_mask = base_mask & (marker_unknown | marker_low)
+            override_mask = accepted_mask & (marker_unknown | marker_low)
+
         adata.obs.loc[override_mask, "cell_type"] = adata.obs.loc[override_mask, "reference_cell_type"].values
 
         applied = int(override_mask.sum())
         total = int(adata.n_obs)
         ctx.metadata["reference_mapping_status"] = "completed"
         ctx.metadata["reference_mapping_source"] = str(ref_path)
+        ctx.metadata["reference_mapping_source_sha256"] = reference_sha256
+        ctx.metadata["reference_mapping_source_size_bytes"] = int(ref_stat_after.st_size)
         ctx.metadata["reference_mapping_label_key"] = label_key
-        ctx.metadata["reference_mapping_shared_genes"] = int(len(shared))
-        ctx.metadata["reference_mapping_k"] = int(k)
-        ctx.metadata["reference_mapping_override_mode"] = mode if mode in {"all", "conservative"} else "conservative"
+        ctx.metadata["reference_mapping_backend"] = "knn"
+        ctx.metadata["reference_mapping_scanvi_status"] = "not_run_missing_real_compatible_model_artifact"
+        ctx.metadata["reference_mapping_shared_genes"] = int(map_meta["n_shared_genes"])
+        ctx.metadata["reference_mapping_k"] = int(map_meta["effective_k"])
+        ctx.metadata["reference_mapping_requested_device"] = requested_device
+        ctx.metadata["reference_mapping_device"] = device
+        ctx.metadata["reference_mapping_device_policy"] = device_policy
+        ctx.metadata["reference_mapping_ood_mode"] = ood_mode
+        ctx.metadata["reference_mapping_distance_threshold"] = float(dist_thresh)
+        ctx.metadata["reference_mapping_override_mode"] = mode
         ctx.metadata["reference_mapping_overridden_cells"] = applied
         ctx.metadata["reference_mapping_overridden_pct"] = round(100.0 * applied / max(total, 1), 2)
+        ctx.metadata["reference_mapping_accepted_cells"] = int(map_meta["accepted_cells"])
+        ctx.metadata["reference_mapping_rejected_cells"] = int(map_meta["rejected_cells"])
+        ctx.metadata["reference_mapping_rejected_low_confidence"] = int(map_meta["rejected_low_confidence"])
+        ctx.metadata["reference_mapping_rejected_ood_distance"] = int(map_meta["rejected_ood_distance"])
+        ctx.metadata["reference_mapping_cal_receipt"] = cal_receipt
+        ctx.metadata["reference_mapping_timings"] = map_meta.get("timings", {})
+
         logger.info(
-            "Reference mapping applied: %d/%d cells overridden (mode=%s, k=%d, min_conf=%.3f).",
+            "Reference mapping applied: %d/%d cells overridden (mode=%s, k=%d, min_conf=%.3f, dist_thresh=%.4f, accepted=%d/%d).",
             applied,
             total,
             ctx.metadata["reference_mapping_override_mode"],
             k,
-            float(ctx.cfg.reference_min_confidence),
+            min_conf,
+            dist_thresh,
+            ctx.metadata["reference_mapping_accepted_cells"],
+            total,
         )
 
     @staticmethod

@@ -742,6 +742,52 @@ def parse_args() -> argparse.Namespace:
             "'conservative' (Unknown/low-confidence only) or 'all'."
         ),
     )
+    parser.add_argument(
+        "--reference-device",
+        default="auto",
+        choices=["auto", "cpu", "gpu"],
+        help="Reference KNN device. auto uses GPU only for a promoted validation domain; otherwise CPU.",
+    )
+    parser.add_argument(
+        "--reference-validation-domain",
+        default="",
+        help="Offline real-data validation certificate domain required for governed GPU reference mapping",
+    )
+    parser.add_argument(
+        "--reference-ood-mode",
+        default="reference_quantile",
+        choices=["reference_quantile", "fixed"],
+        help="OOD calibration mode: 'reference_quantile' (reference-only quantile split) or 'fixed'. Default: reference_quantile",
+    )
+    parser.add_argument(
+        "--reference-distance-quantile",
+        type=float,
+        default=0.95,
+        help="Upper quantile of reference calibration distances for OOD threshold (default: 0.95)",
+    )
+    parser.add_argument(
+        "--reference-fixed-distance-threshold",
+        type=float,
+        default=None,
+        help="Operator-fixed cosine distance threshold for OOD rejection (used with --reference-ood-mode fixed)",
+    )
+    parser.add_argument(
+        "--reference-calibration-group-key",
+        default="",
+        help="Required obs column for whole-group splitting in reference_quantile mode (e.g. sample or donor_id)",
+    )
+    parser.add_argument(
+        "--reference-calibration-fraction",
+        type=float,
+        default=0.2,
+        help="Fraction of reference groups reserved for OOD calibration (default: 0.2)",
+    )
+    parser.add_argument(
+        "--reference-min-shared-genes",
+        type=int,
+        default=50,
+        help="Minimum required shared genes between query and reference (default: 50)",
+    )
 
     # Marker intelligence (P1A)
     parser.add_argument(
@@ -1069,6 +1115,24 @@ def _validate_args(args: argparse.Namespace) -> None:
             "Error: --reference-min-confidence must be in [0, 1], "
             f"got {args.reference_min_confidence}"
         )
+    if args.reference_min_shared_genes < 1:
+        raise SystemExit(f"Error: --reference-min-shared-genes must be >= 1, got {args.reference_min_shared_genes}")
+    if args.reference_distance_quantile is not None and not (0 < args.reference_distance_quantile < 1):
+        raise SystemExit(f"Error: --reference-distance-quantile must be in (0, 1), got {args.reference_distance_quantile}")
+    if args.reference_calibration_fraction is not None and not (0 < args.reference_calibration_fraction < 1):
+        raise SystemExit(f"Error: --reference-calibration-fraction must be in (0, 1), got {args.reference_calibration_fraction}")
+    if args.reference_ood_mode == "fixed":
+        if args.reference_fixed_distance_threshold is None:
+            raise SystemExit("Error: --reference-ood-mode fixed requires an explicit --reference-fixed-distance-threshold")
+        if not (0.0 <= args.reference_fixed_distance_threshold <= 2.0):
+            raise SystemExit(f"Error: --reference-fixed-distance-threshold must be in [0.0, 2.0], got {args.reference_fixed_distance_threshold}")
+    if args.reference_adata:
+        ref_p = Path(args.reference_adata)
+        if not ref_p.exists():
+            raise SystemExit(f"Error: Requested --reference-adata file does not exist: {ref_p}")
+    if args.reference_device == "gpu":
+        if args.gpu_mode == "off":
+            raise SystemExit("Error: --reference-device gpu cannot be used with --gpu-mode off")
 
 
 def _write_crash_manifest(
@@ -1439,6 +1503,14 @@ def main() -> None:
         reference_k=args.reference_k,
         reference_min_confidence=args.reference_min_confidence,
         reference_override_mode=args.reference_override_mode,
+        reference_device=args.reference_device,
+        reference_validation_domain=args.reference_validation_domain or None,
+        reference_ood_mode=args.reference_ood_mode,
+        reference_distance_quantile=args.reference_distance_quantile,
+        reference_fixed_distance_threshold=args.reference_fixed_distance_threshold,
+        reference_calibration_group_key=args.reference_calibration_group_key or None,
+        reference_calibration_fraction=args.reference_calibration_fraction,
+        reference_min_shared_genes=args.reference_min_shared_genes,
         gpu_mode=args.gpu_mode,
         scale_mode=args.scale_mode,
         scientific_profile=args.scientific_profile,

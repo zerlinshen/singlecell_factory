@@ -360,6 +360,20 @@ def test_cli_reference_mapping_args(monkeypatch):
             "0.75",
             "--reference-override-mode",
             "all",
+            "--reference-device",
+            "gpu",
+            "--reference-validation-domain",
+            "trevino-fetal-cortex-v1",
+            "--reference-ood-mode",
+            "fixed",
+            "--reference-fixed-distance-threshold",
+            "0.42",
+            "--reference-calibration-group-key",
+            "donor",
+            "--reference-calibration-fraction",
+            "0.25",
+            "--reference-min-shared-genes",
+            "75",
         ],
     )
     args = mod.parse_args()
@@ -368,6 +382,13 @@ def test_cli_reference_mapping_args(monkeypatch):
     assert args.reference_k == 9
     assert abs(args.reference_min_confidence - 0.75) < 1e-8
     assert args.reference_override_mode == "all"
+    assert args.reference_device == "gpu"
+    assert args.reference_validation_domain == "trevino-fetal-cortex-v1"
+    assert args.reference_ood_mode == "fixed"
+    assert abs(args.reference_fixed_distance_threshold - 0.42) < 1e-8
+    assert args.reference_calibration_group_key == "donor"
+    assert abs(args.reference_calibration_fraction - 0.25) < 1e-8
+    assert args.reference_min_shared_genes == 75
 
 
 def test_cli_signature_json(monkeypatch):
@@ -2453,6 +2474,8 @@ def test_annotation_reference_mapping_overrides_labels(monkeypatch, tmp_path):
         reference_label_key="cell_type",
         reference_k=3,
         reference_min_confidence=0.6,
+        reference_ood_mode="fixed",
+        reference_fixed_distance_threshold=2.0,
     )
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -2468,10 +2491,14 @@ def test_annotation_reference_mapping_overrides_labels(monkeypatch, tmp_path):
     assert ctx.metadata["reference_mapping_status"] == "completed"
     assert "reference_cell_type" in adata.obs.columns
     assert "reference_confidence" in adata.obs.columns
+    assert len(ctx.metadata["reference_mapping_source_sha256"]) == 64
+    assert ctx.metadata["reference_mapping_source_size_bytes"] == ref_path.stat().st_size
+    assert ctx.metadata["reference_mapping_backend"] == "knn"
+    assert ctx.metadata["reference_mapping_scanvi_status"] == "not_run_missing_real_compatible_model_artifact"
     assert int((adata.obs["cell_type"] == "TypeB").sum()) >= 2
 
 
-def test_annotation_reference_mapping_missing_file_skips(monkeypatch, tmp_path):
+def test_annotation_reference_mapping_missing_file_fails(monkeypatch, tmp_path):
     from workflow.modular.modules.annotation import AnnotationModule
     import workflow.modular.modules.annotation as ann_mod
     from workflow.modular.context import PipelineContext
@@ -2509,8 +2536,8 @@ def test_annotation_reference_mapping_missing_file_skips(monkeypatch, tmp_path):
         adata=adata,
     )
 
-    AnnotationModule().run(ctx)
-    assert ctx.metadata["reference_mapping_status"] == "skipped_missing_reference_file"
+    with pytest.raises(FileNotFoundError, match="Requested reference H5AD file does not exist"):
+        AnnotationModule().run(ctx)
 
 
 def test_annotation_reference_mapping_conservative_preserves_high_conf_marker(monkeypatch, tmp_path):
@@ -2562,6 +2589,8 @@ def test_annotation_reference_mapping_conservative_preserves_high_conf_marker(mo
         reference_label_key="cell_type",
         reference_k=3,
         reference_min_confidence=0.6,
+        reference_ood_mode="fixed",
+        reference_fixed_distance_threshold=2.0,
         reference_override_mode="conservative",
     )
     run_dir = tmp_path / "run"
@@ -2630,6 +2659,8 @@ def test_annotation_reference_mapping_all_overrides_high_conf_marker(monkeypatch
         reference_label_key="cell_type",
         reference_k=3,
         reference_min_confidence=0.6,
+        reference_ood_mode="fixed",
+        reference_fixed_distance_threshold=2.0,
         reference_override_mode="all",
     )
     run_dir = tmp_path / "run"

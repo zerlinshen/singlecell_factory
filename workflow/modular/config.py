@@ -329,6 +329,14 @@ class PipelineConfig:
     reference_k: int = 15
     reference_min_confidence: float = 0.6
     reference_override_mode: str = "conservative"  # conservative, all
+    reference_device: str = "auto"  # auto, cpu, gpu
+    reference_validation_domain: str | None = None
+    reference_ood_mode: str = "reference_quantile"  # reference_quantile, fixed
+    reference_distance_quantile: float = 0.95
+    reference_fixed_distance_threshold: float | None = None
+    reference_calibration_group_key: str | None = None
+    reference_calibration_fraction: float = 0.2
+    reference_min_shared_genes: int = 50
     random_state: int = 42  # global seed propagated to all stochastic modules via ctx.random_state
     gpu_mode: str = "auto"  # auto, off, force
     scale_mode: str = "standard"  # standard, large, massive — kept as preset bundle for backwards compat
