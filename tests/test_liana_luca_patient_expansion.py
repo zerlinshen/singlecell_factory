@@ -132,7 +132,9 @@ def test_direct_h5_subset_ignores_large_slots(tmp_path):
     assert subset.var_names.tolist() == ["A", "B", "C", "D", "E"]
     assert list(subset.obsm.keys()) == []
     assert list(subset.obsp.keys()) == []
-    assert list(subset.layers.keys()) == []
+    # AnnData 0.13 exposes X as the reserved ``layers[None]`` alias; the
+    # direct loader must still omit every named atlas layer.
+    assert [key for key in subset.layers.keys() if key is not None] == []
 
 
 def test_resume_checkpoint_requires_summary_and_csv(tmp_path):

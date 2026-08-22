@@ -200,7 +200,13 @@ class PipelineContext:
             obs=adata.obs,
             var=adata.var,
             uns=_compact_uns(dict(adata.uns)),
-            layers={k: _compact_value(adata.layers[k]) for k in adata.layers},
+            # AnnData 0.13 exposes X as ``layers[None]``. X is already passed
+            # explicitly above, so only named layers belong in this mapping.
+            layers={
+                k: _compact_value(adata.layers[k])
+                for k in adata.layers
+                if k is not None
+            },
             obsm={k: _compact_value(adata.obsm[k]) for k in adata.obsm},
             varm={k: _compact_value(adata.varm[k]) for k in adata.varm},
             obsp={k: _compact_value(adata.obsp[k]) for k in adata.obsp},

@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import scipy.sparse as sp
+from pandas.api.types import is_string_dtype
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +129,7 @@ class TestObsContract:
         assert "sample" in rna_adata.obs.columns, "obs['sample'] must be present"
 
     def test_sample_dtype(self, rna_adata):
-        assert rna_adata.obs["sample"].dtype == object, (
+        assert is_string_dtype(rna_adata.obs["sample"].dtype), (
             "obs['sample'] must be object/str dtype"
         )
 
@@ -150,7 +151,7 @@ class TestObsContract:
         assert "cell_type" in rna_adata.obs.columns, "obs['cell_type'] must be present"
 
     def test_cell_type_dtype(self, rna_adata):
-        assert rna_adata.obs["cell_type"].dtype == object, (
+        assert is_string_dtype(rna_adata.obs["cell_type"].dtype), (
             "obs['cell_type'] must be object/str dtype"
         )
 
@@ -160,7 +161,7 @@ class TestObsContract:
         )
 
     def test_context_aware_celltype_dtype(self, rna_adata):
-        assert rna_adata.obs["context_aware_celltype"].dtype == object, (
+        assert is_string_dtype(rna_adata.obs["context_aware_celltype"].dtype), (
             "obs['context_aware_celltype'] must be object/str dtype"
         )
 
@@ -170,9 +171,9 @@ class TestObsContract:
         )
 
     def test_context_aware_substate_dtype(self, rna_adata):
-        # Column may be object with None values for cells with no substate
-        assert rna_adata.obs["context_aware_substate"].dtype == object, (
-            "obs['context_aware_substate'] must be object dtype"
+        # Object and pandas nullable-string storage preserve the same contract.
+        assert is_string_dtype(rna_adata.obs["context_aware_substate"].dtype), (
+            "obs['context_aware_substate'] must be object/str dtype"
         )
 
     def test_annotation_confidence_present(self, rna_adata):
@@ -211,7 +212,7 @@ class TestVarContract:
         )
 
     def test_feature_type_dtype(self, rna_adata):
-        assert rna_adata.var["feature_type"].dtype == object, (
+        assert is_string_dtype(rna_adata.var["feature_type"].dtype), (
             "var['feature_type'] must be object/str dtype"
         )
 

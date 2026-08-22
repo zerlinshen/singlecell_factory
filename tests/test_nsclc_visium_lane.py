@@ -11,6 +11,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+import sys
+from types import SimpleNamespace
+from scipy import sparse
 
 from scripts.nsclc_visium_spatial_liana import (
     BOUNDARY,
@@ -63,10 +66,38 @@ def _fake_liana(adata, **kwargs) -> None:
     )
 
 
-def test_analyze_adata_schema_and_honesty(monkeypatch):
-    import liana as li
+def _fake_spatial_neighbors(adata, **kwargs) -> None:
+    coords = np.asarray(adata.obsm["spatial"])
+    row: list[int] = []
+    col: list[int] = []
+    for i, source in enumerate(coords):
+        distance = np.abs(coords - source).sum(axis=1)
+        for j in np.flatnonzero(distance == 1):
+            row.append(i)
+            col.append(int(j))
+    adata.obsp["spatial_connectivities"] = sparse.csr_matrix(
+        (np.ones(len(row), dtype=np.float32), (row, col)),
+        shape=(len(coords), len(coords)),
+    )
 
-    monkeypatch.setattr(li.mt, "rank_aggregate", _fake_liana)
+
+def _force_weights_moran(*args, **kwargs) -> None:
+    raise RuntimeError("synthetic test uses the deterministic weights fallback")
+
+
+def test_analyze_adata_schema_and_honesty(monkeypatch):
+    # The promoted RAPIDS environment intentionally omits LIANA because its
+    # pandas constraint conflicts with RAPIDS 26.08. Supply only the mocked
+    # interface this synthetic unit test consumes.
+    fake_li = SimpleNamespace(mt=SimpleNamespace(rank_aggregate=_fake_liana))
+    monkeypatch.setitem(sys.modules, "liana", fake_li)
+    fake_sq = SimpleNamespace(
+        gr=SimpleNamespace(
+            spatial_neighbors=_fake_spatial_neighbors,
+            spatial_autocorr=_force_weights_moran,
+        )
+    )
+    monkeypatch.setitem(sys.modules, "squidpy", fake_sq)
     adata = _synthetic_visium()
     out = analyze_adata(adata, max_spots=144, seed=41)
 

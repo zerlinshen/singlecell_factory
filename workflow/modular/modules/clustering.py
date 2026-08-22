@@ -113,6 +113,14 @@ class ClusteringModule:
             X_clone = X.copy()
         else:
             X_clone = np.array(X, copy=True)
+        # AnnData 0.13 exposes X through ``layers[None]``. Passing that alias
+        # together with the independent X clone is rejected and would also
+        # defeat the isolation contract, so carry only named layers.
+        named_layers = {
+            key: adata.layers[key]
+            for key in adata.layers
+            if key is not None
+        }
         return ad.AnnData(
             X=X_clone,
             obs=adata.obs,
@@ -120,7 +128,7 @@ class ClusteringModule:
             obsm=dict(adata.obsm) if adata.obsm is not None else None,
             varm=dict(adata.varm) if adata.varm is not None else None,
             uns=dict(adata.uns) if adata.uns is not None else None,
-            layers=dict(adata.layers) if adata.layers is not None else None,
+            layers=named_layers,
         )
 
     @staticmethod
