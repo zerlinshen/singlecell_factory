@@ -1,1 +1,1 @@
-9edfb03b9415171a79e2911a84002320232394d34b97952b69bbbbd56b89933d  JASPAR2024_CORE_non-redundant_pfms_meme.txt
+38297e16268b3b103870f283c82cf5a929319ec580ccad3cee9489c8d6cbf0fe  JASPAR2024_CORE_non-redundant_pfms_meme.txt

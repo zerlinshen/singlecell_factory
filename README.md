@@ -96,7 +96,8 @@ The 2026-05-28 follow-up remains evidence under
     `PASS_SUPPORTED_NOT_FINAL_WITH_REVIEW_FLAGS`: supported for bounded tested
     claims, not final biological claim readiness.
 Do not summarize the current suite as fully scientifically validated. The
-restored real-data harness and curated figure-parity gate remain open debt.
+broader real-data reproduction remains open debt; original-paper parity is a
+project-level audit and is not counted as a suite pass when no references exist.
 
 ## Bioinformatics Research Pipeline suite
 
@@ -126,17 +127,48 @@ the full gate classification are in
 
 ### Canonical GPU environment
 
-`sc_gpu_stable` conda env (frozen at `environments/sc_gpu_stable.lock.{txt,conda}`):
+The default environment for GPU clustering, marker DE, Scrublet, scVI, and
+CellRank is now `sc_gpu_rapids2608`. It is declared in
+`environment_gpu_rapids2608.yml` and frozen at
+`environments/sc_gpu_rapids2608.lock.{txt,conda}`.
 
 | Component | Version |
 |---|---|
-| RAPIDS | 25.10 |
-| CUDA runtime / driver | 12.9 / 13.x |
-| rapids-singlecell | 0.13.4 |
-| scanpy / anndata | 1.11.5 / current |
-| Python | 3.11 |
+| RAPIDS | 26.08 |
+| CUDA runtime / driver | 13.2 / 595.84 |
+| rapids-singlecell | 0.16.1 |
+| CuPy / PyTorch | 14.2.0 / 2.13.0 (CUDA 13.0) |
+| scanpy / anndata | 1.12.3 / 0.13.2 |
+| scVI-tools / CellRank | 1.5.0.post1 / 2.3.2 |
+| Python | 3.13 |
 
-GPU stack: clustering (PCA + neighbors + UMAP + leiden) via `rapids_singlecell`; batch correction via `rsc.pp.harmony_integrate` (ARI=1.000 parity vs harmonypy); doublet detection via `rsc.pp.scrublet` (99.94% agreement, 5.9× speedup). DE remains CPU-bound (rsc 0.13.4 lacks `tl.rank_genes_groups`; Python 3.12 + RAPIDS 26+ migration is Wave 5).
+Fresh 2026-08-22 validation on the RTX 5090 covers CuPy, PyTorch, RAPIDS
+PCA/neighbors/UMAP/Leiden, `rsc.tl.rank_genes_groups`, `rsc.pp.scrublet`, scVI
+CUDA training, and CellRank GPCCA Schur/macrostate execution. CPU/GPU clustering ARI and
+top-30 marker Jaccard were both 1.0 on the bounded fixture; the dedicated 50k
+injected-doublet harness had 99.936% call agreement, CPU F1=0.9936, and GPU
+F1=1.0 after installing Scrublet's Annoy dependency.
+Evidence is under
+`/home/zerlinshen/projects/gpu-stack-validation-20260822/runs/2026-08-21T1924Z-1137750/`.
+
+`sc_gpu` and `sc_gpu_stable` remain unchanged rollback/full-optional
+environments. Do not install LIANA into `sc_gpu_rapids2608`: LIANA 1.9 requires
+`pandas<3`, while RAPIDS 26.08 requires `pandas>=3`. Route LIANA through its
+existing compatible environment instead of weakening the GPU solve.
+
+This promotion is deliberately scoped to the GPU analysis lanes above. It is
+not the suite-wide plotting/reference-render environment: the environment with
+Matplotlib 3.11 produced ten RMS visual-regression failures against the current
+reference images, although other package differences were not isolated. Run the 34-gate
+suite through its established launcher environment, setting only
+`CONDA_PREFIX=/home/zerlinshen/conda/envs/sc_gpu`; do not prepend that env to
+`PATH` or use the promoted GPU env to refresh plotting baselines.
+
+For isolated factory pytest runs, set `NUMBA_DISABLE_JIT=0` explicitly. The
+repository test harness otherwise defaults it to `1`, which is incompatible
+with Scanpy's JIT-wrapped Wilcoxon rank helper when Numba is first imported
+inside the test process. This is a test-launch contract, not a production
+runtime downgrade.
 
 Verified hardware: NVIDIA GeForce RTX 5090 D v2 (Blackwell sm_120, 24 GB VRAM).
 
@@ -144,14 +176,12 @@ Beginner entrypoint: see [PROTOCOL.md](PROTOCOL.md) for a complete step-by-step 
 
 ### Large-run DE and checkpoint behavior (2026-05-19)
 
-RAPIDS acceleration is module-specific. In the current `sc_gpu_stable`
-environment, GPU clustering and GPU batch post-processing are available, but
-marker differential expression is not: `rapids-singlecell 0.13.4` does not
-provide `rapids_singlecell.tl.rank_genes_groups`. The DE module therefore checks
-the runtime RAPIDS API before calling it, records
-`de_rapids_singlecell_version` and `de_gpu_fallback_reason`, and falls back to
-CPU when `--gpu-mode auto` is used. `--gpu-mode force` still raises if GPU DE is
-not available.
+RAPIDS acceleration remains module-specific. In `sc_gpu_rapids2608`, GPU
+clustering, GPU batch post-processing, GPU Scrublet, and GPU marker DE are
+available. The DE module still checks the runtime API, records
+`de_rapids_singlecell_version` and `de_gpu_fallback_reason`, and preserves the
+existing `auto`/`force` failure contract. The older `sc_gpu_stable` environment
+does not expose GPU marker DE and remains a rollback lane only.
 
 For `--scale-mode massive` with sparse matrices, CPU DE uses the sparse Welch
 fallback instead of forcing Scanpy's dense path. It records
@@ -1052,8 +1082,8 @@ export NUMBA_CACHE_DIR=/tmp/numba_cache
 Optional GPU environment (NVIDIA):
 
 ```bash
-conda env create -f environment_gpu.yml
-conda activate sc_gpu
+conda env create -f environment_gpu_rapids2608.yml
+conda activate sc_gpu_rapids2608
 export MPLCONFIGDIR=$PWD/.mplconfig
 export NUMBA_CACHE_DIR=/tmp/numba_cache
 ```
@@ -1351,8 +1381,8 @@ When large runs approach RAM limits:
   hardware assumptions; `--scale-mode` does not reduce scientific scope.
 - A moderate SSD-backed swapfile (for example `30-40 GB`) can help prevent abrupt OOM kills and make checkpoint-heavy runs more forgiving.
 - On this workstation, Harmony batch correction is intentionally routed to CPU in normal `auto/off` usage because the current `harmonypy` wrapper path was unstable under the previous GPU route; the core Harmony algorithm itself remains valid and was verified separately on both CPU and CUDA.
-- Current GPU reality on this workstation is module-specific rather than globally broken: basic CUDA, PyTorch CUDA, CuPy, and Harmony core all work; the main unstable paths are RAPIDS PCA (`CUSOLVER_STATUS_INTERNAL_ERROR`) and RAPIDS DE (`CUBLAS_STATUS_NOT_INITIALIZED`) on real workloads.
-- For clustering, the pipeline now supports a hybrid fallback path: CPU PCA followed by GPU neighbors/UMAP/Leiden when GPU PCA is the failing substep.
+- Current GPU reality on this workstation is module-specific rather than globally broken. Under `sc_gpu_rapids2608`, basic CUDA, PyTorch, CuPy, RAPIDS PCA, GPU DE, GPU Scrublet, and scVI all pass bounded smokes; the historical 50k RAPIDS PCA reproducer no longer triggers `CUSOLVER_STATUS_INTERNAL_ERROR`.
+- The CPU-PCA plus GPU-neighbors/UMAP/Leiden hybrid remains a recovery path, not the default for the validated environment.
 - Swap is a safety buffer, not real RAM: it may keep a run alive, but it can become much slower once the workflow starts paging heavily.
 - For large but not extreme runs (for example around `100k` cells), swap can be a useful bridge before a RAM upgrade.
 - For extreme runs (several hundred thousand to ~1M cells), swap alone is usually not enough; use staged execution, lighter module sets, subset-first refinement, and consider adding RAM.
@@ -1656,10 +1686,17 @@ For Codex / Claude Code agents:
 - project Codex skills live in `.codex/skills/` using standard Codex project
   skill management
 - project Claude skills live in `.claude/skills/`
+- shared cross-agent skills may live under `~/.agents/skills/`; provider mirrors
+  and cached copies are not canonical owners merely because their names match
 - reusable global skills live under `~/.codex/skills/` and
   `~/.claude/skills/`
 - `codex_skills/` remains only as a legacy compatibility mirror for historical
   project-local skills
+- route ownership and execution with `bioinformatics-autosteer`, evaluate new
+  dependencies/native stacks with `upstream-fit-assessment`, and guard CPU/GPU
+  or scaling changes with `optimize-and-guard-performance`; these skills resolve
+  the current lane from this README, environment declarations, locks, and run
+  evidence instead of pinning a historical RAPIDS/CUDA version internally
 
 ### Paper-Driven Continuous Optimization
 

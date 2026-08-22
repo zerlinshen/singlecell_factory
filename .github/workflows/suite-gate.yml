@@ -9,9 +9,10 @@ name: Suite CI-safe gate (cross-repo)
 # environment, GPU hardware, or this host's staged real data.
 #
 # This is additive alongside the pre-existing, narrower
-# .github/workflows/factory-governance.yml (unchanged, still self-contained
-# and path-filtered). That workflow proves this repo alone is internally
-# consistent on data-free gates; this workflow proves the ci_safe subset of
+# .github/workflows/factory-governance.yml (still self-contained and
+# path-filtered, including a temporary-PNG artifact-integrity smoke). That
+# workflow proves this repo alone is internally consistent on data-free gates;
+# this workflow proves the ci_safe subset of
 # the WHOLE suite still holds with this commit's singlecell_factory dropped
 # in. Neither replaces the local pre-push hook, which alone runs all 34
 # gates including the 12 host_only ones (R/Seurat env, GPU, staged real

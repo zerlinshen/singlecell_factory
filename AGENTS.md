@@ -89,6 +89,15 @@ byte-identical. To update: edit the canonical file here, then run
 
 ### Environment Switches (Round-1a)
 
+Canonical GPU-lane environment (2026-08-22): `sc_gpu_rapids2608` for GPU
+clustering, marker DE, Scrublet, scVI, and CellRank. Preserve `sc_gpu` and
+`sc_gpu_stable` as rollback/full-optional lanes; do not force LIANA 1.9 into
+the RAPIDS environment because its `pandas<3` constraint conflicts with
+RAPIDS 26.08's `pandas>=3` requirement.
+The promotion is not suite-wide: keep plotting/reference-render gates on their
+established launcher environment and never refresh visual baselines merely to
+make the GPU environment pass them.
+
 Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
 | Variable | Unset (default) | `=1` |
@@ -193,8 +202,9 @@ The current suite-level validation posture is intentionally honest:
 
 - The one-command suite gate is a 34-step structure/contract/science-assertion
   harness, including render-only, raw-data, documentation, real-data parity,
-  and real-data science-assertion checks. Figure parity remains conditional
-  where declared; the gate is not universal biological validation.
+  and real-data science-assertion checks. Registered figure artifact integrity
+  is enforced, while original-paper parity is a separate audit that reports
+  `not_run` at zero staged references; neither is universal biological validation.
 - Current bounded real-data handoff proof:
   `/home/zerlinshen/projects/round9-singlecell-comparison/runs/2026-05-24T2347Z-0321773`.
   It uses a retained Round9 LUSC consensus AnnData and validates current
@@ -208,8 +218,8 @@ The current suite-level validation posture is intentionally honest:
   `r_multiomics_arrow` remains the renv-pinned reference env.
 
 This does not prove NG2025 end-to-end reproduction or full raw-input pipeline
-correctness. Treat restored real-data and curated figure-parity gates as open
-release-readiness work.
+correctness. Treat broader real-data reproduction and any future project-owned
+exact-replica reference audit as open release-readiness work.
 
 ## Historical State (2026-05-16)
 

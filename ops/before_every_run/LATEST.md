@@ -1,5 +1,26 @@
 # CURRENT STATUS BANNER — 2026-08-15 (read first)
 
+**GPU promotion pre-commit review (2026-08-23).** Fresh focused tests passed
+120/120 and the complete canonical suite passed 34/34 after tightening the
+candidate-predecessor and PNG-structure negative controls. Evidence:
+`/home/zerlinshen/projects/gpu-stack-validation-20260822/runs/2026-08-23-gpu-promotion-precommit-review/`.
+Journal: `journal/2026-08-23-gpu-promotion-precommit-review.md`.
+
+**GPU environment promotion (2026-08-22).** The bounded RAPIDS 26.08 / CUDA
+13.2 validation passed for CuPy, PyTorch, clustering, marker DE, Scrublet,
+scVI, CellRank, the historical 50k PCA reproducer, and focused factory tests.
+Use `sc_gpu_rapids2608` for these GPU lanes. Preserve `sc_gpu` and
+`sc_gpu_stable` as rollback/full-optional environments. Do not install LIANA
+1.9 into the promoted env: its `pandas<3` requirement conflicts with RAPIDS
+26.08's `pandas>=3` requirement. Canonical evidence:
+`/home/zerlinshen/projects/gpu-stack-validation-20260822/runs/2026-08-21T1924Z-1137750/`.
+Full journal: `journal/2026-08-22-rapids2608-gpu-stack-promotion.md`.
+The final GPU-first full-suite rerun passed 34/34 after the plotting gate was
+bound to the validated reference-render interpreter and the external-reference
+registry was repaired. Earlier 32/34 and 31/34 results are retained diagnostic
+history, not the current suite status. Original-paper reference parity was not
+run and is not included in 34/34.
+
 **Governance review (docs only, 2026-08-15).** Grok independently checked live
 READMEs against disk. Analysis code was not changed. Use
 `/home/zerlinshen/projects/CATALOG.md` and

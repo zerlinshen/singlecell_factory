@@ -828,6 +828,18 @@ After a run:
 
 - Pipeline auto-detects GPU backends.
 - If unavailable or failure occurs, it falls back to CPU and records backend metadata.
+- For clustering, marker DE, Scrublet, scVI, or CellRank GPU work, activate the
+  validated default first: `conda activate sc_gpu_rapids2608`.
+- Check `nvidia-smi`, then run the bounded evidence script under
+  `/home/zerlinshen/projects/gpu-stack-validation-20260822/runs/2026-08-21T1924Z-1137750/python/gpu_stack_smoke.py`.
+- Do not add LIANA to this environment: LIANA 1.9 requires `pandas<3`, which
+  conflicts with RAPIDS 26.08's `pandas>=3` requirement.
+- Keep suite-wide plotting/reference gates on their established launcher
+  environment. `sc_gpu_rapids2608` is a GPU analysis lane, not authorization to
+  regenerate visual baselines under Matplotlib 3.11.
+- When validating factory tests in an isolated shell, export
+  `NUMBA_DISABLE_JIT=0`; `tests/conftest.py` otherwise disables JIT by default,
+  which breaks fresh-cache Scanpy Wilcoxon execution.
 
 ### 15.5 "RNA velocity failed"
 

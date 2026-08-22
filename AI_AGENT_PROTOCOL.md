@@ -94,6 +94,15 @@ project-root migration, owner approval, and 14-day silent window all pass.
 
 ### Environment Switches (Round-1a)
 
+Canonical GPU-lane environment (2026-08-22): `sc_gpu_rapids2608` for GPU
+clustering, marker DE, Scrublet, scVI, and CellRank. Keep `sc_gpu` and
+`sc_gpu_stable` as unchanged rollback/full-optional lanes. LIANA 1.9 is not
+admissible in the RAPIDS 26.08 environment because their pandas constraints
+conflict; do not force-install it.
+The promotion is not suite-wide: keep plotting/reference-render gates on their
+established launcher environment and do not refresh visual baselines to absorb
+the promoted environment's Matplotlib version.
+
 Plan: `/home/zerlinshen/.omc/plans/factories-optimization-round1.md`
 
 | Variable | Unset | `=1` |

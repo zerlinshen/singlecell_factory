@@ -52,12 +52,28 @@ jobs:
             echo "  Full cross-repo enforcement: suite-gate.yml (requires SUITE_CI_TOKEN) + local pre-push."
           fi
 
-      - name: Figure parity gate unit coverage (data-free)
+      - name: Figure artifact-integrity smoke (data-free)
         run: |
+          python - <<'PY'
+          import json
+          import struct
+          import zlib
+          from pathlib import Path
+
+          def chunk(kind, payload):
+              crc = zlib.crc32(payload, zlib.crc32(kind)) & 0xffffffff
+              return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
+
+          png = Path("/tmp/factory-governance-ci.png")
+          ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+          png.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00")) + chunk(b"IEND", b""))
+          manifest = {"schema_version": "ci_fixture", "figures": [{"id": "ci", "produced": str(png)}]}
+          Path("/tmp/figure-artifact-integrity-manifest.json").write_text(json.dumps(manifest))
+          PY
           python scripts/validate_figure_parity_gate.py \
-            --allow-conditional \
-            --allow-missing-produced \
-            --output /tmp/figure_parity_gate.json
+            --manifest /tmp/figure-artifact-integrity-manifest.json \
+            --mode artifact-integrity \
+            --output /tmp/figure-artifact-integrity.json
 
       - name: R-bundle export focused test (data-free)
         run: |
