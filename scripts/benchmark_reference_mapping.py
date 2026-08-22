@@ -647,6 +647,8 @@ def verify_lane_output(
     if metrics.get("input_manifest_sha256") != expected_input_manifest_sha256:
         raise ValueError(f"{device} metrics did not consume the coordinator input manifest.")
     repetition_frames: list[pd.DataFrame] = []
+    repetition_raw_hashes: list[str] = []
+    repetition_scientific_hashes: list[str] = []
     for record in metrics.get("repetitions", []):
         repetition_path = Path(record.get("mapping_path", ""))
         if not repetition_path.is_file():
@@ -654,12 +656,16 @@ def verify_lane_output(
         repetition_file_sha256 = compute_sha256(repetition_path)
         if repetition_file_sha256 != record.get("mapping_file_sha256"):
             raise ValueError(f"{device} child repetition artifact SHA-256 mismatch.")
-        repetition_frame = pd.read_csv(repetition_path, index_col=0)
-        if _mapping_sha256(repetition_frame) != record.get("mapping_sha256"):
+        if repetition_file_sha256 != record.get("mapping_sha256"):
             raise ValueError(f"{device} child repetition mapping hash mismatch.")
-        if _scientific_output_sha256(repetition_frame) != record.get("scientific_output_sha256"):
-            raise ValueError(f"{device} child repetition scientific-output hash mismatch.")
+        repetition_frame = pd.read_csv(repetition_path, index_col=0)
+        if not record.get("scientific_output_sha256"):
+            raise ValueError(f"{device} child repetition scientific-output hash is missing.")
+        repetition_raw_hashes.append(repetition_file_sha256)
+        repetition_scientific_hashes.append(str(record["scientific_output_sha256"]))
         repetition_frames.append(repetition_frame)
+    if len(set(repetition_scientific_hashes)) != 1:
+        raise ValueError(f"{device} child exact scientific-output hashes differ across repetitions.")
     try:
         verified_repeatability = _assess_within_lane_repeatability(repetition_frames)
     except RuntimeError as exc:
@@ -671,12 +677,15 @@ def verify_lane_output(
         "exact_columns",
         "distance_rtol",
         "distance_atol",
-        "scientific_output_sha256",
-        "raw_mapping_sha256s",
-        "raw_bitwise_identical",
     ):
         if recorded_repeatability.get(field) != verified_repeatability.get(field):
             raise ValueError(f"{device} child repeatability receipt mismatch for {field}.")
+    if recorded_repeatability.get("scientific_output_sha256") != repetition_scientific_hashes[0]:
+        raise ValueError(f"{device} child repeatability receipt mismatch for scientific_output_sha256.")
+    if recorded_repeatability.get("raw_mapping_sha256s") != repetition_raw_hashes:
+        raise ValueError(f"{device} child repeatability receipt mismatch for raw_mapping_sha256s.")
+    if recorded_repeatability.get("raw_bitwise_identical") != (len(set(repetition_raw_hashes)) == 1):
+        raise ValueError(f"{device} child repeatability receipt mismatch for raw_bitwise_identical.")
     for field in ("distance_max_abs_diff", "distance_mean_abs_diff_max"):
         if not np.isclose(
             float(recorded_repeatability.get(field, np.nan)),
