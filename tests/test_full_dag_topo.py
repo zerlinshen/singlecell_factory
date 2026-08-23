@@ -31,7 +31,7 @@ def test_mandatory_modules_respect_their_own_deps():
 
     Note: this is the real topological invariant. Mandatory modules do NOT have to
     precede every optional module — only those that depend on them. Several
-    optionals (marker_db_loader, modality_registry, atac_ingest) have empty
+    optionals (marker_db_loader, modality_registry) have empty
     depends_on and may topologically appear at the same level as cellranger.
     """
     from workflow.modular.pipeline import _build_registry, _resolve_execution_order

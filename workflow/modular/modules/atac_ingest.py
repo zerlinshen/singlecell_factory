@@ -150,6 +150,11 @@ class ATACIngestModule:
     name = "atac_ingest"
     required = False
     mutates_structure = False
+    # The producer writes canonical obsm/uns keys that QC must slice together
+    # with the cell axis.  Keep it on the main context before mutating and
+    # parallel append-only work; a branch merge after QC would lose alignment.
+    runs_before_mutating_modules = True
+    force_sequential = True
     requires_keys: dict[str, list[str]] = {}
     provides_keys: dict[str, list[str]] = {
         "obsm": ["atac_peaks", "X_atac"],

@@ -187,7 +187,11 @@ def test_new_modules_in_dag():
     # opt-in; depends_on clustering; batch_correction runs_after it).
     assert len(MODULE_DEPENDENCIES) == 45
     assert "scatac_pseudobulk_da" in MODULE_DEPENDENCIES
-    assert MODULE_DEPENDENCIES["scatac_pseudobulk_da"] == {"atac_ingest"}
+    assert MODULE_DEPENDENCIES["atac_ingest"] == {"cellranger"}
+    assert MODULE_DEPENDENCIES["scatac_pseudobulk_da"] == {
+        "atac_ingest",
+        "doublet_detection",
+    }
     assert "integration_select" in MODULE_DEPENDENCIES
     assert MODULE_DEPENDENCIES["integration_select"] == {"clustering"}
     assert "ambient_correction" in MODULE_DEPENDENCIES

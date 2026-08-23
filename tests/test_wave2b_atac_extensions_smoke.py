@@ -161,7 +161,23 @@ def test_atac_extensions_in_registry():
     # peak_to_gene must come after atac_ingest in topo
     optional = ["atac_ingest", "atac_qc", "peak_to_gene"]
     order = _resolve_execution_order(list(MANDATORY_MODULES), optional)
+    assert order.index("cellranger") < order.index("atac_ingest") < order.index("qc")
     assert order.index("peak_to_gene") > order.index("atac_ingest")
+    assert reg["qc"].mutates_structure is True
+    assert reg["atac_ingest"].runs_before_mutating_modules is True
+    assert reg["atac_ingest"].force_sequential is True
+
+
+def test_scatac_da_runs_on_the_post_qc_cell_axis():
+    from workflow.modular.pipeline import _resolve_execution_order
+    from workflow.modular.module_catalog import MANDATORY_MODULES
+
+    order = _resolve_execution_order(
+        list(MANDATORY_MODULES), ["scatac_pseudobulk_da"]
+    )
+    assert order.index("cellranger") < order.index("atac_ingest")
+    assert order.index("atac_ingest") < order.index("qc")
+    assert order.index("doublet_detection") < order.index("scatac_pseudobulk_da")
 
 
 def test_atac_ingest_lsi_peak_to_gene_chain(synthetic_adata, synthetic_gene_tss_bed, tmp_path):

@@ -44,6 +44,10 @@ class QCModule:
 
     name = "qc"
     required = True
+    # QC replaces ctx.adata with a cell/gene subset.  It must never execute on
+    # a copy-on-branch appending lane because positional obsm data (including
+    # ATAC peaks) have to be sliced on the canonical object.
+    mutates_structure = True
 
     def run(self, ctx: PipelineContext) -> None:
         adata = ctx.adata

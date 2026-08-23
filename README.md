@@ -145,7 +145,9 @@ python scripts/scfactory.py run <rna-or-metadata.h5ad> \
 The matrix and BED paths are forwarded through both the public wrapper and the
 canonical modular CLI. `atac_ingest` binds their ordered peak IDs and emits the
 certificate consumed by DA; do not hand-edit or synthesize that certificate in
-a downstream AnnData file. Exact sparse aggregation is CPU-only in this staged
+a downstream AnnData file. The DAG binds the ATAC axis before cell QC so the
+peak matrix is subset with AnnData, then runs DA only after doublet handling.
+Exact sparse aggregation is CPU-only in this staged
 release. There is no GPU/CPU dual execution: an uncertified GPU domain routes
 directly to CPU, and GPU support cannot be promoted without exact integer
 aggregation and known-truth statistical validation.

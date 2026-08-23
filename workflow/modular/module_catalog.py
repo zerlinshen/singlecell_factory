@@ -126,6 +126,10 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     "qc": ModuleSpec(
         name="qc",
         depends_on=("cellranger",),
+        # Conditional ordering only: when ATAC ingest is selected, bind the
+        # full cell axis before QC subsets AnnData (and therefore obsm).
+        # runs_after never auto-includes atac_ingest for RNA-only runs.
+        runs_after=("atac_ingest",),
         layer="quality_control",
         description="Cell/gene QC filtering and QC figures.",
     ),
@@ -434,7 +438,7 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     ),
     "atac_ingest": ModuleSpec(
         name="atac_ingest",
-        depends_on=(),
+        depends_on=("cellranger",),
         layer="ingest",
         modality="atac",
         bridge_ready=True,
@@ -511,7 +515,7 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
     ),
     "scatac_pseudobulk_da": ModuleSpec(
         name="scatac_pseudobulk_da",
-        depends_on=("atac_ingest",),
+        depends_on=("atac_ingest", "doublet_detection"),
         layer="analysis",
         modality="atac",
         bridge_ready=True,
