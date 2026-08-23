@@ -180,6 +180,37 @@ def test_scatac_da_runs_on_the_post_qc_cell_axis():
     assert order.index("doublet_detection") < order.index("scatac_pseudobulk_da")
 
 
+def test_parallel_tier_executes_atac_ingest_before_mutating_qc(monkeypatch):
+    """Lock the real parallel safety mechanism, not just the sequential topo."""
+    from workflow.modular import pipeline
+    from workflow.modular.module_catalog import MANDATORY_MODULES
+
+    registry = pipeline._build_registry()
+    order = pipeline._resolve_execution_order(
+        list(MANDATORY_MODULES), ["scatac_pseudobulk_da"]
+    )
+    tiers = pipeline._compute_tiers(order, completed=set())
+    shared_tier = next(
+        tier for tier in tiers if {"atac_ingest", "qc"}.issubset(tier)
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def record(modules, *_args, **_kwargs):
+        calls.append(tuple(modules))
+
+    monkeypatch.setattr(pipeline, "_run_sequential", record)
+    pipeline._execute_tier(
+        shared_tier,
+        registry,
+        object(),
+        set(MANDATORY_MODULES),
+        max_workers=4,
+        mutating_modules=pipeline._discover_mutating(registry),
+    )
+
+    assert calls.index(("atac_ingest",)) < calls.index(("qc",))
+
+
 def test_atac_ingest_lsi_peak_to_gene_chain(synthetic_adata, synthetic_gene_tss_bed, tmp_path):
     """Synthetic ATAC chain uses one canonical sparse peak matrix contract."""
     import scipy.io as sio
