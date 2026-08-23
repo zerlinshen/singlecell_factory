@@ -1,13 +1,24 @@
-# CURRENT STATUS BANNER — 2026-08-15 (read first)
+# CURRENT STATUS BANNER — 2026-08-23 (read first)
 
-**Reference Atlas OOD P0 results (2026-08-23).** The 600-cell Census reference
+**Reference Atlas GPU certificate revoked (2026-08-23).** The corrected,
+independently query-blind Trevino run `2026-08-23T1054Z-0b66858` failed all
+four OOD falsifiability gates on CPU, and the GPU lane additionally failed
+exact confidence and bounded-distance repeatability (maximum pairwise drift
+`2.1905e-6`). The earlier `11.04x` result used a source-wide retained
+feature mask and is superseded historical evidence only. Production `auto`
+now routes `trevino-fetal-cortex-v1` directly to CPU without a dual run;
+explicit GPU fails closed. This is a technical negative result using proxy
+labels, not proof that CPU is biological ground truth. Journal:
+`journal/2026-08-23-reference-atlas-queryblind-certificate-revocation.md`.
+
+**Superseded Reference Atlas OOD P0 result (2026-08-23).** The 600-cell Census reference
 materialization and receipt verification passed. The clean process-isolated
 Trevino run `2026-08-22T1558Z-c38053d` passed exact scientific-output,
 bounded-distance repeatability, OOD, CUDA-residency, and CPU/GPU parity gates;
 its isolated median speedup was `11.04x`. `auto` selects GPU only for the exact
-promoted `trevino-fetal-cortex-v1` / cuML `26.08.00` certificate and otherwise
-selects CPU before mapping; production does not dual-run. This is a technical
-routing certificate, not biological ground truth or general GPU proof. Journal:
+formerly promoted `trevino-fetal-cortex-v1` / cuML `26.08.00` certificate.
+That certificate is now revoked by the query-blind rerun above; do not use this
+paragraph to authorize GPU routing. Journal:
 `journal/2026-08-23-reference-atlas-ood-p0-results.md`.
 
 **GPU promotion pre-commit review (2026-08-23).** Fresh focused tests passed

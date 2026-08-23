@@ -232,14 +232,15 @@ In both modes, this remote repo remains the run-truth surface.
 
 ## Current State (2026-08-23)
 
-The Reference Atlas OOD P0 amendment completed its bounded technical evidence pass.
-The clean process-isolated run `2026-08-22T1558Z-c38053d` passed exact scientific-output,
-bounded-distance repeatability, OOD, CUDA-residency, and CPU/GPU parity gates, with an
-isolated `11.04x` median speedup. `auto` selects GPU only for the promoted
-`trevino-fetal-cortex-v1` / cuML `26.08.00` certificate; unknown, unvalidated, disabled,
-unavailable, or version-drift cases select CPU before mapping. Production never dual-runs.
-This is a technical routing certificate, not biological ground truth or general GPU proof.
-Consult `docs/REFERENCE_ATLAS_OOD.md` before reporting the milestone.
+The Reference Atlas OOD certificate for `trevino-fetal-cortex-v1` is revoked.
+The corrected independently query-blind run `2026-08-23T1054Z-0b66858`
+failed all four OOD falsifiability gates on CPU, and the GPU lane additionally
+failed exact repeatability. The earlier `11.04x` result is retained as
+superseded non-query-blind evidence and must not authorize routing. `auto`
+selects CPU for this domain before mapping; explicit GPU fails closed and
+production never dual-runs. This is a bounded technical result using proxy
+labels, not proof that CPU is biological ground truth. Consult
+`docs/REFERENCE_ATLAS_OOD.md` before reporting the milestone.
 
 The August pipeline-remediation round preserves the bounded scientific verdicts
 below and adds the canonical `../QUICKSTART.md`, report-all 33-gate route,

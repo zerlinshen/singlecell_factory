@@ -201,11 +201,8 @@ def select_reference_features(
     ordered_genes_sha256 = _sha256_bytes("\n".join(selected_genes).encode("utf-8") + b"\n")
 
     feature_receipt = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "selection_route": "reference_only_sparse_variance_v1",
-        "independently_query_blind": True,
-        "fit_population": "reference_cells_only",
-        "query_cells_consumed": False,
         "n_fit_cells": n_cells,
         "fit_cells_sha256": fit_cells_sha256,
         "n_input_features": n_features,
@@ -220,6 +217,52 @@ def select_reference_features(
     return selected_genes, feature_receipt
 
 
+def attest_query_blind_feature_selection(
+    receipt: dict[str, Any],
+    *,
+    fit_cell_ids: list[str],
+    query_cell_ids: list[str],
+) -> dict[str, Any]:
+    """Bind a feature-fit receipt to explicit disjoint fit/query cell IDs.
+
+    ``select_reference_features`` only sees its input matrix and therefore
+    cannot truthfully infer whether the caller included query cells. This
+    attestation is added only where both populations are explicitly known.
+    """
+    fit_cells = [str(cell) for cell in fit_cell_ids]
+    query_cells = [str(cell) for cell in query_cell_ids]
+    if not query_cells:
+        raise ValueError("At least one explicit query cell is required for query-blind attestation.")
+    if len(set(fit_cells)) != len(fit_cells):
+        raise ValueError("Feature-fit cell IDs must be unique before query-blind attestation.")
+    if len(set(query_cells)) != len(query_cells):
+        raise ValueError("Query cell IDs must be unique before query-blind attestation.")
+    overlap = sorted(set(fit_cells) & set(query_cells))
+    if overlap:
+        raise ValueError(
+            f"Feature-fit/query cell overlap prevents query-blind attestation ({len(overlap)} cells)."
+        )
+    expected_fit_sha = _sha256_bytes("\n".join(fit_cells).encode("utf-8") + b"\n")
+    if receipt.get("fit_cells_sha256") != expected_fit_sha:
+        raise ValueError("Feature-fit receipt does not match the cells being attested.")
+
+    attested = dict(receipt)
+    attested.update(
+        {
+            "independently_query_blind": True,
+            "fit_population": "reference_cells_only",
+            "query_cells_consumed": False,
+            "query_blind_attestation": "explicit_cell_id_disjointness_v1",
+            "n_declared_query_cells": len(query_cells),
+            "query_cells_sha256": _sha256_bytes(
+                "\n".join(query_cells).encode("utf-8") + b"\n"
+            ),
+            "fit_query_overlap_count": 0,
+        }
+    )
+    return attested
+
+
 def select_reference_hvg_genes(
     adata: ad.AnnData,
     reference_cells: list[str],
@@ -231,7 +274,14 @@ def select_reference_hvg_genes(
     if np.any(adata.obs_names.get_indexer(reference_cells) < 0):
         raise ValueError("Reference split contains cell IDs absent from the source AnnData.")
     ref_adata = adata[reference_cells, :].copy()
-    return select_reference_features(ref_adata, max_genes=max_genes)
+    selected_genes, receipt = select_reference_features(ref_adata, max_genes=max_genes)
+    reference_set = set(str(cell) for cell in reference_cells)
+    query_cells = [str(cell) for cell in adata.obs_names if str(cell) not in reference_set]
+    return selected_genes, attest_query_blind_feature_selection(
+        receipt,
+        fit_cell_ids=ref_adata.obs_names.astype(str).tolist(),
+        query_cell_ids=query_cells,
+    )
 
 
 def validate_feature_selection_receipt(
@@ -239,6 +289,7 @@ def validate_feature_selection_receipt(
     *,
     expected_reference_cells: list[str],
     expected_genes: list[str],
+    expected_query_cells: Optional[list[str]] = None,
 ) -> None:
     """Validate query-blind feature selection proof against frozen reference and genes."""
     if not isinstance(receipt, dict):
@@ -260,6 +311,39 @@ def validate_feature_selection_receipt(
 
     if receipt.get("query_cells_consumed") is not False:
         raise ValueError("Feature selection receipt indicates query cells were consumed.")
+
+    expected_reference = [str(cell) for cell in expected_reference_cells]
+    if len(set(expected_reference)) != len(expected_reference):
+        raise ValueError("Expected reference cells must be unique.")
+    expected_query: Optional[list[str]] = None
+    computed_overlap_count: Optional[int] = None
+    if expected_query_cells is not None:
+        expected_query = [str(cell) for cell in expected_query_cells]
+        if not expected_query:
+            raise ValueError("At least one expected query cell is required.")
+        if len(set(expected_query)) != len(expected_query):
+            raise ValueError("Expected query cells must be unique.")
+        computed_overlap_count = len(set(expected_reference) & set(expected_query))
+        if computed_overlap_count:
+            raise ValueError(
+                f"Expected reference/query cell overlap invalidates query-blind proof ({computed_overlap_count} cells)."
+            )
+
+    schema_version = str(receipt.get("schema_version", ""))
+    if schema_version != "1.0":
+        if expected_query is None or computed_overlap_count is None:
+            raise ValueError("Feature selection schema >=1.1 requires expected query cells.")
+        if receipt.get("query_blind_attestation") != "explicit_cell_id_disjointness_v1":
+            raise ValueError("Feature selection receipt lacks explicit query-blind attestation.")
+        if int(receipt.get("fit_query_overlap_count", -1)) != computed_overlap_count:
+            raise ValueError("Feature selection receipt fit/query overlap count mismatch.")
+        if int(receipt.get("n_declared_query_cells", -1)) != len(expected_query):
+            raise ValueError("Feature selection query cell count mismatch.")
+        expected_query_sha = _sha256_bytes(
+            "\n".join(expected_query).encode("utf-8") + b"\n"
+        )
+        if receipt.get("query_cells_sha256") != expected_query_sha:
+            raise ValueError("Feature selection query cells SHA-256 does not match frozen query cells.")
 
     expected_cells_count = len(expected_reference_cells)
     if int(receipt.get("n_fit_cells", -1)) != expected_cells_count:
@@ -361,10 +445,16 @@ def prepare_trevino_split(
 
     ref_sub = adata[reference_cells, :].copy()
     selected_genes, feature_receipt = select_reference_features(ref_sub, max_genes=max_genes)
+    feature_receipt = attest_query_blind_feature_selection(
+        feature_receipt,
+        fit_cell_ids=ref_sub.obs_names.astype(str).tolist(),
+        query_cell_ids=query_cells,
+    )
     validate_feature_selection_receipt(
         feature_receipt,
         expected_reference_cells=ref_sub.obs_names.astype(str).tolist(),
         expected_genes=selected_genes,
+        expected_query_cells=query_cells,
     )
     ref_adata = ref_sub[:, selected_genes].copy()
     query_adata = adata[query_cells, selected_genes].copy()
@@ -452,6 +542,7 @@ def _write_frozen_input_manifest(
         feature_receipt,
         expected_reference_cells=_read_lines(frozen_dir / "reference_cells.txt"),
         expected_genes=_read_lines(frozen_dir / "genes.txt"),
+        expected_query_cells=_read_lines(frozen_dir / "query_cells.txt"),
     )
     _atomic_write_json(threshold_path, threshold_receipt)
     _atomic_write_json(parameters_path, parameters)
@@ -571,6 +662,7 @@ def verify_frozen_inputs(input_dir: Path, expected_manifest_sha256: Optional[str
             feature_receipt,
             expected_reference_cells=reference_cells,
             expected_genes=genes,
+            expected_query_cells=query_cells,
         )
 
     return {
@@ -1182,6 +1274,7 @@ def run_benchmark(
         feature_receipt,
         expected_reference_cells=ref_adata.obs_names.astype(str).tolist(),
         expected_genes=prepared["genes"],
+        expected_query_cells=query_adata.obs_names.astype(str).tolist(),
     )
     threshold, threshold_receipt = calibrate_reference_ood_threshold(
         ref_adata=ref_adata,

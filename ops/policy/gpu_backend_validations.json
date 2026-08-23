@@ -1,6 +1,6 @@
 {
-  "schema_version": "2.1",
-  "policy": "Production selects exactly one backend before reference mapping. Unknown or unvalidated domains, disabled GPU mode, unavailable CUDA/cuML, and backend-version drift route directly to CPU. A promoted offline real-data certificate may route its exact declared domain and backend version directly to GPU. Production never dual-runs CPU and GPU; CPU is a conservative fallback, not biological ground truth.",
+  "schema_version": "2.2",
+  "policy": "Production selects exactly one backend before reference mapping. Only a promoted offline real-data certificate may route its exact declared domain and backend version to GPU. Revoked, unknown, or unvalidated domains, disabled GPU mode, unavailable CUDA/cuML, and backend-version drift route auto directly to CPU. Production never dual-runs CPU and GPU; CPU is a conservative fallback, not biological ground truth.",
   "modules": {
     "reference_mapping_knn": {
       "default_unvalidated_device": "cpu",
@@ -8,83 +8,95 @@
       "production_dual_run": false,
       "domains": {
         "trevino-fetal-cortex-v1": {
-          "certificate_id": "reference-knn-trevino-20260822-v2",
-          "status": "promoted",
-          "validated_backend": {
-            "implementation": "cuml.neighbors.NearestNeighbors",
-            "cuml_version": "26.08.00",
-            "device": "NVIDIA GeForce RTX 5090 D v2",
-            "cuda_residency_verified": true
-          },
-          "validation_dataset": {
-            "source": "Trevino fetal cortex HFT3 versus HFT7/HFT5/HFT6",
+          "certificate_id": "reference-knn-trevino-20260823-queryblind-revoked",
+          "status": "revoked_after_query_blind_validation_failure",
+          "revoked_at": "2026-08-23T10:55:38Z",
+          "revocation_reason": "The first independently query-blind real-data rerun failed every predeclared OOD falsifiability gate on CPU, and the GPU lane additionally failed within-lane scientific repeatability. The historical non-query-blind 11.04x certificate cannot authorize production routing under the corrected method contract.",
+          "current_validation": {
+            "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-23T1054Z-0b66858/python/validation",
+            "technical_verdict": "FAIL_NOT_PROMOTED",
             "source_sha256": "44b3cf6f98ef890ad9a2723f275f8ac63b51148f5a685e38cfe802d561282ad7",
+            "input_manifest_sha256": "31e30d69d46b6d1deb262899f2508e942542d3f35035d629334bfdfc29e0984c",
             "query_cells": 4143,
             "reference_cells": 9496,
-            "features": 2000,
-            "feature_selection": "source_highly_variable_ordered_cap",
-            "feature_selection_independently_query_blind": false,
+            "features": 3000,
+            "feature_selection": "reference_only_sparse_variance_v1",
+            "feature_selection_independently_query_blind": true,
+            "query_cells_consumed_for_feature_fit": false,
             "held_out_ood_label": "Microglia",
-            "labels": "pipeline-derived proxy labels"
-          },
-          "scientific_gates": {
-            "known_acceptance_coverage": 0.931938559322034,
-            "known_all_cells_macro_f1_rejected_as_unknown": 0.8243223242061022,
-            "known_accepted_macro_f1": 0.9621386824274898,
-            "held_out_ood_rejection_recall": 0.9564032697547684,
-            "delta_rejection_rate_ood_vs_known": 0.8883418290768024,
-            "all_passed": true
-          },
-          "within_lane_repeatability": {
-            "contract": "exact_scientific_outputs_plus_bounded_float_distance",
-            "measured_repetitions": 3,
-            "exact_scientific_output_sha256": "a24437b8da0c99b0af2179c9caf49ada80de01f29c744864a93b6ce4d5202a83",
-            "distance_rtol": 0.000001,
-            "distance_atol": 0.000001,
-            "cpu_max_abs_distance_drift": 0.0,
-            "gpu_max_abs_distance_drift": 0.000000476837158203125,
-            "gpu_raw_bitwise_identical": false,
-            "interpretation": "GPU raw CSV bytes differ only in bounded floating-point distances; labels, confidence, assignment status, final reference cell type, and OOD flags are exact across repetitions."
-          },
-          "backend_fidelity": {
-            "candidate_label_agreement": 1.0,
-            "assignment_status_agreement": 1.0,
-            "reference_cell_type_agreement": 1.0,
-            "maximum_distance_difference": 0.00000092,
-            "delta_known_macro_f1": 0.0,
-            "delta_ood_rejection_recall": 0.0,
-            "parity_passed": true
-          },
-          "performance": {
-            "evidence_class": "process_isolated_same_interpreter_hash_identical_frozen_inputs",
-            "cpu_median_seconds": 0.9080402250110637,
-            "gpu_median_seconds": 0.08227156900102273,
-            "speedup": 11.037108,
-            "cpu_child_ru_maxrss_mb": 3380.2578125,
-            "gpu_child_ru_maxrss_mb": 3380.2578125,
-            "gpu_peak_vram_mb": 522,
-            "gpu_vram_delta_mb": 22.0
+            "labels": "pipeline-derived proxy labels",
+            "scientific_gates": {
+              "known_acceptance_coverage": 0.5127118644067796,
+              "known_all_cells_macro_f1_rejected_as_unknown": 0.5748506829825113,
+              "known_accepted_macro_f1": 0.8607013635352365,
+              "held_out_ood_rejection_recall": 0.4305177111716621,
+              "delta_rejection_rate_ood_vs_known": -0.05677042442155822,
+              "all_passed": false
+            },
+            "repeatability": {
+              "cpu": "pass_exact",
+              "gpu": "failed_exact_confidence_and_bounded_distance_repeatability",
+              "gpu_changed_confidence_cells": 1,
+              "gpu_max_abs_distance_drift": 0.0000021904706954956055,
+              "gpu_distance_contract_rtol": 0.000001,
+              "gpu_distance_contract_atol": 0.000001,
+              "gpu_distance_pairwise_max_abs_drift": {
+                "repetition_1_vs_2": 0.000001952052116394043,
+                "repetition_1_vs_3": 0.0000021904706954956055,
+                "repetition_2_vs_3": 0.0000021532177924971085
+              },
+              "gpu_distance_contract_status": "failed_all_pairwise_comparisons",
+              "cpu_gpu_candidate_label_disagreements": 1,
+              "cpu_gpu_confidence_disagreements": 5,
+              "cpu_gpu_assignment_status_disagreements": 0,
+              "cpu_gpu_final_cell_type_disagreements": 0,
+              "cpu_gpu_ood_disagreements": 0,
+              "cpu_gpu_max_abs_distance_difference": 0.00000990182161329789,
+              "candidate_label_disagreement_note": "For one rejected known-proxy cell, CPU predicted the matching Inhibitory interneuron candidate while GPU predicted Excitatory neuron. Both were rejected_low_confidence, so this does not establish CPU as biological ground truth; it is additional evidence against GPU promotion."
+            },
+            "evidence_sha256": {
+              "benchmark_contract.json": "579c94f4492b1d8148a35eb1f46738722d2f4b8147808dbdc62fa06102640dc8",
+              "feature_selection_receipt.json": "122011ae17525292852c29f750afd91044af5a498ef8c13738075ac3069b6b2f",
+              "heldout_ood_metrics.json": "2bdeb7f10acd3d01da3fcca55c343148346ba80360fff8987a32b7c117d77dd3",
+              "cpu_metrics.json": "99e5071d6e90c133d7a4dccfce86c218df7a2e4e76427f9963cf1dad9b37893f",
+              "gpu_lane_receipt.json": "cbe4007e65db5940aa38c6129b5125f1d0b3dcb8d3b249c4ad4f275e6420117d",
+              "gpu_mapping_repetition_1.csv": "70d00a82c3dd5ff4e7374b5001d1565c3191316fa2db29b6fa96a068f552993f",
+              "gpu_mapping_repetition_2.csv": "ebdd7b8c551b07cfc2abf6296941f78e65cc3cc322162b341a95e6b6360ae48a",
+              "gpu_mapping_repetition_3.csv": "7e187acdd94accb162455f42a50875fc16d8baf8532193fe8dcda26301a5526f",
+              "input_manifest.json": "31e30d69d46b6d1deb262899f2508e942542d3f35035d629334bfdfc29e0984c"
+            }
           },
           "routing": {
-            "auto_for_exact_promoted_domain": "gpu",
+            "auto_for_this_domain": "cpu",
             "auto_for_unknown_or_unvalidated_domain": "cpu",
             "auto_when_gpu_mode_off": "cpu",
-            "auto_on_backend_unavailable_or_version_drift": "cpu",
-            "explicit_gpu_failure": "fail_loud_no_cpu_fallback",
+            "explicit_gpu_for_this_domain": "fail_closed_no_promoted_certificate",
             "production_dual_run": false
           },
-          "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1558Z-c38053d/python/validation",
-          "input_manifest_sha256": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
-          "evidence_sha256": {
-            "benchmark_contract.json": "3d4058bedff3d93f3191ba465264982732d750591558f998e453fbb2c5ac9d37",
-            "heldout_ood_metrics.json": "35f1f32b94b1df54268c70958ac462f858e021b75bc59f3582f1da08d6e78142",
-            "cpu_gpu_parity.json": "629e44d0b1e217a66bbf072cb81b839e45b3065205e1ff731cdb9f7a79564962",
-            "cpu_metrics.json": "fb50d43f2fd884d599ef6365fc51182b913d59f191853156dcf254f3348bd375",
-            "gpu_metrics.json": "4ac925832cea4ba1fb344dd43dbf036602c7c39516433f624b9770164914e1d5",
-            "input_manifest.json": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
-            "source_and_split_receipt.json": "7c70ac2fb675065e75caa6533f656288f1e84212ba71f9b6d44073a7f7cc3fc4"
-          },
-          "superseded_evidence": [
+          "historical_certificates": [
+            {
+              "certificate_id": "reference-knn-trevino-20260822-v2",
+              "status": "superseded_non_query_blind_do_not_route",
+              "evidence_run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1558Z-c38053d/python/validation",
+              "input_manifest_sha256": "d5a8d21f872a734ab4d2821e79809cb14ba4355e7b8a6055598a1d8212220d89",
+              "validated_backend": {
+                "implementation": "cuml.neighbors.NearestNeighbors",
+                "cuml_version": "26.08.00",
+                "device": "NVIDIA GeForce RTX 5090 D v2",
+                "cuda_residency_verified": true
+              },
+              "feature_selection": "source_highly_variable_ordered_cap",
+              "feature_selection_independently_query_blind": false,
+              "scientific_gates_all_passed": true,
+              "exact_scientific_output_sha256": "a24437b8da0c99b0af2179c9caf49ada80de01f29c744864a93b6ce4d5202a83",
+              "cpu_gpu_candidate_label_agreement": 1.0,
+              "cpu_median_seconds": 0.9080402250110637,
+              "gpu_median_seconds": 0.08227156900102273,
+              "speedup": 11.037108,
+              "reason_superseded": "The feature mask was inherited from the source-wide object and therefore did not prove query-blind feature fitting. The corrected reference-only rerun failed scientific and GPU repeatability gates."
+            }
+          ],
+          "superseded_diagnostic_evidence": [
             {
               "run": "/home/zerlinshen/projects/reference-atlas-ood-validation/runs/2026-08-22T1313Z-26f9123/python/validation",
               "reason": "cumulative-process performance measurement was not process-isolated"
@@ -98,7 +110,7 @@
               "reason": "artifact verifier compared parsed CSV reserialization rather than persisted file bytes"
             }
           ],
-          "claim_scope": "Promotes cuML 26.08 GPU routing only for the declared Trevino fetal-cortex technical domain and exact certificate contract. Trevino labels are pipeline-derived proxies; this is not biological ground truth, a general GPU-module guarantee, or authority to route other datasets to GPU."
+          "claim_scope": "No current GPU promotion exists for Trevino reference mapping. Production auto routes this domain directly to CPU without a dual run. The failed query-blind benchmark is technical evidence using pipeline-derived proxy labels; it is not biological validation and does not prove CPU biological correctness."
         }
       }
     }

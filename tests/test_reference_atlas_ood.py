@@ -17,6 +17,7 @@ from scripts.benchmark_reference_mapping import (
     _json_sha256,
     _sha256_bytes,
     _write_frozen_input_manifest,
+    attest_query_blind_feature_selection,
     compute_sha256,
     run_lane,
     select_reference_features,
@@ -37,6 +38,7 @@ from workflow.modular._reference_mapping import (
     ASSIGNMENT_STATUS_REJECTED_BOTH,
     ASSIGNMENT_STATUS_REJECTED_LOW_CONF,
     ASSIGNMENT_STATUS_REJECTED_OOD_DIST,
+    DEFAULT_GPU_VALIDATION_POLICY,
     _configure_cuda_toolkit_path,
     align_reference_genes,
     calibrate_reference_ood_threshold,
@@ -305,9 +307,13 @@ def test_reference_feature_selection_excludes_query_signal():
     selected_2, receipt_2 = select_reference_hvg_genes(spiked, reference_cells, max_genes=15)
     assert len(selected_1) == 15
     assert receipt_1["selection_route"] == "reference_only_sparse_variance_v1"
+    assert receipt_1["schema_version"] == "1.1"
     assert receipt_1["independently_query_blind"] is True
     assert receipt_1["fit_population"] == "reference_cells_only"
     assert receipt_1["query_cells_consumed"] is False
+    assert receipt_1["query_blind_attestation"] == "explicit_cell_id_disjointness_v1"
+    assert receipt_1["fit_query_overlap_count"] == 0
+    assert receipt_1["n_declared_query_cells"] == len(query_cells)
     assert selected_1 == selected_2
     assert receipt_1["ordered_genes_sha256"] == receipt_2["ordered_genes_sha256"]
     assert _json_sha256(receipt_1) == _json_sha256(receipt_2)
@@ -319,6 +325,21 @@ def test_reference_feature_selection_excludes_query_signal():
     assert leaky_selected[0] == "G_0"
     assert leaky_selected != selected_1
     assert leaky_receipt["n_fit_cells"] == spiked.n_obs
+    assert "independently_query_blind" not in leaky_receipt
+    assert "query_cells_consumed" not in leaky_receipt
+
+    with pytest.raises(ValueError, match="overlap prevents query-blind attestation"):
+        attest_query_blind_feature_selection(
+            leaky_receipt,
+            fit_cell_ids=spiked.obs_names.astype(str).tolist(),
+            query_cell_ids=query_cells,
+        )
+    with pytest.raises(ValueError, match="At least one explicit query cell"):
+        attest_query_blind_feature_selection(
+            receipt_1,
+            fit_cell_ids=reference_cells,
+            query_cell_ids=[],
+        )
 
     with pytest.raises(TypeError, match="required positional argument"):
         select_reference_hvg_genes(baseline, max_genes=15)  # type: ignore[call-arg]
@@ -458,6 +479,101 @@ def test_feature_selection_receipt_validation_fail_closed():
     with pytest.raises(ValueError, match="ordered genes SHA-256 does not match"):
         validate_feature_selection_receipt(gene_hash_mismatch, expected_reference_cells=ref_cells, expected_genes=genes)
 
+    # Schema 1.1 derives query-blindness from explicit fit/query disjointness.
+    query_cells = ["q1", "q2"]
+    v11_receipt = {
+        **valid_receipt,
+        "schema_version": "1.1",
+        "query_blind_attestation": "explicit_cell_id_disjointness_v1",
+        "n_declared_query_cells": len(query_cells),
+        "query_cells_sha256": _sha256_bytes("\n".join(query_cells).encode("utf-8") + b"\n"),
+        "fit_query_overlap_count": 0,
+    }
+    validate_feature_selection_receipt(
+        v11_receipt,
+        expected_reference_cells=ref_cells,
+        expected_genes=genes,
+        expected_query_cells=query_cells,
+    )
+    with pytest.raises(ValueError, match="requires expected query cells"):
+        validate_feature_selection_receipt(
+            v11_receipt,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+        )
+    bad_query_hash = v11_receipt.copy()
+    bad_query_hash["query_cells_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="query cells SHA-256"):
+        validate_feature_selection_receipt(
+            bad_query_hash,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=query_cells,
+        )
+    with pytest.raises(ValueError, match="reference cells must be unique"):
+        validate_feature_selection_receipt(
+            valid_receipt,
+            expected_reference_cells=[*ref_cells, ref_cells[0]],
+            expected_genes=genes,
+        )
+    with pytest.raises(ValueError, match="At least one expected query cell"):
+        validate_feature_selection_receipt(
+            v11_receipt,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=[],
+        )
+    with pytest.raises(ValueError, match="query cells must be unique"):
+        validate_feature_selection_receipt(
+            v11_receipt,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=["q1", "q1"],
+        )
+    bad_overlap_count = v11_receipt.copy()
+    bad_overlap_count["fit_query_overlap_count"] = 1
+    with pytest.raises(ValueError, match="overlap count mismatch"):
+        validate_feature_selection_receipt(
+            bad_overlap_count,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=query_cells,
+        )
+    bad_query_count = v11_receipt.copy()
+    bad_query_count["n_declared_query_cells"] = len(query_cells) + 1
+    with pytest.raises(ValueError, match="query cell count mismatch"):
+        validate_feature_selection_receipt(
+            bad_query_count,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=query_cells,
+        )
+    overlapping_query = [ref_cells[0], "q2"]
+    overlap_receipt = {
+        **v11_receipt,
+        "n_declared_query_cells": len(overlapping_query),
+        "query_cells_sha256": _sha256_bytes(
+            "\n".join(overlapping_query).encode("utf-8") + b"\n"
+        ),
+        "fit_query_overlap_count": 0,
+    }
+    with pytest.raises(ValueError, match="overlap invalidates query-blind proof"):
+        validate_feature_selection_receipt(
+            overlap_receipt,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=overlapping_query,
+        )
+    # Historical schema 1.0 remains readable, but a verifier that has query IDs
+    # still recomputes overlap rather than trusting the stamped booleans.
+    with pytest.raises(ValueError, match="overlap invalidates query-blind proof"):
+        validate_feature_selection_receipt(
+            valid_receipt,
+            expected_reference_cells=ref_cells,
+            expected_genes=genes,
+            expected_query_cells=overlapping_query,
+        )
+
 
 def test_reference_feature_selection_rejects_duplicate_names_and_zero_variance():
     """Verify input validation: duplicate var_names, duplicate obs_names, zero variance, max_genes < 1."""
@@ -498,6 +614,31 @@ def test_reference_device_auto_uses_cpu_without_validated_domain():
     device, receipt = resolve_reference_device("cpu")
     assert device == "cpu"
     assert receipt["decision"] == "explicit_cpu"
+
+
+def test_canonical_trevino_certificate_is_revoked_and_auto_routes_cpu(monkeypatch):
+    def _gpu_preflight_must_not_run():
+        raise AssertionError("revoked domains must route before GPU preflight")
+
+    monkeypatch.setattr(
+        "workflow.modular._reference_mapping._preflight_reference_gpu",
+        _gpu_preflight_must_not_run,
+    )
+    policy = json.loads(DEFAULT_GPU_VALIDATION_POLICY.read_text(encoding="utf-8"))
+    certificate = policy["modules"]["reference_mapping_knn"]["domains"][
+        "trevino-fetal-cortex-v1"
+    ]
+    assert certificate["status"] == "revoked_after_query_blind_validation_failure"
+    assert certificate["routing"]["auto_for_this_domain"] == "cpu"
+
+    device, receipt = resolve_reference_device(
+        "auto", validation_domain="trevino-fetal-cortex-v1"
+    )
+    assert device == "cpu"
+    assert receipt["decision"] == "cpu_domain_not_promoted"
+    assert receipt["production_dual_run"] is False
+    with pytest.raises(ValueError, match="No promoted GPU certificate"):
+        resolve_reference_device("gpu", validation_domain="trevino-fetal-cortex-v1")
 
 
 def test_reference_gpu_mode_off_routes_auto_cpu_and_blocks_explicit_gpu():
