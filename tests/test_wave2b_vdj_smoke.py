@@ -10,6 +10,7 @@ Covers:
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,7 +22,21 @@ import scipy.sparse as sp
 
 
 FACTORY_ROOT = Path(__file__).resolve().parent.parent
-R_FACTORY_ROOT = FACTORY_ROOT.parent / "r_multiomics_factory"
+
+
+def _resolve_r_factory_root() -> Path:
+    candidates = [
+        FACTORY_ROOT.parent / "r_multiomics_factory",
+        FACTORY_ROOT.parents[2] / "r_multiomics_factory",
+        Path("/home/zerlinshen/Bioinformatics Research Pipeline/r_multiomics_factory"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+R_FACTORY_ROOT = _resolve_r_factory_root()
 
 
 @pytest.fixture
@@ -130,14 +145,102 @@ def test_vdj_metrics_computes_shannon_gini_expansion(synthetic_adata_with_barcod
     assert "clonal_expansion" in adata.obs.columns
     assert "vdj_diversity" in adata.uns
     div = adata.uns["vdj_diversity"]
-    assert "shannon" in div.columns and "gini" in div.columns
-    # The synthetic data has 3 large clonotypes (10-11 cells each) — expect "medium" expansion class
+    assert list(div.columns) == ["sample", "n_cells_with_vdj", "n_clonotypes", "shannon", "gini"]
+    # With 4 samples (S0..S3), 10-11-cell clonotypes are split sample-locally into 2-3 cells per sample
     expansion_counts = adata.obs["clonal_expansion"].value_counts().to_dict()
-    assert "medium_6-20" in expansion_counts
+    assert "small_2-5" in expansion_counts
+    assert "no_vdj" in expansion_counts
+    assert "medium_6-20" not in expansion_counts  # proves sample-local counting (global count was 10-11)
     # Shannon entropy must be positive on a multi-clonotype sample
     assert (div["shannon"] > 0).any()
-    # CSV written
+    # CSV and summary JSON written
     assert (tmp_path / "vdj_metrics" / "vdj_diversity.csv").exists()
+    summary_path = tmp_path / "vdj_metrics" / "vdj_diversity.summary.json"
+    assert summary_path.exists()
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["provenance"]["expansion_unit"] == "obs.sample"
+    assert summary["provenance"]["sample_local_clonotypes"] is True
+    assert ctx.metadata["vdj_expansion_unit"] == "obs.sample"
+    assert ctx.metadata["vdj_sample_local_clonotypes"] is True
+
+
+def test_vdj_metrics_two_samples_same_clonotype_are_singletons(tmp_path):
+    """Counterexample proof: cellranger clonotype IDs with same string across 2 samples are singletons."""
+    from workflow.modular.modules.vdj_metrics import VDJMetricsModule
+
+    obs = pd.DataFrame(
+        {
+            "sample": ["S1", "S2"],
+            "clonotype_id": ["clonotype1", "clonotype1"],
+        },
+        index=["cell_1", "cell_2"],
+    )
+    adata = ad.AnnData(X=np.zeros((2, 2)), obs=obs, var=pd.DataFrame(index=["G1", "G2"]))
+    ctx = SimpleNamespace(
+        adata=adata, cfg=SimpleNamespace(), random_state=42,
+        run_dir=tmp_path, metadata={}, status=lambda *a, **k: None,
+    )
+    VDJMetricsModule().run(ctx)
+    # Both cells must be singleton (not small_2-5 from global pooling)
+    assert adata.obs.loc["cell_1", "clonal_expansion"] == "singleton"
+    assert adata.obs.loc["cell_2", "clonal_expansion"] == "singleton"
+
+    div = adata.uns["vdj_diversity"]
+    assert div.shape[0] == 2
+    assert sorted(div["sample"].tolist()) == ["S1", "S2"]
+    assert div["n_cells_with_vdj"].tolist() == [1, 1]
+    assert div["n_clonotypes"].tolist() == [1, 1]
+    assert ctx.metadata["vdj_expansion_unit"] == "obs.sample"
+    assert ctx.metadata["vdj_sample_local_clonotypes"] is True
+
+
+def test_vdj_metrics_sample_absent_fallback_all(tmp_path):
+    """Fallback proof: when obs.sample is absent, fallback to _ALL_ and count globally."""
+    from workflow.modular.modules.vdj_metrics import VDJMetricsModule
+
+    obs = pd.DataFrame(
+        {
+            "clonotype_id": ["clonotype1", "clonotype1"],
+        },
+        index=["cell_1", "cell_2"],
+    )
+    adata = ad.AnnData(X=np.zeros((2, 2)), obs=obs, var=pd.DataFrame(index=["G1", "G2"]))
+    ctx = SimpleNamespace(
+        adata=adata, cfg=SimpleNamespace(), random_state=42,
+        run_dir=tmp_path, metadata={}, status=lambda *a, **k: None,
+    )
+    VDJMetricsModule().run(ctx)
+    # Both cells pool into small_2-5
+    assert adata.obs.loc["cell_1", "clonal_expansion"] == "small_2-5"
+    assert adata.obs.loc["cell_2", "clonal_expansion"] == "small_2-5"
+
+    div = adata.uns["vdj_diversity"]
+    assert div.shape[0] == 1
+    assert div.loc[0, "sample"] == "_ALL_"
+    assert div.loc[0, "n_cells_with_vdj"] == 2
+    assert div.loc[0, "n_clonotypes"] == 1
+    assert ctx.metadata["vdj_expansion_unit"] == "_ALL_"
+    assert ctx.metadata["vdj_fallback_all_repertoire"] is True
+
+
+def test_vdj_metrics_fails_loud_on_blank_sample_for_vdj_cells(tmp_path):
+    """Fail-closed proof: VDJ-bearing cell with blank/null sample raises ValueError."""
+    from workflow.modular.modules.vdj_metrics import VDJMetricsModule
+
+    obs = pd.DataFrame(
+        {
+            "sample": ["S1", ""],
+            "clonotype_id": ["clonotype1", "clonotype1"],
+        },
+        index=["cell_1", "cell_2"],
+    )
+    adata = ad.AnnData(X=np.zeros((2, 2)), obs=obs, var=pd.DataFrame(index=["G1", "G2"]))
+    ctx = SimpleNamespace(
+        adata=adata, cfg=SimpleNamespace(), random_state=42,
+        run_dir=tmp_path, metadata={}, status=lambda *a, **k: None,
+    )
+    with pytest.raises(ValueError, match="VDJ-bearing cells contain null, NaN, or blank sample identifiers"):
+        VDJMetricsModule().run(ctx)
 
 
 def test_vdj_metrics_skips_without_clonotype_column(synthetic_adata_with_barcodes, tmp_path):

@@ -850,10 +850,12 @@ After a run:
 
 - **Missing reference file**: Verify `--reference-adata` path. The pipeline fails loud with `FileNotFoundError` if a requested file is absent; it never silently skips requested reference mapping.
 - **Dynamic Census build rejected**: Dynamic aliases like `latest` or `stable` are rejected locally before network calls. Supply an explicit date-form string, e.g. `--census-build 2025-11-08`.
+- **Feature selection proof requirement**: Reference benchmark splits require a valid, hash-bound `feature_selection_receipt.json` declaring `reference_only_sparse_variance_v1` and `independently_query_blind: true`. Missing, false, or hash-inconsistent proof fails before calibration or child execution.
 - **Device contract**: Reference mapping defaults to `auto`, which selects exactly one backend before mapping and never dual-runs production data. With `--reference-validation-domain trevino-fetal-cortex-v1`, the exact promoted cuML `26.08.00` certificate routes directly to GPU after CUDA preflight. Missing/unknown certificates, `--gpu-mode off`, unavailable CUDA/cuML, or backend-version drift route `auto` directly to CPU. Explicit `--reference-device gpu` fails loud on any mismatch and never executes sklearn as a fallback. CPU is conservative fallback behavior, not biological ground truth.
 - **Insufficient shared genes**: If shared genes < 50, verify gene namespaces (e.g. HGNC symbols vs Ensembl IDs). Positional joins are forbidden.
 - **Invalid calibration contract**: `reference_quantile` requires an explicit group column; it must exist and contain at least two groups. Calibration and mapping use the same aligned genes, and `k` is never silently reduced. Use a larger reference or an explicitly reviewed fixed threshold.
 - **OOD Rejection**: Cells with high distance or low confidence are classified as `rejected_*` with `reference_cell_type=Unknown` and are never allowed to override `cell_type`.
+- **VDJ sample semantics**: `vdj_metrics` computes clonal expansion and diversity sample-locally when `obs.sample` is present. If VDJ-bearing cells have blank, null, or unresolvable sample identifiers, the module fails loud (`ValueError`) to prevent silent cross-sample pooling. When `obs.sample` is absent, the pipeline falls back to `_ALL_` single-repertoire counting.
 
 ### 15.7 Reference-atlas materialization, verification, benchmark, and recovery
 

@@ -1,7 +1,11 @@
 """VDJ metrics (Wave 2B / P2.S16): Shannon, Gini, clonal expansion.
 
 Consumes adata.obs["clonotype_id"] from vdj_ingest. Writes per-sample diversity
-metrics and per-cell expansion class. Memory-safe (no AnnData duplication).
+metrics and per-cell expansion class. When ``obs.sample`` exists, clonal
+expansion is keyed by ``(sample, clonotype_id)``; clonotype-only counting and
+the ``_ALL_`` repertoire are used only when the sample column is absent.
+Diversity remains per-sample with the established output columns. Memory-safe
+(no AnnData duplication).
 
 Outputs:
   adata.obs["clonal_expansion"]            string class: "singleton" | "small_2-5" | "medium_6-20" | "large_>20"
@@ -91,7 +95,15 @@ def _gini(counts: np.ndarray) -> float:
 
 
 class VDJMetricsModule:
-    """Per-sample VDJ diversity + per-cell clonal expansion class."""
+    """Compute per-sample diversity and sample-local clonal expansion classes.
+
+    With ``obs.sample``, each expansion count is keyed by ``(sample,
+    clonotype_id)`` so Cell Ranger-local clonotype IDs never aggregate across
+    biological samples. Only an absent sample column permits clonotype-only
+    counting in the ``_ALL_`` repertoire. Diversity retains the established
+    per-sample ``sample``, ``n_cells_with_vdj``, ``n_clonotypes``, ``shannon``,
+    and ``gini`` columns.
+    """
 
     name = "vdj_metrics"
     required = False
@@ -114,33 +126,39 @@ class VDJMetricsModule:
             ctx.metadata["vdj_metrics_status"] = "skipped_no_clonotypes"
             return
 
-        # Per-cell clonal expansion class (global, across all samples)
-        clonotype_counts = adata.obs["clonotype_id"].value_counts()
-        # Cells with empty clonotype_id (no VDJ) get "no_vdj"
-        def _classify(cid: str) -> str:
-            if cid == "" or pd.isna(cid):
-                return "no_vdj"
-            return _expansion_class(int(clonotype_counts.get(cid, 0)))
-        adata.obs["clonal_expansion"] = adata.obs["clonotype_id"].map(_classify).astype(str)
+        # Determine expansion unit and compute per-cell clonal expansion class
+        sample_present = "sample" in adata.obs.columns
+        vdj_mask = (adata.obs["clonotype_id"] != "") & (adata.obs["clonotype_id"].notna())
 
-        # Per-sample diversity. Use "sample" column if present, otherwise treat all cells as one sample.
-        sample_col = "sample" if "sample" in adata.obs.columns else None
-        rows: list[dict] = []
-        if sample_col is None:
-            # Aggregate one row
-            cell_mask = adata.obs["clonotype_id"] != ""
-            counts = adata.obs.loc[cell_mask, "clonotype_id"].value_counts().to_numpy()
-            rows.append({
-                "sample": "_ALL_",
-                "n_cells_with_vdj": int(cell_mask.sum()),
-                "n_clonotypes": int(counts.size),
-                "shannon": _shannon(counts),
-                "gini": _gini(counts),
-            })
-        else:
-            for sample_id, group in adata.obs.groupby(sample_col, observed=True):
-                mask = group["clonotype_id"] != ""
-                counts = group.loc[mask, "clonotype_id"].value_counts().to_numpy()
+        if sample_present:
+            expansion_unit = "obs.sample"
+            counting_keys = "sample + clonotype_id"
+            sample_local_clonotypes = True
+            fallback_all_repertoire = False
+
+            # Validate that every VDJ-bearing cell has a non-null, non-blank sample identifier
+            if vdj_mask.any():
+                vdj_samples = adata.obs.loc[vdj_mask, "sample"]
+                if vdj_samples.isna().any() or (vdj_samples.astype(str).str.strip() == "").any():
+                    raise ValueError("VDJ-bearing cells contain null, NaN, or blank sample identifiers.")
+
+            vdj_obs = adata.obs.loc[vdj_mask, ["sample", "clonotype_id"]].copy()
+            vdj_obs["sample_str"] = vdj_obs["sample"].astype(str)
+            vdj_obs["clonotype_str"] = vdj_obs["clonotype_id"].astype(str)
+            counts_series = vdj_obs.groupby(["sample_str", "clonotype_str"], observed=True).size()
+
+            clonal_exp = pd.Series("no_vdj", index=adata.obs.index, dtype=object)
+            if vdj_mask.any():
+                keys = list(zip(vdj_obs["sample_str"], vdj_obs["clonotype_str"]))
+                mapped_counts = [counts_series.get(k, 0) for k in keys]
+                clonal_exp.loc[vdj_mask] = [_expansion_class(int(c)) for c in mapped_counts]
+            adata.obs["clonal_expansion"] = clonal_exp.astype(str)
+
+            # Per-sample diversity
+            rows: list[dict[str, Any]] = []
+            for sample_id, group in adata.obs.groupby("sample", observed=True):
+                mask = (group["clonotype_id"] != "") & (group["clonotype_id"].notna())
+                counts = group.loc[mask, "clonotype_id"].astype(str).value_counts().to_numpy()
                 rows.append({
                     "sample": str(sample_id),
                     "n_cells_with_vdj": int(mask.sum()),
@@ -148,9 +166,41 @@ class VDJMetricsModule:
                     "shannon": _shannon(counts),
                     "gini": _gini(counts),
                 })
+        else:
+            expansion_unit = "_ALL_"
+            counting_keys = "clonotype_id"
+            sample_local_clonotypes = False
+            fallback_all_repertoire = True
 
-        diversity_df = pd.DataFrame(rows)
+            counts_series = adata.obs.loc[vdj_mask, "clonotype_id"].astype(str).value_counts()
+            clonal_exp = pd.Series("no_vdj", index=adata.obs.index, dtype=object)
+            if vdj_mask.any():
+                cids = adata.obs.loc[vdj_mask, "clonotype_id"].astype(str)
+                clonal_exp.loc[vdj_mask] = [_expansion_class(int(counts_series.get(cid, 0))) for cid in cids]
+            adata.obs["clonal_expansion"] = clonal_exp.astype(str)
+
+            counts = counts_series.to_numpy()
+            rows = [{
+                "sample": "_ALL_",
+                "n_cells_with_vdj": int(vdj_mask.sum()),
+                "n_clonotypes": int(counts.size),
+                "shannon": _shannon(counts),
+                "gini": _gini(counts),
+            }]
+
+        diversity_df = pd.DataFrame(
+            rows,
+            columns=["sample", "n_cells_with_vdj", "n_clonotypes", "shannon", "gini"],
+        )
         adata.uns["vdj_diversity"] = diversity_df
+
+        vdj_provenance = {
+            "expansion_unit": expansion_unit,
+            "counting_keys": counting_keys,
+            "sample_local_clonotypes": sample_local_clonotypes,
+            "fallback_all_repertoire": fallback_all_repertoire,
+            "sample_column_present": sample_present,
+        }
 
         out_dir = ctx.run_dir / "vdj_metrics"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -161,14 +211,19 @@ class VDJMetricsModule:
                 "shannon_mean": float(diversity_df["shannon"].mean()) if not diversity_df.empty else 0.0,
                 "gini_mean": float(diversity_df["gini"].mean()) if not diversity_df.empty else 0.0,
                 "expansion_counts": adata.obs["clonal_expansion"].value_counts().to_dict(),
+                "provenance": vdj_provenance,
             }, indent=2),
             encoding="utf-8",
         )
 
         ctx.metadata["vdj_metrics_status"] = "ok"
         ctx.metadata["vdj_n_samples_with_diversity"] = int(diversity_df.shape[0])
+        ctx.metadata["vdj_expansion_unit"] = expansion_unit
+        ctx.metadata["vdj_counting_keys"] = counting_keys
+        ctx.metadata["vdj_sample_local_clonotypes"] = sample_local_clonotypes
+        ctx.metadata["vdj_fallback_all_repertoire"] = fallback_all_repertoire
         logger.info(
-            "%s: per-sample diversity computed for %d samples; expansion buckets: %s",
-            self.name, ctx.metadata["vdj_n_samples_with_diversity"],
+            "%s: per-sample diversity computed for %d samples (expansion_unit=%s); expansion buckets: %s",
+            self.name, ctx.metadata["vdj_n_samples_with_diversity"], expansion_unit,
             adata.obs["clonal_expansion"].value_counts().to_dict(),
         )

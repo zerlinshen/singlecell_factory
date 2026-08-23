@@ -189,6 +189,16 @@ The clean committed-SHA replacement at `/home/zerlinshen/projects/reference-atla
 
 The policy certificate is therefore `promoted` only for `trevino-fetal-cortex-v1` with cuML `26.08.00`. This is authorization to choose the validated implementation for that exact technical domain, not biological promotion. Trevino labels remain pipeline-derived proxy labels, the retained feature set is not independently query-blind, and no result generalizes the GPU certificate to another dataset or module.
 
+### Prospective Query-Blind Feature Fitting (`reference_only_sparse_variance_v1`)
+
+To address the historical limitation where the benchmark inherited a source-wide `highly_variable` feature mask, the benchmark coordinator has been updated with route `reference_only_sparse_variance_v1`.
+
+Under this contract:
+1. **Strict Reference-Only Fitting**: The feature selector (`select_reference_features`) receives only the frozen reference split (`ref_adata`). Query cells, query expression, query labels, and source `var['highly_variable']` masks are completely excluded from the fitting step.
+2. **Deterministic & Sparse-Safe Computation**: Operates directly on sparse CSR/CSC column statistics (sample variance) without densifying the full matrix. Ties are broken deterministically by lexicographical feature symbol order (`tie_break_rule: lexicographical_gene_symbol_ascending`), capped at $\min(\text{max\_genes}, 3000)$.
+3. **Structured Provenance Receipt & Gate**: Emits a verifiable `feature_selection_receipt.json` (schema v1.0) with fit cell count, cell ID SHA-256, storage class, requested/effective caps, and ordered gene SHA-256. The receipt is bound into `input_manifest.json` and `benchmark_contract.json` (schema v3.0). Any missing, false, or hash-inconsistent proof fails closed before OOD calibration or child execution.
+4. **Validation Posture**: The new route currently possesses local synthetic correctness and unit regression evidence. It will require a fresh, project-owned Trevino benchmark run under `/home/zerlinshen/projects/reference-atlas-ood-validation/` to establish real-data GPU parity and promotion evidence under the new receipt contract.
+
 ### Backend Device Contract
 
 `auto` is the CLI and programmatic default and selects one backend before execution; it never compares CPU and GPU on production data. An exact promoted domain and cuML version route to GPU after CUDA preflight. Missing/unknown certificates, `gpu_mode=off`, unavailable CUDA/cuML, and backend-version drift route `auto` directly to CPU. Explicit `gpu` requires the same certificate and fails loud on any mismatch with no sklearn fallback. The complete JSON-safe mapping summary is mirrored into both run metadata and `adata.uns["annotation"]["reference_mapping"]`, including the selection receipt, source identity, alignment, calibration receipt, backend/residency, thresholds, accepted/rejected counts, override counts, timing, claim class, and SCANVI status.
@@ -206,5 +216,6 @@ The policy certificate is therefore `promoted` only for `trevino-fetal-cortex-v1
 | Missing reference label column | Annotation stage fails loud (`ValueError`) | Check `--reference-label-key` matches reference `.obs`. |
 | Insufficient gene overlap ($< 50$) | Annotation stage fails loud (`ValueError`) | Verify gene identifier namespace between query and reference. |
 | Calibration group/partition or `k` invalid | Annotation stage fails loud (`ValueError`) | Supply a valid whole-group column and adequate reference, or use an explicitly governed fixed threshold. |
+| Feature selection receipt missing, false query-blind, or hash mismatch | Hard error before calibration/child launch (`ValueError`/`FileNotFoundError`) | Re-run split preparation using `reference_only_sparse_variance_v1`; do not bypass or tamper with frozen input receipts. |
 | `--reference-device auto` with absent/unpromoted domain, disabled GPU, unavailable backend, or version drift | Select CPU before mapping | Supply a promoted `--reference-validation-domain` only when the input satisfies that certificate; otherwise retain CPU. |
 | `--reference-device gpu` requested without an exact promoted certificate or CUDA/cuML preflight | Hard error (`ValueError`/`RuntimeError`) | Run in `sc_gpu_rapids2608` with the exact validated domain/version, or select CPU explicitly. Never silently falls back. |

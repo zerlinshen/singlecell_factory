@@ -126,35 +126,160 @@ def get_peak_rss_mb() -> float:
     return float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0)
 
 
-def select_reference_hvg_genes(
-    adata: ad.AnnData,
-    reference_cells: list[str],
-    max_genes: int,
-) -> list[str]:
-    """Freeze the upstream retained feature set without recomputing HVGs.
+def select_reference_features(
+    ref_adata: ad.AnnData,
+    max_genes: int = 3000,
+) -> tuple[list[str], dict[str, Any]]:
+    """Fit variable features only on the frozen reference AnnData slice.
 
-    ``highly_variable`` belongs to the source object, not this benchmark.  The
-    selection remains deterministic by source feature order and is capped at
-    3,000.  It is deliberately recorded as *not independently query-blind*:
-    the upstream retained feature set may have seen cells outside the frozen
-    benchmark reference split.
+    Operates strictly on the reference/training population in a query-blind,
+    deterministic, and sparse-safe manner. No query cells, query expression,
+    query labels, or upstream source ``var['highly_variable']`` flags enter
+    this calculation.
+
+    Returns:
+        tuple[list[str], dict[str, Any]]: (selected_genes, feature_selection_receipt)
     """
     if max_genes < 1:
         raise ValueError(f"max_genes must be >= 1, got {max_genes}.")
+    if ref_adata.n_obs < 1:
+        raise ValueError("Reference AnnData must contain at least one cell.")
+    if ref_adata.n_vars < 1:
+        raise ValueError("Reference AnnData must contain at least one feature.")
+
+    var_names = np.asarray(ref_adata.var_names.astype(str))
+    if len(set(var_names)) != len(var_names):
+        raise ValueError("Reference AnnData var_names must be unique.")
+
+    obs_names = np.asarray(ref_adata.obs_names.astype(str))
+    if len(set(obs_names)) != len(obs_names):
+        raise ValueError("Reference AnnData obs_names must be unique.")
+
+    X = ref_adata.X
+    n_cells = int(ref_adata.n_obs)
+    n_features = int(ref_adata.n_vars)
+
+    if sp.issparse(X):
+        storage_class = "csr" if sp.isspmatrix_csr(X) else ("csc" if sp.isspmatrix_csc(X) else "sparse")
+        col_sum = np.asarray(X.sum(axis=0)).ravel().astype(np.float64)
+        if hasattr(X, "data") and hasattr(X, "indices") and hasattr(X, "indptr"):
+            X_sq_data = X.data.astype(np.float64) ** 2
+            X_sq = X.__class__((X_sq_data, X.indices, X.indptr), shape=X.shape)
+            col_sum_sq = np.asarray(X_sq.sum(axis=0)).ravel().astype(np.float64)
+        else:
+            col_sum_sq = np.asarray(X.power(2).sum(axis=0)).ravel().astype(np.float64)
+    else:
+        storage_class = "ndarray"
+        X_arr = np.asarray(X, dtype=np.float64)
+        col_sum = np.sum(X_arr, axis=0)
+        col_sum_sq = np.sum(X_arr ** 2, axis=0)
+
+    if n_cells == 1:
+        var = np.zeros(n_features, dtype=np.float64)
+    else:
+        var = (col_sum_sq - (col_sum ** 2) / n_cells) / (n_cells - 1)
+        var = np.maximum(0.0, var)
+
+    if not np.isfinite(var).all():
+        raise ValueError("Computed reference feature variances contain non-finite values.")
+
+    positive_mask = var > 0.0
+    if not np.any(positive_mask):
+        raise ValueError(
+            "No usable variable features found in reference population (all feature variances are <= 0)."
+        )
+
+    positive_indices = np.where(positive_mask)[0]
+    records = [(float(var[i]), var_names[i]) for i in positive_indices]
+    records.sort(key=lambda item: (-item[0], item[1]))
+
+    effective_cap = min(int(max_genes), 3000)
+    selected_genes = [gene for _, gene in records[:effective_cap]]
+
+    fit_cells = obs_names.tolist()
+    fit_cells_sha256 = _sha256_bytes("\n".join(fit_cells).encode("utf-8") + b"\n")
+    ordered_genes_sha256 = _sha256_bytes("\n".join(selected_genes).encode("utf-8") + b"\n")
+
+    feature_receipt = {
+        "schema_version": "1.0",
+        "selection_route": "reference_only_sparse_variance_v1",
+        "independently_query_blind": True,
+        "fit_population": "reference_cells_only",
+        "query_cells_consumed": False,
+        "n_fit_cells": n_cells,
+        "fit_cells_sha256": fit_cells_sha256,
+        "n_input_features": n_features,
+        "matrix_storage_class": storage_class,
+        "score_method": "sparse_sample_variance",
+        "tie_break_rule": "lexicographical_gene_symbol_ascending",
+        "requested_cap": int(max_genes),
+        "effective_cap": effective_cap,
+        "selected_count": len(selected_genes),
+        "ordered_genes_sha256": ordered_genes_sha256,
+    }
+    return selected_genes, feature_receipt
+
+
+def select_reference_hvg_genes(
+    adata: ad.AnnData,
+    reference_cells: list[str],
+    max_genes: int = 3000,
+) -> tuple[list[str], dict[str, Any]]:
+    """Convenience adapter delegating to query-blind ``select_reference_features``."""
     if not reference_cells:
         raise ValueError("Reference split must contain at least one cell.")
     if np.any(adata.obs_names.get_indexer(reference_cells) < 0):
         raise ValueError("Reference split contains cell IDs absent from the source AnnData.")
-    if "highly_variable" not in adata.var.columns:
+    ref_adata = adata[reference_cells, :].copy()
+    return select_reference_features(ref_adata, max_genes=max_genes)
+
+
+def validate_feature_selection_receipt(
+    receipt: dict[str, Any],
+    *,
+    expected_reference_cells: list[str],
+    expected_genes: list[str],
+) -> None:
+    """Validate query-blind feature selection proof against frozen reference and genes."""
+    if not isinstance(receipt, dict):
+        raise ValueError("Feature selection receipt must be a dictionary.")
+
+    route = receipt.get("selection_route")
+    if route != "reference_only_sparse_variance_v1":
         raise ValueError(
-            "Source AnnData must contain an upstream 'highly_variable' field; "
-            "the benchmark must not recompute Seurat HVGs."
+            f"Feature selection route {route!r} is invalid or historical (expected 'reference_only_sparse_variance_v1')."
         )
-    upstream_mask = adata.var["highly_variable"].fillna(False).astype(bool).to_numpy()
-    selected = adata.var_names.astype(str)[upstream_mask].tolist()
-    if not selected:
-        raise ValueError("Source AnnData highly_variable field contains no selected features.")
-    return selected[: min(int(max_genes), 3000)]
+
+    if receipt.get("independently_query_blind") is not True:
+        raise ValueError("Feature selection receipt must declare independently_query_blind: true.")
+
+    if receipt.get("fit_population") != "reference_cells_only":
+        raise ValueError(
+            f"Feature selection fit_population must be 'reference_cells_only', got {receipt.get('fit_population')!r}."
+        )
+
+    if receipt.get("query_cells_consumed") is not False:
+        raise ValueError("Feature selection receipt indicates query cells were consumed.")
+
+    expected_cells_count = len(expected_reference_cells)
+    if int(receipt.get("n_fit_cells", -1)) != expected_cells_count:
+        raise ValueError(
+            f"Feature selection fit cell count mismatch: receipt has {receipt.get('n_fit_cells')}, expected {expected_cells_count}."
+        )
+
+    expected_cells_sha = _sha256_bytes("\n".join(expected_reference_cells).encode("utf-8") + b"\n")
+    if receipt.get("fit_cells_sha256") != expected_cells_sha:
+        raise ValueError("Feature selection fit cells SHA-256 does not match frozen reference cells.")
+
+    expected_genes_count = len(expected_genes)
+    if int(receipt.get("selected_count", -1)) != expected_genes_count:
+        raise ValueError(
+            f"Feature selection gene count mismatch: receipt has {receipt.get('selected_count')}, expected {expected_genes_count}."
+        )
+
+    expected_genes_sha = _sha256_bytes("\n".join(expected_genes).encode("utf-8") + b"\n")
+    if receipt.get("ordered_genes_sha256") != expected_genes_sha:
+        raise ValueError("Feature selection ordered genes SHA-256 does not match frozen genes.txt.")
 
 
 def prepare_trevino_split(
@@ -234,10 +359,16 @@ def prepare_trevino_split(
     if len(query_cells) < _WARMUP_ROWS:
         raise ValueError(f"Benchmark requires at least {_WARMUP_ROWS} query cells, found {len(query_cells)}.")
 
-    source_hvg_count = int(adata.var["highly_variable"].fillna(False).astype(bool).sum())
-    selected_genes = select_reference_hvg_genes(adata, reference_cells, max_genes=max_genes)
-    ref_adata = adata[reference_cells, selected_genes].copy()
+    ref_sub = adata[reference_cells, :].copy()
+    selected_genes, feature_receipt = select_reference_features(ref_sub, max_genes=max_genes)
+    validate_feature_selection_receipt(
+        feature_receipt,
+        expected_reference_cells=ref_sub.obs_names.astype(str).tolist(),
+        expected_genes=selected_genes,
+    )
+    ref_adata = ref_sub[:, selected_genes].copy()
     query_adata = adata[query_cells, selected_genes].copy()
+    del ref_sub
     del adata
 
     if set(ref_adata.obs["sample"].astype(str)) & set(query_adata.obs["sample"].astype(str)):
@@ -247,6 +378,9 @@ def prepare_trevino_split(
     ref_adata.X = ref_adata.X.tocsr() if sp.issparse(ref_adata.X) else sp.csr_matrix(ref_adata.X)
     query_adata.X = query_adata.X.tocsr() if sp.issparse(query_adata.X) else sp.csr_matrix(query_adata.X)
 
+    feature_receipt_path = frozen_dir / "feature_selection_receipt.json"
+    _atomic_write_json(feature_receipt_path, feature_receipt)
+
     file_paths = {
         "reference_matrix.npz": frozen_dir / "reference_matrix.npz",
         "query_matrix.npz": frozen_dir / "query_matrix.npz",
@@ -255,6 +389,7 @@ def prepare_trevino_split(
         "reference_labels.txt": frozen_dir / "reference_labels.txt",
         "query_proxy_labels.txt": frozen_dir / "query_proxy_labels.txt",
         "genes.txt": frozen_dir / "genes.txt",
+        "feature_selection_receipt.json": feature_receipt_path,
     }
     sp.save_npz(file_paths["reference_matrix.npz"], ref_adata.X)
     sp.save_npz(file_paths["query_matrix.npz"], query_adata.X)
@@ -269,7 +404,7 @@ def prepare_trevino_split(
         raise RuntimeError("Trevino source H5AD changed while the frozen split was being prepared.")
 
     split_receipt = {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "source_h5ad": str(source_h5ad),
         "source_sha256": source_sha256,
         "expected_source_sha256": expected_source_sha256,
@@ -283,19 +418,11 @@ def prepare_trevino_split(
         "n_genes": int(ref_adata.n_vars),
         "reference_samples": sorted(ref_adata.obs["sample"].astype(str).unique().tolist()),
         "query_samples": sorted(query_adata.obs["sample"].astype(str).unique().tolist()),
-        "feature_selection": {
-            "selection_route": "source_highly_variable_ordered_cap",
-            "source_highly_variable_required": True,
-            "source_highly_variable_count": source_hvg_count,
-            "max_cap": min(int(max_genes), 3000),
-            "selected_count": int(ref_adata.n_vars),
-            "ordered_genes_sha256": compute_sha256(file_paths["genes.txt"]),
-            "upstream_retained_feature_set_independently_query_blind": False,
-            "note": "The benchmark did not recompute HVGs; source highly_variable provenance may predate this split.",
-        },
+        "feature_selection": feature_receipt,
         "files": {name: _file_record(path) for name, path in file_paths.items()},
     }
     _atomic_write_json(out_dir / "source_and_split_receipt.json", split_receipt)
+    _atomic_write_json(out_dir / "feature_selection_receipt.json", feature_receipt)
     return {
         "reference_adata": ref_adata,
         "query_adata": query_adata,
@@ -314,6 +441,18 @@ def _write_frozen_input_manifest(
     """Bind every serialized child input to hashes before either lane starts."""
     threshold_path = frozen_dir / "ood_threshold_receipt.json"
     parameters_path = frozen_dir / "parameters.json"
+    feature_receipt_path = frozen_dir / "feature_selection_receipt.json"
+    if not feature_receipt_path.is_file():
+        raise FileNotFoundError("Frozen feature selection receipt is missing: feature_selection_receipt.json")
+    try:
+        feature_receipt = json.loads(feature_receipt_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("Frozen feature selection receipt is not valid JSON.") from exc
+    validate_feature_selection_receipt(
+        feature_receipt,
+        expected_reference_cells=_read_lines(frozen_dir / "reference_cells.txt"),
+        expected_genes=_read_lines(frozen_dir / "genes.txt"),
+    )
     _atomic_write_json(threshold_path, threshold_receipt)
     _atomic_write_json(parameters_path, parameters)
     names = [
@@ -326,20 +465,25 @@ def _write_frozen_input_manifest(
         "genes.txt",
         "ood_threshold_receipt.json",
         "parameters.json",
+        "feature_selection_receipt.json",
     ]
+    manifest_files = {name: _file_record(frozen_dir / name) for name in names}
+
     manifest = {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "source_sha256": split_receipt["source_sha256"],
-        "files": {name: _file_record(frozen_dir / name) for name in names},
+        "files": manifest_files,
         "matrix_shapes": {
             "reference": [int(split_receipt["n_reference_cells"]), int(split_receipt["n_genes"])],
             "query": [int(split_receipt["n_query_cells"]), int(split_receipt["n_genes"])],
         },
         "parameters_sha256": _json_sha256(parameters),
         "threshold_receipt_sha256": compute_sha256(threshold_path),
+        "feature_selection_receipt_sha256": compute_sha256(feature_receipt_path),
         "ordered_gene_sha256": compute_sha256(frozen_dir / "genes.txt"),
         "contract": "Both lane children must consume these exact hash-bound files before mapping.",
     }
+
     manifest_path = frozen_dir / "input_manifest.json"
     _atomic_write_json(manifest_path, manifest)
     return manifest_path, compute_sha256(manifest_path)
@@ -355,7 +499,23 @@ def verify_frozen_inputs(input_dir: Path, expected_manifest_sha256: Optional[str
     if expected_manifest_sha256 and actual_manifest_sha != expected_manifest_sha256:
         raise ValueError("Frozen input manifest SHA-256 differs from the coordinator contract.")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    for name, record in manifest.get("files", {}).items():
+    try:
+        schema_major = int(str(manifest.get("schema_version", "")).split(".", 1)[0])
+    except ValueError as exc:
+        raise ValueError("Frozen input manifest schema_version must begin with an integer.") from exc
+    manifest_files = manifest.get("files", {})
+    if not isinstance(manifest_files, dict):
+        raise ValueError("Frozen input manifest files record must be a dictionary.")
+    feature_receipt_record = manifest_files.get("feature_selection_receipt.json")
+    feature_receipt_sha = manifest.get("feature_selection_receipt_sha256")
+    if schema_major >= 3:
+        if not isinstance(feature_receipt_record, dict):
+            raise ValueError("Schema >=3 frozen input manifest must record feature_selection_receipt.json.")
+        if not isinstance(feature_receipt_sha, str) or not feature_receipt_sha:
+            raise ValueError("Schema >=3 frozen input manifest must declare feature_selection_receipt_sha256.")
+    for name, record in manifest_files.items():
+        if not isinstance(record, dict):
+            raise ValueError(f"Frozen input file record must be a dictionary: {name}")
         file_path = input_dir / name
         if not file_path.is_file():
             raise FileNotFoundError(f"Frozen input artifact is missing: {name}")
@@ -399,6 +559,20 @@ def verify_frozen_inputs(input_dir: Path, expected_manifest_sha256: Optional[str
     if not 0.0 <= threshold <= 2.0:
         raise ValueError("Frozen OOD distance threshold is outside [0, 2].")
 
+    feature_receipt = None
+    if isinstance(feature_receipt_record, dict):
+        feature_receipt_path = input_dir / "feature_selection_receipt.json"
+        if not feature_receipt_path.is_file():
+            raise FileNotFoundError("Frozen feature selection receipt is missing: feature_selection_receipt.json")
+        if schema_major >= 3 and compute_sha256(feature_receipt_path) != feature_receipt_sha:
+            raise ValueError("Frozen feature selection receipt differs from coordinator contract.")
+        feature_receipt = json.loads(feature_receipt_path.read_text(encoding="utf-8"))
+        validate_feature_selection_receipt(
+            feature_receipt,
+            expected_reference_cells=reference_cells,
+            expected_genes=genes,
+        )
+
     return {
         "manifest": manifest,
         "manifest_sha256": actual_manifest_sha,
@@ -411,6 +585,7 @@ def verify_frozen_inputs(input_dir: Path, expected_manifest_sha256: Optional[str
         "genes": genes,
         "parameters": parameters,
         "threshold_receipt": threshold_receipt,
+        "feature_selection_receipt": feature_receipt,
     }
 
 
@@ -880,14 +1055,18 @@ def _write_validation_summary(
     ood_metrics: Optional[dict[str, Any]],
     failure_reason: Optional[str] = None,
 ) -> None:
+    feature_selection = split_receipt.get("feature_selection", {})
+    route = feature_selection.get("selection_route", "unknown")
+    query_blind = feature_selection.get("independently_query_blind", False)
+    query_blind_text = "independently query-blind" if query_blind else "not independently query-blind"
     lines = [
         "# Reference Atlas OOD Technical Benchmark",
         "",
         f"- Run: `{run_dir}`",
         f"- Technical verdict: `{technical_verdict}`",
         f"- Source SHA-256: `{split_receipt['source_sha256']}`",
-        f"- Feature route: `{split_receipt['feature_selection']['selection_route']}`",
-        f"- Features: `{split_receipt['n_genes']}` (upstream retained set; not independently query-blind)",
+        f"- Feature route: `{route}`",
+        f"- Features: `{split_receipt['n_genes']}` ({query_blind_text})",
         f"- Full-precision OOD threshold: `{threshold_receipt['distance_threshold']!r}`",
         "- Claim boundary: Trevino labels are pipeline-derived proxies; this is technical P0 evidence, not biological validation or production promotion.",
     ]
@@ -917,6 +1096,7 @@ def _write_run_manifest(
     artifact_paths = [
         validation_dir / "benchmark_contract.json",
         validation_dir / "source_and_split_receipt.json",
+        validation_dir / "feature_selection_receipt.json",
         validation_dir / "ood_threshold_receipt.json",
         validation_dir / "cpu" / "metrics.json",
         validation_dir / "gpu" / "metrics.json",
@@ -987,6 +1167,22 @@ def run_benchmark(
     )
     ref_adata = prepared["reference_adata"]
     query_adata = prepared["query_adata"]
+    feature_receipt_path = prepared["frozen_dir"] / "feature_selection_receipt.json"
+    if not feature_receipt_path.is_file():
+        raise FileNotFoundError(
+            "Frozen feature selection receipt is missing before OOD calibration: feature_selection_receipt.json"
+        )
+    try:
+        feature_receipt = json.loads(feature_receipt_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("Frozen feature selection receipt is not valid JSON.") from exc
+    if _json_sha256(feature_receipt) != _json_sha256(prepared["split_receipt"].get("feature_selection")):
+        raise ValueError("Frozen feature selection receipt differs from source-and-split receipt.")
+    validate_feature_selection_receipt(
+        feature_receipt,
+        expected_reference_cells=ref_adata.obs_names.astype(str).tolist(),
+        expected_genes=prepared["genes"],
+    )
     threshold, threshold_receipt = calibrate_reference_ood_threshold(
         ref_adata=ref_adata,
         ref_genes=prepared["genes"],
@@ -998,7 +1194,7 @@ def run_benchmark(
         k=k,
     )
     threshold_receipt["source_sha256"] = prepared["split_receipt"]["source_sha256"]
-    threshold_receipt["feature_order_sha256"] = prepared["split_receipt"]["feature_selection"]["ordered_genes_sha256"]
+    threshold_receipt["feature_order_sha256"] = feature_receipt["ordered_genes_sha256"]
     parameters = {
         "k": int(k),
         "min_confidence": float(min_confidence),
@@ -1011,7 +1207,7 @@ def run_benchmark(
         prepared["frozen_dir"], prepared["split_receipt"], threshold_receipt, parameters
     )
     benchmark_contract = {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "factory_git_state": git_state,
         "implementation_sha256": {
             "benchmark_reference_mapping.py": compute_sha256(Path(__file__).resolve()),
@@ -1021,6 +1217,7 @@ def run_benchmark(
         "input_manifest_path": str(input_manifest_path),
         "input_manifest_sha256": input_manifest_sha256,
         "threshold_receipt_sha256": compute_sha256(prepared["frozen_dir"] / "ood_threshold_receipt.json"),
+        "feature_selection_receipt_sha256": compute_sha256(prepared["frozen_dir"] / "feature_selection_receipt.json"),
         "parameters": parameters,
         "execution": {
             "cpu_gpu_process_isolation": True,

@@ -994,7 +994,8 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
   bounded content hash; the legacy `diff_sha256` field remains available.
 - **Module runtime telemetry** — per-module wall-time automatically stored in `run_manifest.json`
 - **Raw-count integrity for pseudobulk** — a real Cell Ranger matrix is copied to `adata.layers["counts"]` with explicit factory/source/schema provenance. A prepared H5AD must already carry the same provenance-qualified layer; its possibly normalized `X` is never copied and relabelled as counts. `pseudobulk_de` validates finite nonnegative integer values without rounding and fails closed for confirmatory inference.
-- **Reference-aware annotation (optional)** — KNN label transfer from reference `h5ad` can override low-certainty marker labels
+- **Reference-aware annotation (optional)** — KNN label transfer from reference `h5ad` can override low-certainty marker labels with fail-closed rejection safety and certificate-gated device routing
+- **Sample-local VDJ repertoire metrics (optional)** — `vdj_metrics` computes per-sample diversity (Shannon + Gini) and sample-local clonal expansion keyed by `obs.sample` (with fallback to `_ALL_` only when sample column is absent)
 - Multi-backend support: each module auto-detects the best available tool
 - Validated against cBioPortal mutation data
 - Engineering principle: **accuracy and reproducibility first, performance second**
@@ -1019,6 +1020,8 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 | `batch_correction` | Multi-sample batch correction (Harmony/BBKNN/Combat/Scanorama/scVI/MNN/fastMNN-style). `harmony_backend` accepts `auto`/`cpu`/`gpu`/`direct` (`direct` = canonical `harmonypy.run_harmony`, the proven-working path). | clustering |
 | `differential_expression` | Cluster marker genes (`wilcoxon` default, configurable), significance filtering | clustering |
 | `annotation` | Marker-based cell type annotation with confidence scores | clustering |
+| `vdj_ingest` | Ingest Cell Ranger VDJ contig annotations (`filtered_contig_annotations.csv`) into per-cell clonotype IDs | cellranger |
+| `vdj_metrics` | Compute per-sample Shannon/Gini diversity and sample-local clonal expansion | vdj_ingest |
 | `trajectory` | **Opt-in** PAGA + DPT. Claim-capable pseudotime requires an existing Leiden `--trajectory-root-cluster` and a non-empty `--trajectory-root-justification`; otherwise outputs are explicitly non-claimable. | clustering |
 | `pseudo_velocity` | **Opt-in exploratory proxy only.** Neighbour-gradient arrows/streams are labeled `exploratory_proxy` and are never canonical RNA velocity. | trajectory |
 | `rna_velocity` | Real RNA velocity (scVelo: stochastic/dynamical) | clustering |

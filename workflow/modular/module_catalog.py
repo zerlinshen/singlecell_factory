@@ -464,8 +464,8 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
         modality="vdj",
         bridge_ready=True,
         description=(
-            "Per-sample VDJ diversity (Shannon + Gini) and per-cell clonal_expansion class. "
-            "Wave 2B / P2.S16."
+            "Per-sample VDJ diversity (Shannon + Gini) and sample-local per-cell clonal_expansion class "
+            "(keyed by biological sample when obs.sample is present, with _ALL_ fallback). Wave 2B / P2.S16."
         ),
     ),
     "atac_qc": ModuleSpec(

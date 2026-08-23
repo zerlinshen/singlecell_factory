@@ -14,10 +14,14 @@ import scipy.sparse as sp
 
 import scripts.benchmark_reference_mapping as benchmark_module
 from scripts.benchmark_reference_mapping import (
+    _json_sha256,
+    _sha256_bytes,
     _write_frozen_input_manifest,
     compute_sha256,
     run_lane,
+    select_reference_features,
     select_reference_hvg_genes,
+    validate_feature_selection_receipt,
     verify_frozen_inputs,
     verify_lane_output,
 )
@@ -264,39 +268,226 @@ def test_gene_alignment_rejects_ambiguous_stable_ids_without_symbol_fallback():
         align_reference_genes(query, reference, min_shared=2)
 
 
-def test_reference_hvg_feature_selection_excludes_query_signal():
+def test_reference_feature_selection_excludes_query_signal():
+    """Query-only spikes cannot cross the explicit reference-selection boundary."""
     rng = np.random.default_rng(42)
-    reference_x = np.log1p(rng.poisson(2.0, size=(40, 50))).astype(float)
-    query_x = np.log1p(rng.poisson(2.0, size=(2, 50))).astype(float)
-    obs_names = [f"ref_{i}" for i in range(40)] + ["query_1", "query_ood"]
-    var_names = [f"G_{i}" for i in range(50)]
-    adata = ad.AnnData(
-        X=sp.csr_matrix(np.vstack([reference_x, query_x])),
-        obs=pd.DataFrame(index=obs_names),
-        var=pd.DataFrame(index=var_names),
-    )
-    changed_query = ad.AnnData(
-        X=sp.csr_matrix(np.vstack([reference_x, query_x * 1000.0])),
-        obs=pd.DataFrame(index=obs_names),
-        var=pd.DataFrame(index=var_names),
-    )
-    adata.var["highly_variable"] = [idx < 12 for idx in range(50)]
-    changed_query.var["highly_variable"] = [idx < 12 for idx in range(50)]
+    ref_x = np.zeros((40, 50), dtype=np.float32)
+    for g in range(50):
+        ref_x[:, g] = rng.normal(loc=1.0, scale=(g + 1) * 0.1, size=40)
     reference_cells = [f"ref_{i}" for i in range(40)]
-    selected = select_reference_hvg_genes(adata, reference_cells, max_genes=10)
-    selected_after_query_perturbation = select_reference_hvg_genes(changed_query, reference_cells, max_genes=10)
-    assert selected == selected_after_query_perturbation
-    assert selected == [f"G_{idx}" for idx in range(10)]
-
-
-def test_reference_hvg_feature_selection_requires_upstream_field():
-    adata = ad.AnnData(
-        X=sp.csr_matrix(np.ones((3, 3))),
-        obs=pd.DataFrame(index=["r1", "r2", "q1"]),
-        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    query_cells = [f"query_{i}" for i in range(20)]
+    obs = pd.DataFrame(index=[*reference_cells, *query_cells])
+    var = pd.DataFrame(index=[f"G_{i}" for i in range(50)])
+    baseline = ad.AnnData(
+        X=sp.vstack(
+            [sp.csr_matrix(ref_x), sp.csr_matrix((len(query_cells), ref_x.shape[1]), dtype=np.float32)],
+            format="csr",
+        ),
+        obs=obs,
+        var=var,
     )
-    with pytest.raises(ValueError, match="must contain an upstream 'highly_variable' field"):
-        select_reference_hvg_genes(adata, ["r1", "r2"], max_genes=3)
+
+    spike_rows = np.arange(len(query_cells), dtype=np.int64)
+    spiked_query = sp.csr_matrix(
+        (
+            np.full(len(query_cells), 1_000_000.0, dtype=np.float32),
+            (spike_rows, np.zeros(len(query_cells), dtype=np.int64)),
+        ),
+        shape=(len(query_cells), ref_x.shape[1]),
+    )
+    spiked = ad.AnnData(
+        X=sp.vstack([sp.csr_matrix(ref_x), spiked_query], format="csr"),
+        obs=obs.copy(),
+        var=var.copy(),
+    )
+
+    selected_1, receipt_1 = select_reference_hvg_genes(baseline, reference_cells, max_genes=15)
+    selected_2, receipt_2 = select_reference_hvg_genes(spiked, reference_cells, max_genes=15)
+    assert len(selected_1) == 15
+    assert receipt_1["selection_route"] == "reference_only_sparse_variance_v1"
+    assert receipt_1["independently_query_blind"] is True
+    assert receipt_1["fit_population"] == "reference_cells_only"
+    assert receipt_1["query_cells_consumed"] is False
+    assert selected_1 == selected_2
+    assert receipt_1["ordered_genes_sha256"] == receipt_2["ordered_genes_sha256"]
+    assert _json_sha256(receipt_1) == _json_sha256(receipt_2)
+    assert receipt_1["fit_cells_sha256"] == receipt_2["fit_cells_sha256"]
+    assert receipt_1["n_fit_cells"] == receipt_2["n_fit_cells"] == len(reference_cells)
+    assert "G_0" not in selected_1[:10]
+
+    leaky_selected, leaky_receipt = select_reference_features(spiked, max_genes=15)
+    assert leaky_selected[0] == "G_0"
+    assert leaky_selected != selected_1
+    assert leaky_receipt["n_fit_cells"] == spiked.n_obs
+
+    with pytest.raises(TypeError, match="required positional argument"):
+        select_reference_hvg_genes(baseline, max_genes=15)  # type: ignore[call-arg]
+
+
+def test_reference_feature_selection_reference_sensitivity():
+    """Verify that modifying only reference expression changes feature rankings in expected direction."""
+    rng = np.random.default_rng(42)
+    ref_x = np.zeros((40, 20), dtype=np.float32)
+    # G_0 to G_18 have low variance, G_19 has moderate variance
+    for g in range(19):
+        ref_x[:, g] = rng.normal(loc=1.0, scale=0.1, size=40)
+    ref_x[:, 19] = rng.normal(loc=1.0, scale=1.0, size=40)
+
+    ref_adata = ad.AnnData(
+        X=sp.csr_matrix(ref_x),
+        obs=pd.DataFrame(index=[f"ref_{i}" for i in range(40)]),
+        var=pd.DataFrame(index=[f"G_{i}" for i in range(20)]),
+    )
+    selected_initial, receipt_initial = select_reference_features(ref_adata, max_genes=5)
+    assert selected_initial[0] == "G_19"
+
+    # Now perturb reference expression so G_0 becomes the highest variance feature
+    ref_x_modified = ref_x.copy()
+    ref_x_modified[:, 0] = rng.normal(loc=1.0, scale=10.0, size=40)
+    ref_adata_modified = ad.AnnData(
+        X=sp.csr_matrix(ref_x_modified),
+        obs=pd.DataFrame(index=[f"ref_{i}" for i in range(40)]),
+        var=pd.DataFrame(index=[f"G_{i}" for i in range(20)]),
+    )
+    selected_modified, receipt_modified = select_reference_features(ref_adata_modified, max_genes=5)
+    assert selected_modified[0] == "G_0"
+    assert selected_modified != selected_initial
+    assert receipt_modified["ordered_genes_sha256"] != receipt_initial["ordered_genes_sha256"]
+    assert _json_sha256(receipt_modified) != _json_sha256(receipt_initial)
+
+
+def test_reference_feature_selection_sparse_dense_determinism():
+    """Verify deterministic output across CSR, CSC, and ndarray representations without densification."""
+    rng = np.random.default_rng(42)
+    dense_x = np.maximum(0.0, rng.normal(loc=1.0, scale=1.0, size=(50, 30))).astype(np.float32)
+    csr_x = sp.csr_matrix(dense_x)
+    csc_x = sp.csc_matrix(dense_x)
+
+    obs = pd.DataFrame(index=[f"c_{i}" for i in range(50)])
+    var = pd.DataFrame(index=[f"g_{i}" for i in range(30)])
+
+    ad_csr = ad.AnnData(X=csr_x, obs=obs, var=var)
+    ad_csc = ad.AnnData(X=csc_x, obs=obs, var=var)
+    ad_dense = ad.AnnData(X=dense_x, obs=obs, var=var)
+
+    genes_csr, receipt_csr = select_reference_features(ad_csr, max_genes=10)
+    genes_csc, receipt_csc = select_reference_features(ad_csc, max_genes=10)
+    genes_dense, receipt_dense = select_reference_features(ad_dense, max_genes=10)
+
+    assert genes_csr == genes_csc == genes_dense
+    assert receipt_csr["ordered_genes_sha256"] == receipt_csc["ordered_genes_sha256"] == receipt_dense["ordered_genes_sha256"]
+    assert receipt_csr["matrix_storage_class"] == "csr"
+    assert receipt_csc["matrix_storage_class"] == "csc"
+    assert receipt_dense["matrix_storage_class"] == "ndarray"
+
+
+def test_feature_selection_receipt_validation_fail_closed():
+    """Verify validator fails closed on missing, false, old-route, or hash-mismatched receipts."""
+    ref_cells = [f"r{i}" for i in range(10)]
+    genes = [f"G{i}" for i in range(5)]
+    fit_cells_sha = _sha256_bytes("\n".join(ref_cells).encode("utf-8") + b"\n")
+    ordered_genes_sha = _sha256_bytes("\n".join(genes).encode("utf-8") + b"\n")
+
+    valid_receipt = {
+        "schema_version": "1.0",
+        "selection_route": "reference_only_sparse_variance_v1",
+        "independently_query_blind": True,
+        "fit_population": "reference_cells_only",
+        "query_cells_consumed": False,
+        "n_fit_cells": 10,
+        "fit_cells_sha256": fit_cells_sha,
+        "n_input_features": 20,
+        "matrix_storage_class": "csr",
+        "score_method": "sparse_sample_variance",
+        "tie_break_rule": "lexicographical_gene_symbol_ascending",
+        "requested_cap": 5,
+        "effective_cap": 5,
+        "selected_count": 5,
+        "ordered_genes_sha256": ordered_genes_sha,
+    }
+    # Valid receipt passes
+    validate_feature_selection_receipt(valid_receipt, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    # 1. Non-dict receipt
+    with pytest.raises(ValueError, match="must be a dictionary"):
+        validate_feature_selection_receipt(None, expected_reference_cells=ref_cells, expected_genes=genes)  # type: ignore
+
+    # 2. Old / historical route
+    old_route = valid_receipt.copy()
+    old_route["selection_route"] = "source_highly_variable_ordered_cap"
+    with pytest.raises(ValueError, match="invalid or historical"):
+        validate_feature_selection_receipt(old_route, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    # 3. independently_query_blind is False
+    leakage = valid_receipt.copy()
+    leakage["independently_query_blind"] = False
+    with pytest.raises(ValueError, match="must declare independently_query_blind: true"):
+        validate_feature_selection_receipt(leakage, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    # 4. fit_population not reference_cells_only
+    pop = valid_receipt.copy()
+    pop["fit_population"] = "reference_and_query"
+    with pytest.raises(ValueError, match="fit_population must be 'reference_cells_only'"):
+        validate_feature_selection_receipt(pop, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    # 5. query_cells_consumed is True
+    consumed = valid_receipt.copy()
+    consumed["query_cells_consumed"] = True
+    with pytest.raises(ValueError, match="indicates query cells were consumed"):
+        validate_feature_selection_receipt(consumed, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    # 6. Fit cell count / hash mismatch
+    count_mismatch = valid_receipt.copy()
+    count_mismatch["n_fit_cells"] = 9
+    with pytest.raises(ValueError, match="fit cell count mismatch"):
+        validate_feature_selection_receipt(count_mismatch, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    hash_mismatch = valid_receipt.copy()
+    hash_mismatch["fit_cells_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="fit cells SHA-256 does not match"):
+        validate_feature_selection_receipt(hash_mismatch, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    # 7. Ordered genes count / hash mismatch
+    gene_count_mismatch = valid_receipt.copy()
+    gene_count_mismatch["selected_count"] = 4
+    with pytest.raises(ValueError, match="gene count mismatch"):
+        validate_feature_selection_receipt(gene_count_mismatch, expected_reference_cells=ref_cells, expected_genes=genes)
+
+    gene_hash_mismatch = valid_receipt.copy()
+    gene_hash_mismatch["ordered_genes_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="ordered genes SHA-256 does not match"):
+        validate_feature_selection_receipt(gene_hash_mismatch, expected_reference_cells=ref_cells, expected_genes=genes)
+
+
+def test_reference_feature_selection_rejects_duplicate_names_and_zero_variance():
+    """Verify input validation: duplicate var_names, duplicate obs_names, zero variance, max_genes < 1."""
+    # max_genes < 1
+    ad_valid = ad.AnnData(X=np.ones((5, 5)), var=pd.DataFrame(index=[f"g{i}" for i in range(5)]))
+    with pytest.raises(ValueError, match="max_genes must be >= 1"):
+        select_reference_features(ad_valid, max_genes=0)
+
+    # Duplicate var_names
+    ad_dup_var = ad.AnnData(X=np.ones((5, 3)), var=pd.DataFrame(index=["g1", "g1", "g2"]))
+    with pytest.raises(ValueError, match="var_names must be unique"):
+        select_reference_features(ad_dup_var, max_genes=2)
+
+    # Duplicate obs_names
+    ad_dup_obs = ad.AnnData(
+        X=np.ones((3, 3)),
+        obs=pd.DataFrame(index=["c1", "c1", "c2"]),
+        var=pd.DataFrame(index=["g1", "g2", "g3"]),
+    )
+    with pytest.raises(ValueError, match="obs_names must be unique"):
+        select_reference_features(ad_dup_obs, max_genes=2)
+
+    # Zero variance for all features
+    ad_const = ad.AnnData(
+        X=np.full((10, 5), fill_value=3.0, dtype=np.float32),
+        obs=pd.DataFrame(index=[f"c{i}" for i in range(10)]),
+        var=pd.DataFrame(index=[f"g{i}" for i in range(5)]),
+    )
+    with pytest.raises(ValueError, match="No usable variable features found"):
+        select_reference_features(ad_const, max_genes=3)
 
 
 def test_reference_device_auto_uses_cpu_without_validated_domain():
@@ -799,6 +990,26 @@ def _write_frozen_input_fixture(tmp_path: Path) -> Path:
     (frozen / "reference_labels.txt").write_text("A\nB\n", encoding="utf-8")
     (frozen / "query_proxy_labels.txt").write_text("".join("A\n" for _ in range(256)), encoding="utf-8")
     (frozen / "genes.txt").write_text("G1\nG2\n", encoding="utf-8")
+    feature_receipt = {
+        "schema_version": "1.0",
+        "selection_route": "reference_only_sparse_variance_v1",
+        "independently_query_blind": True,
+        "fit_population": "reference_cells_only",
+        "query_cells_consumed": False,
+        "n_fit_cells": 2,
+        "fit_cells_sha256": compute_sha256(frozen / "reference_cells.txt"),
+        "n_input_features": 2,
+        "matrix_storage_class": "csr",
+        "score_method": "sparse_sample_variance",
+        "tie_break_rule": "lexicographical_gene_symbol_ascending",
+        "requested_cap": 2,
+        "effective_cap": 2,
+        "selected_count": 2,
+        "ordered_genes_sha256": compute_sha256(frozen / "genes.txt"),
+    }
+    (frozen / "feature_selection_receipt.json").write_text(
+        json.dumps(feature_receipt, indent=2) + "\n", encoding="utf-8"
+    )
     _write_frozen_input_manifest(
         frozen,
         {"source_sha256": "a" * 64, "n_reference_cells": 2, "n_query_cells": 256, "n_genes": 2},
@@ -823,6 +1034,7 @@ def _write_frozen_input_fixture(tmp_path: Path) -> Path:
         "ood_threshold_receipt.json",
         "parameters.json",
         "query_cells.txt",
+        "feature_selection_receipt.json",
     ],
 )
 def test_process_lane_contract_rejects_hash_mismatch(tmp_path: Path, artifact_name: str):
@@ -834,6 +1046,70 @@ def test_process_lane_contract_rejects_hash_mismatch(tmp_path: Path, artifact_na
         target.write_text(target.read_text(encoding="utf-8") + "tampered\n", encoding="utf-8")
     with pytest.raises(ValueError, match=f"Frozen input SHA-256 mismatch: {artifact_name}"):
         verify_frozen_inputs(frozen)
+
+
+def test_schema3_frozen_inputs_require_feature_selection_proof(tmp_path: Path):
+    frozen = _write_frozen_input_fixture(tmp_path)
+    manifest_path = frozen / "input_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"].pop("feature_selection_receipt.json")
+    manifest.pop("feature_selection_receipt_sha256")
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Schema >=3 frozen input manifest"):
+        verify_frozen_inputs(frozen)
+
+
+def test_run_benchmark_requires_persisted_feature_selection_receipt_before_calibration(tmp_path: Path, monkeypatch):
+    frozen = _write_frozen_input_fixture(tmp_path)
+    feature_receipt = json.loads((frozen / "feature_selection_receipt.json").read_text(encoding="utf-8"))
+    (frozen / "feature_selection_receipt.json").unlink()
+    reference = ad.AnnData(
+        X=sp.csr_matrix(np.ones((2, 2))),
+        obs=pd.DataFrame({"sample": ["S1", "S2"], "cell_type": ["A", "B"]}, index=["r1", "r2"]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    query = ad.AnnData(
+        X=sp.csr_matrix(np.ones((256, 2))),
+        obs=pd.DataFrame({"cell_type": ["A"] * 256}, index=[f"q{idx}" for idx in range(256)]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "prepare_trevino_split",
+        lambda **_kwargs: {
+            "reference_adata": reference,
+            "query_adata": query,
+            "genes": ["G1", "G2"],
+            "frozen_dir": frozen,
+            "split_receipt": {
+                "source_sha256": "a" * 64,
+                "held_out_ood_label": "Microglia",
+                "n_reference_cells": 2,
+                "n_query_cells": 256,
+                "n_genes": 2,
+                "feature_selection": feature_receipt,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        benchmark_module,
+        "calibrate_reference_ood_threshold",
+        lambda **_kwargs: pytest.fail("calibration must not run without persisted feature proof"),
+    )
+    monkeypatch.setattr(
+        benchmark_module,
+        "_run_lane_process",
+        lambda **_kwargs: pytest.fail("child lanes must not launch without persisted feature proof"),
+    )
+
+    with pytest.raises(FileNotFoundError, match="missing before OOD calibration"):
+        benchmark_module.run_benchmark(
+            project_root=tmp_path,
+            run_id="2026-08-23T2358Z-0000000",
+            allow_dirty=True,
+        )
 
 
 def test_within_lane_scientific_nondeterminism_writes_failure_receipt(tmp_path: Path, monkeypatch):
@@ -937,10 +1213,16 @@ def test_failed_gpu_child_is_fail_not_promoted(tmp_path: Path, monkeypatch):
         var=pd.DataFrame(index=["G1", "G2"]),
     )
     reference = ad.AnnData(
-        X=sp.csr_matrix(np.ones((20, 2))),
-        obs=pd.DataFrame({"sample": ["S1"] * 10 + ["S2"] * 10, "cell_type": ["A"] * 10 + ["B"] * 10}),
+        X=sp.csr_matrix(np.ones((2, 2))),
+        obs=pd.DataFrame(
+            {"sample": ["S1", "S2"], "cell_type": ["A", "B"]},
+            index=["r1", "r2"],
+        ),
         var=pd.DataFrame(index=["G1", "G2"]),
     )
+    ref_cells = reference.obs_names.astype(str).tolist()
+    ref_cells_sha = _sha256_bytes("\n".join(ref_cells).encode("utf-8") + b"\n")
+    genes_sha = compute_sha256(frozen / "genes.txt")
 
     def _prepared(**_kwargs):
         return {
@@ -955,8 +1237,21 @@ def test_failed_gpu_child_is_fail_not_promoted(tmp_path: Path, monkeypatch):
                 "n_query_cells": 256,
                 "n_genes": 2,
                 "feature_selection": {
-                    "selection_route": "source_highly_variable_ordered_cap",
-                    "ordered_genes_sha256": compute_sha256(frozen / "genes.txt"),
+                    "schema_version": "1.0",
+                    "selection_route": "reference_only_sparse_variance_v1",
+                    "independently_query_blind": True,
+                    "fit_population": "reference_cells_only",
+                    "query_cells_consumed": False,
+                    "n_fit_cells": 2,
+                    "fit_cells_sha256": ref_cells_sha,
+                    "n_input_features": 2,
+                    "matrix_storage_class": "csr",
+                    "score_method": "sparse_sample_variance",
+                    "tie_break_rule": "lexicographical_gene_symbol_ascending",
+                    "requested_cap": 2,
+                    "effective_cap": 2,
+                    "selected_count": 2,
+                    "ordered_genes_sha256": genes_sha,
                 },
             },
         }
