@@ -133,11 +133,22 @@ counts and design metadata only; it must not be described as differential
 accessibility.
 
 ```bash
-python scripts/scfactory.py run <atac.h5ad> --optional-modules scatac_pseudobulk_da \
+python scripts/scfactory.py run <rna-or-metadata.h5ad> \
+  --optional-modules atac_ingest,scatac_pseudobulk_da \
+  --atac-peak-matrix-path <cells-by-peaks.mtx.gz> \
+  --atac-peaks-bed-path <ordered-peaks.bed> \
   --scatac-da-sample-col sample --scatac-da-group-col cell_type \
   --scatac-da-condition-col condition --scatac-da-peak-id-col peak_id \
   --scatac-da-test-level STIM --scatac-da-reference-level CTRL --dry-run
 ```
+
+The matrix and BED paths are forwarded through both the public wrapper and the
+canonical modular CLI. `atac_ingest` binds their ordered peak IDs and emits the
+certificate consumed by DA; do not hand-edit or synthesize that certificate in
+a downstream AnnData file. Exact sparse aggregation is CPU-only in this staged
+release. There is no GPU/CPU dual execution: an uncertified GPU domain routes
+directly to CPU, and GPU support cannot be promoted without exact integer
+aggregation and known-truth statistical validation.
 
 Use a fresh project-owned path such as
 `/home/zerlinshen/projects/<project-id>/runs/<run-id>/`; synthetic tests prove

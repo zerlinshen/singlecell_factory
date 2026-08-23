@@ -338,6 +338,9 @@ class PipelineConfig:
     optional_modules: list[str] = field(
         default_factory=lambda: list(DEFAULT_OPTIONAL_MODULES)
     )
+    atac_peak_matrix_path: Path | None = None
+    atac_peaks_bed_path: Path | None = None
+    atac_n_components: int = 30
     markers: dict[str, list[str]] = field(default_factory=dict)
     cbioportal: CbioPortalConfig = field(default_factory=CbioPortalConfig)
     gene_signature: GeneSignatureConfig = field(default_factory=GeneSignatureConfig)

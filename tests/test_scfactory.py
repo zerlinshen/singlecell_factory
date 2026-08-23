@@ -241,9 +241,16 @@ def test_subprocess_rna_plan_uses_canonical_catalog_defaults(tmp_path):
 
 def test_subprocess_dry_run_forwards_complete_explicit_scatac_contract(tmp_path):
     h5ad = _make_minimal_adata(tmp_path)
+    peak_matrix = tmp_path / "peaks.mtx.gz"
+    peaks_bed = tmp_path / "peaks.bed"
+    peak_matrix.write_bytes(b"fixture")
+    peaks_bed.write_text("chr1\t0\t50\n", encoding="utf-8")
     proc = _run_scfactory_subprocess(
         "run", str(h5ad),
-        "--optional-modules", "scatac_pseudobulk_da",
+        "--optional-modules", "atac_ingest,scatac_pseudobulk_da",
+        "--atac-peak-matrix-path", str(peak_matrix),
+        "--atac-peaks-bed-path", str(peaks_bed),
+        "--atac-n-components", "7",
         "--scatac-da-sample-col", "sample",
         "--scatac-da-group-col", "cell_type",
         "--scatac-da-condition-col", "condition",
@@ -262,8 +269,11 @@ def test_subprocess_dry_run_forwards_complete_explicit_scatac_contract(tmp_path)
 
     assert proc.returncode == 0, proc.stderr
     tokens = _planned_cli_tokens(proc.stdout)
-    assert tokens[tokens.index("--optional-modules") + 1] == "scatac_pseudobulk_da"
+    assert tokens[tokens.index("--optional-modules") + 1] == "atac_ingest,scatac_pseudobulk_da"
     expected = {
+        "--atac-peak-matrix-path": str(peak_matrix),
+        "--atac-peaks-bed-path": str(peaks_bed),
+        "--atac-n-components": "7",
         "--scatac-da-sample-col": "sample",
         "--scatac-da-group-col": "cell_type",
         "--scatac-da-condition-col": "condition",
@@ -280,6 +290,21 @@ def test_subprocess_dry_run_forwards_complete_explicit_scatac_contract(tmp_path)
     }
     for option, value in expected.items():
         assert tokens[tokens.index(option) + 1] == value
+
+
+def test_public_dry_run_rejects_missing_atac_ingest_file(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+    proc = _run_scfactory_subprocess(
+        "run",
+        str(h5ad),
+        "--optional-modules", "atac_ingest",
+        "--atac-peak-matrix-path", str(tmp_path / "missing.mtx.gz"),
+        "--dry-run",
+    )
+
+    assert proc.returncode == 2
+    assert "--atac-peak-matrix-path file not found" in proc.stderr
+    assert "would execute" not in proc.stdout
 
 
 def test_public_dry_run_rejects_incomplete_scatac_contract(tmp_path):

@@ -473,6 +473,22 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 2
 
+    for option, attribute in (
+        ("--atac-peak-matrix-path", "atac_peak_matrix_path"),
+        ("--atac-peaks-bed-path", "atac_peaks_bed_path"),
+    ):
+        raw_path = getattr(args, attribute)
+        if not raw_path:
+            continue
+        resolved_path = Path(raw_path).expanduser().resolve()
+        if not resolved_path.is_file():
+            print(f"scfactory: {option} file not found: {resolved_path}", file=sys.stderr)
+            return 2
+        setattr(args, attribute, str(resolved_path))
+    if args.atac_n_components is not None and args.atac_n_components < 2:
+        print("scfactory: --atac-n-components must be at least 2.", file=sys.stderr)
+        return 2
+
     input_path = Path(args.input).resolve()
 
     if not input_path.exists():
@@ -707,6 +723,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         cli_cmd += ["--output-dir", output_dir]
 
     cli_cmd += ["--optional-modules", ",".join(planned)]
+
+    if args.atac_peak_matrix_path:
+        cli_cmd += ["--atac-peak-matrix-path", args.atac_peak_matrix_path]
+    if args.atac_peaks_bed_path:
+        cli_cmd += ["--atac-peaks-bed-path", args.atac_peaks_bed_path]
+    if args.atac_n_components is not None:
+        cli_cmd += ["--atac-n-components", str(args.atac_n_components)]
 
     if scatac_selected:
         cli_cmd += [
@@ -2330,6 +2353,22 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Override auto-detected optional module list "
                             "(comma-separated; passthrough escape hatch — "
                             "wins over --recipe)")
+    p_run.add_argument(
+        "--atac-peak-matrix-path",
+        default=None,
+        help="Sparse peak-count matrix consumed by the canonical atac_ingest producer",
+    )
+    p_run.add_argument(
+        "--atac-peaks-bed-path",
+        default=None,
+        help="Ordered peaks BED consumed by the canonical atac_ingest producer",
+    )
+    p_run.add_argument(
+        "--atac-n-components",
+        type=int,
+        default=None,
+        help="TF-IDF/LSI components for atac_ingest (canonical default: 30)",
+    )
     p_run.add_argument("--scatac-da-sample-col", default=None,
                        help="Explicit biological-sample obs column for scATAC pseudobulk DA")
     p_run.add_argument("--scatac-da-group-col", default=None,

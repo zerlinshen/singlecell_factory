@@ -145,6 +145,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--markers-json", default="", help="Optional custom marker dictionary JSON file")
 
+    # scATAC ingest.  These inputs are kept explicit so atac_ingest, rather
+    # than a downstream consumer or fixture, signs the ordered peak axis.
+    parser.add_argument(
+        "--atac-peak-matrix-path",
+        default="",
+        help="Sparse scATAC peak-count matrix (.mtx, .mtx.gz, or Cell Ranger ATAC .h5).",
+    )
+    parser.add_argument(
+        "--atac-peaks-bed-path",
+        default="",
+        help="Ordered peaks BED paired with --atac-peak-matrix-path.",
+    )
+    parser.add_argument(
+        "--atac-n-components",
+        type=int,
+        default=30,
+        help="Number of TF-IDF/LSI components requested during scATAC ingest (default: 30).",
+    )
+
     # Cell Ranger
     parser.add_argument("--fastq-dir", default="")
     parser.add_argument(
@@ -1233,6 +1252,16 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise SystemExit(f"Error: --max-ribo-pct must be in [0, 100], got {args.max_ribo_pct}")
     if args.parallel_workers < 1:
         raise SystemExit(f"Error: --parallel-workers must be >= 1, got {args.parallel_workers}")
+    if args.atac_n_components < 2:
+        raise SystemExit(
+            f"Error: --atac-n-components must be >= 2, got {args.atac_n_components}"
+        )
+    for option, raw_path in (
+        ("--atac-peak-matrix-path", args.atac_peak_matrix_path),
+        ("--atac-peaks-bed-path", args.atac_peaks_bed_path),
+    ):
+        if raw_path and not Path(raw_path).expanduser().is_file():
+            raise SystemExit(f"Error: {option} file not found: {raw_path}")
     if args.hic_resolution_bp <= 0:
         raise SystemExit(f"Error: --hic-resolution-bp must be > 0, got {args.hic_resolution_bp}")
     if args.hic_tad_window_bins < 1:
@@ -1589,6 +1618,17 @@ def main() -> None:
             n_neighbors=args.velocity_n_neighbors,
         ),
         optional_modules=_resolve_optional_modules(args),
+        atac_peak_matrix_path=(
+            Path(args.atac_peak_matrix_path).expanduser()
+            if args.atac_peak_matrix_path
+            else None
+        ),
+        atac_peaks_bed_path=(
+            Path(args.atac_peaks_bed_path).expanduser()
+            if args.atac_peaks_bed_path
+            else None
+        ),
+        atac_n_components=args.atac_n_components,
         markers=_load_markers(args.markers_json),
         gene_signature=GeneSignatureConfig(
             signature_json=Path(args.signature_json) if args.signature_json else None,
