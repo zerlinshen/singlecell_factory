@@ -68,6 +68,23 @@ blocked with named data asks.
 - Run focused modular tests:
   `pytest -q tests/test_modular.py tests/test_modular_optimizations.py`
 
+## scATAC pseudobulk DA boundary
+
+Use the public adapter for plan review, not an ad hoc R invocation:
+
+```bash
+python scripts/scfactory.py run <atac.h5ad> --optional-modules scatac_pseudobulk_da \
+  --scatac-da-sample-col sample --scatac-da-group-col cell_type \
+  --scatac-da-condition-col condition --scatac-da-peak-id-col peak_id \
+  --scatac-da-test-level STIM --scatac-da-reference-level CTRL --dry-run
+```
+
+This route is structurally active but staged non-production and non-claimable.
+Require the producer-emitted ordered peak-axis certificate, biological-sample
+replication (never cells), exact two-level design, checked sparse CPU
+aggregation, and both shared DESeq2/edgeR engines. `aggregation_only` is a
+technical count/design export, not a DA conclusion.
+
 ## Claude Review Checklist
 - Scientific validity:
   - Are biological claims consistent with marker genes, cell states, and known pathway logic?

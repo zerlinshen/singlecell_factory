@@ -111,9 +111,37 @@ truth, bundle export, cross-factory validation, and governance records. The
 suite name does not physically merge git histories; GitHub publication should
 keep each repository's history unless an explicit monorepo migration is planned.
 
-A comprehensive, production-ready single-cell RNA-seq analysis framework with **4 mandatory QC modules + 40 optional analysis modules (44 total) + automatic dependency resolution + GPU acceleration + categorized output**. Module counts are asserted against `workflow/modular/module_catalog.py` by `tests/test_readme_module_counts.py` — see [Historical: Wave 4/5 Progress Narrative](#historical-wave-45-progress-narrative-2026-04-26--2026-05-16) for the superseded Wave 4/5 reproducibility snapshots.
+A comprehensive single-cell RNA-seq analysis framework with **4 mandatory QC modules + 41 optional analysis modules (45 total) + automatic dependency resolution + GPU acceleration + categorized output**. Structural registration is not a scientific production certificate: every module retains its own evidence and release status. Module counts are asserted against `workflow/modular/module_catalog.py` by `tests/test_readme_module_counts.py` — see [Historical: Wave 4/5 Progress Narrative](#historical-wave-45-progress-narrative-2026-04-26--2026-05-16) for the superseded Wave 4/5 reproducibility snapshots.
 
 Designed for 10X Genomics datasets. Tested on lung squamous cell carcinoma (LUSC) 3K cells and the NC2024 NSCLC E-MTAB-13526 cohort at full 828k-cell scale.
+
+### scATAC pseudobulk DA (staged, non-production)
+
+`scatac_pseudobulk_da` is structurally registered but remains
+`staged_nonproduction_missing_representative_real_data` and always emits
+`claimable: false`. It aggregates sparse cells-by-peaks **raw integer counts**
+by named biological sample and named cell group; cells are never replicates.
+`atac_ingest` emits an ordered peak-axis certificate, and the DA module rejects
+missing, reordered, duplicated, blank, or index-fallback peak identities.
+
+Confirmatory mode requires explicit sample, group, peak-ID, condition, test,
+and reference fields; exactly the declared two condition levels; and at least
+two biological samples per condition within every analyzed group. It uses
+DESeq2 as the primary engine with a mandatory edgeR QL cross-check in the
+declared `r_multiomics` environment. Aggregation-only mode exports pseudobulk
+counts and design metadata only; it must not be described as differential
+accessibility.
+
+```bash
+python scripts/scfactory.py run <atac.h5ad> --optional-modules scatac_pseudobulk_da \
+  --scatac-da-sample-col sample --scatac-da-group-col cell_type \
+  --scatac-da-condition-col condition --scatac-da-peak-id-col peak_id \
+  --scatac-da-test-level STIM --scatac-da-reference-level CTRL --dry-run
+```
+
+Use a fresh project-owned path such as
+`/home/zerlinshen/projects/<project-id>/runs/<run-id>/`; synthetic tests prove
+the implementation contract only and do not promote a biological claim.
 
 ### Remote CI
 
@@ -952,7 +980,7 @@ Once the NC2024 full-cohort stage-1 baseline is already proven, prefer targeted 
 ## Features
 
 - **4 mandatory modules** (cellranger, QC, ambient correction, doublet detection) ensure data quality baseline
-- **40 optional analysis modules** covering the full scRNA-seq workflow (44 total; see `workflow/modular/module_catalog.py`)
+- **41 optional analysis modules** covering the full scRNA-seq workflow (45 total; see `workflow/modular/module_catalog.py`)
 - Automatic topological dependency resolution — just list what you want, dependencies are auto-included
 - **GPU acceleration** — auto-detected rapids-singlecell backend for clustering, batch post-processing, DE ranking, and evolution clone markers
 - **Categorized output** — each module's figures and tables in its own subfolder
@@ -2803,40 +2831,44 @@ Use [`docs/MODULE_TECH_DOC_TEMPLATE.md`](docs/MODULE_TECH_DOC_TEMPLATE.md) for e
 | 161 | La Manno et al., *Nature*, 2018 | [10.1038/s41586-018-0414-6](https://doi.org/10.1038/s41586-018-0414-6) | `rna_velocity` (auto-detected from module source) |
 | 162 | Bergen et al. et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (scVelo stochastic + dynamical models. Library used here.) |
 | 163 | Bergen et al., *Nature Biotechnology*, 2020 | [10.1038/s41587-020-0591-3](https://doi.org/10.1038/s41587-020-0591-3) | `rna_velocity` (auto-detected from module source) |
-| 164 | Chen et al. et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` |
-| 165 | Chen et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` (auto-detected from module source) |
-| 166 | 10x Genomics et al., *Unknown*, 2020 | [https://www.10xgenomics.com/products/spatial-gene-expression](https://doi.org/https://www.10xgenomics.com/products/spatial-gene-expression) | `spatial_ingest` (Spatial barcoded array; tissue_positions_list.csv schema.) |
-| 167 | 10x Genomics et al., *Unknown*, 2023 | [https://www.10xgenomics.com/products/xenium-in-situ](https://doi.org/https://www.10xgenomics.com/products/xenium-in-situ) | `spatial_ingest` (Subcellular in-situ assay; same (x,y) per-cell schema.) |
-| 168 | Palla et al. et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` |
-| 169 | Palla et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` (auto-detected from module source) |
-| 170 | Aibar S, González-Blas CB, Moerman T, et al. et al., *Nature Methods*, 2017 | [10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463) | `tf_network` (TF → gene network inference framework; this module implements a chromVAR-anchored variant that requires both motif accessibility and peak-to-gene support.) |
-| 171 | Aibar et al., *Nature Methods*, 2017 | [10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463) | `tf_network` (auto-detected from module source) |
-| 172 | Trevino et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `tf_network` (auto-detected from module source) |
-| 173 | Trevino AE, Müller F, Andersen J, et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `tf_network` (Source paper for F-6 TF-gene network reproduction (Wave-5.6 MV3).) |
-| 174 | Haghverdi, Buttner, Wolf et al. et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (Diffusion pseudotime (sc.tl.dpt) used for ordering cells along trajectories.) |
-| 175 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (auto-detected from module source) |
-| 176 | Setty et al. et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (Pseudotime computed over a joint manifold embedding (X_wnn or X_pca). Supports the rationale for running DPT on the best available joint embedding rather than UMAP.) |
-| 177 | Setty et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (auto-detected from module source) |
-| 178 | Wolf et al. et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (PAGA topology-preserving abstraction. sc.tl.paga used here.) |
-| 179 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (auto-detected from module source) |
-| 180 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (WNN (Weighted Nearest Neighbor) joint embedding. X_wnn is preferred over X_pca for pseudotime when available, as it captures multi-modal cell state more faithfully.) |
-| 181 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (auto-detected from module source) |
-| 182 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (Score-gene-set framework used for TME marker scoring.) |
-| 183 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (auto-detected from module source) |
-| 184 | Aran et al. et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (Reference-based lung TME phenotype assignments.) |
-| 185 | Aran et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (auto-detected from module source) |
-| 186 | Cerami et al. et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (External cancer genomics validation portal queried by this module.) |
-| 187 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (auto-detected from module source) |
-| 188 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (Canonical VDJ repertoire analysis conventions adopted here for clonotype definition (V-gene + J-gene + CDR3 nt).) |
-| 189 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (auto-detected from module source) |
-| 190 | Sturm et al. et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (Reference framework for AnnData-native VDJ analysis. This module follows scirpy's chain-pairing + clonotype semantics without taking a hard dependency on the package (so the pipeline runs in scirpy-less environments).) |
-| 191 | Sturm et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (auto-detected from module source) |
-| 192 | 10x Genomics et al., *Software documentation*, 2024 | [https://support.10xgenomics.com/single-cell-vdj/software](https://doi.org/https://support.10xgenomics.com/single-cell-vdj/software) | `vdj_ingest` (Authoritative spec for filtered_contig_annotations.csv / clonotypes.csv schemas consumed here.) |
-| 193 | Gini et al., *Studi Economico-Giuridici della Universita de Cagliari*, 1912 | [https://en.wikipedia.org/wiki/Gini_coefficient](https://doi.org/https://en.wikipedia.org/wiki/Gini_coefficient) | `vdj_metrics` (Gini coefficient used to quantify clonotype abundance inequality (1 - sum_i p_i (2 i - n - 1)/n).) |
-| 194 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (Shannon entropy used here for clonotype diversity per sample.) |
-| 195 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (auto-detected from module source) |
-| 196 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (Canonical repertoire diversity conventions adopted here (Shannon / Gini per sample; clonal expansion buckets).) |
-| 197 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (auto-detected from module source) |
+| 164 | Granja et al. et al., *Nature Genetics*, 2021 | [10.1038/s41588-021-00790-6](https://doi.org/10.1038/s41588-021-00790-6) | `scatac_pseudobulk_da` (Sample-aware pseudobulk replication for single-cell ATAC-seq accessibility modeling.) |
+| 165 | Granja et al., *Nature Genetics*, 2021 | [10.1038/s41588-021-00790-6](https://doi.org/10.1038/s41588-021-00790-6) | `scatac_pseudobulk_da` (auto-detected from module source) |
+| 166 | Squair et al. et al., *Nature Communications*, 2021 | [10.1038/s41467-021-25960-2](https://doi.org/10.1038/s41467-021-25960-2) | `scatac_pseudobulk_da` (Sample-level pseudobulk avoids cell-level pseudoreplication.) |
+| 167 | Squair et al., *Nature Communications*, 2021 | [10.1038/s41467-021-25960-2](https://doi.org/10.1038/s41467-021-25960-2) | `scatac_pseudobulk_da` (auto-detected from module source) |
+| 168 | Chen et al. et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` |
+| 169 | Chen et al., *Science*, 2015 | [10.1126/science.aaa6090](https://doi.org/10.1126/science.aaa6090) | `spatial_ingest` (auto-detected from module source) |
+| 170 | 10x Genomics et al., *Unknown*, 2020 | [https://www.10xgenomics.com/products/spatial-gene-expression](https://doi.org/https://www.10xgenomics.com/products/spatial-gene-expression) | `spatial_ingest` (Spatial barcoded array; tissue_positions_list.csv schema.) |
+| 171 | 10x Genomics et al., *Unknown*, 2023 | [https://www.10xgenomics.com/products/xenium-in-situ](https://doi.org/https://www.10xgenomics.com/products/xenium-in-situ) | `spatial_ingest` (Subcellular in-situ assay; same (x,y) per-cell schema.) |
+| 172 | Palla et al. et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` |
+| 173 | Palla et al., *Nature Methods*, 2022 | [10.1038/s41592-021-01358-2](https://doi.org/10.1038/s41592-021-01358-2) | `spatial_neighborhoods` (auto-detected from module source) |
+| 174 | Aibar S, González-Blas CB, Moerman T, et al. et al., *Nature Methods*, 2017 | [10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463) | `tf_network` (TF → gene network inference framework; this module implements a chromVAR-anchored variant that requires both motif accessibility and peak-to-gene support.) |
+| 175 | Aibar et al., *Nature Methods*, 2017 | [10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463) | `tf_network` (auto-detected from module source) |
+| 176 | Trevino et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `tf_network` (auto-detected from module source) |
+| 177 | Trevino AE, Müller F, Andersen J, et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.07.039](https://doi.org/10.1016/j.cell.2021.07.039) | `tf_network` (Source paper for F-6 TF-gene network reproduction (Wave-5.6 MV3).) |
+| 178 | Haghverdi, Buttner, Wolf et al. et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (Diffusion pseudotime (sc.tl.dpt) used for ordering cells along trajectories.) |
+| 179 | Haghverdi et al., *Nature Methods*, 2016 | [10.1038/nmeth.3971](https://doi.org/10.1038/nmeth.3971) | `trajectory` (auto-detected from module source) |
+| 180 | Setty et al. et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (Pseudotime computed over a joint manifold embedding (X_wnn or X_pca). Supports the rationale for running DPT on the best available joint embedding rather than UMAP.) |
+| 181 | Setty et al., *Nature Biotechnology*, 2019 | [10.1038/s41587-019-0068-4](https://doi.org/10.1038/s41587-019-0068-4) | `trajectory` (auto-detected from module source) |
+| 182 | Wolf et al. et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (PAGA topology-preserving abstraction. sc.tl.paga used here.) |
+| 183 | Wolf et al., *Genome Biology*, 2019 | [10.1186/s13059-019-1663-x](https://doi.org/10.1186/s13059-019-1663-x) | `trajectory` (auto-detected from module source) |
+| 184 | Hao et al. et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (WNN (Weighted Nearest Neighbor) joint embedding. X_wnn is preferred over X_pca for pseudotime when available, as it captures multi-modal cell state more faithfully.) |
+| 185 | Hao et al., *Cell*, 2021 | [10.1016/j.cell.2021.04.048](https://doi.org/10.1016/j.cell.2021.04.048) | `trajectory` (auto-detected from module source) |
+| 186 | Tirosh et al. et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (Score-gene-set framework used for TME marker scoring.) |
+| 187 | Tirosh et al., *Science*, 2016 | [10.1126/science.aad0501](https://doi.org/10.1126/science.aad0501) | `tumor_microenvironment` (auto-detected from module source) |
+| 188 | Aran et al. et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (Reference-based lung TME phenotype assignments.) |
+| 189 | Aran et al., *Nature Immunology*, 2019 | [10.1038/s41590-018-0276-y](https://doi.org/10.1038/s41590-018-0276-y) | `tumor_microenvironment` (auto-detected from module source) |
+| 190 | Cerami et al. et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (External cancer genomics validation portal queried by this module.) |
+| 191 | Cerami et al., *Cancer Discovery*, 2012 | [10.1158/2159-8290.CD-12-0095](https://doi.org/10.1158/2159-8290.CD-12-0095) | `validate_cbioportal` (auto-detected from module source) |
+| 192 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (Canonical VDJ repertoire analysis conventions adopted here for clonotype definition (V-gene + J-gene + CDR3 nt).) |
+| 193 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_ingest` (auto-detected from module source) |
+| 194 | Sturm et al. et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (Reference framework for AnnData-native VDJ analysis. This module follows scirpy's chain-pairing + clonotype semantics without taking a hard dependency on the package (so the pipeline runs in scirpy-less environments).) |
+| 195 | Sturm et al., *Bioinformatics*, 2020 | [10.1093/bioinformatics/btaa611](https://doi.org/10.1093/bioinformatics/btaa611) | `vdj_ingest` (auto-detected from module source) |
+| 196 | 10x Genomics et al., *Software documentation*, 2024 | [https://support.10xgenomics.com/single-cell-vdj/software](https://doi.org/https://support.10xgenomics.com/single-cell-vdj/software) | `vdj_ingest` (Authoritative spec for filtered_contig_annotations.csv / clonotypes.csv schemas consumed here.) |
+| 197 | Gini et al., *Studi Economico-Giuridici della Universita de Cagliari*, 1912 | [https://en.wikipedia.org/wiki/Gini_coefficient](https://doi.org/https://en.wikipedia.org/wiki/Gini_coefficient) | `vdj_metrics` (Gini coefficient used to quantify clonotype abundance inequality (1 - sum_i p_i (2 i - n - 1)/n).) |
+| 198 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (Shannon entropy used here for clonotype diversity per sample.) |
+| 199 | Shannon et al., *Bell System Technical Journal*, 1948 | [10.1002/j.1538-7305.1948.tb01338.x](https://doi.org/10.1002/j.1538-7305.1948.tb01338.x) | `vdj_metrics` (auto-detected from module source) |
+| 200 | Bagaev et al. et al., *PLoS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (Canonical repertoire diversity conventions adopted here (Shannon / Gini per sample; clonal expansion buckets).) |
+| 201 | Shugay et al., *PLOS Computational Biology*, 2015 | [10.1371/journal.pcbi.1004503](https://doi.org/10.1371/journal.pcbi.1004503) | `vdj_metrics` (auto-detected from module source) |
 ---
 
 ## Results
@@ -2886,7 +2918,7 @@ The most recent canonical work is the **wave5 Trevino PCW21** biology-aware vali
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-22T16:23:17Z`
+Last refreshed: `2026-08-23T06:00:50Z`
 
 ![Workspace structure](docs/architecture/structure.png)
 
@@ -2894,20 +2926,17 @@ Last refreshed: `2026-08-22T16:23:17Z`
 
 | Surface | Type | Governance role |
 | --- | --- | --- |
-| `.omx` | `dir` | agent-facing memory |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
 | `contracts` | `dir` | contracts / schemas |
 | `data` | `dir` | data / generated artifacts |
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
-| `envs` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
 | `ops` | `dir` | workspace area (inferred) |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
-| `results` | `dir` | data / generated artifacts |
 | `rna_velocity_pseudotime_analysis` | `dir` | workspace area (inferred) |
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
@@ -2918,6 +2947,9 @@ Last refreshed: `2026-08-22T16:23:17Z`
 | `AI_AGENT_PROTOCOL.md` | `file` | file artifact (inferred) |
 | `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
 | `CHANGELOG.md` | `file` | file artifact (inferred) |
+| `CLAUDE.md` | `file` | file artifact (inferred) |
+| `CODEX.md` | `file` | file artifact (inferred) |
+| `environment.yml` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 

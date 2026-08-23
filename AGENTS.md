@@ -352,6 +352,14 @@ for historical project-local skills.
   exploratory/non-claimable. Keep `pseudobulk_counts.csv` numeric and place
   sample/group/condition plus inference fields in aligned
   `pseudobulk_metadata.csv`.
+- `scatac_pseudobulk_da` is structurally active but scientifically staged and
+  non-claimable. It requires the producer-emitted `atac_peak_axis/v1`
+  certificate, explicit sample/group/peak-ID fields, and (for confirmatory
+  mode) an exact two-level biological-sample design with at least two samples
+  per condition. Never infer these fields from an index, `cell_type`, or
+  `name`; aggregation-only exports are not DA claims. Preserve sparse checked
+  integer aggregation and route inference only through the declared
+  `r_multiomics` DESeq2-primary/edgeR-QL shared engine.
 - Composition counts and proportions are grouped by biological sample.
   Confirmatory scCODA additionally requires an explicit, separate condition
   column with one condition per sample and sufficient replicates; without that

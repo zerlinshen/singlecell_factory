@@ -3,7 +3,7 @@
 <!-- ARCHITECTURE-GOVERNANCE:START -->
 ## Architecture Governance
 
-Last refreshed: `2026-08-22T16:23:17Z`
+Last refreshed: `2026-08-23T06:00:50Z`
 
 ![Workspace structure](structure.png)
 
@@ -11,20 +11,17 @@ Last refreshed: `2026-08-22T16:23:17Z`
 
 | Surface | Type | Governance role |
 | --- | --- | --- |
-| `.omx` | `dir` | agent-facing memory |
 | `bridges` | `dir` | execution / code |
 | `codex_skills` | `dir` | workspace area (inferred) |
 | `contracts` | `dir` | contracts / schemas |
 | `data` | `dir` | data / generated artifacts |
 | `docs` | `dir` | documentation; contains generated architecture governance |
 | `environments` | `dir` | workspace area (inferred) |
-| `envs` | `dir` | workspace area (inferred) |
 | `notebooks` | `dir` | workspace area (inferred) |
 | `ops` | `dir` | workspace area (inferred) |
 | `recipes` | `dir` | workspace area (inferred) |
 | `ref` | `dir` | workspace area (inferred) |
 | `reports` | `dir` | human-facing evidence |
-| `results` | `dir` | data / generated artifacts |
 | `rna_velocity_pseudotime_analysis` | `dir` | workspace area (inferred) |
 | `runtime_monitor` | `dir` | workspace area (inferred) |
 | `scripts` | `dir` | execution / code |
@@ -35,6 +32,9 @@ Last refreshed: `2026-08-22T16:23:17Z`
 | `AI_AGENT_PROTOCOL.md` | `file` | file artifact (inferred) |
 | `BEST_PRACTICES.md` | `file` | file artifact (inferred) |
 | `CHANGELOG.md` | `file` | file artifact (inferred) |
+| `CLAUDE.md` | `file` | file artifact (inferred) |
+| `CODEX.md` | `file` | file artifact (inferred) |
+| `environment.yml` | `file` | file artifact (inferred) |
 
 ### Required Update Habit
 

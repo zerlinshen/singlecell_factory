@@ -526,6 +526,68 @@ def cmd_run(args: argparse.Namespace) -> int:
         planned = plan_optional_modules(modality)
         plan_source = f"auto for modality={modality}"
 
+    # scATAC pseudobulk DA is an explicit contract, never an inference from a
+    # generic ATAC modality.  Keep the public dry-run plan identical to the
+    # canonical modular CLI selection and fail before starting either route.
+    scatac_flag_values = (
+        args.scatac_da_sample_col,
+        args.scatac_da_group_col,
+        args.scatac_da_condition_col,
+        args.scatac_da_peak_id_col,
+        args.scatac_da_test_level,
+        args.scatac_da_reference_level,
+        args.scatac_da_groups,
+        args.scatac_da_mode,
+        args.scatac_da_min_samples_per_condition,
+        args.scatac_da_min_total_count,
+        args.scatac_da_fdr_threshold,
+        args.scatac_da_abs_log2fc_threshold,
+        args.scatac_da_r_conda_env,
+        args.scatac_da_timeout,
+        args.scatac_da_aggregation_backend,
+    )
+    scatac_requested = any(value is not None for value in scatac_flag_values)
+    scatac_selected = scatac_requested or "scatac_pseudobulk_da" in planned
+    if scatac_requested and "scatac_pseudobulk_da" not in planned:
+        planned.append("scatac_pseudobulk_da")
+        plan_source += " + explicit scatac DA contract"
+    if scatac_selected:
+        mode = args.scatac_da_mode or "confirmatory_da"
+        missing = [
+            name for name, value in (
+                ("--scatac-da-sample-col", args.scatac_da_sample_col),
+                ("--scatac-da-group-col", args.scatac_da_group_col),
+                ("--scatac-da-peak-id-col", args.scatac_da_peak_id_col),
+            ) if not value
+        ]
+        if mode == "confirmatory_da":
+            missing.extend(
+                name for name, value in (
+                    ("--scatac-da-condition-col", args.scatac_da_condition_col),
+                    ("--scatac-da-test-level", args.scatac_da_test_level),
+                    ("--scatac-da-reference-level", args.scatac_da_reference_level),
+                ) if not value
+            )
+        if missing:
+            print(
+                "scfactory: scATAC pseudobulk DA requires explicit " + ", ".join(missing) + ".\n"
+                "  no dry-run or real run was started.",
+                file=sys.stderr,
+            )
+            return 2
+        if args.scatac_da_min_samples_per_condition is not None and args.scatac_da_min_samples_per_condition < 2:
+            print("scfactory: --scatac-da-min-samples-per-condition must be at least 2.", file=sys.stderr)
+            return 2
+        if args.scatac_da_timeout is not None and args.scatac_da_timeout <= 0:
+            print("scfactory: --scatac-da-timeout must be positive.", file=sys.stderr)
+            return 2
+        if args.scatac_da_r_conda_env not in (None, "r_multiomics"):
+            print("scfactory: --scatac-da-r-conda-env must be r_multiomics.", file=sys.stderr)
+            return 2
+        if args.scatac_da_aggregation_backend not in (None, "cpu"):
+            print("scfactory: --scatac-da-aggregation-backend must be cpu.", file=sys.stderr)
+            return 2
+
     # Wave-2 W2.1: fail early when recipe/modules require packages that are
     # not installed (e.g. squidpy for spatial_neighborhoods / visium recipe).
     # Applies to dry-run too so operators discover the gap before a long run.
@@ -645,6 +707,29 @@ def cmd_run(args: argparse.Namespace) -> int:
         cli_cmd += ["--output-dir", output_dir]
 
     cli_cmd += ["--optional-modules", ",".join(planned)]
+
+    if scatac_selected:
+        cli_cmd += [
+            "--scatac-da-sample-col", args.scatac_da_sample_col,
+            "--scatac-da-group-col", args.scatac_da_group_col,
+            "--scatac-da-peak-id-col", args.scatac_da_peak_id_col,
+            "--scatac-da-mode", args.scatac_da_mode or "confirmatory_da",
+            "--scatac-da-min-samples-per-condition", str(args.scatac_da_min_samples_per_condition or 2),
+            "--scatac-da-min-total-count", str(args.scatac_da_min_total_count or 10),
+            "--scatac-da-fdr-threshold", str(args.scatac_da_fdr_threshold or 0.05),
+            "--scatac-da-abs-log2fc-threshold", str(args.scatac_da_abs_log2fc_threshold or 1.0),
+            "--scatac-da-r-conda-env", args.scatac_da_r_conda_env or "r_multiomics",
+            "--scatac-da-timeout", str(args.scatac_da_timeout or 1800),
+            "--scatac-da-aggregation-backend", args.scatac_da_aggregation_backend or "cpu",
+        ]
+        if args.scatac_da_condition_col:
+            cli_cmd += ["--scatac-da-condition-col", args.scatac_da_condition_col]
+        if args.scatac_da_test_level:
+            cli_cmd += ["--scatac-da-test-level", args.scatac_da_test_level]
+        if args.scatac_da_reference_level:
+            cli_cmd += ["--scatac-da-reference-level", args.scatac_da_reference_level]
+        if args.scatac_da_groups:
+            cli_cmd += ["--scatac-da-groups", args.scatac_da_groups]
 
     if batch_strategy != BATCH_STRATEGY_AUTO:
         cli_cmd += ["--batch-strategy", batch_strategy]
@@ -2245,6 +2330,36 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Override auto-detected optional module list "
                             "(comma-separated; passthrough escape hatch — "
                             "wins over --recipe)")
+    p_run.add_argument("--scatac-da-sample-col", default=None,
+                       help="Explicit biological-sample obs column for scATAC pseudobulk DA")
+    p_run.add_argument("--scatac-da-group-col", default=None,
+                       help="Explicit cell-group obs column for scATAC pseudobulk DA")
+    p_run.add_argument("--scatac-da-condition-col", default=None,
+                       help="Explicit two-level condition obs column for confirmatory scATAC DA")
+    p_run.add_argument("--scatac-da-peak-id-col", default=None,
+                       help="Explicit ordered peak-ID column in atac_var")
+    p_run.add_argument("--scatac-da-test-level", default=None,
+                       help="Test/numerator condition level for confirmatory scATAC DA")
+    p_run.add_argument("--scatac-da-reference-level", default=None,
+                       help="Reference/denominator condition level for confirmatory scATAC DA")
+    p_run.add_argument("--scatac-da-mode", choices=["confirmatory_da", "aggregation_only"], default=None,
+                       help="scATAC route: confirmatory_da or aggregation_only")
+    p_run.add_argument("--scatac-da-min-samples-per-condition", type=int, default=None,
+                       help="Minimum biological samples per condition (must be at least 2)")
+    p_run.add_argument("--scatac-da-min-total-count", type=int, default=None,
+                       help="Minimum aggregate peak count passed to the R engine")
+    p_run.add_argument("--scatac-da-fdr-threshold", type=float, default=None,
+                       help="FDR threshold for scATAC DA")
+    p_run.add_argument("--scatac-da-abs-log2fc-threshold", type=float, default=None,
+                       help="Absolute log2 fold-change threshold for scATAC DA")
+    p_run.add_argument("--scatac-da-groups", default=None,
+                       help="Optional comma-separated group allowlist for scATAC DA")
+    p_run.add_argument("--scatac-da-r-conda-env", default=None,
+                       help="Declared R environment for scATAC DA (r_multiomics)")
+    p_run.add_argument("--scatac-da-timeout", type=int, default=None,
+                       help="Per-group R inference timeout in seconds")
+    p_run.add_argument("--scatac-da-aggregation-backend", choices=["cpu"], default=None,
+                       help="Exact scATAC aggregation backend (CPU only)")
     p_run.add_argument("--recipe", default=None,
                        help=f"Apply a preset recipe from {RECIPES_DIR.name}/<name>.yaml "
                             "(modules + scale-mode + env + bundle config)")

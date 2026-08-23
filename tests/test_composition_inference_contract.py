@@ -6,6 +6,7 @@ produced sample-level coefficients instead of the requested condition contrast.
 """
 from __future__ import annotations
 
+import os
 import sys
 import subprocess
 from types import SimpleNamespace
@@ -178,11 +179,14 @@ data = sccoda.load(
 sccoda.prepare(data, formula="C(condition)", reference_cell_type="automatic")
 assert "condition" in data["coda"].obs.columns
 """
+    env = os.environ.copy()
+    env["CONDA_PREFIX"] = str(python.parent.parent)
     completed = subprocess.run(
         [str(python), "-c", probe],
         text=True,
         capture_output=True,
         check=False,
+        env=env,
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
 

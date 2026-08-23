@@ -796,6 +796,34 @@ Current behavior:
 
 ---
 
+## 13.1 scATAC pseudobulk differential accessibility (staged contract)
+
+`scatac_pseudobulk_da` consumes sparse raw counts in `adata.obsm["atac_peaks"]`
+and ordered metadata in `adata.uns["atac_var"]`. `atac_ingest` must have emitted
+the matching `adata.uns["atac_peak_axis"]` certificate; a column name, length,
+or uniqueness check alone cannot prove peak-axis order. The caller must name
+the biological sample, cell group, and peak-ID columns. Confirmatory mode also
+must name the condition column, test level, and reference level.
+
+- Reject null, blank, NA-like, duplicate, reordered, or index-fallback labels.
+- Apply an optional group allowlist before requiring the observed condition set
+  to equal exactly `{reference, test}`. Never discard a third level silently.
+- Require at least two biological samples per condition per analyzed group;
+  cell count is descriptive only and never increases replication.
+- Aggregate with checked signed-`int64` sparse arithmetic and CPU-only routing.
+  The matrix may materialize only after aggregation at the R boundary.
+- Use DESeq2 primary plus mandatory edgeR QL support through the shared
+  `r_multiomics_factory/bulk/rna_diff/shared_deseq2_edger.R` engine. Either
+  engine failure fails the request.
+- Write only into the governed run directory. Manifests record exact counts,
+  denominators, threshold/contrast order, hashes, argv, engine versions, and
+  repository states. The release remains non-claimable pending a separately
+  reviewed representative real-data run.
+
+`aggregation_only` is a count/design export and must not be labelled DA.
+
+---
+
 ## 14. Basic Interpretation Checklist
 
 After a run:

@@ -509,6 +509,17 @@ MODULE_SPECS: dict[str, ModuleSpec] = {
             "P2.S13 + Wave 5 / US-W5-6."
         ),
     ),
+    "scatac_pseudobulk_da": ModuleSpec(
+        name="scatac_pseudobulk_da",
+        depends_on=("atac_ingest",),
+        layer="analysis",
+        modality="atac",
+        bridge_ready=True,
+        description=(
+            "scATAC sample-level pseudobulk differential accessibility using DESeq2 "
+            "primary and edgeR QL F-test cross-check."
+        ),
+    ),
     "hic_ingest": ModuleSpec(
         name="hic_ingest",
         depends_on=(),

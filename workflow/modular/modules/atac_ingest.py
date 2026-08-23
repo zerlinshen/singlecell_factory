@@ -13,12 +13,14 @@ Outputs:
   adata.obsm["X_atac"]                compatibility LSI embedding (n_cells x n_components)
   adata.uns["atac_peaks"]             peak coords DataFrame
   adata.uns["atac_var"]               peak coords DataFrame with peak_id for linkage code
+  adata.uns["atac_peak_axis"]         producer-emitted ordered peak-axis certificate
   adata.uns["atac_ingest_metadata"]   shape, dtype, n_components, density
   runs/<run-id>/atac_ingest/atac_summary.json
 """
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -60,6 +62,12 @@ __references__ = {
 }
 
 _DEFAULT_N_COMPONENTS = 30
+
+
+def _ordered_peak_id_sha256(peak_ids: pd.Series) -> str:
+    """Hash the producer-bound peak axis without an order-insensitive fallback."""
+    payload = "\0".join(peak_ids.astype(str).tolist()).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _load_peak_matrix(path: Path) -> sp.csr_matrix:
@@ -145,7 +153,7 @@ class ATACIngestModule:
     requires_keys: dict[str, list[str]] = {}
     provides_keys: dict[str, list[str]] = {
         "obsm": ["atac_peaks", "X_atac"],
-        "uns": ["atac_peaks", "atac_var"],
+        "uns": ["atac_peaks", "atac_var", "atac_peak_axis"],
     }
 
     def run(self, ctx: PipelineContext) -> None:
@@ -211,11 +219,24 @@ class ATACIngestModule:
         if peaks_df is not None:
             adata.uns["atac_peaks"] = peaks_df
             adata.uns["atac_var"] = peaks_df.copy()
+            # The DA route must distinguish an ordered matrix/metadata binding
+            # from merely matching the number of peaks.  This is producer
+            # evidence: a later consumer cannot reconstruct it from a length
+            # and uniqueness check after metadata have been permuted.
+            adata.uns["atac_peak_axis"] = {
+                "schema_version": "atac_peak_axis/v1",
+                "producer": self.name,
+                "source_status": "bound_from_peaks_bed",
+                "peak_id_col": "peak_id",
+                "n_peaks": int(cells_x_peaks.shape[1]),
+                "ordered_peak_id_sha256": _ordered_peak_id_sha256(peaks_df["peak_id"]),
+            }
         adata.uns["atac_ingest_metadata"] = {
             "n_peaks": int(cells_x_peaks.shape[1]),
             "n_components": int(embedding.shape[1]),
             "peak_matrix_obsm_key": "atac_peaks",
             "lsi_compat_obsm_key": "X_atac",
+            "peak_axis_certificate": "atac_peak_axis/v1" if peaks_df is not None else None,
             "density": float(cells_x_peaks.nnz) / (cells_x_peaks.shape[0] * cells_x_peaks.shape[1]),
             "random_state": random_state,
         }

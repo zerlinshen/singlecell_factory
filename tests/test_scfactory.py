@@ -239,6 +239,60 @@ def test_subprocess_rna_plan_uses_canonical_catalog_defaults(tmp_path):
     assert actual == list(DEFAULT_OPTIONAL_MODULES)
 
 
+def test_subprocess_dry_run_forwards_complete_explicit_scatac_contract(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+    proc = _run_scfactory_subprocess(
+        "run", str(h5ad),
+        "--optional-modules", "scatac_pseudobulk_da",
+        "--scatac-da-sample-col", "sample",
+        "--scatac-da-group-col", "cell_type",
+        "--scatac-da-condition-col", "condition",
+        "--scatac-da-peak-id-col", "peak_id",
+        "--scatac-da-test-level", "STIM",
+        "--scatac-da-reference-level", "CTRL",
+        "--scatac-da-min-samples-per-condition", "2",
+        "--scatac-da-min-total-count", "10",
+        "--scatac-da-fdr-threshold", "0.05",
+        "--scatac-da-abs-log2fc-threshold", "1.0",
+        "--scatac-da-r-conda-env", "r_multiomics",
+        "--scatac-da-timeout", "1800",
+        "--scatac-da-aggregation-backend", "cpu",
+        "--dry-run",
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    tokens = _planned_cli_tokens(proc.stdout)
+    assert tokens[tokens.index("--optional-modules") + 1] == "scatac_pseudobulk_da"
+    expected = {
+        "--scatac-da-sample-col": "sample",
+        "--scatac-da-group-col": "cell_type",
+        "--scatac-da-condition-col": "condition",
+        "--scatac-da-peak-id-col": "peak_id",
+        "--scatac-da-test-level": "STIM",
+        "--scatac-da-reference-level": "CTRL",
+        "--scatac-da-min-samples-per-condition": "2",
+        "--scatac-da-min-total-count": "10",
+        "--scatac-da-fdr-threshold": "0.05",
+        "--scatac-da-abs-log2fc-threshold": "1.0",
+        "--scatac-da-r-conda-env": "r_multiomics",
+        "--scatac-da-timeout": "1800",
+        "--scatac-da-aggregation-backend": "cpu",
+    }
+    for option, value in expected.items():
+        assert tokens[tokens.index(option) + 1] == value
+
+
+def test_public_dry_run_rejects_incomplete_scatac_contract(tmp_path):
+    h5ad = _make_minimal_adata(tmp_path)
+    proc = _run_scfactory_subprocess(
+        "run", str(h5ad), "--scatac-da-sample-col", "sample", "--dry-run"
+    )
+
+    assert proc.returncode == 2
+    assert "requires explicit --scatac-da-group-col" in proc.stderr
+    assert "would execute" not in proc.stdout
+
+
 def test_dry_run_rejects_unknown_user_module_before_printing_a_plan(tmp_path):
     h5ad = _make_minimal_adata(tmp_path)
     proc = _run_scfactory_subprocess(

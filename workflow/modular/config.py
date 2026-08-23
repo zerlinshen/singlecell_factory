@@ -287,6 +287,41 @@ class CompositionConfig:
 
 
 @dataclass
+class ScatacPseudobulkDAConfig:
+    """Configuration for scATAC pseudobulk differential accessibility analysis."""
+
+    sample_col: str | None = None
+    group_col: str | None = None
+    condition_col: str | None = None
+    peak_id_col: str | None = None
+    test_level: str | None = None
+    reference_level: str | None = None
+    mode: str = "confirmatory_da"
+    min_samples_per_condition: int = 2
+    min_total_count: int = 10
+    fdr_threshold: float = 0.05
+    abs_log2fc_threshold: float = 1.0
+    groups: tuple[str, ...] = ()
+    r_conda_env: str = "r_multiomics"
+    subprocess_timeout: int = 1800
+    aggregation_backend: str = "cpu"
+
+    def __post_init__(self) -> None:
+        """Reject an invalid replicate design before a pipeline can be built.
+
+        The module never treats cells as replication.  Keeping this guard on
+        the typed configuration prevents programmatic callers from bypassing
+        the CLI's argument validation with ``min_samples_per_condition=0`` or
+        ``1``.
+        """
+        if self.min_samples_per_condition < 2:
+            raise ValueError(
+                "scATAC pseudobulk DA requires min_samples_per_condition >= 2 "
+                "biological samples in each condition."
+            )
+
+
+@dataclass
 class PipelineConfig:
     """Top-level modular workflow configuration."""
 
@@ -311,6 +346,7 @@ class PipelineConfig:
     composition: CompositionConfig = field(default_factory=CompositionConfig)
     de_config: DEConfig = field(default_factory=DEConfig)
     pseudobulk_de: PseudobulkDEConfig = field(default_factory=PseudobulkDEConfig)
+    scatac_pseudobulk_da: ScatacPseudobulkDAConfig = field(default_factory=ScatacPseudobulkDAConfig)
     regress_cell_cycle: bool = False
     trajectory_root_cluster: str | None = None
     trajectory_root_justification: str | None = None

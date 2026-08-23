@@ -1,0 +1,294 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScatacPseudobulkDASchema",
+  "description": "v2 governed artifact contracts for staged, non-claimable scATAC pseudobulk aggregation and differential-accessibility inference.",
+  "type": "object",
+  "definitions": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "peak_axis_certificate": {
+      "type": "object",
+      "required": ["schema_version", "producer", "source_status", "peak_id_col", "n_peaks", "ordered_peak_id_sha256"],
+      "properties": {
+        "schema_version": {"enum": ["atac_peak_axis/v1"]},
+        "producer": {"enum": ["atac_ingest"]},
+        "source_status": {"type": "string", "minLength": 1},
+        "peak_id_col": {"type": "string", "minLength": 1},
+        "n_peaks": {"type": "integer", "minimum": 1},
+        "ordered_peak_id_sha256": {"$ref": "#/definitions/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "backend": {
+      "type": "object",
+      "required": ["aggregation_backend_requested", "aggregation_backend_resolved", "integer_parity_certificate", "production_dual_run"],
+      "properties": {
+        "aggregation_backend_requested": {"enum": ["cpu"]},
+        "aggregation_backend_resolved": {"enum": ["cpu"]},
+        "integer_parity_certificate": {"type": "null"},
+        "production_dual_run": {"enum": [false]}
+      },
+      "additionalProperties": false
+    },
+    "integer_count_map": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "aggregation_manifest": {
+      "type": "object",
+      "required": [
+        "schema_version", "module_name", "timestamp_utc", "n_cells", "n_peaks", "n_pseudobulk_samples",
+        "peak_id_hash", "peak_axis_certificate", "aggregation_backend_requested", "aggregation_backend_resolved",
+        "backend_observation", "integer_parity_certificate", "production_dual_run", "sample_col", "group_col",
+        "condition_col", "peak_id_col", "count_invariants", "input_hashes", "repository_state", "files", "artifact_hashes"
+      ],
+      "properties": {
+        "schema_version": {"enum": ["2.0.0"]},
+        "module_name": {"enum": ["scatac_pseudobulk_da"]},
+        "timestamp_utc": {"type": "string", "minLength": 1},
+        "n_cells": {"type": "integer", "minimum": 1},
+        "n_peaks": {"type": "integer", "minimum": 1},
+        "n_pseudobulk_samples": {"type": "integer", "minimum": 1},
+        "peak_id_hash": {"$ref": "#/definitions/sha256"},
+        "peak_axis_certificate": {"$ref": "#/definitions/peak_axis_certificate"},
+        "aggregation_backend_requested": {"enum": ["cpu"]},
+        "aggregation_backend_resolved": {"enum": ["cpu"]},
+        "backend_observation": {
+          "type": "object",
+          "required": ["requested", "resolved", "matrix_implementation", "gpu_modules_loaded", "cpu_only_observed"],
+          "properties": {
+            "requested": {"enum": ["cpu"]},
+            "resolved": {"enum": ["cpu"]},
+            "matrix_implementation": {"type": "string", "minLength": 1},
+            "gpu_modules_loaded": {"type": "array", "items": {"type": "string"}},
+            "cpu_only_observed": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "integer_parity_certificate": {"type": "null"},
+        "production_dual_run": {"enum": [false]},
+        "sample_col": {"type": "string", "minLength": 1},
+        "group_col": {"type": "string", "minLength": 1},
+        "condition_col": {"type": "string"},
+        "peak_id_col": {"type": "string", "minLength": 1},
+        "count_invariants": {
+          "type": "object",
+          "required": ["input_total_exact", "output_total_exact", "per_peak_sha256", "per_pseudobulk_sample_sha256"],
+          "properties": {
+            "input_total_exact": {"type": "string", "pattern": "^[0-9]+$"},
+            "output_total_exact": {"type": "string", "pattern": "^[0-9]+$"},
+            "per_peak_sha256": {"$ref": "#/definitions/sha256"},
+            "per_pseudobulk_sample_sha256": {"$ref": "#/definitions/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "input_hashes": {
+          "type": "object",
+          "required": ["selected_sparse_counts_sha256", "selected_design_sha256"],
+          "properties": {
+            "selected_sparse_counts_sha256": {"$ref": "#/definitions/sha256"},
+            "selected_design_sha256": {"$ref": "#/definitions/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "repository_state": {"type": "object"},
+        "files": {
+          "type": "object",
+          "required": ["peaks_file", "pseudobulk_samples_file", "counts_matrix_file"],
+          "properties": {
+            "peaks_file": {"type": "string", "minLength": 1},
+            "pseudobulk_samples_file": {"type": "string", "minLength": 1},
+            "counts_matrix_file": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        "artifact_hashes": {
+          "type": "object",
+          "required": ["peaks_file", "pseudobulk_samples_file", "counts_matrix_file"],
+          "properties": {
+            "peaks_file": {"$ref": "#/definitions/sha256"},
+            "pseudobulk_samples_file": {"$ref": "#/definitions/sha256"},
+            "counts_matrix_file": {"$ref": "#/definitions/sha256"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "inference_manifest": {
+      "type": "object",
+      "required": [
+        "schema_version", "lane", "module_name", "technical_inference_status", "group_id", "group_label", "test", "ref",
+        "n_input_peaks", "n_deseq2_tested", "n_edger_tested", "n_tested_both", "n_deseq2_significant",
+        "n_edger_significant", "n_cross_engine_supported", "n_concordance_denominator", "concordance_fraction_edger",
+        "padj_threshold", "lfc_threshold", "min_total_count", "lfc_shrinkage_method", "biological_sample_counts_by_condition",
+        "cell_counts_by_condition", "software_versions", "adapter_version", "adapter", "argv", "input_hashes",
+        "artifact_hashes", "repository_state", "cpu_backend"
+      ],
+      "properties": {
+        "schema_version": {"enum": ["2.0.0"]},
+        "lane": {"enum": ["scatac_pseudobulk_da"]},
+        "module_name": {"enum": ["scatac_pseudobulk_da"]},
+        "technical_inference_status": {"enum": ["dual_engine_inference_completed"]},
+        "group_id": {"type": "string", "pattern": "^grp_[a-f0-9]{12}$"},
+        "group_label": {"type": "string", "minLength": 1},
+        "test": {"type": "string", "minLength": 1},
+        "ref": {"type": "string", "minLength": 1},
+        "n_input_peaks": {"type": "integer", "minimum": 1},
+        "n_deseq2_tested": {"type": "integer", "minimum": 0},
+        "n_edger_tested": {"type": "integer", "minimum": 0},
+        "n_tested_both": {"type": "integer", "minimum": 0},
+        "n_deseq2_significant": {"type": "integer", "minimum": 0},
+        "n_edger_significant": {"type": "integer", "minimum": 0},
+        "n_cross_engine_supported": {"type": "integer", "minimum": 0},
+        "n_concordance_denominator": {"type": "integer", "minimum": 0},
+        "concordance_fraction_edger": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "padj_threshold": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "lfc_threshold": {"type": "number", "minimum": 0},
+        "min_total_count": {"type": "integer", "minimum": 0},
+        "lfc_shrinkage_method": {"enum": ["none"]},
+        "biological_sample_counts_by_condition": {"$ref": "#/definitions/integer_count_map"},
+        "cell_counts_by_condition": {"$ref": "#/definitions/integer_count_map"},
+        "software_versions": {
+          "type": "object",
+          "required": ["r", "bioconductor", "deseq2", "edger", "matrix", "jsonlite", "optparse"],
+          "properties": {
+            "r": {"type": "string", "minLength": 1},
+            "bioconductor": {"type": "string", "minLength": 1},
+            "deseq2": {"type": "string", "minLength": 1},
+            "edger": {"type": "string", "minLength": 1},
+            "matrix": {"type": "string", "minLength": 1},
+            "jsonlite": {"type": "string", "minLength": 1},
+            "optparse": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        "adapter_version": {"type": "string", "minLength": 1},
+        "adapter": {
+          "type": "object",
+          "required": ["path", "sha256", "version"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/definitions/sha256"},
+            "version": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        "argv": {
+          "type": "object",
+          "required": ["sanitized_relative", "nul_delimited_sha256"],
+          "properties": {
+            "sanitized_relative": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+            "nul_delimited_sha256": {"$ref": "#/definitions/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "input_hashes": {
+          "type": "object",
+          "required": ["counts_tsv_sha256", "design_tsv_sha256", "peak_id_sha256"],
+          "properties": {
+            "counts_tsv_sha256": {"$ref": "#/definitions/sha256"},
+            "design_tsv_sha256": {"$ref": "#/definitions/sha256"},
+            "peak_id_sha256": {"$ref": "#/definitions/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "artifact_hashes": {
+          "type": "object",
+          "required": ["da_results_tsv_gz", "counts_tsv", "design_tsv", "r_stdout_log", "r_stderr_log"],
+          "properties": {
+            "da_results_tsv_gz": {"$ref": "#/definitions/sha256"},
+            "counts_tsv": {"$ref": "#/definitions/sha256"},
+            "design_tsv": {"$ref": "#/definitions/sha256"},
+            "r_stdout_log": {"$ref": "#/definitions/sha256"},
+            "r_stderr_log": {"$ref": "#/definitions/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "repository_state": {"type": "object"},
+        "cpu_backend": {
+          "type": "object",
+          "required": ["aggregation_backend_resolved", "r_conda_env", "production_dual_run", "integer_parity_certificate"],
+          "properties": {
+            "aggregation_backend_resolved": {"enum": ["cpu"]},
+            "r_conda_env": {"enum": ["r_multiomics"]},
+            "production_dual_run": {"enum": [false]},
+            "integer_parity_certificate": {"type": "null"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "claimability_manifest": {
+      "type": "object",
+      "required": [
+        "schema_version", "module_name", "execution_mode", "technical_inference_status", "scientific_release_status",
+        "capability_release_status", "claimable", "biological_unit", "groups_evaluated", "completed_group_ids",
+        "failed_group_ids", "aggregation_backend", "thresholds", "blockers", "per_group_sample_denominators",
+        "repository_state", "software_versions", "artifact_hashes"
+      ],
+      "properties": {
+        "schema_version": {"enum": ["2.0.0"]},
+        "module_name": {"enum": ["scatac_pseudobulk_da"]},
+        "execution_mode": {"enum": ["confirmatory_da", "aggregation_only"]},
+        "technical_inference_status": {"enum": ["aggregation_completed", "dual_engine_inference_completed"]},
+        "scientific_release_status": {"enum": ["staged_nonproduction_missing_representative_real_data"]},
+        "capability_release_status": {"enum": ["staged_nonproduction_missing_representative_real_data"]},
+        "claimable": {"enum": [false]},
+        "biological_unit": {"enum": ["biological_sample"]},
+        "groups_evaluated": {"type": "array", "items": {"type": "string", "pattern": "^grp_[a-f0-9]{12}$"}},
+        "completed_group_ids": {"type": "array", "items": {"type": "string", "pattern": "^grp_[a-f0-9]{12}$"}},
+        "failed_group_ids": {"type": "array", "maxItems": 0},
+        "aggregation_backend": {"$ref": "#/definitions/backend"},
+        "thresholds": {
+          "type": "object",
+          "required": ["fdr_threshold", "abs_log2fc_threshold", "min_total_count", "min_samples_per_condition"],
+          "properties": {
+            "fdr_threshold": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+            "abs_log2fc_threshold": {"type": "number", "minimum": 0},
+            "min_total_count": {"type": "integer", "minimum": 0},
+            "min_samples_per_condition": {"type": "integer", "minimum": 2}
+          },
+          "additionalProperties": false
+        },
+        "blockers": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "per_group_sample_denominators": {"type": "object"},
+        "repository_state": {"type": "object"},
+        "software_versions": {"type": "object"},
+        "artifact_hashes": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "failure_manifest": {
+      "type": "object",
+      "required": [
+        "schema_version", "module_name", "status", "failed_stage", "error_type", "error_message", "timestamp_utc",
+        "completed_group_ids", "failed_group_id", "capability_release_status", "claimable", "partial_artifact_hashes"
+      ],
+      "properties": {
+        "schema_version": {"enum": ["2.0.0"]},
+        "module_name": {"enum": ["scatac_pseudobulk_da"]},
+        "status": {"enum": ["validation_failed", "aggregation_failed", "inference_failed"]},
+        "failed_stage": {"enum": ["validation", "aggregation", "inference"]},
+        "error_type": {"type": "string", "minLength": 1},
+        "error_message": {"type": "string", "minLength": 1},
+        "timestamp_utc": {"type": "string", "minLength": 1},
+        "completed_group_ids": {"type": "array", "items": {"type": "string", "pattern": "^grp_[a-f0-9]{12}$"}},
+        "failed_group_id": {"type": ["string", "null"], "pattern": "^grp_[a-f0-9]{12}$"},
+        "capability_release_status": {"enum": ["staged_nonproduction_missing_representative_real_data"]},
+        "claimable": {"enum": [false]},
+        "partial_artifact_hashes": {"type": "object", "additionalProperties": {"$ref": "#/definitions/sha256"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/definitions/aggregation_manifest"},
+    {"$ref": "#/definitions/inference_manifest"},
+    {"$ref": "#/definitions/claimability_manifest"},
+    {"$ref": "#/definitions/failure_manifest"}
+  ]
+}

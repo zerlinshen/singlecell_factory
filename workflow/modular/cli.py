@@ -19,6 +19,7 @@ from .config import (
     PipelineConfig,
     PseudobulkConfig,
     PseudobulkDEConfig,
+    ScatacPseudobulkDAConfig,
     QCConfig,
     VelocityConfig,
     scale_mode_to_capabilities,
@@ -114,8 +115,8 @@ _SCIENTIFIC_PROFILE_OVERRIDES = {
 }
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments for modular workflow."""
+def build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for modular workflow."""
     parser = argparse.ArgumentParser(description="Modular single-cell workflow runner")
     parser.add_argument("--project", required=True)
     input_group = parser.add_mutually_exclusive_group(required=True)
@@ -695,6 +696,90 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pseudobulk-min-cells-per-sample", type=int, default=3)
     parser.add_argument("--pseudobulk-min-samples-per-condition", type=int, default=2)
 
+    # scATAC Pseudobulk Differential Accessibility
+    parser.add_argument(
+        "--scatac-da-sample-col",
+        default="",
+        help="obs column identifying biological samples for scATAC pseudobulk DA.",
+    )
+    parser.add_argument(
+        "--scatac-da-group-col",
+        default="",
+        help="Required obs column used for stratified scATAC pseudobulk aggregation and contrasts.",
+    )
+    parser.add_argument(
+        "--scatac-da-condition-col",
+        default="",
+        help="obs column containing condition/contrast labels for scATAC pseudobulk DA.",
+    )
+    parser.add_argument(
+        "--scatac-da-peak-id-col",
+        default="",
+        help="Required explicit column in atac_var containing ordered unique peak identifiers.",
+    )
+    parser.add_argument(
+        "--scatac-da-test-level",
+        default="",
+        help="Test (numerator) condition level for scATAC DA contrast.",
+    )
+    parser.add_argument(
+        "--scatac-da-reference-level",
+        default="",
+        help="Reference (denominator) condition level for scATAC DA contrast.",
+    )
+    parser.add_argument(
+        "--scatac-da-mode",
+        default="confirmatory_da",
+        choices=["confirmatory_da", "aggregation_only"],
+        help="scATAC DA execution mode (default: confirmatory_da).",
+    )
+    parser.add_argument(
+        "--scatac-da-min-samples-per-condition",
+        type=int,
+        default=2,
+        help="Minimum biological samples per condition per group for confirmatory DA (default: 2).",
+    )
+    parser.add_argument(
+        "--scatac-da-min-total-count",
+        type=int,
+        default=10,
+        help="Minimum total peak count across samples for DESeq2 filtering (default: 10).",
+    )
+    parser.add_argument(
+        "--scatac-da-fdr-threshold",
+        type=float,
+        default=0.05,
+        help="FDR threshold for significance (default: 0.05).",
+    )
+    parser.add_argument(
+        "--scatac-da-abs-log2fc-threshold",
+        type=float,
+        default=1.0,
+        help="Absolute log2FC threshold for DA calls (default: 1.0).",
+    )
+    parser.add_argument(
+        "--scatac-da-groups",
+        default="",
+        help="Optional comma-separated list of group names to evaluate.",
+    )
+    parser.add_argument(
+        "--scatac-da-r-conda-env",
+        default="r_multiomics",
+        help="Declared conda environment for the shared R DESeq2/edgeR adapter (default: r_multiomics).",
+    )
+    parser.add_argument(
+        "--scatac-da-timeout",
+        type=int,
+        default=1800,
+        help="Timeout in seconds for one per-group R inference call (default: 1800).",
+    )
+    parser.add_argument(
+        "--scatac-da-aggregation-backend",
+        default="cpu",
+        choices=["cpu"],
+        help="Aggregation backend. This staged release supports only exact CPU sparse aggregation.",
+    )
+
     # Configurable thresholds
     parser.add_argument("--de-pval-threshold", type=float, default=0.05,
                         help="Adjusted p-value threshold for significant DE genes (default: 0.05)")
@@ -889,7 +974,12 @@ def parse_args() -> argparse.Namespace:
             "explicit recovery workflows."
         ),
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args(args: list[str] | None = None) -> argparse.Namespace:
+    """Parse command line arguments for modular workflow."""
+    return build_parser().parse_args(args)
 
 
 def _load_pipeline_manifest(result: object) -> tuple[dict, str]:
@@ -917,6 +1007,52 @@ def _validate_modules(optional_modules_str: str) -> list[str]:
             f"Available: {sorted(MODULE_DEPENDENCIES.keys())}"
         )
     return modules
+
+
+def validate_scatac_cli_contract(args: argparse.Namespace, modules: list[str]) -> None:
+    """Validate that scATAC pseudobulk DA CLI flags form a complete contract."""
+    scatac_sample = getattr(args, "scatac_da_sample_col", "")
+    scatac_group = getattr(args, "scatac_da_group_col", "")
+    scatac_cond = getattr(args, "scatac_da_condition_col", "")
+    scatac_peak = getattr(args, "scatac_da_peak_id_col", "")
+    scatac_test = getattr(args, "scatac_da_test_level", "")
+    scatac_ref = getattr(args, "scatac_da_reference_level", "")
+    scatac_mode = getattr(args, "scatac_da_mode", "confirmatory_da")
+    scatac_flags = any((
+        scatac_sample,
+        scatac_group,
+        scatac_cond,
+        scatac_peak,
+        scatac_test,
+        scatac_ref,
+        getattr(args, "scatac_da_groups", ""),
+    ))
+    if "scatac_pseudobulk_da" in modules or scatac_flags:
+        if getattr(args, "scatac_da_min_samples_per_condition", 2) < 2:
+            raise SystemExit(
+                "Error: --scatac-da-min-samples-per-condition must be at least 2; "
+                "cells are never treated as biological replicates."
+            )
+        if getattr(args, "scatac_da_r_conda_env", "r_multiomics") != "r_multiomics":
+            raise SystemExit(
+                "Error: --scatac-da-r-conda-env must be the declared r_multiomics environment."
+            )
+        if getattr(args, "scatac_da_timeout", 1800) <= 0:
+            raise SystemExit("Error: --scatac-da-timeout must be a positive number of seconds.")
+        if not scatac_sample or not scatac_group or not scatac_peak:
+            raise SystemExit(
+                "Error: scATAC pseudobulk DA requires explicit --scatac-da-sample-col, "
+                "--scatac-da-group-col, and --scatac-da-peak-id-col."
+            )
+        if scatac_mode == "confirmatory_da":
+            if not scatac_cond or not scatac_test or not scatac_ref:
+                raise SystemExit(
+                    "Error: confirmatory scATAC pseudobulk DA requires explicit --scatac-da-sample-col, "
+                    "--scatac-da-group-col, --scatac-da-condition-col, --scatac-da-peak-id-col, "
+                    "--scatac-da-test-level, and --scatac-da-reference-level."
+                )
+        if scatac_flags and "scatac_pseudobulk_da" not in modules:
+            modules.append("scatac_pseudobulk_da")
 
 
 def _resolve_optional_modules(args: argparse.Namespace) -> list[str]:
@@ -965,7 +1101,11 @@ def _resolve_optional_modules(args: argparse.Namespace) -> list[str]:
     ))
     if composition_requested and "composition" not in modules:
         modules.append("composition")
+    validate_scatac_cli_contract(args, modules)
     return modules
+
+
+resolve_requested_modules = _resolve_optional_modules
 
 
 def _load_markers(markers_json: str) -> dict[str, list[str]]:
@@ -1492,6 +1632,23 @@ def main() -> None:
             marker_correction=args.de_correction,
         ),
         pseudobulk_de=PseudobulkDEConfig(),
+        scatac_pseudobulk_da=ScatacPseudobulkDAConfig(
+            sample_col=args.scatac_da_sample_col or None,
+            group_col=args.scatac_da_group_col or None,
+            condition_col=args.scatac_da_condition_col or None,
+            peak_id_col=args.scatac_da_peak_id_col or None,
+            test_level=args.scatac_da_test_level or None,
+            reference_level=args.scatac_da_reference_level or None,
+            mode=args.scatac_da_mode,
+            min_samples_per_condition=args.scatac_da_min_samples_per_condition,
+            min_total_count=args.scatac_da_min_total_count,
+            fdr_threshold=args.scatac_da_fdr_threshold,
+            abs_log2fc_threshold=args.scatac_da_abs_log2fc_threshold,
+            groups=tuple(g.strip() for g in args.scatac_da_groups.split(",") if g.strip()) if getattr(args, "scatac_da_groups", "") else (),
+            r_conda_env=args.scatac_da_r_conda_env,
+            subprocess_timeout=args.scatac_da_timeout,
+            aggregation_backend=args.scatac_da_aggregation_backend,
+        ),
         regress_cell_cycle=args.regress_cell_cycle,
         trajectory_root_cluster=args.trajectory_root_cluster,
         trajectory_root_justification=args.trajectory_root_justification,

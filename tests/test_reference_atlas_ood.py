@@ -934,6 +934,7 @@ def test_explicit_gpu_request_fails_without_fallback(monkeypatch):
     import sys
     monkeypatch.setitem(sys.modules, "cuml", None)
     monkeypatch.setitem(sys.modules, "cuml.neighbors", None)
+    monkeypatch.setattr("workflow.modular._reference_mapping._configure_cuda_toolkit_path", lambda: {})
 
     q = ad.AnnData(X=np.zeros((5, 10)), var=pd.DataFrame(index=[f"G_{i}" for i in range(10)]))
     r = ad.AnnData(

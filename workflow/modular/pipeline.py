@@ -317,6 +317,7 @@ def _build_registry() -> dict[str, object]:
     from .modules.hic_ingest import HiCIngestModule
     from .modules.hic_tad import HiCTADModule
     from .modules.ribo_ingest import RiboIngestModule
+    from .modules.scatac_pseudobulk_da import ScatacPseudobulkDAModule
 
     return {
         "cellranger": CellRangerModule(),
@@ -363,6 +364,7 @@ def _build_registry() -> dict[str, object]:
         "hic_ingest": HiCIngestModule(),
         "hic_tad": HiCTADModule(),
         "ribo_ingest": RiboIngestModule(),
+        "scatac_pseudobulk_da": ScatacPseudobulkDAModule(),
     }
 
 
@@ -637,7 +639,7 @@ def _run_module(mod, ctx: PipelineContext, *, mandatory: bool = False) -> None:
     if missing:
         name = getattr(mod, "name", type(mod).__name__)
         msg = f"Module '{name}' missing required keys: {', '.join(missing)}"
-        if mandatory:
+        if mandatory or getattr(mod, "fail_pipeline_on_error", False) or getattr(mod, "fail_closed", False):
             raise ValueError(msg)
         logger.warning("%s — skipping.", msg)
         raise _SkipModule(msg)
@@ -805,12 +807,18 @@ def _execute_tier(
         m for m in tier
         if getattr(registry.get(m), "runs_before_mutating_modules", False)
     ]
-    mutating = [m for m in tier if m in _mutating_set and m not in pre_mutating]
-    appending = [m for m in tier if m not in _mutating_set and m not in pre_mutating]
+    force_seq = [
+        m for m in tier
+        if getattr(registry.get(m), "force_sequential", False) or not getattr(registry.get(m), "parallel_safe", True)
+    ]
+    mutating = [m for m in tier if m in _mutating_set and m not in pre_mutating and m not in force_seq]
+    sequential_main = [m for m in tier if m in force_seq and m not in pre_mutating and m not in mutating]
+    appending = [m for m in tier if m not in _mutating_set and m not in pre_mutating and m not in force_seq]
 
-    # Run main-context pre-gates and mutating modules sequentially first.
+    # Run main-context pre-gates, mutating modules, and force-sequential modules sequentially first.
     _run_sequential(pre_mutating, registry, ctx, mandatory)
     _run_sequential(mutating, registry, ctx, mandatory)
+    _run_sequential(sequential_main, registry, ctx, mandatory)
 
     # Run appending modules.
     if max_workers <= 1 or len(appending) <= 1:

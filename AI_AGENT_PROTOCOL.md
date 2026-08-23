@@ -185,6 +185,13 @@ plotting/reporting helpers:
   sample-to-condition mapping, valid labels, raw counts, and sufficient
   biological replicates. Only all-pydeseq2 confirmatory output is claimable;
   backend fallback is visibly exploratory/non-claimable.
+- Treat `scatac_pseudobulk_da` separately from RNA pseudobulk: it is a staged,
+  non-claimable CPU-only adapter for sparse peak counts. Require the
+  `atac_ingest` peak-axis certificate plus explicit sample/group/peak-ID fields;
+  confirmatory requests additionally require an exact two-level biological
+  sample design with at least two samples per condition. Never use cells as
+  replicates, infer column defaults, or call aggregation-only output DA.
+  DESeq2 primary plus edgeR QL support must both succeed in `r_multiomics`.
 - `--scale-mode` is resource-only. Scientific changes belong to an explicit
   `--scientific-profile` and require
   `--acknowledge-scientific-non-equivalence`; agents must inspect the recorded

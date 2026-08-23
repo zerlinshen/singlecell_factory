@@ -10,6 +10,7 @@ Covers:
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -220,6 +221,18 @@ def test_atac_ingest_lsi_peak_to_gene_chain(synthetic_adata, synthetic_gene_tss_
     assert sp.issparse(synthetic_adata.obsm["atac_peaks"])
     assert synthetic_adata.obsm["atac_peaks"].shape == (n_cells, n_peaks)
     assert "atac_var" in synthetic_adata.uns
+    certificate = synthetic_adata.uns["atac_peak_axis"]
+    expected_peak_ids = synthetic_adata.uns["atac_var"]["peak_id"].tolist()
+    assert certificate == {
+        "schema_version": "atac_peak_axis/v1",
+        "producer": "atac_ingest",
+        "source_status": "bound_from_peaks_bed",
+        "peak_id_col": "peak_id",
+        "n_peaks": n_peaks,
+        "ordered_peak_id_sha256": hashlib.sha256(
+            "\0".join(expected_peak_ids).encode("utf-8")
+        ).hexdigest(),
+    }
 
     ATACLSIModule().run(ctx)
     assert "X_lsi" in synthetic_adata.obsm

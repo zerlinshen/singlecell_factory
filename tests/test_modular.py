@@ -174,7 +174,7 @@ def test_modular_cli_accepts_harmony_direct(monkeypatch):
 def test_new_modules_in_dag():
     from workflow.modular.pipeline import MODULE_DEPENDENCIES
 
-    # Verify all modules are registered (4 mandatory + 40 optional = 44).
+    # Verify all modules are registered (4 mandatory + 41 optional = 45).
     # Phase B (v2.1) added protein_adt; spatial lane (spatial_ingest +
     # spatial_neighborhoods); multimodal_integration (EXPERIMENTAL).
     # Phase 1A added marker_db_loader (P1A.S2) + context_aware_annotation (P1A.S3).
@@ -185,7 +185,9 @@ def test_new_modules_in_dag():
     # 2026-05-20: added ambient_correction (conditional DecontX, MANDATORY).
     # 2026-05-26: added integration_select (per-run discovery integration gate,
     # opt-in; depends_on clustering; batch_correction runs_after it).
-    assert len(MODULE_DEPENDENCIES) == 44
+    assert len(MODULE_DEPENDENCIES) == 45
+    assert "scatac_pseudobulk_da" in MODULE_DEPENDENCIES
+    assert MODULE_DEPENDENCIES["scatac_pseudobulk_da"] == {"atac_ingest"}
     assert "integration_select" in MODULE_DEPENDENCIES
     assert MODULE_DEPENDENCIES["integration_select"] == {"clustering"}
     assert "ambient_correction" in MODULE_DEPENDENCIES
